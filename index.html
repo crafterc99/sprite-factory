@@ -1,0 +1,2936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPRITE FACTORY — Soul Jam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a28;
+    --surface3: #222236;
+    --border: #2a2a3a;
+    --border-focus: #4a4a6a;
+    --text: #e8e8f0;
+    --text-dim: #6a6a80;
+    --text-muted: #44445a;
+    --accent: #ff4400;
+    --accent-hover: #ff5511;
+    --accent2: #00ff88;
+    --accent3: #4488ff;
+    --warning: #ffaa00;
+    --danger: #ff2244;
+    --green-bg: #00ff00;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Outfit', sans-serif;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    --shadow-accent: 0 4px 20px rgba(255,68,0,0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  ::selection { background: var(--accent); color: white; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── HEADER ─── */
+  .header {
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: rgba(10,10,15,0.97);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .logo span { color: var(--text-dim); font-weight: 400; }
+
+  .flow-tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .flow-tab {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    padding: 7px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-dim);
+    transition: all 0.15s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .flow-tab:hover { color: var(--text); }
+  .flow-tab.active { background: var(--accent); color: white; }
+  .flow-tab .tab-key {
+    font-weight: 700;
+    font-size: 9px;
+    width: 16px; height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.15);
+  }
+  .flow-tab.active .tab-key { background: rgba(255,255,255,0.25); }
+
+  .header-right {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-left: auto;
+  }
+
+  .char-selector {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+    min-width: 120px;
+  }
+  .char-selector:focus { outline: none; border-color: var(--accent3); }
+
+  .model-select {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    cursor: pointer;
+  }
+  .model-select:focus { outline: none; border-color: var(--accent3); }
+
+  .status {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text-dim);
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent2);
+    animation: pulse 2s infinite;
+  }
+  .status-dot.offline { background: var(--danger); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .cost-badge {
+    background: var(--surface);
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 10px;
+  }
+  .cost-badge .amount { color: var(--accent2); font-weight: 700; }
+
+  /* ─── MAIN 3-COL LAYOUT ─── */
+  .main {
+    display: grid;
+    grid-template-columns: 260px 1fr 300px;
+    height: calc(100vh - 49px);
+  }
+
+  /* ─── LEFT SIDEBAR ─── */
+  .sidebar-left {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 12px 14px 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-label .count {
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px;
+    letter-spacing: 0;
+  }
+
+  .roster-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 4px 10px;
+  }
+
+  .roster-item {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    padding: 6px;
+    cursor: pointer;
+    transition: all 0.12s;
+    text-align: center;
+    position: relative;
+  }
+  .roster-item:hover { border-color: var(--accent); }
+  .roster-item.active { border-color: var(--accent); background: var(--surface2); }
+  .roster-item img {
+    width: 100%; height: 56px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    border-radius: 3px;
+    background: var(--surface2);
+  }
+  .roster-item .name {
+    font-family: var(--mono);
+    font-size: 9px;
+    margin-top: 3px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .roster-item .anchor-dots {
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+    margin-top: 2px;
+  }
+  .anchor-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+  .anchor-dot.done { background: var(--accent2); }
+  .anchor-dot.partial { background: var(--warning); }
+
+  /* ─── FLOW STEPS ─── */
+  .flow-steps {
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .flow-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    transition: all 0.1s;
+  }
+  .flow-step.active { background: var(--surface2); color: var(--text); }
+  .flow-step.done { color: var(--accent2); }
+  .flow-step .step-num {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .flow-step.active .step-num { border-color: var(--accent); color: var(--accent); }
+  .flow-step.done .step-num { border-color: var(--accent2); background: rgba(0,255,136,0.1); }
+
+  .sidebar-actions {
+    margin-top: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ─── CENTER WORKSPACE ─── */
+  .workspace {
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .workspace-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .flow-section { display: none; }
+  .flow-section.active { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ─── RIGHT SIDEBAR ─── */
+  .sidebar-right {
+    border-left: 1px solid var(--border);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow-y: auto;
+  }
+
+  /* ─── BOTTOM DRAWER ─── */
+  .drawer-toggle {
+    position: fixed;
+    bottom: 0;
+    left: 260px;
+    right: 300px;
+    height: 32px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 8px;
+    cursor: pointer;
+    z-index: 50;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .drawer-toggle:hover { color: var(--text); }
+
+  .drawer {
+    position: fixed;
+    bottom: 0;
+    left: 260px;
+    right: 300px;
+    height: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 49;
+    overflow: hidden;
+    transition: height 0.25s ease;
+  }
+  .drawer.open {
+    height: 340px;
+  }
+
+  .drawer-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .drawer-tab {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-dim);
+  }
+  .drawer-tab:hover { color: var(--text); }
+  .drawer-tab.active { background: var(--accent); color: white; }
+
+  .drawer-content {
+    padding: 10px 16px;
+    overflow-y: auto;
+    height: calc(100% - 40px);
+  }
+
+  .drawer-pane { display: none; }
+  .drawer-pane.active { display: block; }
+
+  /* ─── SHARED COMPONENTS ─── */
+  .btn {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: var(--shadow-accent); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent3); }
+
+  .btn-success { background: rgba(0,255,136,0.12); color: var(--accent2); border: 1px solid rgba(0,255,136,0.3); }
+  .btn-success:hover { background: rgba(0,255,136,0.2); }
+
+  .btn-sm { padding: 6px 12px; font-size: 9px; }
+  .btn-block { width: 100%; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+  }
+
+  .input {
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .input:focus { outline: none; border-color: var(--accent3); }
+
+  select.input {
+    cursor: pointer;
+  }
+
+  textarea.input {
+    min-height: 60px;
+    resize: vertical;
+    line-height: 1.6;
+    font-size: 10px;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .form-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .spinner.active { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-bar {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-bar .fill {
+    height: 100%;
+    background: var(--accent3);
+    border-radius: 3px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--accent2);
+    color: var(--text);
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    font-family: var(--mono);
+    font-size: 11px;
+    z-index: 1000;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.25s;
+    max-width: 400px;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.error { border-color: var(--danger); }
+
+  .log {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text-dim);
+    max-height: 160px;
+    overflow-y: auto;
+    line-height: 1.9;
+  }
+  .log .success { color: var(--accent2); }
+  .log .error { color: var(--danger); }
+  .log .info { color: var(--accent3); }
+  .log .warn { color: var(--warning); }
+
+  /* ─── ANGLE / BALL REF GRID ─── */
+  .ref-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .ref-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+  .ref-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    text-align: center;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .ref-card.done { border-color: var(--accent2); }
+  .ref-card.generating { border-color: var(--accent3); }
+  .ref-card.error { border-color: var(--danger); }
+
+  .ref-card .ref-label {
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 5px 6px;
+    background: var(--surface2);
+  }
+  .ref-card.done .ref-label { background: rgba(0,255,136,0.08); color: var(--accent2); }
+  .ref-card.generating .ref-label { background: rgba(68,136,255,0.1); color: var(--accent3); }
+
+  .ref-card img {
+    width: 100%;
+    aspect-ratio: 3/4;
+    object-fit: contain;
+    image-rendering: pixelated;
+    background: var(--surface2);
+    display: block;
+  }
+
+  .ref-card .ref-empty {
+    width: 100%;
+    aspect-ratio: 3/4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 18px;
+    background: var(--bg);
+  }
+
+  .ref-card .regen-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px; height: 20px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+  }
+  .ref-card:hover .regen-btn { display: flex; }
+  .ref-card .regen-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ─── PREVIEW PLAYER ─── */
+  .preview-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .preview-area img, .preview-area canvas {
+    max-width: 100%;
+    max-height: 320px;
+    image-rendering: pixelated;
+  }
+
+  .preview-empty {
+    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    text-align: center;
+    line-height: 2;
+  }
+
+  .preview-label {
+    position: absolute;
+    top: 8px; left: 12px;
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    background: var(--bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  /* ─── VIDEO PIPELINE ─── */
+  .pipeline-steps {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .step-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: var(--surface2);
+    transition: all 0.2s;
+  }
+  .step-badge.active { border-color: var(--accent3); color: var(--accent3); background: rgba(68,136,255,0.1); }
+  .step-badge.done { border-color: var(--accent2); color: var(--accent2); background: rgba(0,255,136,0.08); }
+  .step-arrow { color: var(--text-muted); font-size: 12px; }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent3); background: rgba(68,136,255,0.05); }
+  .drop-zone p { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+  .drop-zone input { display: none; }
+
+  .frame-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .frame-thumb-wrapper { position: relative; }
+  .frame-thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 3px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.1s;
+    display: block;
+  }
+  .frame-thumb:hover { border-color: var(--accent3); }
+  .frame-thumb.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .frame-order-badge {
+    position: absolute;
+    top: 2px; right: 2px;
+    background: var(--accent);
+    color: white;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 700;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .anim-config {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 10px;
+    background: var(--surface2);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+
+  .mode-toggle {
+    display: flex;
+    gap: 2px;
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 2px;
+    border: 1px solid var(--border);
+  }
+  .mode-toggle button {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 4px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-dim);
+    transition: all 0.1s;
+  }
+  .mode-toggle button.active { background: var(--accent); color: white; }
+
+  /* ─── FBF FRAME CARDS ─── */
+  .fbf-frame-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 6px;
+  }
+
+  .fbf-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .fbf-card.generating { border-color: var(--accent3); }
+  .fbf-card.done { border-color: var(--accent2); }
+  .fbf-card.error { border-color: var(--danger); }
+
+  .fbf-card .frame-num {
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 700;
+    padding: 3px;
+    background: var(--surface2);
+    color: var(--text-dim);
+  }
+  .fbf-card.generating .frame-num { background: rgba(68,136,255,0.15); color: var(--accent3); }
+  .fbf-card.done .frame-num { background: rgba(0,255,136,0.1); color: var(--accent2); }
+
+  .fbf-card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: contain;
+    image-rendering: pixelated;
+    background: var(--surface2);
+    display: block;
+  }
+
+  /* ─── COST TRACKER ─── */
+  .cost-hero {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: 4px 0 8px;
+  }
+  .cost-hero .amount {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+  .cost-hero .label {
+    font-family: var(--mono);
+    font-size: 8px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .cost-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+  .cost-stat {
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 6px 8px;
+  }
+  .cost-stat .val { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .cost-stat .lbl { font-family: var(--mono); font-size: 7px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 1px; }
+
+  /* ─── REPLICATION UI ─── */
+  .target-select-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 6px;
+  }
+
+  .target-char {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    padding: 6px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.12s;
+  }
+  .target-char:hover { border-color: var(--accent3); }
+  .target-char.selected { border-color: var(--accent); background: rgba(255,68,0,0.06); }
+  .target-char img {
+    width: 100%; height: 48px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    border-radius: 3px;
+  }
+  .target-char .name { font-family: var(--mono); font-size: 8px; margin-top: 2px; }
+
+  /* ─── CHARACTER FORM ─── */
+  .char-options-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .char-option {
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--surface);
+    position: relative;
+  }
+  .char-option:hover { border-color: var(--accent3); }
+  .char-option.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+  .char-option img {
+    width: 100%;
+    aspect-ratio: 3/4;
+    object-fit: contain;
+    image-rendering: pixelated;
+    background: white;
+  }
+  .char-option .option-label {
+    position: absolute;
+    top: 4px; left: 4px;
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--text-dim);
+  }
+  .char-option.selected .option-label { background: var(--accent); color: white; }
+
+  /* ─── EXPORT ─── */
+  .anim-picker {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
+  .anim-pick-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text);
+    text-align: left;
+    transition: all 0.1s;
+  }
+  .anim-pick-btn:hover { border-color: var(--accent3); }
+  .anim-pick-btn.active { border-color: var(--accent); background: rgba(255,68,0,0.06); }
+  .anim-pick-btn.done::after {
+    content: '';
+    float: right;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent2);
+    margin-top: 4px;
+  }
+
+  @media (max-width: 1100px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar-left, .sidebar-right { border: none; border-bottom: 1px solid var(--border); }
+    .drawer, .drawer-toggle { left: 0; right: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HEADER ═══════════════════════════════ -->
+<div class="header">
+  <div class="logo">SPRITE FACTORY <span>/ Soul Jam</span></div>
+  <div class="flow-tabs" id="flowTabs">
+    <button class="flow-tab active" onclick="setWorkflow('A')"><span class="tab-key">A</span> New Char</button>
+    <button class="flow-tab" onclick="setWorkflow('B')"><span class="tab-key">B</span> Angles</button>
+    <button class="flow-tab" onclick="setWorkflow('C')"><span class="tab-key">C</span> Ball Refs</button>
+    <button class="flow-tab" onclick="setWorkflow('D')"><span class="tab-key">D</span> Video</button>
+    <button class="flow-tab" onclick="setWorkflow('E')"><span class="tab-key">E</span> Replicate</button>
+    <button class="flow-tab" onclick="setWorkflow('F')"><span class="tab-key">F</span> Test/Export</button>
+  </div>
+  <div class="header-right">
+    <select class="char-selector" id="charSelector" onchange="selectCharacter(this.value)">
+      <option value="">Select character...</option>
+    </select>
+    <select class="model-select" id="modelSelect">
+      <option value="gemini-2.5-flash-image">Flash 2.5</option>
+      <option value="gemini-3.1-flash-image-preview">Flash 3.1</option>
+      <option value="gemini-3-pro-image-preview">Pro 3</option>
+    </select>
+    <div class="cost-badge"><span class="amount" id="headerCostAmount">$0.00</span> <span style="color:var(--text-muted);font-size:8px">total</span></div>
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="apiStatus">...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
+<div class="main">
+
+  <!-- ─── LEFT SIDEBAR ─── -->
+  <div class="sidebar-left">
+    <div class="section-label">Roster <span class="count" id="rosterCount">0</span></div>
+    <div class="roster-grid" id="rosterGrid"></div>
+
+    <div class="section-label" style="margin-top:12px">Flow Steps</div>
+    <div class="flow-steps" id="flowSteps"></div>
+
+    <div class="sidebar-actions">
+      <button class="btn btn-secondary btn-sm btn-block" onclick="loadRoster()">Refresh Roster</button>
+    </div>
+  </div>
+
+  <!-- ─── CENTER WORKSPACE ─── -->
+  <div class="workspace" id="workspace">
+
+    <!-- FLOW A: New Character -->
+    <div class="flow-section active" id="flowA">
+      <div class="workspace-title">A — New Character</div>
+
+      <div class="card">
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label">Character Name</label>
+          <input class="input" id="newCharName" placeholder="e.g. blair" />
+        </div>
+        <div class="form-row" style="margin-bottom:10px">
+          <div class="form-group">
+            <label class="form-label">Height</label>
+            <input class="input" id="charHeight" type="number" value="72" min="60" max="90" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Weight (lbs)</label>
+            <input class="input" id="charWeight" type="number" value="185" />
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:10px">
+          <div class="form-group">
+            <label class="form-label">Build</label>
+            <select class="input" id="charBuild">
+              <option value="athletic">Athletic</option>
+              <option value="lean">Lean</option>
+              <option value="stocky">Stocky</option>
+              <option value="heavy">Heavy</option>
+              <option value="slim">Slim</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Jersey #</label>
+            <input class="input" id="charJersey" placeholder="e.g. 23" />
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:10px">
+          <div class="form-group">
+            <label class="form-label">Primary Color</label>
+            <input class="input" id="charColor1" type="color" value="#FF4400" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Secondary Color</label>
+            <input class="input" id="charColor2" type="color" value="#FFFFFF" />
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label">Description / Notes</label>
+          <textarea class="input" id="charDescription" placeholder="Tall guard with braids, wears headband..."></textarea>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-label" style="padding:0 0 8px">Photo Upload</div>
+        <div class="drop-zone" id="charDropZone">
+          <p>Drop photo here or click to browse</p>
+          <input type="file" id="charPhotoFile" accept="image/*" />
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <input class="input" id="charPhotoPath" placeholder="Or paste photo path..." style="flex:1" />
+          <img id="charPhotoThumb" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);display:none" />
+        </div>
+      </div>
+
+      <div class="card" id="charChangeSection" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Change Request (for regeneration)</label>
+          <textarea class="input" id="charChangeRequest" placeholder="Make the jersey red instead..."></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="createCharBtn" onclick="createCharacter()" style="flex:1">
+          <span class="spinner" id="charSpinner"></span>
+          Generate Options
+        </button>
+      </div>
+
+      <div id="charOptionsArea" style="display:none">
+        <div class="section-label" style="padding:0 0 8px">Choose Best Option</div>
+        <div class="char-options-grid" id="charOptionsGrid"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-success" id="confirmCharBtn" onclick="confirmCharacter()" disabled style="flex:1">Confirm & Save</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('charChangeSection').style.display='block'">Request Changes</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FLOW B: Angle Generation -->
+    <div class="flow-section" id="flowB">
+      <div class="workspace-title">B — 8-Angle References</div>
+      <div id="angleCharNotice" class="card" style="text-align:center;color:var(--text-dim)">
+        Select a character from the roster to generate angle references.
+      </div>
+      <div id="angleContent" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="btn btn-primary" id="genAnglesBtn" onclick="generateAngles()" style="flex:1">
+            <span class="spinner" id="angleSpinner"></span>
+            Generate All 8 Angles
+          </button>
+        </div>
+        <div class="progress-bar" id="angleProgressBar" style="display:none;margin-bottom:10px"><div class="fill" id="angleProgressFill"></div></div>
+        <div id="angleStatus" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:8px"></div>
+        <div class="ref-grid" id="angleGrid"></div>
+      </div>
+    </div>
+
+    <!-- FLOW C: Ball References -->
+    <div class="flow-section" id="flowC">
+      <div class="workspace-title">C — Ball-Holding References</div>
+      <div id="ballCharNotice" class="card" style="text-align:center;color:var(--text-dim)">
+        Select a character from the roster to generate ball references.
+      </div>
+      <div id="ballContent" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="btn btn-primary" id="genBallBtn" onclick="generateBallRefs()" style="flex:1">
+            <span class="spinner" id="ballSpinner"></span>
+            Generate All 6 Ball Refs
+          </button>
+        </div>
+        <div class="progress-bar" id="ballProgressBar" style="display:none;margin-bottom:10px"><div class="fill" id="ballProgressFill"></div></div>
+        <div id="ballStatus" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:8px"></div>
+        <div class="ref-grid cols-3" id="ballGrid"></div>
+      </div>
+    </div>
+
+    <!-- FLOW D: Video to Animation -->
+    <div class="flow-section" id="flowD">
+      <div class="workspace-title">D — Video to Animation</div>
+
+      <div class="card">
+        <div class="pipeline-steps" id="videoSteps">
+          <span class="step-badge active" id="stepUpload">Upload</span>
+          <span class="step-arrow">&rarr;</span>
+          <span class="step-badge" id="stepExtract">Extract</span>
+          <span class="step-arrow">&rarr;</span>
+          <span class="step-badge" id="stepSelect">Select</span>
+          <span class="step-arrow">&rarr;</span>
+          <span class="step-badge" id="stepConfig">Config</span>
+          <span class="step-arrow">&rarr;</span>
+          <span class="step-badge" id="stepGenerate">Generate</span>
+        </div>
+      </div>
+
+      <!-- Upload -->
+      <div class="card" id="videoUploadSection">
+        <div class="form-group">
+          <label class="form-label">Video Path</label>
+          <input class="input" id="videoPath" placeholder="/Users/you/Downloads/clip.mov" />
+        </div>
+        <div class="drop-zone" id="videoDropZone" style="margin-top:8px">
+          <p>Drop video file here or click</p>
+          <input type="file" id="videoFile" accept="video/*" />
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="loadVideoFromPath()">Load Path</button>
+          <input class="input" id="extractFps" value="10" style="width:50px;text-align:center" />
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">FPS</span>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary btn-sm" onclick="extractFrames()" id="extractBtn" disabled>
+            <span class="spinner" id="extractSpinner"></span>
+            Extract
+          </button>
+        </div>
+      </div>
+
+      <!-- Frame Gallery -->
+      <div class="card" id="videoFrameSection" style="display:none">
+        <div class="section-label" style="padding:0 0 6px">Frames <span class="count" id="frameCountBadge">0</span></div>
+        <div class="frame-gallery" id="frameGrid"></div>
+        <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text-dim)">Selected: <span id="frameSelCount" style="color:var(--accent);font-weight:700">0</span></span>
+          <button class="btn btn-sm btn-secondary" onclick="clearFrameSelection()">Clear</button>
+          <div style="flex:1"></div>
+          <input class="input" id="selectCount" value="6" style="width:40px;text-align:center" />
+          <button class="btn btn-sm btn-primary" onclick="smartSelectFrames()">
+            <span class="spinner" id="selectSpinner"></span>
+            Smart Select
+          </button>
+        </div>
+      </div>
+
+      <!-- Anim Config -->
+      <div class="card" id="videoConfigSection" style="display:none">
+        <div class="section-label" style="padding:0 0 6px">Animation Config</div>
+        <div class="anim-config">
+          <div class="form-group">
+            <label class="form-label">Name</label>
+            <input class="input" id="videoAnimName" placeholder="spin-move" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Action</label>
+            <input class="input" id="videoAnimAction" placeholder="spin move dribble" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">FPS</label>
+            <input class="input" id="videoAnimFps" type="number" value="8" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Loop</label>
+            <select class="input" id="videoAnimLoop">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <div class="mode-toggle" id="videoGenModeToggle">
+            <button class="active" onclick="setVideoGenMode('strip')">Strip</button>
+            <button onclick="setVideoGenMode('fbf')">FBF</button>
+          </div>
+          <div style="flex:1"></div>
+          <button class="btn btn-primary" onclick="generateFromVideo()" id="videoGenBtn">
+            <span class="spinner" id="videoGenSpinner"></span>
+            Generate
+          </button>
+        </div>
+      </div>
+
+      <!-- Video FBF Progress -->
+      <div id="videoFbfSection" style="display:none">
+        <div class="progress-bar" style="margin-bottom:8px"><div class="fill" id="videoFbfFill"></div></div>
+        <div id="videoFbfStatus" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:8px"></div>
+        <div class="fbf-frame-grid" id="videoFbfGrid"></div>
+      </div>
+
+      <!-- Result preview -->
+      <div class="preview-area" id="videoPreview" style="display:none">
+        <div class="preview-label">RESULT</div>
+        <img id="videoPreviewImg" />
+      </div>
+    </div>
+
+    <!-- FLOW E: Animation Replication -->
+    <div class="flow-section" id="flowE">
+      <div class="workspace-title">E — Animation Replication</div>
+
+      <div class="card">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Source Character</label>
+            <select class="input" id="replSourceChar" onchange="loadSourceAnims()"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Source Animation</label>
+            <select class="input" id="replSourceAnim"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-label" style="padding:0 0 6px">Target Characters <span style="color:var(--text-muted)">(click to select)</span></div>
+        <div class="target-select-grid" id="replTargetGrid"></div>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="replBtn" onclick="startReplication()" style="flex:1">
+          <span class="spinner" id="replSpinner"></span>
+          Replicate Animation
+        </button>
+      </div>
+
+      <div id="replProgress" style="display:none">
+        <div class="progress-bar" style="margin-bottom:8px"><div class="fill" id="replFill"></div></div>
+        <div id="replStatus" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:8px"></div>
+        <div class="fbf-frame-grid" id="replFrameGrid"></div>
+      </div>
+    </div>
+
+    <!-- FLOW F: Live Test / Export -->
+    <div class="flow-section" id="flowF">
+      <div class="workspace-title">F — Live Test / Export</div>
+
+      <div class="card">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Animation</label>
+            <select class="input" id="testAnimSelect" onchange="loadTestAnim()"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">FPS / Speed</label>
+            <div style="display:flex;gap:4px">
+              <input class="input" id="testFps" type="number" value="8" style="width:50px" onchange="updateTestPlayer()" />
+              <select class="input" id="testSpeed" onchange="updateTestPlayer()">
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
+                <option value="1" selected>1x</option>
+                <option value="2">2x</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="preview-area" style="min-height:240px">
+        <div class="preview-label">PREVIEW</div>
+        <canvas id="testCanvas" width="320" height="240" style="image-rendering:pixelated"></canvas>
+      </div>
+
+      <div style="display:flex;gap:6px;justify-content:center">
+        <button class="btn btn-secondary btn-sm" onclick="testStepBack()">&#9664; Prev</button>
+        <button class="btn btn-primary btn-sm" id="testPlayBtn" onclick="testTogglePlay()">Play</button>
+        <button class="btn btn-secondary btn-sm" onclick="testStepForward()">Next &#9654;</button>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text-dim);display:flex;align-items:center;margin-left:8px" id="testFrameNum">0/0</span>
+      </div>
+
+      <div class="card">
+        <div class="section-label" style="padding:0 0 6px">Available Animations</div>
+        <div class="anim-picker" id="testAnimGrid"></div>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-success" onclick="exportToSoulJam()" style="flex:1">Export to Soul Jam</button>
+        <button class="btn btn-secondary" onclick="buildGridSheet()">Build Grid</button>
+        <button class="btn btn-secondary" onclick="runAudit()">Audit</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ─── RIGHT SIDEBAR ─── -->
+  <div class="sidebar-right">
+    <div class="card">
+      <div class="section-label" style="padding:0 0 6px">Settings</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label class="form-label">Resolution</label>
+        <select class="input" id="resolutionSelect">
+          <option value="1K">1K</option>
+          <option value="2K" selected>2K</option>
+          <option value="4K">4K</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Gen Mode</label>
+        <select class="input" id="genModeSelect">
+          <option value="fbf">Frame-by-Frame</option>
+          <option value="strip">Strip</option>
+          <option value="autotest">Auto-Test</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-label" style="padding:0 0 4px">Cost Tracker</div>
+      <div class="cost-hero">
+        <span class="amount" id="costTotal">$0.00</span>
+        <span class="label">total spend</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--warning);margin-bottom:6px">Session: <span id="costSession">$0.00</span></div>
+      <div class="cost-grid">
+        <div class="cost-stat"><div class="val" id="costGens">0</div><div class="lbl">generations</div></div>
+        <div class="cost-stat"><div class="val" id="costAvg">$0.00</div><div class="lbl">avg/gen</div></div>
+      </div>
+    </div>
+
+    <div class="card" id="anchorStatusCard" style="display:none">
+      <div class="section-label" style="padding:0 0 6px">Anchor Status</div>
+      <div id="anchorStatusContent"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-label" style="padding:0 0 6px">Activity Log</div>
+      <div class="log" id="logArea"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── BOTTOM DRAWER ─── -->
+<div class="drawer-toggle" id="drawerToggle" onclick="toggleDrawer()">
+  &#9650; Prompts / Logs / Debug
+</div>
+<div class="drawer" id="drawer">
+  <div class="drawer-tabs">
+    <button class="drawer-tab active" onclick="setDrawerTab('prompts')">Prompts</button>
+    <button class="drawer-tab" onclick="setDrawerTab('logs')">Generation Logs</button>
+    <button class="drawer-tab" onclick="setDrawerTab('debug')">Debug</button>
+  </div>
+  <div class="drawer-content">
+    <div class="drawer-pane active" id="drawerPrompts">
+      <div id="promptSectionsContainer"></div>
+    </div>
+    <div class="drawer-pane" id="drawerLogs">
+      <div class="log" id="genLogArea" style="max-height:180px"></div>
+    </div>
+    <div class="drawer-pane" id="drawerDebug">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)">
+        <div>State: <pre id="debugState" style="max-height:160px;overflow:auto;background:var(--bg);padding:8px;border-radius:4px;margin-top:4px;font-size:9px"></pre></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════
+
+const API = '';
+const ANGLE_NAMES = ['front','front-3/4-L','side-L','back-3/4-L','back','back-3/4-R','side-R','front-3/4-R'];
+const BALL_VARIANTS = ['dribble-low','dribble-high','carry-hip','shoot-release','two-hand-chest','palming'];
+
+const STATE = {
+  workflow: 'A',
+  selectedChar: null,
+  roster: {},
+  characters: {},
+  animations: {},
+  customAnimations: {},
+  session: { id: null, frames: [], selectedFiles: [] },
+  generation: { busy: false, progress: 0 },
+  settings: { model: 'gemini-2.5-flash-image', resolution: '2K', genMode: 'fbf' },
+  drawer: { open: false, tab: 'prompts' },
+  costs: { total: 0, session: 0, gens: 0 },
+  // Video state
+  videoGenMode: 'strip',
+  // Replication
+  replTargets: [],
+  // Test/Export
+  testPlayer: { frames: [], currentFrame: 0, playing: false, fps: 8, speed: 1, animId: null },
+  // Char creation
+  charPhoto: null,
+  charSelectedOption: -1,
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════
+
+async function init() {
+  try {
+    const resp = await fetch(`${API}/api/characters`);
+    const data = await resp.json();
+    STATE.characters = data.characters || {};
+    STATE.animations = data.animations || {};
+    STATE.customAnimations = data.customAnimations || {};
+
+    // Build roster from registry
+    if (data.registry) {
+      STATE.roster = data.registry;
+    }
+
+    renderRoster();
+    populateCharSelector();
+    loadCosts();
+
+    // Check API
+    el('statusDot').classList.remove('offline');
+    el('apiStatus').textContent = 'Online';
+    log('System initialized', 'success');
+  } catch (err) {
+    el('statusDot').classList.add('offline');
+    el('apiStatus').textContent = 'Offline';
+    log('Failed to connect: ' + err.message, 'error');
+  }
+
+  setWorkflow('A');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════════════
+
+function el(id) { return document.getElementById(id); }
+
+function log(msg, cls = '') {
+  const logEl = el('logArea');
+  logEl.innerHTML += `<div class="${cls}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function genLog(msg, cls = '') {
+  const logEl = el('genLogArea');
+  logEl.innerHTML += `<div class="${cls}">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ─── Prompt Logging ───
+let promptLogCounter = 0;
+
+async function fetchPromptPreview(params) {
+  try {
+    const qs = new URLSearchParams(params).toString();
+    const resp = await fetch(`${API}/api/prompt-preview?${qs}`);
+    return await resp.json();
+  } catch { return null; }
+}
+
+function logPrompt(entry) {
+  // entry: { flow, type, character, model, settings, references, prompt, status }
+  const container = el('promptSectionsContainer');
+  const id = 'prompt-' + (++promptLogCounter);
+  const time = new Date().toLocaleTimeString();
+  const flowColors = { A: '#ff4400', B: '#4488ff', C: '#00ff88', D: '#ffaa00', E: '#aa44ff', F: '#ff44aa' };
+  const flowColor = flowColors[entry.flow] || '#888';
+  const flowNames = { A: 'Character', B: 'Angles', C: 'Ball Refs', D: 'Video', E: 'Replication', F: 'Test/Export' };
+  const flowName = flowNames[entry.flow] || entry.flow;
+
+  const refsHtml = (entry.references || []).map(r => {
+    const icon = r.type === 'portrait' ? '&#128100;' : r.type === 'pose-reference' ? '&#127939;' : r.type === 'video-strip' ? '&#127909;' : r.type === 'video-frame' ? '&#127902;' : '&#128444;';
+    const imgSrc = r.path ? `/assets/${r.path}` : null;
+    return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;color:var(--text-dim)">
+      <span>${icon}</span>
+      <span style="color:var(--text)">${r.type}</span>
+      ${r.path ? `<span style="color:var(--text-muted)">${r.path}</span>` : ''}
+      ${r.note ? `<span style="color:var(--text-muted);font-style:italic">${r.note}</span>` : ''}
+      ${imgSrc ? `<img src="${imgSrc}" style="height:28px;border-radius:3px;border:1px solid var(--border)" onerror="this.style.display='none'" />` : ''}
+    </div>`;
+  }).join('');
+
+  const settingsHtml = entry.settings ? Object.entries(entry.settings).map(([k, v]) =>
+    `<span style="display:inline-block;background:var(--surface3);padding:1px 6px;border-radius:3px;font-size:10px;margin:1px">${k}: <b>${v}</b></span>`
+  ).join(' ') : '';
+
+  const promptText = entry.prompt || '';
+  const truncated = promptText.length > 500;
+  const displayPrompt = truncated ? promptText.slice(0, 500) + '...' : promptText;
+
+  const html = `<div id="${id}" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin-bottom:8px;font-size:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="background:${flowColor};color:white;padding:1px 8px;border-radius:10px;font-size:10px;font-weight:700">${flowName}</span>
+        <span style="font-weight:600">${entry.character || '?'}</span>
+        <span style="color:var(--text-dim)">${entry.type || ''}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="color:var(--text-muted);font-size:10px">${time}</span>
+        <span style="color:var(--text-dim);font-size:10px;font-family:var(--mono)">${entry.model || getModel()}</span>
+        <span class="prompt-status" id="${id}-status" style="font-size:10px;padding:1px 6px;border-radius:3px;background:var(--surface3);color:var(--warning)">pending</span>
+      </div>
+    </div>
+    ${settingsHtml ? `<div style="margin-bottom:6px">${settingsHtml}</div>` : ''}
+    ${refsHtml ? `<div style="border-top:1px solid var(--border);padding-top:4px;margin-bottom:4px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">UPLOADS / REFERENCES</div>${refsHtml}</div>` : ''}
+    ${promptText ? `<div style="border-top:1px solid var(--border);padding-top:4px">
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px;cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">PROMPT TEXT (click to toggle)</div>
+      <pre style="display:none;background:var(--bg);padding:6px;border-radius:4px;font-size:10px;font-family:var(--mono);white-space:pre-wrap;max-height:200px;overflow:auto;color:var(--text-dim)">${displayPrompt.replace(/</g, '&lt;')}</pre>
+    </div>` : ''}
+  </div>`;
+
+  container.insertAdjacentHTML('afterbegin', html);
+
+  // Switch to prompts tab, auto-open if not already
+  setDrawerTab('prompts');
+  if (!STATE.drawer.open) toggleDrawer();
+
+  return id;
+}
+
+function updatePromptStatus(id, status, extra) {
+  const statusEl = document.getElementById(id + '-status');
+  if (!statusEl) return;
+  const colors = { generating: 'var(--accent)', complete: 'var(--accent2)', error: 'var(--danger)' };
+  statusEl.style.color = colors[status] || 'var(--text-dim)';
+  statusEl.textContent = status + (extra ? ` ${extra}` : '');
+}
+
+function toast(msg, isError = false) {
+  const t = el('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+function getModel() { return el('modelSelect').value; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// WORKFLOW NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════
+
+function setWorkflow(wf) {
+  STATE.workflow = wf;
+
+  // Update tabs
+  document.querySelectorAll('.flow-tab').forEach((tab, i) => {
+    tab.classList.toggle('active', 'ABCDEF'[i] === wf);
+  });
+
+  // Show/hide flow sections
+  document.querySelectorAll('.flow-section').forEach(s => s.classList.remove('active'));
+  const section = el('flow' + wf);
+  if (section) section.classList.add('active');
+
+  // Update flow steps in sidebar
+  renderFlowSteps(wf);
+
+  // Flow-specific setup
+  if (wf === 'B') refreshAngles();
+  if (wf === 'C') refreshBallRefs();
+  if (wf === 'E') setupReplication();
+  if (wf === 'F') setupTestExport();
+
+  updateDebug();
+}
+
+function renderFlowSteps(wf) {
+  const stepsEl = el('flowSteps');
+  const steps = {
+    A: ['Enter details', 'Upload photo', 'Generate options', 'Review & save'],
+    B: ['Select character', 'Generate 8 angles', 'Review & fix'],
+    C: ['Select character', 'Generate 6 variants', 'Review & fix'],
+    D: ['Upload video', 'Extract frames', 'Select key frames', 'Configure animation', 'Generate sprites'],
+    E: ['Pick source', 'Pick targets', 'Replicate', 'Review results'],
+    F: ['Select animation', 'Preview player', 'Export to Soul Jam'],
+  };
+
+  const list = steps[wf] || [];
+  stepsEl.innerHTML = list.map((s, i) =>
+    `<div class="flow-step${i === 0 ? ' active' : ''}">
+      <div class="step-num">${i + 1}</div>
+      <span>${s}</span>
+    </div>`
+  ).join('');
+}
+
+function setFlowStep(stepIndex) {
+  document.querySelectorAll('.flow-step').forEach((s, i) => {
+    s.classList.remove('active', 'done');
+    if (i < stepIndex) s.classList.add('done');
+    if (i === stepIndex) s.classList.add('active');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CHARACTER SELECTION
+// ═══════════════════════════════════════════════════════════════════════
+
+function populateCharSelector() {
+  const sel = el('charSelector');
+  const chars = Object.keys(STATE.roster);
+  sel.innerHTML = '<option value="">Select character...</option>' +
+    chars.map(c => `<option value="${c}"${c === STATE.selectedChar ? ' selected' : ''}>${c}</option>`).join('');
+
+  // Also populate replication source
+  const replSel = el('replSourceChar');
+  if (replSel) {
+    replSel.innerHTML = '<option value="">Select...</option>' + chars.map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+}
+
+function selectCharacter(name) {
+  STATE.selectedChar = name || null;
+  el('charSelector').value = name || '';
+
+  // Highlight in roster
+  document.querySelectorAll('.roster-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.name === name);
+  });
+
+  // Update anchor status
+  updateAnchorStatus();
+
+  // Refresh current flow if char-dependent
+  if (STATE.workflow === 'B') refreshAngles();
+  if (STATE.workflow === 'C') refreshBallRefs();
+  if (STATE.workflow === 'F') setupTestExport();
+
+  updateDebug();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ROSTER
+// ═══════════════════════════════════════════════════════════════════════
+
+function renderRoster() {
+  const grid = el('rosterGrid');
+  const chars = Object.keys(STATE.roster);
+  el('rosterCount').textContent = chars.length;
+
+  grid.innerHTML = chars.map(name => {
+    const c = STATE.roster[name];
+    const anchor = c.anchor || {};
+    const hasPrt = anchor.portrait ? true : false;
+    const angCount = (anchor.angles || []).filter(Boolean).length;
+    const ballCount = (anchor.ballRefs || []).filter(Boolean).length;
+
+    return `<div class="roster-item${name === STATE.selectedChar ? ' active' : ''}" data-name="${name}" onclick="selectCharacter('${name}')">
+      <img src="/assets/${c.portraitPath || name + 'full.png'}" onerror="this.style.display='none'" />
+      <div class="name">${name}</div>
+      <div class="anchor-dots">
+        <div class="anchor-dot${hasPrt ? ' done' : ''}" title="Portrait"></div>
+        <div class="anchor-dot${angCount === 8 ? ' done' : angCount > 0 ? ' partial' : ''}" title="Angles ${angCount}/8"></div>
+        <div class="anchor-dot${ballCount === 6 ? ' done' : ballCount > 0 ? ' partial' : ''}" title="Ball ${ballCount}/6"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function loadRoster() {
+  try {
+    const resp = await fetch(`${API}/api/characters`);
+    const data = await resp.json();
+    STATE.characters = data.characters || {};
+    STATE.animations = data.animations || {};
+    STATE.customAnimations = data.customAnimations || {};
+    if (data.registry) STATE.roster = data.registry;
+    renderRoster();
+    populateCharSelector();
+    toast('Roster refreshed');
+  } catch (err) {
+    toast('Failed to refresh: ' + err.message, true);
+  }
+}
+
+function updateAnchorStatus() {
+  const card = el('anchorStatusCard');
+  const content = el('anchorStatusContent');
+  if (!STATE.selectedChar) { card.style.display = 'none'; return; }
+
+  card.style.display = 'block';
+  const c = STATE.roster[STATE.selectedChar] || {};
+  const anchor = c.anchor || {};
+  const angCount = (anchor.angles || []).filter(Boolean).length;
+  const ballCount = (anchor.ballRefs || []).filter(Boolean).length;
+
+  content.innerHTML = `
+    <div style="font-family:var(--mono);font-size:10px;margin-bottom:4px;color:var(--text)"><b>${STATE.selectedChar}</b></div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);display:flex;flex-direction:column;gap:3px">
+      <div>Portrait: <span style="color:${anchor.portrait ? 'var(--accent2)' : 'var(--danger)'}">${anchor.portrait ? 'Done' : 'Missing'}</span></div>
+      <div>Angles: <span style="color:${angCount === 8 ? 'var(--accent2)' : angCount > 0 ? 'var(--warning)' : 'var(--danger)'}">${angCount}/8</span></div>
+      <div>Ball Refs: <span style="color:${ballCount === 6 ? 'var(--accent2)' : ballCount > 0 ? 'var(--warning)' : 'var(--danger)'}">${ballCount}/6</span></div>
+      <div>Status: <span style="color:${anchor.status === 'complete' ? 'var(--accent2)' : 'var(--warning)'}">${anchor.status || 'incomplete'}</span></div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLOW A: NEW CHARACTER
+// ═══════════════════════════════════════════════════════════════════════
+
+// Photo upload handlers
+(function() {
+  setTimeout(() => {
+    const dz = el('charDropZone');
+    const fi = el('charPhotoFile');
+    if (!dz || !fi) return;
+    dz.onclick = () => fi.click();
+    fi.onchange = () => { if (fi.files[0]) loadCharPhoto(fi.files[0]); };
+    dz.ondragover = e => { e.preventDefault(); dz.classList.add('dragover'); };
+    dz.ondragleave = () => dz.classList.remove('dragover');
+    dz.ondrop = e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files[0]) loadCharPhoto(e.dataTransfer.files[0]); };
+  }, 100);
+})();
+
+function loadCharPhoto(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    STATE.charPhoto = e.target.result;
+    const thumb = el('charPhotoThumb');
+    thumb.src = e.target.result;
+    thumb.style.display = 'block';
+    log('Photo loaded: ' + file.name, 'info');
+    setFlowStep(1);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function createCharacter() {
+  const name = el('newCharName').value.trim().toLowerCase().replace(/\s+/g, '-');
+  if (!name) return toast('Name required', true);
+
+  const photoPath = el('charPhotoPath').value.trim();
+  if (!STATE.charPhoto && !photoPath) return toast('Photo required', true);
+
+  const btn = el('createCharBtn');
+  const spinner = el('charSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+  setFlowStep(2);
+
+  try {
+    const body = {
+      name,
+      model: getModel(),
+      heightInches: parseInt(el('charHeight').value) || 72,
+      weightLbs: parseInt(el('charWeight').value) || 185,
+      build: el('charBuild').value,
+      jerseyNumber: el('charJersey').value,
+      teamColors: {
+        primary: el('charColor1').value,
+        secondary: el('charColor2').value,
+        accent: '#000000',
+      },
+      changeRequest: el('charChangeRequest')?.value || '',
+    };
+
+    if (STATE.charPhoto) {
+      body.photoBase64 = STATE.charPhoto;
+    } else {
+      body.photoPath = photoPath;
+    }
+
+    // Log prompt info
+    const promptId = logPrompt({
+      flow: 'A', type: 'Character Creation (4 options)', character: name, model: getModel(),
+      settings: { options: 4, height: body.heightInches + 'in', weight: body.weightLbs + 'lbs', build: body.build, jersey: body.jerseyNumber, model: getModel() },
+      references: [
+        { type: 'photo', note: STATE.charPhoto ? 'Uploaded photo (base64)' : (photoPath || 'none'), path: null },
+      ],
+      prompt: `Character creation for "${name}" — ${body.build} build, #${body.jerseyNumber}, ${body.heightInches}in/${body.weightLbs}lbs. Colors: ${body.teamColors.primary}/${body.teamColors.secondary}${body.changeRequest ? '. Changes: ' + body.changeRequest : ''}`,
+    });
+    updatePromptStatus(promptId, 'generating');
+
+    log('Generating 4 options for ' + name + '...', 'info');
+    const resp = await fetch(`${API}/api/character/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    // Show options
+    const grid = el('charOptionsGrid');
+    grid.innerHTML = (data.options || []).map((opt, i) =>
+      `<div class="char-option" onclick="selectCharOption(${opt.index})">
+        <div class="option-label">#${opt.index + 1}</div>
+        <img src="${opt.url}" />
+      </div>`
+    ).join('');
+
+    el('charOptionsArea').style.display = 'block';
+    STATE.charSelectedOption = -1;
+    el('confirmCharBtn').disabled = true;
+    setFlowStep(3);
+    log(`${data.options?.length || 0} options generated`, 'success');
+    toast('Options ready — pick the best one');
+    updatePromptStatus(promptId, 'complete', `${data.options?.length || 0} options`);
+  } catch (err) {
+    toast('Error: ' + err.message, true);
+    log('Create failed: ' + err.message, 'error');
+    updatePromptStatus(promptId, 'error', err.message);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+function selectCharOption(index) {
+  STATE.charSelectedOption = index;
+  document.querySelectorAll('.char-option').forEach((opt, i) => {
+    opt.classList.toggle('selected', i === index);
+  });
+  el('confirmCharBtn').disabled = false;
+}
+
+async function confirmCharacter() {
+  const name = el('newCharName').value.trim().toLowerCase().replace(/\s+/g, '-');
+  if (STATE.charSelectedOption < 0) return;
+
+  try {
+    const resp = await fetch(`${API}/api/character/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        optionIndex: STATE.charSelectedOption,
+        heightInches: parseInt(el('charHeight').value) || 72,
+        weightLbs: parseInt(el('charWeight').value) || 185,
+        build: el('charBuild').value,
+        jerseyNumber: el('charJersey').value,
+        teamColors: {
+          primary: el('charColor1').value,
+          secondary: el('charColor2').value,
+          accent: '#000000',
+        },
+      }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    toast(name + ' saved to roster!');
+    log(name + ' confirmed and saved', 'success');
+
+    // Refresh roster and select new char
+    await loadRoster();
+    selectCharacter(name);
+    setWorkflow('B'); // Auto-advance to angles
+  } catch (err) {
+    toast('Error: ' + err.message, true);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLOW B: ANGLE GENERATION
+// ═══════════════════════════════════════════════════════════════════════
+
+async function refreshAngles() {
+  if (!STATE.selectedChar) {
+    el('angleCharNotice').style.display = 'block';
+    el('angleContent').style.display = 'none';
+    return;
+  }
+  el('angleCharNotice').style.display = 'none';
+  el('angleContent').style.display = 'block';
+
+  try {
+    const resp = await fetch(`${API}/api/anchor/angles/${STATE.selectedChar}`);
+    const data = await resp.json();
+    renderAngleGrid(data.angles || []);
+  } catch (err) {
+    log('Failed to load angles: ' + err.message, 'error');
+    renderAngleGrid([]);
+  }
+}
+
+function renderAngleGrid(angles) {
+  const grid = el('angleGrid');
+  grid.innerHTML = ANGLE_NAMES.map((name, i) => {
+    const a = angles[i] || {};
+    const hasImg = a.exists && a.url;
+    return `<div class="ref-card${hasImg ? ' done' : ''}" id="angleCard${i}">
+      <div class="ref-label">${name}</div>
+      ${hasImg ? `<img src="${a.url}" />` : `<div class="ref-empty">?</div>`}
+      ${hasImg ? `<button class="regen-btn" onclick="regenerateAngle(${i})" title="Regenerate">&#8635;</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function generateAngles() {
+  if (!STATE.selectedChar) return toast('Select a character first', true);
+
+  const btn = el('genAnglesBtn');
+  const spinner = el('angleSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+  el('angleProgressBar').style.display = 'block';
+  setFlowStep(1);
+
+  // Log prompt info
+  const preview = await fetchPromptPreview({ type: 'angle', character: STATE.selectedChar, angleIndex: 0 });
+  const promptId = logPrompt({
+    flow: 'B', type: '8 Angle Turnaround', character: STATE.selectedChar, model: getModel(),
+    settings: { angles: 8, model: getModel() },
+    references: preview?.references || [{ type: 'portrait', path: `${STATE.selectedChar}full.png` }],
+    prompt: preview?.prompt || '',
+  });
+  updatePromptStatus(promptId, 'generating');
+
+  try {
+    const resp = await fetch(`${API}/api/anchor/angles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: STATE.selectedChar, model: getModel() }),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            handleAngleEvent(data);
+          } catch {}
+        }
+      }
+    }
+    updatePromptStatus(promptId, 'complete');
+  } catch (err) {
+    toast('Error: ' + err.message, true);
+    log('Angle generation failed: ' + err.message, 'error');
+    updatePromptStatus(promptId, 'error', err.message);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+    el('angleProgressBar').style.display = 'none';
+  }
+}
+
+function handleAngleEvent(data) {
+  if (data.type) {
+    // Parse SSE event type from wrapping
+    return;
+  }
+
+  // Events come as: { index, angle, url, ... } from different SSE event types
+  // We detect by checking fields
+  if (data.totalAngles !== undefined) {
+    el('angleStatus').textContent = `Generating ${data.totalAngles} angles for ${data.character}...`;
+    genLog(`Starting angle generation for ${data.character}`, 'info');
+  }
+  if (data.angle !== undefined && data.url === undefined && data.error === undefined) {
+    // angle_start
+    const card = el('angleCard' + data.index);
+    if (card) card.className = 'ref-card generating';
+    el('angleStatus').textContent = `Generating angle ${data.index + 1}/8: ${data.angle}...`;
+  }
+  if (data.url && data.angle !== undefined) {
+    // angle_done
+    const card = el('angleCard' + data.index);
+    if (card) {
+      card.className = 'ref-card done';
+      card.innerHTML = `<div class="ref-label">${data.angle}</div><img src="${data.url}" /><button class="regen-btn" onclick="regenerateAngle(${data.index})" title="Regenerate">&#8635;</button>`;
+    }
+    el('angleProgressFill').style.width = ((data.index + 1) / 8 * 100) + '%';
+    genLog(`Angle ${data.index + 1}/8 done: ${data.angle}`, 'success');
+  }
+  if (data.error && data.angle !== undefined) {
+    // angle_error
+    const card = el('angleCard' + data.index);
+    if (card) card.className = 'ref-card error';
+    genLog(`Angle ${data.index + 1} error: ${data.error}`, 'error');
+  }
+  if (data.completedCount !== undefined && data.angles !== undefined) {
+    // complete
+    el('angleStatus').textContent = `Done! ${data.completedCount}/8 angles generated. Cost: $${(data.totalCost || 0).toFixed(3)}`;
+    trackSessionCost(data.totalCost || 0);
+    toast(`${data.completedCount}/8 angles generated`);
+    setFlowStep(2);
+    // Update roster anchor data
+    if (STATE.roster[STATE.selectedChar]) {
+      if (!STATE.roster[STATE.selectedChar].anchor) STATE.roster[STATE.selectedChar].anchor = {};
+      STATE.roster[STATE.selectedChar].anchor.angles = data.angles;
+    }
+    renderRoster();
+    updateAnchorStatus();
+  }
+}
+
+async function regenerateAngle(index) {
+  if (!STATE.selectedChar) return;
+  const card = el('angleCard' + index);
+  if (card) card.className = 'ref-card generating';
+
+  try {
+    const resp = await fetch(`${API}/api/anchor/angles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: STATE.selectedChar, model: getModel(), regenerate: [index] }),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { handleAngleEvent(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    }
+  } catch (err) {
+    toast('Regen failed: ' + err.message, true);
+    if (card) card.className = 'ref-card error';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLOW C: BALL REFERENCES
+// ═══════════════════════════════════════════════════════════════════════
+
+async function refreshBallRefs() {
+  if (!STATE.selectedChar) {
+    el('ballCharNotice').style.display = 'block';
+    el('ballContent').style.display = 'none';
+    return;
+  }
+  el('ballCharNotice').style.display = 'none';
+  el('ballContent').style.display = 'block';
+
+  try {
+    const resp = await fetch(`${API}/api/anchor/ball-refs/${STATE.selectedChar}`);
+    const data = await resp.json();
+    renderBallGrid(data.ballRefs || []);
+  } catch (err) {
+    renderBallGrid([]);
+  }
+}
+
+function renderBallGrid(refs) {
+  const grid = el('ballGrid');
+  grid.innerHTML = BALL_VARIANTS.map((variant, i) => {
+    const r = refs[i] || {};
+    const hasImg = r.exists && r.url;
+    return `<div class="ref-card${hasImg ? ' done' : ''}" id="ballCard${i}">
+      <div class="ref-label">${variant}</div>
+      ${hasImg ? `<img src="${r.url}" />` : `<div class="ref-empty">?</div>`}
+      ${hasImg ? `<button class="regen-btn" onclick="regenerateBallRef(${i})" title="Regenerate">&#8635;</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function generateBallRefs() {
+  if (!STATE.selectedChar) return toast('Select a character first', true);
+
+  const btn = el('genBallBtn');
+  const spinner = el('ballSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+  el('ballProgressBar').style.display = 'block';
+  setFlowStep(1);
+
+  // Log prompt info
+  const preview = await fetchPromptPreview({ type: 'ball', character: STATE.selectedChar, angleIndex: 0 });
+  const promptId = logPrompt({
+    flow: 'C', type: '6 Ball Variants', character: STATE.selectedChar, model: getModel(),
+    settings: { variants: 6, model: getModel() },
+    references: preview?.references || [{ type: 'portrait', path: `${STATE.selectedChar}full.png` }],
+    prompt: preview?.prompt || '',
+  });
+  updatePromptStatus(promptId, 'generating');
+
+  try {
+    const resp = await fetch(`${API}/api/anchor/ball-refs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: STATE.selectedChar, model: getModel() }),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { handleBallEvent(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    }
+    updatePromptStatus(promptId, 'complete');
+  } catch (err) {
+    toast('Error: ' + err.message, true);
+    updatePromptStatus(promptId, 'error', err.message);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+    el('ballProgressBar').style.display = 'none';
+  }
+}
+
+function handleBallEvent(data) {
+  if (data.totalVariants !== undefined) {
+    el('ballStatus').textContent = `Generating ${data.totalVariants} ball variants...`;
+    genLog(`Starting ball ref generation for ${data.character}`, 'info');
+  }
+  if (data.variant !== undefined && data.url === undefined && data.error === undefined) {
+    const card = el('ballCard' + data.index);
+    if (card) card.className = 'ref-card generating';
+    el('ballStatus').textContent = `Generating ${data.index + 1}/6: ${data.variant}...`;
+  }
+  if (data.url && data.variant !== undefined) {
+    const card = el('ballCard' + data.index);
+    if (card) {
+      card.className = 'ref-card done';
+      card.innerHTML = `<div class="ref-label">${data.variant}</div><img src="${data.url}" /><button class="regen-btn" onclick="regenerateBallRef(${data.index})" title="Regenerate">&#8635;</button>`;
+    }
+    el('ballProgressFill').style.width = ((data.index + 1) / 6 * 100) + '%';
+    genLog(`Ball ref ${data.index + 1}/6 done: ${data.variant}`, 'success');
+  }
+  if (data.error && data.variant !== undefined) {
+    const card = el('ballCard' + data.index);
+    if (card) card.className = 'ref-card error';
+    genLog(`Ball ref error: ${data.error}`, 'error');
+  }
+  if (data.completedCount !== undefined && data.ballRefs !== undefined) {
+    el('ballStatus').textContent = `Done! ${data.completedCount}/6 ball refs. Cost: $${(data.totalCost || 0).toFixed(3)}`;
+    trackSessionCost(data.totalCost || 0);
+    toast(`${data.completedCount}/6 ball refs generated`);
+    setFlowStep(2);
+    if (STATE.roster[STATE.selectedChar]) {
+      if (!STATE.roster[STATE.selectedChar].anchor) STATE.roster[STATE.selectedChar].anchor = {};
+      STATE.roster[STATE.selectedChar].anchor.ballRefs = data.ballRefs;
+    }
+    renderRoster();
+    updateAnchorStatus();
+  }
+}
+
+async function regenerateBallRef(index) {
+  if (!STATE.selectedChar) return;
+  const card = el('ballCard' + index);
+  if (card) card.className = 'ref-card generating';
+
+  try {
+    const resp = await fetch(`${API}/api/anchor/ball-refs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: STATE.selectedChar, model: getModel(), regenerate: [index] }),
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { handleBallEvent(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    }
+  } catch (err) {
+    toast('Regen failed: ' + err.message, true);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLOW D: VIDEO TO ANIMATION
+// ═══════════════════════════════════════════════════════════════════════
+
+// Video drop zone setup
+(function() {
+  setTimeout(() => {
+    const dz = el('videoDropZone');
+    const fi = el('videoFile');
+    if (!dz || !fi) return;
+    dz.onclick = () => fi.click();
+    fi.onchange = () => { if (fi.files[0]) uploadVideoFile(fi.files[0]); };
+    dz.ondragover = e => { e.preventDefault(); dz.classList.add('dragover'); };
+    dz.ondragleave = () => dz.classList.remove('dragover');
+    dz.ondrop = e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files[0]) uploadVideoFile(e.dataTransfer.files[0]); };
+  }, 100);
+})();
+
+async function uploadVideoFile(file) {
+  try {
+    const resp = await fetch(`${API}/api/video/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file,
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    STATE.session.id = data.sessionId;
+    el('extractBtn').disabled = false;
+    setVideoStep('stepUpload', true);
+    log('Video uploaded: ' + data.sessionId, 'success');
+    toast('Video loaded');
+  } catch (err) {
+    toast('Upload failed: ' + err.message, true);
+  }
+}
+
+async function loadVideoFromPath() {
+  const vpath = el('videoPath').value.trim();
+  if (!vpath) return toast('Enter a video path', true);
+
+  try {
+    const resp = await fetch(`${API}/api/video/from-path`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoPath: vpath }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    STATE.session.id = data.sessionId;
+    el('extractBtn').disabled = false;
+    setVideoStep('stepUpload', true);
+    toast('Video loaded from path');
+  } catch (err) {
+    toast('Load failed: ' + err.message, true);
+  }
+}
+
+async function extractFrames() {
+  if (!STATE.session.id) return toast('Load a video first', true);
+  el('extractSpinner').classList.add('active');
+  el('extractBtn').disabled = true;
+
+  try {
+    const fps = parseInt(el('extractFps').value) || 10;
+    const resp = await fetch(`${API}/api/video/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: STATE.session.id, fps }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    STATE.session.frames = data.frames || [];
+    STATE.session.selectedFiles = [];
+    renderFrameGallery();
+    el('videoFrameSection').style.display = 'block';
+    el('frameCountBadge').textContent = data.frameCount;
+    setVideoStep('stepExtract', true);
+    setFlowStep(2);
+    toast(`${data.frameCount} frames extracted`);
+  } catch (err) {
+    toast('Extract failed: ' + err.message, true);
+  } finally {
+    el('extractSpinner').classList.remove('active');
+    el('extractBtn').disabled = false;
+  }
+}
+
+function renderFrameGallery() {
+  const grid = el('frameGrid');
+  grid.innerHTML = STATE.session.frames.map((f, i) => {
+    const sel = STATE.session.selectedFiles.indexOf(f.file || f.fileName);
+    return `<div class="frame-thumb-wrapper">
+      <img class="frame-thumb${sel >= 0 ? ' selected' : ''}" src="${f.url}" onclick="toggleFrameSelect('${f.file || f.fileName}', this)" />
+      ${sel >= 0 ? `<div class="frame-order-badge">${sel + 1}</div>` : ''}
+    </div>`;
+  }).join('');
+  el('frameSelCount').textContent = STATE.session.selectedFiles.length;
+}
+
+function toggleFrameSelect(file, imgEl) {
+  const idx = STATE.session.selectedFiles.indexOf(file);
+  if (idx >= 0) {
+    STATE.session.selectedFiles.splice(idx, 1);
+  } else {
+    STATE.session.selectedFiles.push(file);
+  }
+  renderFrameGallery();
+  if (STATE.session.selectedFiles.length > 0) {
+    el('videoConfigSection').style.display = 'block';
+    setVideoStep('stepSelect', true);
+    setFlowStep(3);
+  }
+}
+
+function clearFrameSelection() {
+  STATE.session.selectedFiles = [];
+  renderFrameGallery();
+}
+
+async function smartSelectFrames() {
+  const count = parseInt(el('selectCount').value) || 6;
+  el('selectSpinner').classList.add('active');
+
+  try {
+    const resp = await fetch(`${API}/api/video/smart-select`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: STATE.session.id, count }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    STATE.session.selectedFiles = data.selectedFileNames || [];
+    renderFrameGallery();
+    el('videoConfigSection').style.display = 'block';
+    setVideoStep('stepSelect', true);
+    setFlowStep(3);
+    toast(`${STATE.session.selectedFiles.length} frames selected`);
+  } catch (err) {
+    toast('Smart select failed: ' + err.message, true);
+  } finally {
+    el('selectSpinner').classList.remove('active');
+  }
+}
+
+function setVideoStep(stepId, done) {
+  const step = el(stepId);
+  if (!step) return;
+  step.classList.remove('active');
+  step.classList.add(done ? 'done' : 'active');
+}
+
+function setVideoGenMode(mode) {
+  STATE.videoGenMode = mode;
+  document.querySelectorAll('#videoGenModeToggle button').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase() === mode);
+  });
+}
+
+async function generateFromVideo() {
+  if (!STATE.session.id || !STATE.selectedChar) return toast('Need video session and character', true);
+
+  const animName = el('videoAnimName').value.trim() || 'custom-anim';
+  const animAction = el('videoAnimAction').value.trim() || animName;
+  const fps = parseInt(el('videoAnimFps').value) || 8;
+  const loop = el('videoAnimLoop').value === 'true';
+
+  el('videoGenSpinner').classList.add('active');
+  el('videoGenBtn').disabled = true;
+  setVideoStep('stepConfig', true);
+
+  // Log prompt info
+  const previewType = STATE.videoGenMode === 'fbf' ? 'video-fbf' : 'video';
+  const preview = await fetchPromptPreview({
+    type: previewType, character: STATE.selectedChar, action: animAction,
+    frameCount: STATE.session.selectedFiles.length, frameIndex: 0,
+  });
+  const promptId = logPrompt({
+    flow: 'D', type: `Video ${STATE.videoGenMode === 'fbf' ? 'FBF' : 'Strip'}`,
+    character: STATE.selectedChar, model: getModel(),
+    settings: { mode: STATE.videoGenMode, animation: animName, action: animAction, frames: STATE.session.selectedFiles.length, fps, loop, model: getModel() },
+    references: [
+      { type: 'portrait', path: `${STATE.selectedChar}full.png` },
+      { type: STATE.videoGenMode === 'fbf' ? 'video-frame' : 'video-strip', note: `${STATE.session.selectedFiles.length} selected frames from video` },
+    ],
+    prompt: preview?.prompt || '',
+  });
+  updatePromptStatus(promptId, 'generating');
+
+  try {
+    // Sync manual selection
+    await fetch(`${API}/api/video/select-manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: STATE.session.id, frameFiles: STATE.session.selectedFiles }),
+    });
+
+    // Build strip
+    await fetch(`${API}/api/video/strip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: STATE.session.id }),
+    });
+
+    if (STATE.videoGenMode === 'fbf') {
+      await generateVideoFBF(animName, animAction, fps, loop);
+    } else {
+      const resp = await fetch(`${API}/api/video/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: STATE.session.id,
+          character: STATE.selectedChar,
+          animName, frameCount: STATE.session.selectedFiles.length,
+          model: getModel(), fps, loop, action: animAction,
+        }),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+
+      el('videoPreview').style.display = 'flex';
+      el('videoPreviewImg').src = data.processed || data.raw;
+      toast('Strip generated!');
+      genLog(`Video strip generated. Cost: $${(data.cost?.totalCost || 0).toFixed(3)}`, 'success');
+    }
+
+    // Register custom animation
+    await registerCustomAnim(animName, STATE.session.selectedFiles.length, fps, loop, animAction);
+    setVideoStep('stepGenerate', true);
+    setFlowStep(4);
+    updatePromptStatus(promptId, 'complete');
+  } catch (err) {
+    toast('Generation failed: ' + err.message, true);
+    updatePromptStatus(promptId, 'error', err.message);
+  } finally {
+    el('videoGenSpinner').classList.remove('active');
+    el('videoGenBtn').disabled = false;
+  }
+}
+
+async function generateVideoFBF(animName, animAction, fps, loop) {
+  el('videoFbfSection').style.display = 'block';
+  const totalFrames = STATE.session.selectedFiles.length;
+
+  // Create frame cards
+  el('videoFbfGrid').innerHTML = Array.from({ length: totalFrames }, (_, i) =>
+    `<div class="fbf-card" id="vfbfCard${i}"><div class="frame-num">F${i + 1}</div><div class="ref-empty" style="aspect-ratio:1;font-size:12px">...</div></div>`
+  ).join('');
+
+  const resp = await fetch(`${API}/api/video/generate-fbf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: STATE.session.id,
+      character: STATE.selectedChar,
+      animName, model: getModel(), fps, loop, action: animAction,
+    }),
+  });
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          handleVideoFbfEvent(data, totalFrames);
+        } catch {}
+      }
+    }
+  }
+}
+
+function handleVideoFbfEvent(data, totalFrames) {
+  if (data.frameIndex !== undefined && data.processedUrl) {
+    const card = el('vfbfCard' + data.frameIndex);
+    if (card) {
+      card.className = 'fbf-card done';
+      card.innerHTML = `<div class="frame-num">F${data.frameIndex + 1}</div><img src="${data.processedUrl || data.rawUrl}" />`;
+    }
+    el('videoFbfFill').style.width = ((data.frameIndex + 1) / totalFrames * 100) + '%';
+    el('videoFbfStatus').textContent = `Frame ${data.frameIndex + 1}/${totalFrames} done`;
+  }
+  if (data.frameIndex !== undefined && !data.processedUrl && !data.error) {
+    const card = el('vfbfCard' + data.frameIndex);
+    if (card) card.className = 'fbf-card generating';
+    el('videoFbfStatus').textContent = `Generating frame ${data.frameIndex + 1}/${totalFrames}...`;
+  }
+  if ((data.stripUrl || data.url) && data.totalFrames) {
+    el('videoPreview').style.display = 'flex';
+    el('videoPreviewImg').src = data.stripUrl || data.url;
+    el('videoFbfStatus').textContent = `Complete! Cost: $${(data.totalCost || data.cost || 0).toFixed(3)}`;
+    trackSessionCost(data.totalCost || data.cost || 0);
+  }
+  if (data.error && !data.frameIndex) {
+    toast('FBF error: ' + (data.message || data.error), true);
+  }
+}
+
+async function registerCustomAnim(name, frames, fps, loop, action) {
+  try {
+    await fetch(`${API}/api/animations/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, frames, fps, loop, action, source: 'video' }),
+    });
+    STATE.customAnimations[name] = { frames, fps, loop, action, custom: true };
+    log('Custom animation registered: ' + name, 'success');
+  } catch {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLOW E: ANIMATION REPLICATION
+// ═══════════════════════════════════════════════════════════════════════
+
+function setupReplication() {
+  const chars = Object.keys(STATE.roster);
+  const sourceChar = el('replSourceChar');
+  sourceChar.innerHTML = '<option value="">Select source...</option>' +
+    chars.map(c => `<option value="${c}">${c}</option>`).join('');
+
+  const targetGrid = el('replTargetGrid');
+  targetGrid.innerHTML = chars.map(c => {
+    const r = STATE.roster[c];
+    return `<div class="target-char" data-name="${c}" onclick="toggleReplTarget('${c}', this)">
+      <img src="/assets/${r.portraitPath || c + 'full.png'}" onerror="this.style.display='none'" />
+      <div class="name">${c}</div>
+    </div>`;
+  }).join('');
+
+  STATE.replTargets = [];
+}
+
+async function loadSourceAnims() {
+  const char = el('replSourceChar').value;
+  if (!char) return;
+  try {
+    const resp = await fetch(`${API}/api/sprites/${char}`);
+    const data = await resp.json();
+    const animSel = el('replSourceAnim');
+    const available = Object.entries(data.sprites || {}).filter(([_, s]) => s.exists);
+    animSel.innerHTML = '<option value="">Select animation...</option>' +
+      available.map(([name]) => `<option value="${name}">${name}</option>`).join('');
+  } catch {}
+}
+
+function toggleReplTarget(name, el) {
+  const idx = STATE.replTargets.indexOf(name);
+  if (idx >= 0) {
+    STATE.replTargets.splice(idx, 1);
+    el.classList.remove('selected');
+  } else {
+    STATE.replTargets.push(name);
+    el.classList.add('selected');
+  }
+}
+
+async function startReplication() {
+  const sourceChar = el('replSourceChar').value;
+  const sourceAnim = el('replSourceAnim').value;
+  if (!sourceChar || !sourceAnim) return toast('Select source character and animation', true);
+  if (STATE.replTargets.length === 0) return toast('Select at least one target character', true);
+
+  el('replSpinner').classList.add('active');
+  el('replBtn').disabled = true;
+  el('replProgress').style.display = 'block';
+  setFlowStep(2);
+
+  // Log prompt info
+  const preview = await fetchPromptPreview({ type: 'strip', character: STATE.replTargets[0] || sourceChar, animation: sourceAnim });
+  const promptId = logPrompt({
+    flow: 'E', type: `Replicate ${sourceAnim}`, character: `${sourceChar} -> ${STATE.replTargets.join(', ')}`, model: getModel(),
+    settings: { source: sourceChar, animation: sourceAnim, targets: STATE.replTargets.length, model: getModel() },
+    references: [
+      { type: 'pose-reference', note: `Source: ${sourceChar}/${sourceAnim} strip` },
+      ...STATE.replTargets.map(t => ({ type: 'portrait', path: `${t}full.png` })),
+    ],
+    prompt: preview?.prompt || `Replicating ${sourceAnim} from ${sourceChar} to ${STATE.replTargets.join(', ')}`,
+  });
+  updatePromptStatus(promptId, 'generating');
+
+  try {
+    const resp = await fetch(`${API}/api/anchor/replicate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sourceCharacter: sourceChar,
+        sourceAnimation: sourceAnim,
+        targetCharacters: STATE.replTargets,
+        model: getModel(),
+      }),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try { handleReplEvent(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    }
+    updatePromptStatus(promptId, 'complete');
+  } catch (err) {
+    toast('Replication failed: ' + err.message, true);
+    updatePromptStatus(promptId, 'error', err.message);
+  } finally {
+    el('replSpinner').classList.remove('active');
+    el('replBtn').disabled = false;
+  }
+}
+
+function handleReplEvent(data) {
+  if (data.totalTargets !== undefined) {
+    el('replStatus').textContent = `Replicating ${data.sourceAnimation} to ${data.totalTargets} targets...`;
+    genLog(`Starting replication: ${data.sourceCharacter}/${data.sourceAnimation} -> ${data.totalTargets} targets`, 'info');
+  }
+  if (data.target && data.totalFrames !== undefined && !data.completedFrames) {
+    el('replStatus').textContent = `Processing ${data.target}: ${data.totalFrames} frames...`;
+    el('replFrameGrid').innerHTML = Array.from({ length: data.totalFrames }, (_, i) =>
+      `<div class="fbf-card" id="replCard-${data.target}-${i}"><div class="frame-num">F${i + 1}</div><div class="ref-empty" style="aspect-ratio:1;font-size:10px">...</div></div>`
+    ).join('');
+  }
+  if (data.target && data.frameIndex !== undefined && data.url) {
+    const card = document.getElementById(`replCard-${data.target}-${data.frameIndex}`);
+    if (card) {
+      card.className = 'fbf-card done';
+      card.innerHTML = `<div class="frame-num">F${data.frameIndex + 1}</div><img src="${data.url}" />`;
+    }
+    el('replFill').style.width = ((data.frameIndex + 1) / (parseInt(el('replFrameGrid').children.length) || 1) * 100) + '%';
+  }
+  if (data.target && data.completedFrames !== undefined) {
+    genLog(`${data.target}: ${data.completedFrames} frames replicated`, 'success');
+  }
+  if (data.results) {
+    el('replStatus').textContent = `Replication complete. ${data.totalTargets} targets. Cost: $${(data.totalCost || 0).toFixed(3)}`;
+    trackSessionCost(data.totalCost || 0);
+    toast('Replication complete!');
+    setFlowStep(3);
+  }
+  if (data.reason) {
+    genLog(`Skipped ${data.target}: ${data.reason}`, 'warn');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLOW F: LIVE TEST / EXPORT
+// ═══════════════════════════════════════════════════════════════════════
+
+async function setupTestExport() {
+  if (!STATE.selectedChar) return;
+
+  try {
+    const resp = await fetch(`${API}/api/sprites/${STATE.selectedChar}`);
+    const data = await resp.json();
+    const sprites = data.sprites || {};
+    const allAnims = { ...STATE.animations, ...STATE.customAnimations };
+
+    // Populate anim picker grid
+    const grid = el('testAnimGrid');
+    grid.innerHTML = Object.entries(allAnims).map(([name, anim]) => {
+      const has = sprites[name]?.exists;
+      return `<div class="anim-pick-btn${has ? ' done' : ''}${name === STATE.testPlayer.animId ? ' active' : ''}" onclick="selectTestAnim('${name}')">${name} <span style="color:var(--text-muted);font-size:8px">${anim.frames}f</span></div>`;
+    }).join('');
+
+    // Populate dropdown
+    const sel = el('testAnimSelect');
+    sel.innerHTML = Object.entries(allAnims).map(([name, anim]) =>
+      `<option value="${name}"${name === STATE.testPlayer.animId ? ' selected' : ''}>${name} (${anim.frames}f)</option>`
+    ).join('');
+  } catch {}
+}
+
+function selectTestAnim(name) {
+  STATE.testPlayer.animId = name;
+  setupTestExport();
+  loadTestAnim();
+}
+
+async function loadTestAnim() {
+  const anim = el('testAnimSelect').value;
+  if (!anim || !STATE.selectedChar) return;
+
+  STATE.testPlayer.animId = anim;
+  STATE.testPlayer.frames = [];
+  STATE.testPlayer.currentFrame = 0;
+  STATE.testPlayer.playing = false;
+  el('testPlayBtn').textContent = 'Play';
+
+  try {
+    const resp = await fetch(`${API}/api/animations/frames?character=${STATE.selectedChar}&animation=${anim}`);
+    const data = await resp.json();
+
+    const allAnims = { ...STATE.animations, ...STATE.customAnimations };
+    const animData = allAnims[anim] || {};
+    STATE.testPlayer.fps = animData.fps || 8;
+    el('testFps').value = STATE.testPlayer.fps;
+
+    if (data.frames && data.frames.length > 0) {
+      // Load frame images
+      const promises = data.frames.map(f => {
+        return new Promise(resolve => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+          img.src = f.url;
+        });
+      });
+      STATE.testPlayer.frames = (await Promise.all(promises)).filter(Boolean);
+    } else if (data.hasStrip && data.stripUrl) {
+      // Load strip and cut
+      const img = new Image();
+      await new Promise(r => { img.onload = r; img.src = data.stripUrl; });
+      const frameW = Math.round(img.width / (animData.frames || 6));
+      const frames = [];
+      for (let i = 0; i < (animData.frames || 6); i++) {
+        const c = document.createElement('canvas');
+        c.width = frameW; c.height = img.height;
+        c.getContext('2d').drawImage(img, i * frameW, 0, frameW, img.height, 0, 0, frameW, img.height);
+        const fImg = new Image();
+        await new Promise(r => { fImg.onload = r; fImg.src = c.toDataURL(); });
+        frames.push(fImg);
+      }
+      STATE.testPlayer.frames = frames;
+    }
+
+    updateTestFrameNum();
+    drawTestFrame();
+  } catch (err) {
+    log('Failed to load test anim: ' + err.message, 'error');
+  }
+}
+
+function drawTestFrame() {
+  const canvas = el('testCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#1a1a28';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const frames = STATE.testPlayer.frames;
+  if (frames.length === 0) return;
+
+  const frame = frames[STATE.testPlayer.currentFrame % frames.length];
+  if (!frame) return;
+
+  const scale = Math.min(canvas.width / frame.width, canvas.height / frame.height) * 0.85;
+  const w = frame.width * scale;
+  const h = frame.height * scale;
+  const x = (canvas.width - w) / 2;
+  const y = (canvas.height - h) / 2;
+
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(frame, x, y, w, h);
+  updateTestFrameNum();
+}
+
+function updateTestFrameNum() {
+  el('testFrameNum').textContent = `${STATE.testPlayer.currentFrame + 1}/${STATE.testPlayer.frames.length}`;
+}
+
+function testTogglePlay() {
+  STATE.testPlayer.playing = !STATE.testPlayer.playing;
+  el('testPlayBtn').textContent = STATE.testPlayer.playing ? 'Pause' : 'Play';
+  if (STATE.testPlayer.playing) testLoop();
+}
+
+let testAnimFrame = null;
+function testLoop() {
+  if (!STATE.testPlayer.playing) return;
+  const speed = parseFloat(el('testSpeed').value) || 1;
+  const fps = (parseInt(el('testFps').value) || 8) * speed;
+  const delay = 1000 / fps;
+
+  STATE.testPlayer.currentFrame = (STATE.testPlayer.currentFrame + 1) % Math.max(1, STATE.testPlayer.frames.length);
+  drawTestFrame();
+  testAnimFrame = setTimeout(testLoop, delay);
+}
+
+function testStepBack() {
+  STATE.testPlayer.playing = false;
+  el('testPlayBtn').textContent = 'Play';
+  STATE.testPlayer.currentFrame = Math.max(0, STATE.testPlayer.currentFrame - 1);
+  drawTestFrame();
+}
+
+function testStepForward() {
+  STATE.testPlayer.playing = false;
+  el('testPlayBtn').textContent = 'Play';
+  STATE.testPlayer.currentFrame = (STATE.testPlayer.currentFrame + 1) % Math.max(1, STATE.testPlayer.frames.length);
+  drawTestFrame();
+}
+
+function updateTestPlayer() {
+  // Just restart loop if playing
+  if (STATE.testPlayer.playing) {
+    clearTimeout(testAnimFrame);
+    testLoop();
+  }
+}
+
+async function exportToSoulJam() {
+  if (!STATE.selectedChar) return toast('Select a character', true);
+  try {
+    const resp = await fetch(`${API}/api/deploy/${STATE.selectedChar}`, { method: 'POST' });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    toast(`${STATE.selectedChar} exported to Soul Jam!`);
+    log(`Deploy: ${data.completedAnims?.length || 0} anims, missing: ${data.missingAnims?.length || 0}`, 'success');
+  } catch (err) {
+    toast('Export failed: ' + err.message, true);
+  }
+}
+
+async function buildGridSheet() {
+  if (!STATE.selectedChar) return toast('Select a character', true);
+  try {
+    const resp = await fetch(`${API}/api/grid/${STATE.selectedChar}`);
+    const data = await resp.json();
+    toast('Grid sheet built!');
+    log('Grid built for ' + STATE.selectedChar, 'success');
+  } catch (err) {
+    toast('Grid build failed: ' + err.message, true);
+  }
+}
+
+async function runAudit() {
+  if (!STATE.selectedChar) return toast('Select a character', true);
+  try {
+    const resp = await fetch(`${API}/api/audit/${STATE.selectedChar}`, { method: 'POST' });
+    const data = await resp.json();
+    toast('Audit complete');
+    log('Audit: ' + JSON.stringify(data.report || {}).substring(0, 200), 'info');
+  } catch (err) {
+    toast('Audit failed: ' + err.message, true);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BOTTOM DRAWER
+// ═══════════════════════════════════════════════════════════════════════
+
+function toggleDrawer() {
+  STATE.drawer.open = !STATE.drawer.open;
+  el('drawer').classList.toggle('open', STATE.drawer.open);
+  el('drawerToggle').innerHTML = (STATE.drawer.open ? '&#9660;' : '&#9650;') + ' Prompts / Logs / Debug';
+}
+
+function setDrawerTab(tab) {
+  STATE.drawer.tab = tab;
+  document.querySelectorAll('.drawer-tab').forEach(t => t.classList.toggle('active', t.textContent.toLowerCase().includes(tab)));
+  document.querySelectorAll('.drawer-pane').forEach(p => p.classList.remove('active'));
+  el('drawer' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+
+  if (tab === 'debug') updateDebug();
+}
+
+function updateDebug() {
+  const debugEl = el('debugState');
+  if (debugEl) {
+    const snapshot = { ...STATE };
+    delete snapshot.charPhoto; // Too large
+    debugEl.textContent = JSON.stringify(snapshot, null, 2);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// COST TRACKING
+// ═══════════════════════════════════════════════════════════════════════
+
+async function loadCosts() {
+  try {
+    const resp = await fetch(`${API}/api/costs`);
+    const data = await resp.json();
+    el('costTotal').textContent = '$' + (data.totalSpend || 0).toFixed(2);
+    el('headerCostAmount').textContent = '$' + (data.totalSpend || 0).toFixed(2);
+    el('costGens').textContent = data.totalGenerations || 0;
+    const avg = data.totalGenerations > 0 ? (data.totalSpend / data.totalGenerations) : 0;
+    el('costAvg').textContent = '$' + avg.toFixed(3);
+    STATE.costs.total = data.totalSpend || 0;
+    STATE.costs.gens = data.totalGenerations || 0;
+  } catch {}
+}
+
+function trackSessionCost(amount) {
+  STATE.costs.session += amount;
+  el('costSession').textContent = '$' + STATE.costs.session.toFixed(3);
+  loadCosts(); // Refresh from server
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════════════════
+
+document.addEventListener('keydown', e => {
+  // Alt+A-F for flow switching
+  if (e.altKey && !e.ctrlKey && !e.metaKey) {
+    const key = e.key.toUpperCase();
+    if ('ABCDEF'.includes(key)) {
+      e.preventDefault();
+      setWorkflow(key);
+    }
+  }
+  // Alt+D for drawer
+  if (e.altKey && e.key === 'd') {
+    e.preventDefault();
+    toggleDrawer();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════════════════
+
+init();
+</script>
+</body>
+</html>
