@@ -3,12 +3,12 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { CHARACTERS, ANIMATIONS } = require('../../sprite-generator/prompts');
-const { NanaBananaClient } = require('../../sprite-generator/nano-banana');
+const { CHARACTERS, ANIMATIONS } = require('../lib/sprite-generator/prompts');
+const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
 
-const CHARACTERS_FILE = path.resolve(__dirname, '../../../.characters.json');
-const CUSTOM_ANIMS_FILE = path.resolve(__dirname, '../../../.custom-animations.json');
+const CHARACTERS_FILE = process.env.CHARACTERS_FILE || path.resolve(__dirname, '../data/.characters.json');
+const CUSTOM_ANIMS_FILE = process.env.CUSTOM_ANIMS_FILE || path.resolve(__dirname, '../data/.custom-animations.json');
 
 // ─── Persistent Character Registry ────────────────────────────────────
 

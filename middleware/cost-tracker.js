@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const COST_FILE = path.resolve(__dirname, '../../../.cost-tracking.json');
+const COST_FILE = process.env.COST_FILE || path.resolve(__dirname, '../data/.cost-tracking.json');
 
 // Per-image cost by model and resolution (USD)
 const COST_PER_IMAGE = {

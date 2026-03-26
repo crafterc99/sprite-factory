@@ -3,7 +3,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { buildGrid, GRID_LAYOUT } = require('../../sprite-processor/index');
+const { buildGrid, GRID_LAYOUT } = require('../lib/sprite-processor/index');
 
 function register(router, { ASSETS_DIR, json, parseBody }) {
 
@@ -22,7 +22,7 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
   router.post('/api/audit/:char', async (req, res, params) => {
     const charName = params.char;
     try {
-      const { auditCharacter } = require('../../sprite-processor/consistency-checker');
+      const { auditCharacter } = require('../lib/sprite-processor/consistency-checker');
       const report = await auditCharacter(charName, ASSETS_DIR);
       return json(res, { success: true, report });
     } catch (err) {
@@ -35,7 +35,7 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
   // GET /api/templates — List all templates
   router.get('/api/templates', (req, res, params, query) => {
     try {
-      const { listTemplates } = require('../../sprite-generator/template-engine');
+      const { listTemplates } = require('../lib/sprite-generator/template-engine');
       const filter = {};
       if (query.animation) filter.animation = query.animation;
       if (query.character) filter.character = query.character;
@@ -50,7 +50,7 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
   router.post('/api/templates', async (req, res) => {
     const body = await parseBody(req);
     try {
-      const { saveTemplate } = require('../../sprite-generator/template-engine');
+      const { saveTemplate } = require('../lib/sprite-generator/template-engine');
       const { character, animation, name, quality, model, promptSections } = body;
 
       const stripPath = path.join(ASSETS_DIR, `${character}-${animation}.png`);
@@ -82,7 +82,7 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
   // GET /api/templates/:id — Get a template
   router.get('/api/templates/:id', (req, res, params) => {
     try {
-      const { loadTemplate } = require('../../sprite-generator/template-engine');
+      const { loadTemplate } = require('../lib/sprite-generator/template-engine');
       const template = loadTemplate(params.id);
       if (!template) return json(res, { error: 'Template not found' }, 404);
       return json(res, { template });
@@ -95,7 +95,7 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
   router.post('/api/templates/:id/apply', async (req, res, params) => {
     const body = await parseBody(req);
     try {
-      const { applyTemplate } = require('../../sprite-generator/template-engine');
+      const { applyTemplate } = require('../lib/sprite-generator/template-engine');
       const result = applyTemplate(params.id, body.character, ASSETS_DIR);
       return json(res, { success: true, ...result });
     } catch (err) {
@@ -106,7 +106,7 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
   // DELETE /api/templates/:id — Delete a template
   router.delete('/api/templates/:id', (req, res, params) => {
     try {
-      const { deleteTemplate } = require('../../sprite-generator/template-engine');
+      const { deleteTemplate } = require('../lib/sprite-generator/template-engine');
       const result = deleteTemplate(params.id);
       return json(res, result);
     } catch (err) {

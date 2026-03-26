@@ -3,12 +3,12 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { NanaBananaClient } = require('../../sprite-generator/nano-banana');
-const { CHARACTERS, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt } = require('../../sprite-generator/prompts');
-const { processSprite } = require('../../sprite-processor/index');
-const { smartSelect, recordFeedback } = require('../../sprite-generator/smart-selector');
-const { extract } = require('../../sprite-generator/video-extractor');
-const { buildRefStrip } = require('../../sprite-generator/strip-builder');
+const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
+const { CHARACTERS, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt } = require('../lib/sprite-generator/prompts');
+const { processSprite } = require('../lib/sprite-processor/index');
+const { smartSelect, recordFeedback } = require('../lib/sprite-generator/smart-selector');
+const { extract } = require('../lib/sprite-generator/video-extractor');
+const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
 const { recordCost } = require('../middleware/cost-tracker');
 const { loadCustomAnimations, saveCustomAnimations } = require('./characters');
 

@@ -3,12 +3,12 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { NanaBananaClient } = require('../../sprite-generator/nano-banana');
-const { CHARACTERS, ANIMATIONS, buildSectionedPrompt, getDefaultSections } = require('../../sprite-generator/prompts');
-const { cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes, evaluateFrame, evaluateStrip, applyFixes } = require('../../sprite-processor/index');
+const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
+const { CHARACTERS, ANIMATIONS, buildSectionedPrompt, getDefaultSections } = require('../lib/sprite-generator/prompts');
+const { cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes, evaluateFrame, evaluateStrip, applyFixes } = require('../lib/sprite-processor/index');
 const { recordCost, getImageCost } = require('../middleware/cost-tracker');
-const { trainPrompt, loadTraining } = require('../../sprite-generator/prompts');
-const { loadFeedback } = require('../../sprite-generator/smart-selector');
+const { trainPrompt, loadTraining } = require('../lib/sprite-generator/prompts');
+const { loadFeedback } = require('../lib/sprite-generator/smart-selector');
 const jobStore = require('../job-store');
 
 function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parseBody }) {

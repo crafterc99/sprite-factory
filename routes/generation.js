@@ -3,10 +3,10 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { NanaBananaClient } = require('../../sprite-generator/nano-banana');
-const { CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, buildPoseTransferPrompt, buildSingleFramePrompt, buildSectionedPrompt, getDefaultSections, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt, buildAnglePrompt, buildBallRefPrompt } = require('../../sprite-generator/prompts');
-const { processSprite, cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes } = require('../../sprite-processor/index');
-const { buildRefStrip } = require('../../sprite-generator/strip-builder');
+const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
+const { CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, buildPoseTransferPrompt, buildSingleFramePrompt, buildSectionedPrompt, getDefaultSections, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt, buildAnglePrompt, buildBallRefPrompt } = require('../lib/sprite-generator/prompts');
+const { processSprite, cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes } = require('../lib/sprite-processor/index');
+const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
 const jobStore = require('../job-store');
 

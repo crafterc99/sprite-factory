@@ -1,0 +1,152 @@
+{
+  "99": {
+    "name": "99",
+    "id": "99",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 72,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "99",
+    "teamColors": {
+      "primary": "#FF4400",
+      "secondary": "#FFFFFF",
+      "accent": "#000000"
+    },
+    "portraitPath": "99full.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 1,
+    "pixelHeight": 112,
+    "completedAnims": [],
+    "status": "active"
+  },
+  "breezy": {
+    "name": "breezy",
+    "id": "breezy",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 72,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "",
+    "teamColors": {
+      "primary": "#FF4400",
+      "secondary": "#FFFFFF",
+      "accent": "#000000"
+    },
+    "portraitPath": "breezyfull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 1,
+    "pixelHeight": 112,
+    "completedAnims": [],
+    "status": "active",
+    "anchor": {
+      "portrait": null,
+      "angles": [
+        "breezy-angle-0.png",
+        "breezy-angle-1.png",
+        "breezy-angle-2.png",
+        "breezy-angle-3.png",
+        "breezy-angle-4.png",
+        "breezy-angle-5.png",
+        "breezy-angle-6.png",
+        "breezy-angle-7.png"
+      ],
+      "ballRefs": [],
+      "status": "partial"
+    }
+  },
+  "joaquin": {
+    "name": "joaquin",
+    "id": "joaquin",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 66,
+    "weightLbs": 160,
+    "build": "stocky",
+    "jerseyNumber": "1",
+    "teamColors": {
+      "primary": "#000000",
+      "secondary": "#ffffff",
+      "accent": "#000000"
+    },
+    "portraitPath": "joaquinfull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 0.917,
+    "pixelHeight": 102,
+    "completedAnims": [],
+    "status": "portrait_done",
+    "anchor": {
+      "portrait": null,
+      "angles": [
+        "joaquin-angle-0.png",
+        "joaquin-angle-1.png",
+        "joaquin-angle-2.png",
+        "joaquin-angle-3.png",
+        "joaquin-angle-4.png",
+        "joaquin-angle-5.png",
+        "joaquin-angle-6.png",
+        "joaquin-angle-7.png"
+      ],
+      "ballRefs": [],
+      "status": "partial"
+    }
+  },
+  "z": {
+    "name": "z",
+    "id": "z",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 72,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "",
+    "teamColors": {
+      "primary": "#FF4400",
+      "secondary": "#FFFFFF",
+      "accent": "#000000"
+    },
+    "portraitPath": "zfull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 1,
+    "pixelHeight": 112,
+    "completedAnims": [],
+    "status": "new"
+  },
+  "bron-test": {
+    "name": "bron-test",
+    "id": "bron-test",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 72,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "",
+    "teamColors": {
+      "primary": "#ff4400",
+      "secondary": "#ffffff",
+      "accent": "#000000"
+    },
+    "portraitPath": "bron-testfull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 1,
+    "pixelHeight": 112,
+    "completedAnims": [],
+    "status": "portrait_done",
+    "anchor": {
+      "portrait": null,
+      "angles": [
+        "bron-test-angle-0.png",
+        "bron-test-angle-1.png",
+        "bron-test-angle-2.png",
+        "bron-test-angle-3.png",
+        "bron-test-angle-4.png",
+        "bron-test-angle-5.png",
+        "bron-test-angle-6.png",
+        "bron-test-angle-7.png"
+      ],
+      "ballRefs": [],
+      "status": "partial"
+    }
+  }
+}

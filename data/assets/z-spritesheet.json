@@ -1,0 +1,56 @@
+{
+  "character": "z",
+  "frameSize": 180,
+  "width": 1440,
+  "height": 1440,
+  "animations": {
+    "static-dribble": {
+      "row": 0,
+      "frames": 6,
+      "y": 0,
+      "width": 1080
+    },
+    "dribble": {
+      "row": 1,
+      "frames": 8,
+      "y": 180,
+      "width": 1440
+    },
+    "jumpshot": {
+      "row": 2,
+      "frames": 7,
+      "y": 360,
+      "width": 1260
+    },
+    "stepback": {
+      "row": 3,
+      "frames": 4,
+      "y": 540,
+      "width": 720
+    },
+    "crossover": {
+      "row": 4,
+      "frames": 4,
+      "y": 720,
+      "width": 720
+    },
+    "defense-backpedal": {
+      "row": 5,
+      "frames": 4,
+      "y": 900,
+      "width": 720
+    },
+    "defense-shuffle": {
+      "row": 6,
+      "frames": 2,
+      "y": 1080,
+      "width": 360
+    },
+    "steal": {
+      "row": 7,
+      "frames": 3,
+      "y": 1260,
+      "width": 540
+    }
+  }
+}

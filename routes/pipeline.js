@@ -5,9 +5,9 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { NanaBananaClient } = require('../../sprite-generator/nano-banana');
-const { CHARACTERS, ANIMATIONS, buildSectionedPrompt, getDefaultSections } = require('../../sprite-generator/prompts');
-const { cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes, buildGrid } = require('../../sprite-processor/index');
+const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
+const { CHARACTERS, ANIMATIONS, buildSectionedPrompt, getDefaultSections } = require('../lib/sprite-generator/prompts');
+const { cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes, buildGrid } = require('../lib/sprite-processor/index');
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
 const jobStore = require('../job-store');
 

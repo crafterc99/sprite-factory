@@ -14,9 +14,9 @@ const path = require('path');
 const {
   CHARACTERS, ANGLE_NAMES, BALL_VARIANTS,
   buildAnglePrompt, buildBallRefPrompt,
-} = require('../../sprite-generator/prompts');
-const { NanaBananaClient } = require('../../sprite-generator/nano-banana');
-const { processSingleFrame } = require('../../sprite-processor');
+} = require('../lib/sprite-generator/prompts');
+const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
+const { processSingleFrame } = require('../lib/sprite-processor');
 const { recordCost } = require('../middleware/cost-tracker');
 const { loadCharacters, saveCharacters, getCharacterRegistry } = require('./characters');
 

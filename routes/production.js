@@ -14,11 +14,10 @@ const fs = require('fs');
 const path = require('path');
 
 // ─── Paths ──────────────────────────────────────────────────────────
-const SOUL_JAM_DIR = path.resolve(__dirname, '../../../../soul-jam');
-const ASSETS_DIR = path.resolve(SOUL_JAM_DIR, 'public/assets/images');
-const RAW_DIR = path.resolve(__dirname, '../../../raw-sprites');
-const CHARACTERS_FILE = path.resolve(__dirname, '../../../.characters.json');
-const PRODUCTION_DB = path.resolve(__dirname, '../../../.production-db.json');
+const ASSETS_DIR = process.env.ASSETS_DIR || path.resolve(__dirname, '../data/assets');
+const RAW_DIR = process.env.RAW_DIR || path.resolve(__dirname, '../data/raw-sprites');
+const CHARACTERS_FILE = process.env.CHARACTERS_FILE || path.resolve(__dirname, '../data/.characters.json');
+const PRODUCTION_DB = process.env.PRODUCTION_DB || path.resolve(__dirname, '../data/.production-db.json');
 
 // ─── Priority 1 Animation IDs ──────────────────────────────────────
 const PRIORITY_1 = new Set([

@@ -18,9 +18,9 @@ const path = require('path');
 const { URL } = require('url');
 
 const PORT = process.env.PORT || 3456;
-const ASSETS_DIR = path.resolve(__dirname, '../../../soul-jam/public/assets/images');
-const RAW_DIR = path.resolve(__dirname, '../../raw-sprites');
-const TMP_DIR = path.resolve(__dirname, '../../.video-tmp');
+const ASSETS_DIR = process.env.ASSETS_DIR || path.resolve(__dirname, 'data/assets');
+const RAW_DIR = process.env.RAW_DIR || path.resolve(__dirname, 'data/raw-sprites');
+const TMP_DIR = process.env.TMP_DIR || path.resolve(__dirname, 'data/.video-tmp');
 
 // ─── Simple Router ──────────────────────────────────────────────────────
 
@@ -196,7 +196,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  const { CHARACTERS } = require('../sprite-generator/prompts');
+  const { CHARACTERS } = require('./lib/sprite-generator/prompts');
   console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
   console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
   console.log(`  Animations: 8`);
