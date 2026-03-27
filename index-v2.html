@@ -608,14 +608,15 @@
     <button class="modal-close" onclick="closeAddChar()">×</button>
     <div class="modal-title">New Character</div>
 
-    <div class="setup-steps" id="setupSteps">
-      <div class="setup-step active" id="step1Label">1 · Photo</div>
-      <div class="setup-step" id="step2Label">2 · Generate</div>
-      <div class="setup-step" id="step3Label">3 · Confirm</div>
+    <!-- Pinned bar: revealed after photo upload, stays visible throughout -->
+    <div id="charPinnedBar" style="display:none;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:16px">
+      <img id="pinnedPhotoThumb" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);image-rendering:pixelated;flex-shrink:0" />
+      <span id="pinnedCharName" style="font-weight:700;font-size:13px;text-transform:capitalize;flex:1;text-align:center;color:var(--text)"></span>
+      <img id="pinnedOptionThumb" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);image-rendering:pixelated;flex-shrink:0;visibility:hidden" />
     </div>
 
-    <!-- Step 1 -->
-    <div id="setupStep1">
+    <!-- Form section -->
+    <div id="charFormSection">
       <div class="form-group">
         <label class="form-label">Character Name</label>
         <input class="input" id="newName" placeholder="e.g. kai" />
@@ -656,7 +657,7 @@
         <div class="drop-zone" id="newDropZone">
           <div class="drop-icon">📷</div>
           <div>Drop photo here or click to browse</div>
-          <input type="file" id="newPhotoFile" accept="image/*" onchange="handlePhotoFile(this.files[0])" />
+          <input type="file" id="newPhotoFile" accept="image/*" onchange="handlePhotoFile(this.files[0]); onPhotoSelected(this.files[0])" />
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
           <img id="newPhotoThumb" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:none;image-rendering:pixelated" />
@@ -673,24 +674,19 @@
       </button>
     </div>
 
-    <!-- Step 2 -->
-    <div id="setupStep2" style="display:none">
+    <!-- Options section: 2×2 grid, revealed after generate -->
+    <div id="optionsSection" style="display:none;opacity:0;transition:opacity 0.2s;margin-top:20px">
       <div class="options-grid" id="optionsGrid"></div>
-      <div style="margin-top:12px;display:flex;gap:8px">
-        <button class="btn btn-secondary" onclick="goToStep(1)" style="flex:0">Back</button>
-        <button class="btn btn-primary" id="confirmOptBtn" onclick="confirmOption()" style="flex:1" disabled>Confirm Selected</button>
-        <button class="btn btn-secondary" onclick="regenerateOptions()">Retry</button>
-      </div>
     </div>
 
-    <!-- Step 3 -->
-    <div id="setupStep3" style="display:none">
-      <div style="text-align:center;padding:20px">
-        <img id="confirmedPortrait" style="width:120px;height:160px;object-fit:cover;border-radius:10px;border:2px solid var(--accent2);image-rendering:pixelated;margin-bottom:14px" />
-        <div style="font-size:18px;font-weight:900;text-transform:capitalize" id="confirmedName"></div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-top:6px">Character saved!</div>
-      </div>
-      <button class="btn btn-success" onclick="finishSetup()" style="width:100%">Open in Studio →</button>
+    <!-- Angles section: 2×4 grid (2 cols, 4 rows), revealed after option pick -->
+    <div id="anglesSection" style="display:none;opacity:0;transition:opacity 0.2s;margin-top:20px">
+      <div id="anglesGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"></div>
+    </div>
+
+    <!-- Done section: revealed after angles complete -->
+    <div id="charDoneSection" style="display:none;opacity:0;transition:opacity 0.2s">
+      <button class="btn btn-success" onclick="finishSetup()" style="width:100%;margin-top:16px">Open in Studio →</button>
     </div>
   </div>
 </div>
@@ -1861,7 +1857,6 @@ async function exportToSoulJam() {
 
 // ─── ADD CHARACTER ────────────────────────────────────────────────────────
 function openAddChar() {
-  goToStep(1);
   document.getElementById('addCharModal').classList.add('open');
 }
 
@@ -1892,6 +1887,19 @@ function handlePhotoFile(file) {
   reader.readAsDataURL(file);
 }
 
+function onPhotoSelected(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const bar = document.getElementById('charPinnedBar');
+    document.getElementById('pinnedPhotoThumb').src = e.target.result;
+    const name = document.getElementById('newName').value.trim();
+    document.getElementById('pinnedCharName').textContent = name || '';
+    bar.style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+}
+
 async function generateOptions() {
   const name = document.getElementById('newName').value.trim().toLowerCase().replace(/\s+/g,'-');
   if (!name) return toast('Name required', true);
@@ -1902,10 +1910,14 @@ async function generateOptions() {
   btn.disabled = true;
   spinner.classList.add('active');
 
+  // Update pinned bar name in case user typed it after photo upload
+  document.getElementById('pinnedCharName').textContent = name;
+
   try {
     const body = {
       name,
       photoBase64: STATE.charPhoto,
+      count: 4,
       heightInches: parseInt(document.getElementById('newHeight').value) || 72,
       weightLbs: parseInt(document.getElementById('newWeight').value) || 185,
       build: document.getElementById('newBuild').value,
@@ -1919,16 +1931,17 @@ async function generateOptions() {
     if (data.error) throw new Error(data.error);
 
     const grid = document.getElementById('optionsGrid');
-    grid.innerHTML = (data.options || []).map((opt, i) =>
-      `<div class="char-option" id="opt${opt.index}" onclick="pickOption(${opt.index})">
+    grid.innerHTML = (data.options || []).map((opt) =>
+      `<div class="char-option" id="opt${opt.index}" onclick="pickOption(${opt.index}, '${opt.url}')">
         <div class="opt-label">#${opt.index + 1}</div>
         <img src="${opt.url}" />
       </div>`
     ).join('');
 
     STATE.selectedOption = -1;
-    document.getElementById('confirmOptBtn').disabled = true;
-    goToStep(2);
+    const sec = document.getElementById('optionsSection');
+    sec.style.display = 'block';
+    requestAnimationFrame(() => { sec.style.opacity = '1'; });
     toast('Options ready — pick the best one');
   } catch(e) {
     toast('Error: ' + e.message, true);
@@ -1938,21 +1951,19 @@ async function generateOptions() {
   }
 }
 
-function pickOption(idx) {
+function pickOption(idx, url) {
   STATE.selectedOption = idx;
   document.querySelectorAll('.char-option').forEach(el => el.classList.remove('selected'));
   document.getElementById('opt' + idx)?.classList.add('selected');
-  document.getElementById('confirmOptBtn').disabled = false;
+  const pinnedOpt = document.getElementById('pinnedOptionThumb');
+  pinnedOpt.src = url;
+  pinnedOpt.style.visibility = 'visible';
+  confirmAndGenerateAngles();
 }
 
-async function regenerateOptions() {
-  goToStep(1);
-  await generateOptions();
-}
-
-async function confirmOption() {
+async function confirmAndGenerateAngles() {
   const name = document.getElementById('newName').value.trim().toLowerCase().replace(/\s+/g,'-');
-  if (STATE.selectedOption < 0) return toast('Pick an option first', true);
+  if (STATE.selectedOption < 0) return;
 
   try {
     const body = {
@@ -1969,13 +1980,77 @@ async function confirmOption() {
     if (data.error) throw new Error(data.error);
 
     STATE.confirmedName = name;
-    document.getElementById('confirmedPortrait').src = data.pixelArtUrl;
-    document.getElementById('confirmedName').textContent = name;
-    goToStep(3);
+    document.getElementById('pinnedCharName').textContent = name;
+
+    // Build angle slots
+    const angleNames = ['front','front_right','right','back_right','back','back_left','left','front_left'];
+    const grid = document.getElementById('anglesGrid');
+    grid.innerHTML = angleNames.map((label, i) =>
+      `<div id="angleSlot${i}" style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <div style="width:100%;aspect-ratio:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+          <span class="spinner active" id="angleSpinner${i}"></span>
+          <img id="angleImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
+        <button class="btn btn-secondary" id="angleRerun${i}" style="display:none;font-size:10px;padding:3px 8px" onclick="rerunAngle(${i})">Rerun</button>
+      </div>`
+    ).join('');
+
+    const angSec = document.getElementById('anglesSection');
+    angSec.style.display = 'block';
+    requestAnimationFrame(() => { angSec.style.opacity = '1'; });
+
     await loadRoster();
-    toast('Character saved');
+    toast('Generating angles...');
+
+    const angResp = await fetch(`${API}/api/generate/angles`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ character: name })
+    });
+    const angData = await angResp.json();
+    if (angData.error) throw new Error(angData.error);
+
+    (angData.generated || []).forEach(angle => {
+      const i = angle.angleIndex;
+      document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
+      const img = document.getElementById(`angleImg${i}`);
+      if (img) { img.src = angle.url; img.style.display = 'block'; }
+      const btn = document.getElementById(`angleRerun${i}`);
+      if (btn) btn.style.display = 'inline-block';
+    });
+
+    const doneSec = document.getElementById('charDoneSection');
+    doneSec.style.display = 'block';
+    requestAnimationFrame(() => { doneSec.style.opacity = '1'; });
+    toast('Character ready');
   } catch(e) {
     toast('Error: ' + e.message, true);
+  }
+}
+
+async function rerunAngle(angleIndex) {
+  const spinner = document.getElementById(`angleSpinner${angleIndex}`);
+  const img = document.getElementById(`angleImg${angleIndex}`);
+  const btn = document.getElementById(`angleRerun${angleIndex}`);
+  if (spinner) spinner.classList.add('active');
+  if (img) img.style.display = 'none';
+  if (btn) btn.style.display = 'none';
+  try {
+    const resp = await fetch(`${API}/api/angle/regenerate`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ character: STATE.confirmedName, angleIndex })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    if (img) { img.src = data.generated?.[0]?.url; img.style.display = 'block'; }
+    if (btn) btn.style.display = 'inline-block';
+  } catch(e) {
+    toast('Error: ' + e.message, true);
+    if (btn) btn.style.display = 'inline-block';
+  } finally {
+    if (spinner) spinner.classList.remove('active');
   }
 }
 
