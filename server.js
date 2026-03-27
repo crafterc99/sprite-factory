@@ -190,6 +190,9 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/' || pathname === '/index.html') {
     return serveStatic(res, path.join(__dirname, 'index.html'), 'text/html');
   }
+  if (pathname === '/v2' || pathname === '/v2/') {
+    return serveStatic(res, path.join(__dirname, 'index-v2.html'), 'text/html');
+  }
 
   res.writeHead(404);
   res.end('Not found');

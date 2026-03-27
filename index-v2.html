@@ -1,0 +1,2262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPRITE FACTORY v2 — Soul Jam</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080810;
+    --surface: #0f0f1a;
+    --surface2: #161625;
+    --surface3: #1e1e30;
+    --border: #25253a;
+    --border-hi: #3a3a5a;
+    --text: #eeeef8;
+    --text-dim: #6060808;
+    --text-muted: #3a3a55;
+    --accent: #ff4400;
+    --accent2: #00ff88;
+    --accent3: #4488ff;
+    --warning: #ffaa00;
+    --danger: #ff2244;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Outfit', sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; overflow-x:hidden; }
+  ::selection { background:var(--accent); color:#fff; }
+  ::-webkit-scrollbar { width:5px; height:5px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  /* ─── LAYOUT ─── */
+  .app { display:grid; grid-template-columns:260px 1fr; grid-template-rows:52px 1fr; height:100vh; }
+  .header { grid-column:1/-1; display:flex; align-items:center; gap:16px; padding:0 20px; border-bottom:1px solid var(--border); background:rgba(8,8,16,0.98); position:sticky; top:0; z-index:100; }
+  .sidebar { border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; background:var(--surface); }
+  .main { overflow-y:auto; }
+
+  /* ─── HEADER ─── */
+  .logo { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:3px; color:var(--accent); white-space:nowrap; }
+  .logo span { color:#444460; font-weight:400; }
+  .header-badge { font-family:var(--mono); font-size:9px; background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:3px 8px; color:#606080; letter-spacing:1px; }
+  .header-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .cost-pill { font-family:var(--mono); font-size:10px; background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:4px 12px; color:var(--text-dim); }
+  .cost-pill span { color:var(--accent2); }
+
+  /* ─── SIDEBAR ─── */
+  .sidebar-header { padding:14px 16px 10px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .sidebar-title { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#50507a; text-transform:uppercase; }
+  .roster-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:4px; }
+  .roster-card {
+    border-radius:8px; border:1px solid var(--border); padding:10px; cursor:pointer;
+    display:flex; align-items:center; gap:10px; transition:all 0.15s; background:var(--surface2);
+  }
+  .roster-card:hover { border-color:var(--border-hi); background:var(--surface3); }
+  .roster-card.active { border-color:var(--accent); background:rgba(255,68,0,0.08); }
+  .roster-portrait { width:38px; height:38px; border-radius:6px; object-fit:cover; border:1px solid var(--border); background:var(--surface3); image-rendering:pixelated; flex-shrink:0; }
+  .roster-portrait-placeholder { width:38px; height:38px; border-radius:6px; border:1px dashed var(--border); background:var(--surface3); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .roster-info { flex:1; min-width:0; }
+  .roster-name { font-weight:700; font-size:13px; text-transform:capitalize; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .roster-progress { margin-top:4px; }
+  .progress-bar { height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .progress-fill { height:100%; border-radius:2px; background:var(--accent2); transition:width 0.3s; }
+  .progress-label { font-family:var(--mono); font-size:9px; color:#50507a; margin-top:3px; }
+  .add-char-btn { margin:8px; border-radius:8px; border:1px dashed var(--border); padding:10px; cursor:pointer; background:transparent; color:#50507a; font-family:var(--mono); font-size:10px; letter-spacing:1px; transition:all 0.15s; width:calc(100% - 16px); text-align:center; }
+  .add-char-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* ─── MAIN WORKSPACE ─── */
+  .workspace-inner { padding:24px; max-width:1200px; }
+  .page { display:none; }
+  .page.active { display:block; }
+
+  /* ─── CARDS ─── */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .card-title { font-family:var(--mono); font-size:10px; letter-spacing:2px; color:#50507a; text-transform:uppercase; margin-bottom:14px; }
+
+  /* ─── BUTTONS ─── */
+  .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 18px; border-radius:8px; border:none; cursor:pointer; font-family:var(--sans); font-size:13px; font-weight:600; transition:all 0.15s; text-decoration:none; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:#ff5511; }
+  .btn-primary:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn-secondary { background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+  .btn-secondary:hover { border-color:var(--border-hi); }
+  .btn-success { background:var(--accent2); color:#000; }
+  .btn-sm { padding:5px 12px; font-size:12px; border-radius:6px; }
+  .btn-icon { width:28px; height:28px; padding:0; justify-content:center; border-radius:6px; font-size:14px; }
+
+  /* ─── INPUTS ─── */
+  .input { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:9px 12px; color:var(--text); font-family:var(--sans); font-size:13px; outline:none; transition:border-color 0.15s; }
+  .input:focus { border-color:var(--border-hi); }
+  select.input { cursor:pointer; }
+  .form-label { font-family:var(--mono); font-size:9px; letter-spacing:1px; color:#50507a; text-transform:uppercase; display:block; margin-bottom:6px; }
+  .form-group { margin-bottom:12px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  /* ─── DROP ZONE ─── */
+  .drop-zone { border:2px dashed var(--border); border-radius:10px; padding:32px; text-align:center; cursor:pointer; transition:all 0.15s; color:#50507a; font-size:13px; position:relative; }
+  .drop-zone:hover, .drop-zone.dragover { border-color:var(--accent); color:var(--accent); }
+  .drop-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+  .drop-zone .drop-icon { font-size:32px; margin-bottom:8px; }
+
+  /* ─── ANIMATION GRID ─── */
+  .anim-categories { display:flex; flex-direction:column; gap:20px; }
+  .anim-category { }
+  .anim-category-label { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#50507a; text-transform:uppercase; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .anim-category-count { font-size:9px; color:#3a3a55; }
+  .anim-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:6px; }
+  .anim-cell {
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:10px 8px; cursor:pointer; transition:all 0.15s; text-align:center;
+    position:relative;
+  }
+  .anim-cell:hover { border-color:var(--border-hi); background:var(--surface3); }
+  .anim-cell.active { border-color:var(--accent); background:rgba(255,68,0,0.08); }
+  .anim-cell.done { border-color:rgba(0,255,136,0.4); background:rgba(0,255,136,0.05); }
+  .anim-cell.generating { border-color:var(--warning); background:rgba(255,170,0,0.05); animation:pulse 1.5s infinite; }
+  .anim-cell-name { font-family:var(--mono); font-size:9px; color:var(--text); word-break:break-all; }
+  .anim-cell-status { font-size:14px; margin-bottom:4px; }
+  .anim-cell-meta { font-family:var(--mono); font-size:8px; color:#40405a; margin-top:3px; }
+  .anim-cell.done .anim-cell-name { color:var(--accent2); }
+  .anim-cell-preview {
+    height:52px; overflow:hidden; border-radius:4px; margin-bottom:6px;
+    background-size:auto 100%; background-repeat:no-repeat; background-position:0 0;
+    background-color:var(--surface3);
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+  /* ─── CHARACTER SETUP ─── */
+  .setup-steps { display:flex; gap:8px; margin-bottom:20px; }
+  .setup-step { flex:1; padding:10px; border-radius:8px; border:1px solid var(--border); text-align:center; font-family:var(--mono); font-size:9px; color:#40405a; letter-spacing:1px; transition:all 0.15s; }
+  .setup-step.active { border-color:var(--accent); color:var(--accent); background:rgba(255,68,0,0.06); }
+  .setup-step.done { border-color:rgba(0,255,136,0.4); color:var(--accent2); background:rgba(0,255,136,0.04); }
+
+  .options-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:12px; }
+  .char-option { border:2px solid var(--border); border-radius:10px; overflow:hidden; cursor:pointer; transition:all 0.15s; position:relative; }
+  .char-option:hover { border-color:var(--border-hi); }
+  .char-option.selected { border-color:var(--accent); }
+  .char-option img { width:100%; display:block; image-rendering:pixelated; }
+  .char-option .opt-label { position:absolute; top:6px; left:6px; font-family:var(--mono); font-size:9px; background:rgba(0,0,0,0.7); padding:2px 6px; border-radius:4px; color:var(--text); }
+  .char-option.selected .opt-label { background:var(--accent); }
+
+  /* ─── GENERATION PANEL ─── */
+  .gen-panel { display:grid; grid-template-columns:1fr 300px; gap:20px; align-items:start; }
+  .gen-preview { background:var(--surface2); border:1px solid var(--border); border-radius:10px; overflow:hidden; min-height:120px; display:flex; align-items:center; justify-content:center; }
+  .gen-preview img { max-width:100%; image-rendering:pixelated; display:block; }
+  .gen-preview-empty { color:#40405a; font-family:var(--mono); font-size:10px; text-align:center; padding:20px; }
+  .gen-controls { display:flex; flex-direction:column; gap:10px; }
+  .anim-info-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .tag { font-family:var(--mono); font-size:9px; background:var(--surface3); border:1px solid var(--border); border-radius:4px; padding:3px 8px; color:#60608a; }
+  .tag.loop { color:var(--accent2); border-color:rgba(0,255,136,0.3); }
+  .tag.ball { color:var(--accent3); border-color:rgba(68,136,255,0.3); }
+  .mode-toggle { display:flex; gap:4px; background:var(--surface2); border-radius:8px; padding:3px; border:1px solid var(--border); }
+  .mode-btn { flex:1; padding:6px; border:none; border-radius:6px; background:transparent; color:#50507a; font-family:var(--mono); font-size:9px; cursor:pointer; transition:all 0.15s; letter-spacing:0.5px; }
+  .mode-btn.active { background:var(--surface3); color:var(--text); border:1px solid var(--border-hi); }
+  .prompt-box { font-family:var(--mono); font-size:9px; line-height:1.6; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; color:#60608a; height:140px; overflow-y:auto; white-space:pre-wrap; resize:vertical; width:100%; outline:none; transition:border-color 0.15s; }
+  .prompt-box:focus { border-color:var(--border-hi); color:var(--text); }
+
+  /* ─── PROGRESS ─── */
+  .progress-ring { display:flex; align-items:center; gap:16px; padding:16px; background:var(--surface2); border-radius:10px; border:1px solid var(--border); }
+  .ring-chart { width:52px; height:52px; flex-shrink:0; }
+  .ring-info { }
+  .ring-label { font-size:22px; font-weight:900; }
+  .ring-sub { font-family:var(--mono); font-size:9px; color:#50507a; letter-spacing:1px; }
+  .sse-log { font-family:var(--mono); font-size:10px; color:#50507a; line-height:1.8; max-height:180px; overflow-y:auto; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px; }
+  .sse-log .ok { color:var(--accent2); }
+  .sse-log .err { color:var(--danger); }
+  .sse-log .info { color:var(--accent3); }
+  .sse-log .warn { color:var(--warning); }
+
+  /* ─── DASHBOARD ─── */
+  .dash-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:14px; }
+  .dash-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s; }
+  .dash-card:hover { border-color:var(--border-hi); transform:translateY(-1px); }
+  .dash-card.active { border-color:var(--accent); }
+  .dash-portrait { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:8px; border:1px solid var(--border); image-rendering:pixelated; margin-bottom:10px; background:var(--surface3); }
+  .dash-portrait-empty { width:100%; aspect-ratio:3/4; border-radius:8px; border:1px dashed var(--border); background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:36px; margin-bottom:10px; }
+  .dash-name { font-weight:700; font-size:15px; text-transform:capitalize; margin-bottom:6px; }
+  .dash-stat { font-family:var(--mono); font-size:9px; color:#50507a; margin-bottom:8px; }
+  .dash-add { border:2px dashed var(--border); background:transparent; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#40405a; }
+  .dash-add:hover { border-color:var(--accent); color:var(--accent); }
+  .dash-add-icon { font-size:28px; }
+  .dash-add-label { font-family:var(--mono); font-size:10px; letter-spacing:1px; }
+
+  /* ─── SOURCES PAGE ─── */
+  .source-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px; }
+  .source-slot { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; }
+  .source-slot-label { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#50507a; text-transform:uppercase; margin-bottom:12px; }
+  .source-thumb-wrap { background:var(--surface2); border:1px solid var(--border); border-radius:8px; overflow:hidden; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; margin-bottom:10px; }
+  .source-thumb-wrap img { width:100%; height:100%; object-fit:cover; image-rendering:pixelated; display:block; }
+  .source-thumb-empty { font-family:var(--mono); font-size:9px; color:#40405a; text-align:center; padding:20px; }
+  .source-slot-actions { margin-bottom:8px; }
+  .source-slot-status { font-family:var(--mono); font-size:9px; height:16px; }
+  .source-slot-status.ready { color:var(--accent2); }
+  .source-slot-status.pending { color:#50507a; }
+  .pkg-status-badge { font-family:var(--mono); font-size:9px; letter-spacing:1px; padding:5px 12px; border-radius:6px; border:1px solid; text-transform:uppercase; }
+  .pkg-status-badge.intake { color:#50507a; border-color:#303050; background:var(--surface2); }
+  .pkg-status-badge.sources_staged { color:var(--warning); border-color:rgba(255,170,0,0.3); background:rgba(255,170,0,0.05); }
+  .pkg-status-badge.portrait_ready { color:var(--accent3); border-color:rgba(68,136,255,0.3); background:rgba(68,136,255,0.05); }
+  .pkg-status-badge.angles_ready { color:var(--accent2); border-color:rgba(0,255,136,0.3); background:rgba(0,255,136,0.05); }
+  .pkg-status-badge.export_ready { color:var(--accent); border-color:rgba(255,68,0,0.3); background:rgba(255,68,0,0.05); }
+  .angle-grid { display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
+  .angle-cell { background:var(--surface2); border:1px solid var(--border); border-radius:8px; overflow:hidden; aspect-ratio:1/1; position:relative; display:flex; align-items:center; justify-content:center; }
+  .angle-cell.ready { border-color:rgba(0,255,136,0.4); }
+  .angle-cell img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; display:block; }
+  .angle-cell-label { position:absolute; bottom:0; left:0; right:0; text-align:center; font-family:var(--mono); font-size:7px; color:#60608a; background:rgba(8,8,16,0.75); padding:2px; }
+  .angle-cell-pending { font-family:var(--mono); font-size:9px; color:#303050; }
+  .clothing-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); }
+  .clothing-row:last-child { border-bottom:none; }
+  .clothing-cat { font-family:var(--mono); font-size:8px; color:#50507a; width:72px; flex-shrink:0; text-transform:uppercase; letter-spacing:0.5px; }
+  .clothing-thumb { width:32px; height:32px; border-radius:4px; border:1px solid var(--border); background:var(--surface3); overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#30304a; }
+  .clothing-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .clothing-status { font-family:var(--mono); font-size:8px; flex:1; }
+  .clothing-status.ready { color:var(--accent2); }
+  .clothing-status.none { color:#30304a; }
+  .upload-btn-wrap { display:inline-flex; align-items:center; cursor:pointer; position:relative; overflow:hidden; }
+  .upload-btn-wrap input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; font-size:0; }
+
+  /* ─── SOURCE SLOT (auto-prep) ─── */
+  .source-slot-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .source-status-pill { font-family:var(--mono); font-size:8px; letter-spacing:0.5px; padding:2px 8px; border-radius:10px; border:1px solid; text-transform:uppercase; }
+  .source-status-pill.pending { color:#40405a; border-color:#252535; }
+  .source-status-pill.processing { color:var(--warning); border-color:rgba(255,170,0,0.3); background:rgba(255,170,0,0.06); animation:pulse 1.5s infinite; }
+  .source-status-pill.ready { color:var(--accent2); border-color:rgba(0,255,136,0.3); background:rgba(0,255,136,0.05); }
+  .source-status-pill.adjusted { color:var(--accent3); border-color:rgba(68,136,255,0.3); background:rgba(68,136,255,0.06); }
+  .source-preview-area {
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    overflow:hidden; aspect-ratio:1/1; margin-bottom:10px;
+    display:flex; align-items:center; justify-content:center; position:relative;
+  }
+  .source-preview-area img {
+    width:100%; height:100%; object-fit:cover; display:block;
+    image-rendering:pixelated; transform-origin:center center; pointer-events:none;
+  }
+  .source-upload-prompt { text-align:center; color:#303050; padding:16px; }
+  .source-upload-icon { font-size:22px; margin-bottom:6px; }
+  .source-upload-text { font-family:var(--mono); font-size:9px; }
+  .source-processing { display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .source-processing-label { font-family:var(--mono); font-size:9px; letter-spacing:1px; color:var(--warning); }
+  .source-actions-row { display:flex; gap:6px; }
+  .source-status-pill.uploaded { color:var(--warning); border-color:rgba(255,170,0,0.3); background:rgba(255,170,0,0.06); }
+  .source-bg-note { font-family:var(--mono); font-size:8px; margin-bottom:8px; padding:2px 4px; }
+  .source-bg-note.ok { color:#50507a; }
+  .source-bg-note.fallback { color:var(--warning); }
+
+  /* ─── ADJUST MODAL ─── */
+  .adjust-body { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+  .adjust-viewport {
+    aspect-ratio:1/1; background:#05050e; border:1px solid var(--border); border-radius:8px;
+    overflow:hidden; position:relative; cursor:grab; user-select:none;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .adjust-viewport:active { cursor:grabbing; }
+  #adjustImg { width:100%; height:100%; object-fit:contain; display:block; transform-origin:center center; pointer-events:none; image-rendering:pixelated; }
+  .adjust-range-group { margin-bottom:14px; }
+  .adjust-range-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
+  .adjust-range-name { font-family:var(--mono); font-size:9px; letter-spacing:1px; color:#50507a; text-transform:uppercase; }
+  .adjust-range-val { font-family:var(--mono); font-size:9px; color:var(--text); }
+  .adjust-range { width:100%; height:4px; accent-color:var(--accent); cursor:pointer; display:block; }
+  .adjust-btn-row { display:flex; gap:8px; margin-top:4px; }
+
+  /* ─── MODAL ─── */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:200; display:none; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; width:500px; max-width:90vw; max-height:90vh; overflow-y:auto; position:relative; }
+  .modal-title { font-family:var(--mono); font-size:11px; letter-spacing:2px; color:#50507a; text-transform:uppercase; margin-bottom:18px; }
+  .modal-close { position:absolute; top:16px; right:16px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; width:28px; height:28px; cursor:pointer; color:var(--text); font-size:16px; display:flex; align-items:center; justify-content:center; }
+  .modal-close:hover { border-color:var(--border-hi); }
+
+  /* ─── TOAST ─── */
+  .toast-area { position:fixed; bottom:20px; right:20px; z-index:999; display:flex; flex-direction:column; gap:8px; }
+  .toast { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 16px; font-size:13px; font-weight:500; min-width:200px; animation:slideIn 0.2s ease; }
+  .toast.error { border-color:var(--danger); color:var(--danger); }
+  .toast.success { border-color:var(--accent2); color:var(--accent2); }
+  @keyframes slideIn { from{transform:translateX(20px);opacity:0} to{transform:translateX(0);opacity:1} }
+
+  /* ─── SPINNER ─── */
+  .spinner { width:14px; height:14px; border:2px solid rgba(255,255,255,0.2); border-top-color:#fff; border-radius:50%; display:none; animation:spin 0.7s linear infinite; flex-shrink:0; }
+  .spinner.active { display:inline-block; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* ─── SECTION HEADER ─── */
+  .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .section-title { font-size:22px; font-weight:900; }
+  .section-sub { font-family:var(--mono); font-size:10px; color:#50507a; margin-top:4px; letter-spacing:1px; }
+
+  /* ─── NAV ─── */
+  .nav { display:flex; gap:4px; margin-left:16px; }
+  .nav-btn { font-family:var(--mono); font-size:9px; letter-spacing:1px; padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:transparent; color:#50507a; cursor:pointer; transition:all 0.15s; }
+  .nav-btn:hover { color:var(--text); border-color:var(--border-hi); }
+  .nav-btn.active { background:var(--surface2); color:var(--text); border-color:var(--border-hi); }
+
+  /* Misc */
+  .divider { height:1px; background:var(--border); margin:16px 0; }
+  .empty-state { text-align:center; padding:40px; color:#40405a; }
+  .empty-state .empty-icon { font-size:36px; margin-bottom:10px; }
+  .empty-state .empty-text { font-family:var(--mono); font-size:11px; letter-spacing:1px; }
+
+  /* ─── DETAIL PANEL ─── */
+  .detail-panel { position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; display:flex; align-items:center; justify-content:center; }
+  .detail-panel-inner { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:24px; max-width:800px; width:90%; }
+  .filmstrip { display:flex; gap:4px; overflow-x:auto; padding:8px 0; }
+  .filmstrip canvas { height:120px; width:auto; border:1px solid var(--border); border-radius:4px; }
+  .detail-preview { display:flex; align-items:center; justify-content:center; margin:16px 0; }
+  .detail-preview canvas { border:1px solid var(--border); border-radius:4px; }
+
+  /* ─── BULK PANEL ─── */
+  #bulkOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:300; display:none; }
+  #bulkOverlay.open { display:block; }
+  #bulkPanel {
+    position:fixed; top:0; right:0; bottom:0; width:340px; max-width:95vw;
+    background:var(--surface); border-left:1px solid var(--border);
+    z-index:301; display:flex; flex-direction:column;
+    transform:translateX(100%); transition:transform 0.2s ease;
+  }
+  #bulkPanel.open { transform:translateX(0); }
+  .bulk-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px; border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .bulk-title { font-family:var(--mono); font-size:10px; letter-spacing:2px; color:#50507a; text-transform:uppercase; }
+  .bulk-body { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:14px; }
+  .bulk-section-label { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:#40405a; text-transform:uppercase; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between; }
+  .bulk-section-label a { color:#50507a; cursor:pointer; text-decoration:none; font-size:8px; }
+  .bulk-section-label a:hover { color:var(--accent2); }
+  .bulk-char-list { display:flex; flex-direction:column; gap:4px; max-height:260px; overflow-y:auto; }
+  .bulk-char-item {
+    display:flex; align-items:center; gap:10px;
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:8px 10px; cursor:pointer; transition:border-color 0.15s;
+  }
+  .bulk-char-item:hover { border-color:var(--border-hi); }
+  .bulk-char-item input[type=checkbox] { accent-color:var(--accent); width:14px; height:14px; flex-shrink:0; cursor:pointer; }
+  .bulk-char-portrait { width:30px; height:30px; border-radius:5px; object-fit:cover; border:1px solid var(--border); image-rendering:pixelated; background:var(--surface3); flex-shrink:0; }
+  .bulk-char-placeholder { width:30px; height:30px; border-radius:5px; border:1px dashed var(--border); background:var(--surface3); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:#40405a; }
+  .bulk-char-name { font-size:13px; font-weight:600; text-transform:capitalize; }
+  .bulk-char-loading { font-family:var(--mono); font-size:9px; color:#40405a; padding:12px 0; text-align:center; }
+  #bulkStatus {
+    font-family:var(--mono); font-size:9px; line-height:1.7; color:#50507a;
+    background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+    padding:10px; min-height:60px; max-height:160px; overflow-y:auto; white-space:pre-wrap;
+  }
+  #bulkStatus .ok { color:var(--accent2); }
+  #bulkStatus .err { color:var(--danger); }
+  #bulkStatus .info { color:var(--accent3); }
+  .bulk-footer { padding:14px 16px; border-top:1px solid var(--border); flex-shrink:0; }
+  .btn-bulk { background:var(--accent3); color:#fff; }
+  .btn-bulk:hover { background:#5599ff; }
+  .btn-bulk:disabled { opacity:0.4; cursor:not-allowed; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ─── HEADER ─── -->
+  <header class="header">
+    <div class="logo">SPRITE FACTORY <span>/ SOUL JAM</span></div>
+    <div class="header-badge">v2</div>
+    <nav class="nav">
+      <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
+      <button class="nav-btn" onclick="showPage('studio')">Studio</button>
+      <button class="nav-btn" onclick="showPage('pipeline')">Pipeline</button>
+      <button class="nav-btn" onclick="showPage('sources')">Sources</button>
+    </nav>
+    <div class="header-right">
+      <div class="cost-pill" id="costPill">spend: <span>$0.00</span></div>
+      <button class="btn btn-bulk btn-sm" onclick="openBulkPanel()" style="font-family:var(--mono);font-size:9px;letter-spacing:1px">Bulk Generate</button>
+      <a href="/" class="btn btn-secondary btn-sm" style="font-family:var(--mono);font-size:9px;letter-spacing:1px">v1</a>
+    </div>
+  </header>
+
+  <!-- ─── SIDEBAR (roster) ─── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">Roster</div>
+      <button class="btn btn-primary btn-sm btn-icon" onclick="openAddChar()" title="Add character">+</button>
+    </div>
+    <div class="roster-list" id="rosterList"></div>
+  </aside>
+
+  <!-- ─── MAIN ─── -->
+  <main class="main">
+    <div class="workspace-inner">
+
+      <!-- PAGE: Dashboard -->
+      <div class="page active" id="page-dashboard">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Characters</div>
+            <div class="section-sub" id="dashSub">— / 63 animations per character</div>
+          </div>
+          <button class="btn btn-primary" onclick="openAddChar()">+ New Character</button>
+        </div>
+        <div class="dash-grid" id="dashGrid"></div>
+      </div>
+
+      <!-- PAGE: Studio -->
+      <div class="page" id="page-studio">
+        <div class="section-header">
+          <div>
+            <div class="section-title" id="studioTitle">Select a character</div>
+            <div class="section-sub" id="studioSub">Pick from the roster to start generating animations</div>
+          </div>
+          <div style="display:flex;gap:8px" id="studioActions"></div>
+        </div>
+
+        <div id="studioEmpty" class="empty-state">
+          <div class="empty-icon">🏀</div>
+          <div class="empty-text">Select a character from the roster</div>
+        </div>
+
+        <div id="studioContent" style="display:none">
+          <!-- Animation grid -->
+          <div class="anim-categories" id="animCategories"></div>
+
+          <!-- Generation panel -->
+          <div class="card" id="genPanel" style="display:none;margin-top:20px">
+            <div class="card-title" id="genPanelTitle">Generate</div>
+            <div class="gen-panel">
+              <div>
+                <div class="anim-info-row" id="animInfoRow" style="margin-bottom:12px"></div>
+                <div class="form-group">
+                  <label class="form-label">Mode</label>
+                  <div class="mode-toggle">
+                    <button class="mode-btn active" onclick="setMode('fbf')" id="modeFbf">Frame-by-Frame</button>
+                    <button class="mode-btn" onclick="setMode('strip')" id="modeStrip">Strip</button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+                    Prompt
+                    <button class="btn btn-secondary btn-sm" style="font-size:9px;padding:2px 8px" onclick="resetStudioPrompt()">Reset</button>
+                  </label>
+                  <textarea class="prompt-box" id="studioPrompt"></textarea>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-primary" id="genBtn" onclick="generateAnimation()" style="flex:1">
+                    <span class="spinner" id="genSpinner"></span>
+                    Generate
+                  </button>
+                  <button class="btn btn-secondary" onclick="closeGenPanel()">Cancel</button>
+                </div>
+                <div class="sse-log" id="genLog" style="margin-top:12px;display:none"></div>
+              </div>
+              <div class="gen-controls">
+                <div class="gen-preview" id="genPreview">
+                  <div class="gen-preview-empty">No preview yet</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Frames</label>
+                  <input class="input" type="number" id="genFrames" min="2" max="32" value="8" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">FPS</label>
+                  <input class="input" type="number" id="genFps" min="4" max="24" value="12" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SSE progress (full FBF) -->
+          <div class="card" id="fbfProgress" style="display:none;margin-top:20px">
+            <div class="card-title">Generating frames</div>
+            <div class="progress-ring" id="fbfRing" style="margin-bottom:12px">
+              <svg class="ring-chart" viewBox="0 0 52 52">
+                <circle cx="26" cy="26" r="22" fill="none" stroke="#1e1e30" stroke-width="4"/>
+                <circle id="fbfRingFill" cx="26" cy="26" r="22" fill="none" stroke="#00ff88" stroke-width="4"
+                  stroke-dasharray="138" stroke-dashoffset="138" stroke-linecap="round"
+                  transform="rotate(-90 26 26)" style="transition:stroke-dashoffset 0.4s"/>
+              </svg>
+              <div class="ring-info">
+                <div class="ring-label" id="fbfRingLabel">0/0</div>
+                <div class="ring-sub">FRAMES DONE</div>
+              </div>
+            </div>
+            <div class="sse-log" id="fbfLog"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: Pipeline -->
+      <div class="page" id="page-pipeline">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Full Pipeline</div>
+            <div class="section-sub">Generate all 63 animations for a character</div>
+          </div>
+        </div>
+        <div class="card" id="pipelineCard">
+          <div id="pipelineEmpty" class="empty-state">
+            <div class="empty-icon">⚡</div>
+            <div class="empty-text">Select a character from the roster</div>
+          </div>
+          <div id="pipelineContent" style="display:none">
+            <div style="display:flex;gap:16px;align-items:start;margin-bottom:16px">
+              <div style="flex:1">
+                <div class="form-group">
+                  <label class="form-label">Budget limit (USD)</label>
+                  <input class="input" type="number" id="pipelineBudget" value="5.00" step="0.50" />
+                </div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:11px;color:#50507a;font-family:var(--mono);margin-bottom:6px">EST. ANIMATIONS</div>
+                <div style="font-size:28px;font-weight:900;" id="pipelineAnimCount">63</div>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="pipelineBtn" onclick="startPipeline()" style="width:100%">
+              <span class="spinner" id="pipelineSpinner"></span>
+              Start Full Pipeline
+            </button>
+            <div class="sse-log" id="pipelineLog" style="margin-top:12px;display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: Sources -->
+      <div class="page" id="page-sources">
+        <div class="section-header">
+          <div>
+            <div class="section-title" id="sourcesTitle">Sources</div>
+            <div class="section-sub" id="sourcesSub">Upload reference photos for sprite generation</div>
+          </div>
+          <div id="pkgStatusBadge" class="pkg-status-badge intake">intake</div>
+        </div>
+
+        <div id="sourcesEmpty" class="empty-state">
+          <div class="empty-icon">📁</div>
+          <div class="empty-text">Select a character from the roster</div>
+        </div>
+
+        <div id="sourcesContent" style="display:none">
+
+          <div class="source-grid">
+            <!-- Headshot (JS-rendered) -->
+            <div class="source-slot" id="slotHeadshot">
+              <div class="source-slot-header"><div class="source-slot-label">Headshot</div></div>
+              <div class="source-preview-area"><div class="source-upload-prompt"><div class="source-upload-icon">+</div><div class="source-upload-text">No source</div></div></div>
+            </div>
+
+            <!-- Bodyshot (JS-rendered) -->
+            <div class="source-slot" id="slotBodyshot">
+              <div class="source-slot-header"><div class="source-slot-label">Bodyshot</div></div>
+              <div class="source-preview-area"><div class="source-upload-prompt"><div class="source-upload-icon">+</div><div class="source-upload-text">No source</div></div></div>
+            </div>
+
+            <!-- Clothing -->
+            <div class="source-slot">
+              <div class="source-slot-label">Clothing</div>
+              <div id="clothingSlots"></div>
+            </div>
+          </div>
+
+          <!-- Adjust Panel (inline reprocess) -->
+          <div id="adjPanelWrap" class="card" style="display:none;margin-bottom:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div class="card-title" id="adjPanelTitle" style="margin-bottom:0">Adjust Source</div>
+              <button class="btn btn-secondary btn-sm" onclick="closeAdjPanel()">Cancel</button>
+            </div>
+            <div style="display:grid;grid-template-columns:200px 1fr;gap:20px;align-items:start">
+              <!-- Preview -->
+              <div>
+                <div style="background:#05050e;border:1px solid var(--border);border-radius:8px;overflow:hidden;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center">
+                  <img id="adjPanelImg" src="" alt="" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated;display:block" />
+                </div>
+                <div style="font-family:var(--mono);font-size:8px;color:#40405a;margin-top:6px;text-align:center;line-height:1.6" id="adjPanelNote">current processed result</div>
+              </div>
+              <!-- Controls -->
+              <div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Top trim</span><span class="adjust-range-val" id="valTopTrim">0px</span></div><input class="adjust-range" type="range" id="rTopTrim" min="0" max="100" value="0" step="1" oninput="onAdjSlider('top_trim',this.value)"></div>
+                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Bottom trim</span><span class="adjust-range-val" id="valBottomTrim">0px</span></div><input class="adjust-range" type="range" id="rBottomTrim" min="0" max="100" value="0" step="1" oninput="onAdjSlider('bottom_trim',this.value)"></div>
+                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Left trim</span><span class="adjust-range-val" id="valLeftTrim">0px</span></div><input class="adjust-range" type="range" id="rLeftTrim" min="0" max="100" value="0" step="1" oninput="onAdjSlider('left_trim',this.value)"></div>
+                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Right trim</span><span class="adjust-range-val" id="valRightTrim">0px</span></div><input class="adjust-range" type="range" id="rRightTrim" min="0" max="100" value="0" step="1" oninput="onAdjSlider('right_trim',this.value)"></div>
+                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Top expand</span><span class="adjust-range-val" id="valTopExpand">0px</span></div><input class="adjust-range" type="range" id="rTopExpand" min="0" max="100" value="0" step="1" oninput="onAdjSlider('top_expand',this.value)"></div>
+                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Bottom expand</span><span class="adjust-range-val" id="valBottomExpand">0px</span></div><input class="adjust-range" type="range" id="rBottomExpand" min="0" max="100" value="0" step="1" oninput="onAdjSlider('bottom_expand',this.value)"></div>
+                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Left expand</span><span class="adjust-range-val" id="valLeftExpand">0px</span></div><input class="adjust-range" type="range" id="rLeftExpand" min="0" max="100" value="0" step="1" oninput="onAdjSlider('left_expand',this.value)"></div>
+                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Right expand</span><span class="adjust-range-val" id="valRightExpand">0px</span></div><input class="adjust-range" type="range" id="rRightExpand" min="0" max="100" value="0" step="1" oninput="onAdjSlider('right_expand',this.value)"></div>
+                </div>
+                <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Zoom</span><span class="adjust-range-val" id="valZoom">1.0×</span></div><input class="adjust-range" type="range" id="rZoom" min="0.5" max="2.0" value="1.0" step="0.05" oninput="onAdjSlider('zoom',this.value)"></div>
+                <div class="divider"></div>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-secondary btn-sm" onclick="resetAdjPanel()" style="flex:1">Reset</button>
+                  <button class="btn btn-secondary btn-sm" id="adjPreviewBtn" onclick="previewAdj()" style="flex:1"><span class="spinner" id="adjPreviewSpinner"></span> Preview</button>
+                  <button class="btn btn-primary btn-sm" id="adjSaveBtn" onclick="saveAdj()" style="flex:1"><span class="spinner" id="adjSaveSpinner"></span> Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Angles -->
+          <div class="card">
+            <div class="card-title">8-Angle Reference Set</div>
+            <div class="angle-grid" id="angleGrid"></div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</div>
+
+<!-- ─── MODAL: Add Character ─── -->
+<div class="modal-overlay" id="addCharModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeAddChar()">×</button>
+    <div class="modal-title">New Character</div>
+
+    <div class="setup-steps" id="setupSteps">
+      <div class="setup-step active" id="step1Label">1 · Photo</div>
+      <div class="setup-step" id="step2Label">2 · Generate</div>
+      <div class="setup-step" id="step3Label">3 · Confirm</div>
+    </div>
+
+    <!-- Step 1 -->
+    <div id="setupStep1">
+      <div class="form-group">
+        <label class="form-label">Character Name</label>
+        <input class="input" id="newName" placeholder="e.g. kai" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Height (in)</label>
+          <input class="input" type="number" id="newHeight" value="72" min="60" max="90" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Weight (lbs)</label>
+          <input class="input" type="number" id="newWeight" value="185" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Build</label>
+          <select class="input" id="newBuild">
+            <option>athletic</option><option>lean</option><option>stocky</option><option>heavy</option><option>slim</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Jersey #</label>
+          <input class="input" id="newJersey" placeholder="e.g. 23" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Primary Color</label>
+          <input class="input" type="color" id="newColor1" value="#FF4400" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Secondary Color</label>
+          <input class="input" type="color" id="newColor2" value="#FFFFFF" />
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="drop-zone" id="newDropZone">
+          <div class="drop-icon">📷</div>
+          <div>Drop photo here or click to browse</div>
+          <input type="file" id="newPhotoFile" accept="image/*" onchange="handlePhotoFile(this.files[0])" />
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <img id="newPhotoThumb" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:none;image-rendering:pixelated" />
+          <span id="newPhotoName" style="font-family:var(--mono);font-size:10px;color:#50507a"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prompt</label>
+        <textarea class="prompt-box" id="newCharPrompt" style="height:120px"></textarea>
+      </div>
+      <button class="btn btn-primary" id="generateOptionsBtn" onclick="generateOptions()" style="width:100%">
+        <span class="spinner" id="optSpinner"></span>
+        Generate Options
+      </button>
+    </div>
+
+    <!-- Step 2 -->
+    <div id="setupStep2" style="display:none">
+      <div class="options-grid" id="optionsGrid"></div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="goToStep(1)" style="flex:0">Back</button>
+        <button class="btn btn-primary" id="confirmOptBtn" onclick="confirmOption()" style="flex:1" disabled>Confirm Selected</button>
+        <button class="btn btn-secondary" onclick="regenerateOptions()">Retry</button>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div id="setupStep3" style="display:none">
+      <div style="text-align:center;padding:20px">
+        <img id="confirmedPortrait" style="width:120px;height:160px;object-fit:cover;border-radius:10px;border:2px solid var(--accent2);image-rendering:pixelated;margin-bottom:14px" />
+        <div style="font-size:18px;font-weight:900;text-transform:capitalize" id="confirmedName"></div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-top:6px">Character saved!</div>
+      </div>
+      <button class="btn btn-success" onclick="finishSetup()" style="width:100%">Open in Studio →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── MODAL: Adjust Source ─── -->
+<div class="modal-overlay" id="adjustModal">
+  <div class="modal" style="width:640px;max-width:95vw">
+    <button class="modal-close" onclick="closeAdjustModal()">×</button>
+    <div class="modal-title" id="adjustModalTitle">Adjust Source</div>
+    <div class="adjust-body">
+      <div class="adjust-viewport" id="adjustViewport">
+        <img id="adjustImg" src="" alt="" />
+      </div>
+      <div>
+        <div class="adjust-range-group">
+          <div class="adjust-range-header">
+            <span class="adjust-range-name">X Offset</span>
+            <span class="adjust-range-val" id="adjustXVal">0</span>
+          </div>
+          <input class="adjust-range" type="range" id="adjustX" min="-200" max="200" value="0" step="1" oninput="onAdjustSlider('x',this.value)">
+        </div>
+        <div class="adjust-range-group">
+          <div class="adjust-range-header">
+            <span class="adjust-range-name">Y Offset</span>
+            <span class="adjust-range-val" id="adjustYVal">0</span>
+          </div>
+          <input class="adjust-range" type="range" id="adjustY" min="-200" max="200" value="0" step="1" oninput="onAdjustSlider('y',this.value)">
+        </div>
+        <div class="adjust-range-group">
+          <div class="adjust-range-header">
+            <span class="adjust-range-name">Zoom</span>
+            <span class="adjust-range-val" id="adjustZoomVal">100%</span>
+          </div>
+          <input class="adjust-range" type="range" id="adjustZoom" min="0.3" max="3" value="1" step="0.05" oninput="onAdjustSlider('zoom',this.value)">
+        </div>
+        <div class="divider"></div>
+        <div style="font-family:var(--mono);font-size:9px;color:#40405a;margin-bottom:14px;line-height:1.8">
+          Drag the preview to reposition.<br>Scroll or use the zoom slider to scale.<br>Reset restores auto-processed result.
+        </div>
+        <div class="adjust-btn-row">
+          <button class="btn btn-secondary btn-sm" onclick="resetAdjust()" style="flex:1">Reset to auto</button>
+          <button class="btn btn-primary btn-sm" onclick="saveAdjust()" id="adjustSaveBtn" style="flex:1">Save</button>
+        </div>
+        <div style="font-family:var(--mono);font-size:8px;color:#303050;margin-top:10px;text-align:center" id="adjustSaveNote"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── DETAIL PANEL ─── -->
+<div class="detail-panel" id="detailPanel" style="display:none">
+  <div class="detail-panel-inner">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span id="detailTitle" style="font-weight:600;font-size:14px"></span>
+      <button class="modal-close" onclick="closeDetailPanel()">&#x2715;</button>
+    </div>
+    <div class="detail-preview"><canvas id="detailCanvas" width="180" height="180"></canvas></div>
+    <div class="filmstrip" id="detailFilmstrip"></div>
+    <div id="detailMeta" style="margin-top:12px;font-size:11px;color:#888;display:flex;gap:16px"></div>
+    <div id="promptEditor" style="display:none;margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:1px;color:#60608a;text-transform:uppercase;margin-bottom:8px" id="promptEditorHeader">Frame 1 prompt</div>
+      <textarea id="promptEditorText" class="prompt-box" style="height:120px;margin-bottom:10px" placeholder="Loading prompt…"></textarea>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button id="promptSaveBtn" class="btn" style="font-size:12px;padding:6px 16px" onclick="saveFramePrompt()">Save</button>
+        <button id="promptRerunBtn" class="btn btn-secondary" style="font-size:12px;padding:6px 16px" onclick="rerunFrame()">Rerun frame</button>
+        <span id="promptStatus" style="font-family:var(--mono);font-size:10px;color:#60608a;margin-left:4px"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── TOAST AREA ─── -->
+<div class="toast-area" id="toastArea"></div>
+
+<!-- ─── BULK PANEL ─── -->
+<div id="bulkOverlay" onclick="closeBulkPanel()"></div>
+<div id="bulkPanel">
+  <div class="bulk-header">
+    <div class="bulk-title">Bulk Generate</div>
+    <button class="modal-close" onclick="closeBulkPanel()">×</button>
+  </div>
+  <div class="bulk-body">
+    <!-- Character list -->
+    <div>
+      <div class="bulk-section-label">
+        <span>Characters</span>
+        <span>
+          <a onclick="bulkSelectAll(true)">Select all</a>
+          &nbsp;/&nbsp;
+          <a onclick="bulkSelectAll(false)">Clear</a>
+        </span>
+      </div>
+      <div class="bulk-char-list" id="bulkCharList">
+        <div class="bulk-char-loading">Loading characters…</div>
+      </div>
+    </div>
+
+    <!-- Animation selector -->
+    <div>
+      <label class="bulk-section-label" for="bulkAnimSelect" style="display:block;margin-bottom:6px;">Animation</label>
+      <select id="bulkAnimSelect" class="input">
+        <option value="idle">idle</option>
+        <option value="walk">walk</option>
+        <option value="run">run</option>
+        <option value="sprint">sprint</option>
+        <option value="jump">jump</option>
+        <option value="dribble">dribble</option>
+        <option value="static-dribble">static-dribble</option>
+        <option value="idle-dribble">idle-dribble</option>
+        <option value="idle_ball">idle_ball</option>
+        <option value="jumpshot">jumpshot</option>
+        <option value="stepback">stepback</option>
+        <option value="crossover">crossover</option>
+        <option value="defense-backpedal">defense-backpedal</option>
+        <option value="defense-shuffle">defense-shuffle</option>
+        <option value="defensive-slide-left">defensive-slide-left</option>
+        <option value="defensive-slide-right">defensive-slide-right</option>
+        <option value="steal">steal</option>
+        <option value="stop">stop</option>
+        <option value="turn">turn</option>
+        <option value="pivot">pivot</option>
+      </select>
+    </div>
+
+    <!-- Status area -->
+    <div>
+      <div class="bulk-section-label" style="margin-bottom:6px;">Status</div>
+      <div id="bulkStatus">Ready. Select characters and an animation, then click Generate.</div>
+    </div>
+  </div>
+
+  <div class="bulk-footer">
+    <button class="btn btn-bulk" id="bulkRunBtn" onclick="runBulkGenerate()" style="width:100%">Generate for selected</button>
+  </div>
+</div>
+
+<script>
+const API = '';
+const TOTAL_ANIMS = 63;
+
+// ─── ANIMATION DEFINITIONS ───────────────────────────────────────────────
+const ANIM_CATEGORIES = {
+  locomotion:  ['idle','idle_ball','walk','run','sprint','stop','turn','pivot'],
+  dribble:     ['dribble_idle','dribble_move','dribble_run','crossover','between_legs','behind_back','hesitation','spin_move','protect_ball','pickup_ball'],
+  passing:     ['pass','pass_fast','pass_lob','catch','catch_move','bobble_catch'],
+  shooting:    ['gather','set_shot','jump_shot','pullup','stepback','fadeaway','floater','shot_follow'],
+  finishing:   ['layup','layup_reverse','eurostep','dunk_one','dunk_two','dunk_contact','putback'],
+  air:         ['jump','airborne','land','land_hard'],
+  defense:     ['def_idle','def_slide','def_run','closeout','contest','steal','block','recover'],
+  offball:     ['cut','backdoor','screen_set','screen_use','box_out','rebound','rebound_tip'],
+  reaction:    ['stumble','hit_light','hit_heavy','fall','slide_floor','get_up'],
+  gameflow:    ['inbound','receive_inbound','transition_offense','transition_defense','celebration','frustration'],
+};
+
+const LOOP_ANIMS = new Set(['idle','idle_ball','walk','run','sprint','dribble_idle','dribble_move','def_idle','def_slide']);
+const BALL_ANIMS = new Set(['idle_ball','dribble_idle','dribble_move','dribble_run','crossover','between_legs','behind_back','hesitation','spin_move','protect_ball','pickup_ball','pass','pass_fast','pass_lob','catch','catch_move','bobble_catch','gather','set_shot','jump_shot','pullup','stepback','fadeaway','floater','shot_follow','layup','layup_reverse','eurostep','dunk_one','dunk_two','dunk_contact','putback','rebound','rebound_tip']);
+
+// ACCEPTED animations per QC (defense-backpedal, defense-shuffle, jumpshot, static-dribble, crossover)
+const ACCEPTED_ANIMATIONS = ['defense-backpedal','defense-shuffle','jumpshot','static-dribble','crossover','steal','idle','walk'];
+
+const DEFAULT_FPS = { locomotion:8, dribble:12, passing:10, shooting:10, finishing:12, air:10, defense:8, offball:10, reaction:10, gameflow:8 };
+const DEFAULT_FRAMES = { idle:4, idle_ball:4, walk:8, run:8, sprint:8, stop:4, turn:4, pivot:4, dribble_idle:6, dribble_move:8, dribble_run:8, crossover:12, between_legs:10, behind_back:10, hesitation:8, spin_move:10, protect_ball:6, pickup_ball:6, pass:6, pass_fast:4, pass_lob:8, catch:4, catch_move:6, bobble_catch:6, gather:4, set_shot:8, jump_shot:10, pullup:8, stepback:6, fadeaway:8, floater:6, shot_follow:4, layup:8, layup_reverse:8, eurostep:10, dunk_one:10, dunk_two:12, dunk_contact:10, putback:8, jump:5, airborne:4, land:4, land_hard:6, def_idle:4, def_slide:6, def_run:8, closeout:6, contest:4, steal:4, block:6, recover:4, cut:6, backdoor:8, screen_set:6, screen_use:4, box_out:4, rebound:6, rebound_tip:4, stumble:6, hit_light:4, hit_heavy:6, fall:8, slide_floor:4, get_up:6, inbound:6, receive_inbound:4, transition_offense:6, transition_defense:6, celebration:8, frustration:6 };
+const DEFAULT_FPS_ANIM = { idle:6, walk:10, jump:8, 'static-dribble':8, dribble:10, jumpshot:8, stepback:8, crossover:13, 'defense-backpedal':8, 'defense-shuffle':6, steal:8 };
+
+const DEFAULT_CHAR_PROMPT = `Image 1 is the style reference — match this exact pixel art style. Image 2 is the person to convert.
+
+Create a FULL BODY standing character portrait showing the complete person from head to shoes.
+The character must be standing upright, facing forward, arms relaxed at sides, in a neutral standing pose.
+Show the ENTIRE body — head, torso, arms, hands, legs, feet/shoes. Do NOT crop or zoom in.
+
+ACCURACY IS CRITICAL:
+- Match the person's EXACT skin tone — do not lighten or darken it
+- Match their EXACT facial features, face shape, eyes, nose, mouth
+- Match their EXACT hairstyle, hair color, hair texture
+- Match their EXACT outfit, clothing colors, and shoes from the photo
+- Match their body type and proportions
+
+STYLE:
+- 16-bit arcade pixel art, GBA game style — chunky pixels, NOT high-resolution
+- Bold thick black pixel outlines around the entire character body
+- Limited color palette with high contrast arcade shading
+- Sharp pixel edges — NO anti-aliasing, NO blur, NO smooth gradients
+- The character should look like they belong in a retro basketball arcade game
+
+Output on a pure white background (#FFFFFF only).
+FULL BODY only. No environment. No extra elements. No cropping.`;
+
+// ─── STATE ───────────────────────────────────────────────────────────────
+const STATE = {
+  roster: [],
+  selectedChar: null,
+  selectedAnim: null,
+  genMode: 'fbf',
+  charPhoto: null,
+  selectedOption: -1,
+  confirmedName: null,
+  sprites: {},
+  charPackage: null,
+  adjust: { type: null, transform: { x:0, y:0, scale:1 } },
+  adjPanel: {
+    type: null,
+    adjustments: { top_trim:0, bottom_trim:0, left_trim:0, right_trim:0, top_expand:0, bottom_expand:0, left_expand:0, right_expand:0, zoom:1.0 },
+  },
+};
+
+// ─── INIT ─────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('newCharPrompt').value = DEFAULT_CHAR_PROMPT;
+  loadRoster();
+  loadCosts();
+  initAdjustInteraction();
+
+  const dz = document.getElementById('newDropZone');
+  dz.ondragover = e => { e.preventDefault(); dz.classList.add('dragover'); };
+  dz.ondragleave = () => dz.classList.remove('dragover');
+  dz.ondrop = e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files[0]) handlePhotoFile(e.dataTransfer.files[0]); };
+});
+
+// ─── NAVIGATION ───────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'pipeline') renderPipelinePanel();
+  if (name === 'sources') renderSourcesPanel();
+}
+
+// ─── ROSTER ───────────────────────────────────────────────────────────────
+async function loadRoster() {
+  try {
+    const r = await fetch(`${API}/api/roster`);
+    const data = await r.json();
+    STATE.roster = data.roster || [];
+    renderRoster();
+    renderDashboard();
+  } catch(e) { toast('Failed to load roster', true); }
+}
+
+function renderRoster() {
+  const list = document.getElementById('rosterList');
+  list.innerHTML = STATE.roster.map(char => {
+    const done = char.completedAnims || 0;
+    const pct = Math.round((done / TOTAL_ANIMS) * 100);
+    const portrait = char.portrait ? `<img class="roster-portrait" src="${char.portrait}" onerror="this.style.display='none'" />` : `<div class="roster-portrait-placeholder">🏀</div>`;
+    return `<div class="roster-card ${STATE.selectedChar?.name === char.name ? 'active' : ''}" onclick="selectChar('${char.name}')">
+      ${portrait}
+      <div class="roster-info">
+        <div class="roster-name">${char.name}</div>
+        <div class="roster-progress">
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <div class="progress-label">${done}/${TOTAL_ANIMS}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderDashboard() {
+  const grid = document.getElementById('dashGrid');
+  const cards = STATE.roster.map(char => {
+    const done = char.completedAnims || 0;
+    const pct = Math.round((done / TOTAL_ANIMS) * 100);
+    const portrait = char.portrait
+      ? `<img class="dash-portrait" src="${char.portrait}" onerror="this.style.display='none'" />`
+      : `<div class="dash-portrait-empty">🏀</div>`;
+    return `<div class="dash-card ${STATE.selectedChar?.name === char.name ? 'active' : ''}" onclick="selectChar('${char.name}');showPage2('studio')">
+      ${portrait}
+      <div class="dash-name">${char.name}</div>
+      <div class="dash-stat">${done} / ${TOTAL_ANIMS} animations</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+
+  grid.innerHTML = cards + `<div class="dash-card dash-add" onclick="openAddChar()">
+    <div class="dash-add-icon">+</div>
+    <div class="dash-add-label">Add Character</div>
+  </div>`;
+
+  document.getElementById('dashSub').textContent = `${STATE.roster.length} characters · ${TOTAL_ANIMS} animations each`;
+}
+
+function showPage2(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const btn = [...document.querySelectorAll('.nav-btn')].find(b => b.textContent.toLowerCase().startsWith(name));
+  if (btn) btn.classList.add('active');
+  if (name === 'pipeline') renderPipelinePanel();
+  if (name === 'sources') renderSourcesPanel();
+}
+
+async function selectChar(name) {
+  STATE.selectedChar = STATE.roster.find(c => c.name === name) || { name };
+  STATE.selectedAnim = null;
+  STATE.charPackage = null;
+  renderRoster();
+  renderDashboard();
+  renderStudio();
+  await Promise.all([loadSprites(name), loadCharPackage(name)]);
+}
+
+async function loadSprites(charName) {
+  try {
+    const r = await fetch(`${API}/api/sprites/${charName}`);
+    const data = await r.json();
+    STATE.sprites = data.sprites || {};
+    renderAnimGrid();
+  } catch(e) {}
+}
+
+async function loadCharPackage(name) {
+  try {
+    const r = await fetch(`${API}/api/character/${name}/package`);
+    const data = await r.json();
+    STATE.charPackage = data.package || null;
+    renderSourcesPanel();
+  } catch(e) {}
+}
+
+// ─── SOURCES ──────────────────────────────────────────────────────────────
+const ANGLE_NAMES = ['front','front_right','right','back_right','back','back_left','left','front_left'];
+const CLOTHING_CATEGORIES = ['top','bottom','shoes','full_outfit'];
+
+function renderSourcesPanel() {
+  const char = STATE.selectedChar;
+  const pkg = STATE.charPackage;
+
+  document.getElementById('sourcesTitle').textContent = char ? char.name : 'Sources';
+  document.getElementById('sourcesSub').textContent = char ? `Package for ${char.name}` : 'Upload reference photos for sprite generation';
+
+  if (!char) {
+    document.getElementById('sourcesEmpty').style.display = 'block';
+    document.getElementById('sourcesContent').style.display = 'none';
+    return;
+  }
+  document.getElementById('sourcesEmpty').style.display = 'none';
+  document.getElementById('sourcesContent').style.display = 'block';
+
+  const status = pkg?.status || 'intake';
+  const badge = document.getElementById('pkgStatusBadge');
+  badge.className = `pkg-status-badge ${status}`;
+  badge.textContent = status.replace(/_/g, ' ');
+
+  // Headshot + Bodyshot — rendered via helper
+  document.getElementById('slotHeadshot').innerHTML = renderSourceSlot('headshot', pkg?.sources?.headshot, char.name);
+  document.getElementById('slotBodyshot').innerHTML = renderSourceSlot('bodyshot', pkg?.sources?.bodyshot, char.name);
+
+  // Clothing rows
+  const clothingContainer = document.getElementById('clothingSlots');
+  clothingContainer.innerHTML = CLOTHING_CATEGORIES.map(cat => {
+    const slot = pkg?.clothing?.[cat];
+    const isReady = slot?.status === 'ready';
+    const thumbHtml = isReady && slot.source_path
+      ? `<div class="clothing-thumb"><img src="${API}/api/character/image/${char.name}/sources/clothing/${slot.source_path.split('/').pop()}?t=${Date.now()}" onerror="this.parentNode.innerHTML='?'" /></div>`
+      : `<div class="clothing-thumb">+</div>`;
+    const statusHtml = isReady
+      ? `<span class="clothing-status ready">ready</span>`
+      : `<span class="clothing-status none">none</span>`;
+    return `<div class="clothing-row">
+      ${thumbHtml}
+      <span class="clothing-cat">${cat.replace('_',' ')}</span>
+      ${statusHtml}
+      <label class="btn btn-secondary btn-sm upload-btn-wrap" style="padding:3px 8px;font-size:9px">
+        Upload
+        <input type="file" accept="image/*" onchange="handleSourceFile('clothing','${cat}',this.files[0]);this.value=''"/>
+      </label>
+    </div>`;
+  }).join('');
+
+  // Angles grid
+  const angleGrid = document.getElementById('angleGrid');
+  angleGrid.innerHTML = ANGLE_NAMES.map((angleName, i) => {
+    const angle = pkg?.angles?.[angleName];
+    const isReady = angle?.status === 'ready';
+    const content = isReady && angle.url
+      ? `<img src="${angle.url}?t=${Date.now()}" onerror="this.style.display='none'" />`
+      : `<div class="angle-cell-pending">—</div>`;
+    return `<div class="angle-cell ${isReady ? 'ready' : ''}">
+      ${content}
+      <div class="angle-cell-label">${angleName.replace(/_/g,' ')}</div>
+    </div>`;
+  }).join('');
+}
+
+async function handleSourceFile(type, category, file) {
+  if (!file) return;
+  const char = STATE.selectedChar;
+  if (!char) return toast('Select a character first', true);
+
+  const params = new URLSearchParams({ name: char.name, type });
+  if (type === 'clothing' && category) params.set('category', category);
+
+  // Show processing state immediately for headshot/bodyshot
+  if (type === 'headshot' || type === 'bodyshot') {
+    const slotEl = document.getElementById(`slot${type.charAt(0).toUpperCase() + type.slice(1)}`);
+    if (slotEl) {
+      // Patch local state to processing so slot renders correctly
+      if (!STATE.charPackage) STATE.charPackage = { sources: {} };
+      if (!STATE.charPackage.sources) STATE.charPackage.sources = {};
+      STATE.charPackage.sources[type] = { ...(STATE.charPackage.sources[type] || {}), status: 'processing' };
+      slotEl.innerHTML = renderSourceSlot(type, STATE.charPackage.sources[type], char.name);
+    }
+  }
+
+  try {
+    const resp = await fetch(`${API}/api/character/upload-source?${params}`, {
+      method: 'POST',
+      body: file,
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    const procOk = data.processing?.status === 'ok';
+    toast(procOk ? `${type} processed ✓` : `${type} uploaded — check result`);
+    await loadCharPackage(char.name);
+    // Patch processing metadata into loaded package (not persisted server-side in full detail)
+    if (data.processing && STATE.charPackage?.sources?.[type]) {
+      STATE.charPackage.sources[type]._processing = data.processing;
+      renderSourcesPanel();
+    }
+  } catch(e) {
+    toast(`Upload failed: ${e.message}`, true);
+    await loadCharPackage(char.name);
+  }
+}
+
+function renderSourceSlot(type, source, charName) {
+  const label = type.charAt(0).toUpperCase() + type.slice(1);
+  const isProcessing = source?.status === 'processing';
+  const hasSource = source && (source.processed_path || source.path) && ['ready','processed'].includes(source.status);
+  const isAdjusted = hasSource && source.user_adjusted;
+  const procFailed = source?._processing?.status === 'failed';
+  const bgDetection = source?._processing?.bg_detection;
+
+  let statusClass, statusText;
+  if (isProcessing)       { statusClass = 'processing'; statusText = 'processing'; }
+  else if (isAdjusted)    { statusClass = 'adjusted';   statusText = 'adjusted'; }
+  else if (hasSource && procFailed) { statusClass = 'uploaded'; statusText = 'uploaded'; }
+  else if (hasSource)     { statusClass = 'ready';      statusText = 'processed ✓'; }
+  else                    { statusClass = 'pending';    statusText = 'pending'; }
+
+  // Image URL — prefer processed over original
+  let imgUrl = null;
+  if (hasSource) {
+    const displayPath = source.processed_path || source.path;
+    const fname = displayPath.split('/').pop();
+    imgUrl = `${API}/api/character/image/${charName}/sources/${fname}?t=${Date.now()}`;
+  }
+
+  // Preview content
+  let previewHtml;
+  if (isProcessing) {
+    previewHtml = `<div class="source-processing"><div class="spinner active" style="border-top-color:var(--warning);border-color:rgba(255,170,0,0.2)"></div><div class="source-processing-label">Processing...</div></div>`;
+  } else if (imgUrl) {
+    const t = source.transform || { x:0, y:0, scale:1 };
+    previewHtml = `<img src="${imgUrl}" style="transform:translate(${t.x}px,${t.y}px) scale(${t.scale})"
+      onerror="this.parentNode.innerHTML='<div class=\\'source-upload-prompt\\'><div class=\\'source-upload-icon\\'>!</div><div class=\\'source-upload-text\\'>Load error</div></div>'" />`;
+  } else {
+    previewHtml = `<div class="source-upload-prompt"><div class="source-upload-icon">+</div><div class="source-upload-text">No source</div></div>`;
+  }
+
+  // BG detection indicator (only shown after upload, when _processing is populated)
+  let bgNote = '';
+  if (bgDetection === 'fallback_full_image') {
+    bgNote = `<div class="source-bg-note fallback">fallback — check result</div>`;
+  } else if (bgDetection === 'corner_sample') {
+    bgNote = `<div class="source-bg-note ok">bg detected</div>`;
+  }
+
+  const adjustBtn = hasSource
+    ? `<button class="btn btn-secondary btn-sm" onclick="openAdjustPanel('${type}')">Adjust</button>`
+    : '';
+
+  return `
+    <div class="source-slot-header">
+      <div class="source-slot-label">${label}</div>
+      <div class="source-status-pill ${statusClass}">${statusText}</div>
+    </div>
+    <div class="source-preview-area">${previewHtml}</div>
+    ${bgNote}
+    <div class="source-actions-row">
+      <label class="btn btn-secondary btn-sm upload-btn-wrap">
+        Upload
+        <input type="file" accept="image/*" onchange="handleSourceFile('${type}',null,this.files[0]);this.value=''"/>
+      </label>
+      ${adjustBtn}
+    </div>`;
+}
+
+// ─── ADJUST PANEL (inline reprocess) ─────────────────────────────────────
+
+const ADJ_SLIDER_IDS = [
+  ['top_trim','rTopTrim','valTopTrim'],
+  ['bottom_trim','rBottomTrim','valBottomTrim'],
+  ['left_trim','rLeftTrim','valLeftTrim'],
+  ['right_trim','rRightTrim','valRightTrim'],
+  ['top_expand','rTopExpand','valTopExpand'],
+  ['bottom_expand','rBottomExpand','valBottomExpand'],
+  ['left_expand','rLeftExpand','valLeftExpand'],
+  ['right_expand','rRightExpand','valRightExpand'],
+];
+
+function openAdjustPanel(type) {
+  const char = STATE.selectedChar;
+  const pkg  = STATE.charPackage;
+  if (!char || !pkg) return;
+
+  const source = pkg.sources?.[type];
+  const displayPath = source?.processed_path || source?.path;
+  if (!displayPath) return;
+
+  const fname = displayPath.split('/').pop();
+  const url   = `${API}/api/character/image/${char.name}/sources/${fname}?t=${Date.now()}`;
+
+  STATE.adjPanel.type = type;
+  STATE.adjPanel.adjustments = { top_trim:0, bottom_trim:0, left_trim:0, right_trim:0, top_expand:0, bottom_expand:0, left_expand:0, right_expand:0, zoom:1.0 };
+
+  document.getElementById('adjPanelTitle').textContent = `Adjust ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+  document.getElementById('adjPanelImg').src = url;
+  document.getElementById('adjPanelNote').textContent = source.processed_path
+    ? 'current auto-processed result'
+    : 'original upload (processing not yet run)';
+
+  syncAdjSliders();
+  const panel = document.getElementById('adjPanelWrap');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeAdjPanel() {
+  document.getElementById('adjPanelWrap').style.display = 'none';
+  STATE.adjPanel.type = null;
+}
+
+function onAdjSlider(key, rawVal) {
+  const val = key === 'zoom' ? parseFloat(rawVal) : parseInt(rawVal, 10);
+  STATE.adjPanel.adjustments[key] = val;
+  syncAdjSliders();
+}
+
+function syncAdjSliders() {
+  const adj = STATE.adjPanel.adjustments;
+  ADJ_SLIDER_IDS.forEach(([key, sliderId, valId]) => {
+    document.getElementById(sliderId).value = adj[key];
+    document.getElementById(valId).textContent = adj[key] + 'px';
+  });
+  document.getElementById('rZoom').value = adj.zoom;
+  document.getElementById('valZoom').textContent = adj.zoom.toFixed(2) + '×';
+}
+
+function resetAdjPanel() {
+  STATE.adjPanel.adjustments = { top_trim:0, bottom_trim:0, left_trim:0, right_trim:0, top_expand:0, bottom_expand:0, left_expand:0, right_expand:0, zoom:1.0 };
+  syncAdjSliders();
+  // Restore original processed image
+  const char = STATE.selectedChar;
+  const pkg  = STATE.charPackage;
+  const type = STATE.adjPanel.type;
+  if (char && pkg && type) {
+    const source = pkg.sources?.[type];
+    const displayPath = source?.processed_path || source?.path;
+    if (displayPath) {
+      const fname = displayPath.split('/').pop();
+      document.getElementById('adjPanelImg').src = `${API}/api/character/image/${char.name}/sources/${fname}?t=${Date.now()}`;
+      document.getElementById('adjPanelNote').textContent = 'reset to auto result';
+    }
+  }
+}
+
+async function _callReprocess(save) {
+  const char = STATE.selectedChar;
+  const type = STATE.adjPanel.type;
+  if (!char || !type) return null;
+
+  try {
+    const resp = await fetch(`${API}/api/character/${char.name}/sources/${type}/reprocess`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adjustments: STATE.adjPanel.adjustments, save }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    return data;
+  } catch(e) {
+    toast(`Reprocess failed: ${e.message}`, true);
+    return null;
+  }
+}
+
+async function previewAdj() {
+  const previewBtn = document.getElementById('adjPreviewBtn');
+  const spinner    = document.getElementById('adjPreviewSpinner');
+  previewBtn.disabled = true;
+  spinner.classList.add('active');
+
+  const data = await _callReprocess(false);
+  if (data?.processed_url) {
+    document.getElementById('adjPanelImg').src = data.processed_url + '?t=' + Date.now();
+    document.getElementById('adjPanelNote').textContent = 'preview result (not saved)';
+  }
+
+  previewBtn.disabled = false;
+  spinner.classList.remove('active');
+}
+
+async function saveAdj() {
+  const saveBtn = document.getElementById('adjSaveBtn');
+  const spinner = document.getElementById('adjSaveSpinner');
+  saveBtn.disabled = true;
+  spinner.classList.add('active');
+
+  const data = await _callReprocess(true);
+  if (data) {
+    toast(`${STATE.adjPanel.type} adjustment saved`);
+    closeAdjPanel();
+    await loadCharPackage(STATE.selectedChar.name);
+  }
+
+  saveBtn.disabled = false;
+  spinner.classList.remove('active');
+}
+
+// ─── ADJUST MODAL ─────────────────────────────────────────────────────────
+
+function openAdjustModal(type) {
+  const char = STATE.selectedChar;
+  const pkg  = STATE.charPackage;
+  if (!char || !pkg) return;
+
+  const source = pkg.sources?.[type];
+  if (!source) return;
+
+  const displayPath = source.processed_path || source.path;
+  if (!displayPath) return;
+
+  const fname = displayPath.split('/').pop();
+  const url   = `${API}/api/character/image/${char.name}/sources/${fname}?t=${Date.now()}`;
+
+  STATE.adjust.type = type;
+  STATE.adjust.transform = { ...(source.transform || { x:0, y:0, scale:1 }) };
+
+  const label = type.charAt(0).toUpperCase() + type.slice(1);
+  document.getElementById('adjustModalTitle').textContent = `Adjust ${label}`;
+  document.getElementById('adjustImg').src = url;
+
+  const note = source.processed_path
+    ? 'Showing auto-processed result.'
+    : 'Showing original upload (auto-processing not yet run).';
+  document.getElementById('adjustSaveNote').textContent = note;
+
+  applyAdjustTransform();
+  syncAdjustSliders();
+  document.getElementById('adjustModal').classList.add('open');
+}
+
+function closeAdjustModal() {
+  document.getElementById('adjustModal').classList.remove('open');
+  STATE.adjust.type = null;
+}
+
+function applyAdjustTransform() {
+  const t = STATE.adjust.transform;
+  document.getElementById('adjustImg').style.transform = `translate(${t.x}px,${t.y}px) scale(${t.scale})`;
+}
+
+function syncAdjustSliders() {
+  const t = STATE.adjust.transform;
+  document.getElementById('adjustX').value    = t.x;
+  document.getElementById('adjustY').value    = t.y;
+  document.getElementById('adjustZoom').value = t.scale;
+  document.getElementById('adjustXVal').textContent    = Math.round(t.x) + 'px';
+  document.getElementById('adjustYVal').textContent    = Math.round(t.y) + 'px';
+  document.getElementById('adjustZoomVal').textContent = Math.round(t.scale * 100) + '%';
+}
+
+function onAdjustSlider(axis, rawVal) {
+  const val = parseFloat(rawVal);
+  const t   = STATE.adjust.transform;
+  if      (axis === 'x')    t.x     = val;
+  else if (axis === 'y')    t.y     = val;
+  else if (axis === 'zoom') t.scale = val;
+  applyAdjustTransform();
+  syncAdjustSliders();
+}
+
+function resetAdjust() {
+  STATE.adjust.transform = { x:0, y:0, scale:1 };
+  applyAdjustTransform();
+  syncAdjustSliders();
+}
+
+async function saveAdjust() {
+  const char = STATE.selectedChar;
+  const type = STATE.adjust.type;
+  if (!char || !type) return;
+
+  const btn = document.getElementById('adjustSaveBtn');
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch(`${API}/api/character/${char.name}/source/${type}/adjust`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(STATE.adjust.transform),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    toast(`${type} adjustment saved`);
+    closeAdjustModal();
+    await loadCharPackage(char.name);
+  } catch(e) {
+    // Endpoint not yet wired — save to local package state so UI reflects the adjustment
+    if (STATE.charPackage?.sources?.[type]) {
+      STATE.charPackage.sources[type].transform    = { ...STATE.adjust.transform };
+      STATE.charPackage.sources[type].user_adjusted = true;
+      renderSourcesPanel();
+    }
+    toast('Saved locally — server endpoint pending from upload terminal');
+    closeAdjustModal();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Drag + scroll interaction — set up once at init
+let _adjDragging = false, _adjDragX = 0, _adjDragY = 0;
+
+function initAdjustInteraction() {
+  const viewport = document.getElementById('adjustViewport');
+
+  viewport.addEventListener('mousedown', e => {
+    _adjDragging = true;
+    _adjDragX = e.clientX;
+    _adjDragY = e.clientY;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!_adjDragging) return;
+    const t = STATE.adjust.transform;
+    t.x += e.clientX - _adjDragX;
+    t.y += e.clientY - _adjDragY;
+    _adjDragX = e.clientX;
+    _adjDragY = e.clientY;
+    // Clamp offsets to prevent losing the image entirely
+    t.x = Math.max(-300, Math.min(300, t.x));
+    t.y = Math.max(-300, Math.min(300, t.y));
+    applyAdjustTransform();
+    syncAdjustSliders();
+  });
+
+  document.addEventListener('mouseup', () => { _adjDragging = false; });
+
+  viewport.addEventListener('wheel', e => {
+    e.preventDefault();
+    const t = STATE.adjust.transform;
+    t.scale = Math.max(0.3, Math.min(3, t.scale - e.deltaY * 0.001));
+    applyAdjustTransform();
+    syncAdjustSliders();
+  }, { passive: false });
+
+  // Close modal on overlay click (not modal click)
+  document.getElementById('adjustModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('adjustModal')) closeAdjustModal();
+  });
+}
+
+// ─── STUDIO ───────────────────────────────────────────────────────────────
+function renderStudio() {
+  const char = STATE.selectedChar;
+  if (!char) {
+    document.getElementById('studioEmpty').style.display = 'block';
+    document.getElementById('studioContent').style.display = 'none';
+    document.getElementById('studioTitle').textContent = 'Select a character';
+    document.getElementById('studioSub').textContent = 'Pick from the roster to start generating animations';
+    return;
+  }
+  document.getElementById('studioEmpty').style.display = 'none';
+  document.getElementById('studioContent').style.display = 'block';
+  document.getElementById('studioTitle').textContent = char.name;
+  document.getElementById('studioSub').textContent = `${(char.completedAnims||0)} / ${TOTAL_ANIMS} animations complete`;
+
+  const actions = document.getElementById('studioActions');
+  actions.innerHTML = `
+    <button class="btn btn-secondary btn-sm" onclick="showPage2('sources')">Sources 📁</button>
+    <button class="btn btn-secondary btn-sm" onclick="showPage2('pipeline')">Full Pipeline ⚡</button>
+    <button class="btn btn-secondary btn-sm" id="exportSJBtn" onclick="exportToSoulJam()">
+      <span class="spinner" id="exportSJSpinner"></span>Export → Soul Jam
+    </button>`;
+
+  renderAnimGrid();
+  document.getElementById('genPanel').style.display = 'none';
+}
+
+function renderAnimGrid() {
+  const container = document.getElementById('animCategories');
+  container.innerHTML = Object.entries(ANIM_CATEGORIES).map(([cat, anims]) => {
+    const doneCount = anims.filter(a => STATE.sprites[a]?.exists).length;
+    const cells = anims.map(anim => {
+      const sprite = STATE.sprites[anim];
+      const done = sprite?.exists;
+      const frames = DEFAULT_FRAMES[anim] || 8;
+      const fps = DEFAULT_FPS_ANIM[anim] || DEFAULT_FPS[cat] || 8;
+      const loop = LOOP_ANIMS.has(anim);
+      const ball = BALL_ANIMS.has(anim);
+      const isActive = STATE.selectedAnim === anim;
+      const dataAttrs = done ? `data-frames="${frames}" data-fps="${fps}" data-sprite="${sprite.url}"` : '';
+      const previewDiv = done ? `<div class="anim-cell-preview" style="background-image:url('${sprite.url}')"></div>` : '';
+      const clickHandler = done
+        ? `openDetailPanel('${STATE.selectedChar}','${anim}','${sprite.url}',${fps},${frames},null,null)`
+        : `selectAnim('${anim}','${cat}')`;
+      return `<div class="anim-cell ${done ? 'done' : ''} ${isActive ? 'active' : ''}" onclick="${clickHandler}" ${dataAttrs}>
+        ${previewDiv}
+        <div class="anim-cell-status">${done ? '✓' : '○'}</div>
+        <div class="anim-cell-name">${anim}</div>
+        <div class="anim-cell-meta">${frames}f${loop ? ' · ∞' : ''}${ball ? ' · 🏀' : ''}</div>
+      </div>`;
+    }).join('');
+    return `<div class="anim-category">
+      <div class="anim-category-label">
+        ${cat}
+        <span class="anim-category-count">${doneCount}/${anims.length}</span>
+      </div>
+      <div class="anim-grid">${cells}</div>
+    </div>`;
+  }).join('');
+  setupAnimHovers();
+}
+
+function setupAnimHovers() {
+  document.querySelectorAll('.anim-cell.done[data-sprite]').forEach(cell => {
+    const frames = parseInt(cell.dataset.frames) || 1;
+    const fps = parseInt(cell.dataset.fps) || 8;
+    const preview = cell.querySelector('.anim-cell-preview');
+    if (!preview || frames <= 1) return;
+    let timer = null;
+    let frame = 0;
+    cell.addEventListener('mouseenter', () => {
+      frame = 0;
+      const h = preview.offsetHeight;
+      timer = setInterval(() => {
+        frame = (frame + 1) % frames;
+        preview.style.backgroundPositionX = `${-(frame * h)}px`;
+      }, Math.round(1000 / fps));
+    });
+    cell.addEventListener('mouseleave', () => {
+      clearInterval(timer);
+      timer = null;
+      frame = 0;
+      preview.style.backgroundPositionX = '0px';
+    });
+  });
+}
+
+function selectAnim(anim, cat) {
+  STATE.selectedAnim = anim;
+  renderAnimGrid();
+  openGenPanel(anim, cat);
+}
+
+function openGenPanel(anim, cat) {
+  const panel = document.getElementById('genPanel');
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  document.getElementById('genPanelTitle').textContent = `Generate · ${anim}`;
+
+  const frames = DEFAULT_FRAMES[anim] || 8;
+  const fps = DEFAULT_FPS_ANIM[anim] || DEFAULT_FPS[cat] || 10;
+  const loop = LOOP_ANIMS.has(anim);
+  const ball = BALL_ANIMS.has(anim);
+
+  document.getElementById('genFrames').value = frames;
+  document.getElementById('genFps').value = fps;
+
+  const infoRow = document.getElementById('animInfoRow');
+  infoRow.innerHTML = [
+    `<span class="tag">${frames} frames</span>`,
+    `<span class="tag">${fps} fps</span>`,
+    `<span class="tag">${cat}</span>`,
+    loop ? `<span class="tag loop">loop</span>` : '',
+    ball ? `<span class="tag ball">🏀 ball</span>` : '',
+  ].join('');
+
+  document.getElementById('studioPrompt').value = buildAnimPrompt(anim, cat, frames, fps);
+  document.getElementById('genLog').style.display = 'none';
+  document.getElementById('genLog').innerHTML = '';
+  document.getElementById('fbfProgress').style.display = 'none';
+
+  const preview = document.getElementById('genPreview');
+  const sprite = STATE.sprites[anim];
+  if (sprite?.exists) {
+    preview.innerHTML = `<img src="${sprite.url}?t=${Date.now()}" title="${anim}" />`;
+  } else {
+    preview.innerHTML = `<div class="gen-preview-empty">No sprite yet</div>`;
+  }
+}
+
+function closeGenPanel() {
+  STATE.selectedAnim = null;
+  document.getElementById('genPanel').style.display = 'none';
+  renderAnimGrid();
+}
+
+function buildAnimPrompt(anim, cat, frames, fps) {
+  const loop = LOOP_ANIMS.has(anim);
+  const ball = BALL_ANIMS.has(anim);
+  const char = STATE.selectedChar?.name || 'character';
+  return `REPLICATE Image 1 EXACTLY. Copy every body position, pose, and limb placement. Replace only the character identity with Image 2.
+
+Animation: ${anim} (${cat})
+Frames: ${frames} frames at ${fps}fps${loop ? ', looping' : ''}${ball ? ', includes basketball' : ''}
+
+OUTPUT:
+- Single horizontal strip, EXACTLY ${frames} equally-sized frames, no gaps, no borders
+- Each frame: 64×64 pixels
+- 16-bit pixel art, GBA style, bold BLACK outlines
+- Background: solid green (#00FF00), NO green on character
+- Character fills ~85% of frame height, feet on same baseline in every frame`;
+}
+
+function resetStudioPrompt() {
+  if (STATE.selectedAnim) {
+    const cat = Object.entries(ANIM_CATEGORIES).find(([,a]) => a.includes(STATE.selectedAnim))?.[0] || '';
+    document.getElementById('studioPrompt').value = buildAnimPrompt(STATE.selectedAnim, cat, parseInt(document.getElementById('genFrames').value), parseInt(document.getElementById('genFps').value));
+  }
+}
+
+function setMode(mode) {
+  STATE.genMode = mode;
+  document.getElementById('modeFbf').classList.toggle('active', mode === 'fbf');
+  document.getElementById('modeStrip').classList.toggle('active', mode === 'strip');
+}
+
+async function generateAnimation() {
+  const char = STATE.selectedChar;
+  const anim = STATE.selectedAnim;
+  if (!char || !anim) return toast('Select a character and animation', true);
+
+  const frames = parseInt(document.getElementById('genFrames').value);
+  const fps = parseInt(document.getElementById('genFps').value);
+  const prompt = document.getElementById('studioPrompt').value;
+  const mode = STATE.genMode;
+
+  const btn = document.getElementById('genBtn');
+  const spinner = document.getElementById('genSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+
+  if (mode === 'fbf') {
+    await generateFBF(char.name, anim, frames, fps, prompt);
+  } else {
+    await generateStrip(char.name, anim, frames, fps, prompt);
+  }
+
+  btn.disabled = false;
+  spinner.classList.remove('active');
+}
+
+async function generateStrip(charName, anim, frames, fps, prompt) {
+  const log = document.getElementById('genLog');
+  log.style.display = 'block';
+  log.innerHTML = '<span class="info">Starting strip generation...</span>\n';
+
+  try {
+    const resp = await fetch(`${API}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: charName, animation: anim, frames, fps, promptOverride: prompt }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    log.innerHTML += `<span class="ok">✓ Strip generated</span>\n`;
+    await loadSprites(charName);
+    renderAnimGrid();
+    const sprite = STATE.sprites[anim];
+    if (sprite?.exists) {
+      document.getElementById('genPreview').innerHTML = `<img src="${sprite.url}?t=${Date.now()}" />`;
+    }
+    toast('Animation generated');
+  } catch(e) {
+    log.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
+    toast('Generation failed: ' + e.message, true);
+  }
+}
+
+async function generateFBF(charName, anim, frames, fps, prompt) {
+  const fbfProgress = document.getElementById('fbfProgress');
+  const fbfLog = document.getElementById('fbfLog');
+  fbfProgress.style.display = 'block';
+  fbfLog.innerHTML = '';
+  updateRing(0, frames);
+
+  try {
+    const resp = await fetch(`${API}/api/generate-fbf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: charName, animation: anim, frames, fps, promptOverride: prompt }),
+    });
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    let done = 0;
+
+    while (true) {
+      const { value, done: streamDone } = await reader.read();
+      if (streamDone) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const ev = JSON.parse(line.slice(5));
+          if (ev.type === 'frame_done') {
+            done = ev.frame + 1;
+            updateRing(done, frames);
+            fbfLog.innerHTML += `<span class="ok">✓ Frame ${done}/${frames}</span>\n`;
+            fbfLog.scrollTop = fbfLog.scrollHeight;
+          } else if (ev.type === 'frame_error') {
+            done = ev.frame + 1;
+            updateRing(done, frames);
+            fbfLog.innerHTML += `<span class="err">✗ Frame ${done}/${frames}${ev.error ? ' · ' + ev.error : ''}</span>\n`;
+            fbfLog.scrollTop = fbfLog.scrollHeight;
+          } else if (ev.type === 'frame_retry') {
+            fbfLog.innerHTML += `<span class="info">↻ Frame ${ev.frame + 1} retry ${ev.attempt}/${ev.maxRetries}${ev.waitSec ? ' (wait ' + ev.waitSec + 's)' : ''}</span>\n`;
+            fbfLog.scrollTop = fbfLog.scrollHeight;
+          } else if (ev.type === 'complete') {
+            fbfLog.innerHTML += `<span class="ok">✓ Complete — ${ev.frames || frames} frames</span>\n`;
+            await loadSprites(charName);
+            renderAnimGrid();
+            const sprite = STATE.sprites[anim];
+            if (sprite?.exists) {
+              document.getElementById('genPreview').innerHTML = `<img src="${sprite.url}?t=${Date.now()}" />`;
+            }
+            toast('Animation complete');
+          } else if (ev.type === 'error') {
+            fbfLog.innerHTML += `<span class="err">✗ ${ev.message}</span>\n`;
+            toast('Error: ' + ev.message, true);
+          }
+        } catch {}
+      }
+    }
+  } catch(e) {
+    fbfLog.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
+    toast('Failed: ' + e.message, true);
+  }
+}
+
+function updateRing(done, total) {
+  const pct = total > 0 ? done / total : 0;
+  const circ = 138;
+  document.getElementById('fbfRingFill').style.strokeDashoffset = circ - (circ * pct);
+  document.getElementById('fbfRingLabel').textContent = `${done}/${total}`;
+}
+
+// ─── PIPELINE ─────────────────────────────────────────────────────────────
+function renderPipelinePanel() {
+  const char = STATE.selectedChar;
+  document.getElementById('pipelineEmpty').style.display = char ? 'none' : 'block';
+  document.getElementById('pipelineContent').style.display = char ? 'block' : 'none';
+}
+
+async function startPipeline() {
+  const char = STATE.selectedChar;
+  if (!char) return toast('Select a character first', true);
+
+  const budget = parseFloat(document.getElementById('pipelineBudget').value) || 5;
+
+  const btn = document.getElementById('pipelineBtn');
+  const spinner = document.getElementById('pipelineSpinner');
+  const log = document.getElementById('pipelineLog');
+  btn.disabled = true;
+  spinner.classList.add('active');
+  log.style.display = 'block';
+  log.innerHTML = `<span class="info">Starting pipeline for ${char.name}...</span>\n`;
+
+  try {
+    const resp = await fetch(`${API}/api/pipeline/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: char.name, budget }),
+    });
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const ev = JSON.parse(line.slice(5));
+          if (ev.type === 'anim_start') {
+            log.innerHTML += `<span class="info">→ ${ev.animation} (${ev.index + 1}/${ev.total})</span>\n`;
+            log.scrollTop = log.scrollHeight;
+          } else if (ev.type === 'anim_complete') {
+            log.innerHTML += `<span class="ok">✓ ${ev.animation} — ${ev.frames}/${ev.totalFrames} frames, score ${ev.score}</span>\n`;
+            log.scrollTop = log.scrollHeight;
+          } else if (ev.type === 'anim_skip') {
+            log.innerHTML += `<span class="err">✗ ${ev.animation} skipped: ${ev.reason}</span>\n`;
+            log.scrollTop = log.scrollHeight;
+          } else if (ev.type === 'budget_stop') {
+            log.innerHTML += `<span class="err">✗ Budget limit reached — spent $${ev.spent}, needed $${ev.needed} for ${ev.animation}</span>\n`;
+            log.scrollTop = log.scrollHeight;
+          } else if (ev.type === 'frame_done') {
+            log.innerHTML += `<span class="info">  ✓ ${ev.animation} frame ${ev.frame + 1}/${ev.totalFrames}</span>\n`;
+            log.scrollTop = log.scrollHeight;
+          } else if (ev.type === 'frame_error') {
+            log.innerHTML += `<span class="err">  ✗ ${ev.animation} frame ${ev.frame + 1} failed: ${ev.error}</span>\n`;
+            log.scrollTop = log.scrollHeight;
+          } else if (ev.type === 'pipeline_complete') {
+            log.innerHTML += `<span class="ok">✓ Pipeline complete — ${ev.completedAnims?.length || '?'} animations, $${ev.totalCost}</span>\n`;
+            await loadRoster();
+            await loadSprites(char.name);
+            toast('Pipeline complete');
+          } else if (ev.type === 'error') {
+            log.innerHTML += `<span class="err">✗ ${ev.message}</span>\n`;
+            toast('Pipeline error: ' + ev.message, true);
+          }
+        } catch {}
+      }
+    }
+  } catch(e) {
+    log.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
+    toast('Pipeline failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────
+
+async function exportToSoulJam() {
+  const char = STATE.selectedChar;
+  if (!char) return toast('Select a character first', true);
+
+  const btn     = document.getElementById('exportSJBtn');
+  const spinner = document.getElementById('exportSJSpinner');
+  if (btn) btn.disabled = true;
+  if (spinner) spinner.classList.add('active');
+
+  try {
+    const resp = await fetch(`${API}/api/export/soul-jam`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: char.name, animations: ACCEPTED_ANIMATIONS }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error + (data.hint ? ` — ${data.hint}` : ''));
+
+    const count = data.animations_included?.length ?? ACCEPTED_ANIMATIONS.length;
+    const missing = data.animations_missing?.length ? ` (${data.animations_missing.length} missing)` : '';
+    toast(`Exported ${count} animations to soul-jam${missing}`);
+  } catch(e) {
+    toast(`Export failed: ${e.message}`, true);
+  } finally {
+    if (btn) btn.disabled = false;
+    if (spinner) spinner.classList.remove('active');
+  }
+}
+
+// ─── ADD CHARACTER ────────────────────────────────────────────────────────
+function openAddChar() {
+  goToStep(1);
+  document.getElementById('addCharModal').classList.add('open');
+}
+
+function closeAddChar() {
+  document.getElementById('addCharModal').classList.remove('open');
+}
+
+function goToStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById(`setupStep${i}`).style.display = i === n ? 'block' : 'none';
+    const lbl = document.getElementById(`step${i}Label`);
+    lbl.classList.remove('active','done');
+    if (i === n) lbl.classList.add('active');
+    else if (i < n) lbl.classList.add('done');
+  });
+}
+
+function handlePhotoFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    STATE.charPhoto = e.target.result;
+    const thumb = document.getElementById('newPhotoThumb');
+    thumb.src = e.target.result;
+    thumb.style.display = 'block';
+    document.getElementById('newPhotoName').textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function generateOptions() {
+  const name = document.getElementById('newName').value.trim().toLowerCase().replace(/\s+/g,'-');
+  if (!name) return toast('Name required', true);
+  if (!STATE.charPhoto) return toast('Photo required', true);
+
+  const btn = document.getElementById('generateOptionsBtn');
+  const spinner = document.getElementById('optSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+
+  try {
+    const body = {
+      name,
+      photoBase64: STATE.charPhoto,
+      heightInches: parseInt(document.getElementById('newHeight').value) || 72,
+      weightLbs: parseInt(document.getElementById('newWeight').value) || 185,
+      build: document.getElementById('newBuild').value,
+      jerseyNumber: document.getElementById('newJersey').value,
+      teamColors: { primary: document.getElementById('newColor1').value, secondary: document.getElementById('newColor2').value, accent: '#000000' },
+      promptOverride: document.getElementById('newCharPrompt').value,
+    };
+
+    const resp = await fetch(`${API}/api/character/create`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    const grid = document.getElementById('optionsGrid');
+    grid.innerHTML = (data.options || []).map((opt, i) =>
+      `<div class="char-option" id="opt${opt.index}" onclick="pickOption(${opt.index})">
+        <div class="opt-label">#${opt.index + 1}</div>
+        <img src="${opt.url}" />
+      </div>`
+    ).join('');
+
+    STATE.selectedOption = -1;
+    document.getElementById('confirmOptBtn').disabled = true;
+    goToStep(2);
+    toast('Options ready — pick the best one');
+  } catch(e) {
+    toast('Error: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+function pickOption(idx) {
+  STATE.selectedOption = idx;
+  document.querySelectorAll('.char-option').forEach(el => el.classList.remove('selected'));
+  document.getElementById('opt' + idx)?.classList.add('selected');
+  document.getElementById('confirmOptBtn').disabled = false;
+}
+
+async function regenerateOptions() {
+  goToStep(1);
+  await generateOptions();
+}
+
+async function confirmOption() {
+  const name = document.getElementById('newName').value.trim().toLowerCase().replace(/\s+/g,'-');
+  if (STATE.selectedOption < 0) return toast('Pick an option first', true);
+
+  try {
+    const body = {
+      name,
+      optionIndex: STATE.selectedOption,
+      heightInches: parseInt(document.getElementById('newHeight').value) || 72,
+      weightLbs: parseInt(document.getElementById('newWeight').value) || 185,
+      build: document.getElementById('newBuild').value,
+      jerseyNumber: document.getElementById('newJersey').value,
+      teamColors: { primary: document.getElementById('newColor1').value, secondary: document.getElementById('newColor2').value, accent: '#000000' },
+    };
+    const resp = await fetch(`${API}/api/character/confirm`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    STATE.confirmedName = name;
+    document.getElementById('confirmedPortrait').src = data.pixelArtUrl;
+    document.getElementById('confirmedName').textContent = name;
+    goToStep(3);
+    await loadRoster();
+    toast('Character saved');
+  } catch(e) {
+    toast('Error: ' + e.message, true);
+  }
+}
+
+function finishSetup() {
+  closeAddChar();
+  STATE.charPhoto = null;
+  STATE.selectedOption = -1;
+  if (STATE.confirmedName) {
+    selectChar(STATE.confirmedName);
+    showPage2('studio');
+  }
+}
+
+// ─── COSTS ────────────────────────────────────────────────────────────────
+async function loadCosts() {
+  try {
+    const r = await fetch(`${API}/api/costs`);
+    const data = await r.json();
+    const total = data.totalCost || 0;
+    document.getElementById('costPill').innerHTML = `spend: <span>$${total.toFixed(2)}</span>`;
+  } catch {}
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────
+function toast(msg, err) {
+  const area = document.getElementById('toastArea');
+  const el = document.createElement('div');
+  el.className = 'toast' + (err ? ' error' : ' success');
+  el.textContent = msg;
+  area.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ─── DETAIL PANEL ────────────────────────────────────────────────────────
+let detailInterval = null;
+
+function openDetailPanel(character, animName, stripUrl, fps, frames, qcScore, qcStatus) {
+  const panel = document.getElementById('detailPanel');
+  document.getElementById('detailTitle').textContent = `${character} \u2014 ${animName}`;
+
+  // Reset prompt editor
+  document.getElementById('promptEditor').style.display = 'none';
+  document.getElementById('promptStatus').textContent = '';
+
+  // Build filmstrip
+  const filmstrip = document.getElementById('detailFilmstrip');
+  filmstrip.innerHTML = '';
+  const frameW = 180, frameH = 180;
+
+  const img = new Image();
+  img.onload = () => {
+    for (let i = 0; i < frames; i++) {
+      const fc = document.createElement('canvas');
+      fc.width = frameW; fc.height = frameH;
+      fc.title = `Frame ${i + 1}`;
+      fc.style.cursor = 'pointer';
+      const ctx = fc.getContext('2d');
+      ctx.drawImage(img, i * frameW, 0, frameW, frameH, 0, 0, frameW, frameH);
+      const frameIdx = i;
+      fc.addEventListener('click', () => openFramePromptEditor(character, animName, frameIdx));
+      filmstrip.appendChild(fc);
+    }
+    // Animated preview
+    let frame = 0;
+    const canvas = document.getElementById('detailCanvas');
+    const ctx = canvas.getContext('2d');
+    if (detailInterval) clearInterval(detailInterval);
+    detailInterval = setInterval(() => {
+      ctx.clearRect(0, 0, 180, 180);
+      ctx.drawImage(img, frame * frameW, 0, frameW, frameH, 0, 0, 180, 180);
+      frame = (frame + 1) % frames;
+    }, 1000 / (fps || 8));
+  };
+  img.src = stripUrl;
+
+  // Meta
+  const meta = document.getElementById('detailMeta');
+  const scoreColor = qcStatus === 'ACCEPTED' ? '#4ade80' : qcStatus === 'CONDITIONAL' ? '#fbbf24' : '#f87171';
+  meta.innerHTML = `<span>${frames} frames</span><span>${fps || 8} fps</span>${qcScore != null ? `<span style="color:${scoreColor}">${qcScore}/100 ${qcStatus || ''}</span>` : ''}`;
+
+  panel.style.display = 'flex';
+}
+
+function closeDetailPanel() {
+  if (detailInterval) { clearInterval(detailInterval); detailInterval = null; }
+  document.getElementById('detailPanel').style.display = 'none';
+  document.getElementById('promptEditor').style.display = 'none';
+}
+
+// ─── PROMPT EDITOR ────────────────────────────────────────────────────────
+let _promptEditorState = { character: null, animName: null, frameIndex: 0 };
+
+async function openFramePromptEditor(character, animName, frameIndex) {
+  _promptEditorState = { character, animName, frameIndex };
+  const editor = document.getElementById('promptEditor');
+  const header = document.getElementById('promptEditorHeader');
+  const textarea = document.getElementById('promptEditorText');
+  const status = document.getElementById('promptStatus');
+
+  header.textContent = `Frame ${frameIndex + 1} prompt`;
+  textarea.value = 'Loading…';
+  status.textContent = '';
+  editor.style.display = 'block';
+
+  // Highlight selected filmstrip frame
+  const filmstrip = document.getElementById('detailFilmstrip');
+  Array.from(filmstrip.querySelectorAll('canvas')).forEach((c, i) => {
+    c.style.outline = i === frameIndex ? '2px solid #7c6fff' : 'none';
+  });
+
+  try {
+    const r = await fetch(`${API}/api/frame-prompts/${encodeURIComponent(character)}/${encodeURIComponent(animName)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const frameData = (data.frames || []).find(f => f.index === frameIndex);
+    textarea.value = frameData ? frameData.prompt : '';
+  } catch (e) {
+    textarea.value = '';
+    status.textContent = 'Could not load prompt';
+  }
+}
+
+async function saveFramePrompt() {
+  const { character, animName, frameIndex } = _promptEditorState;
+  const prompt = document.getElementById('promptEditorText').value;
+  const status = document.getElementById('promptStatus');
+  status.textContent = 'Saving…';
+  try {
+    const r = await fetch(`${API}/api/frame-prompts/${encodeURIComponent(character)}/${encodeURIComponent(animName)}/${frameIndex}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    status.textContent = 'Saved';
+    setTimeout(() => { status.textContent = ''; }, 2500);
+  } catch (e) {
+    status.textContent = 'Save failed: ' + e.message;
+  }
+}
+
+async function rerunFrame() {
+  const { character, animName, frameIndex } = _promptEditorState;
+  const status = document.getElementById('promptStatus');
+  status.textContent = 'Dispatching…';
+  try {
+    const r = await fetch(`${API}/api/frame-prompts/${encodeURIComponent(character)}/${encodeURIComponent(animName)}/${frameIndex}/rerun`, {
+      method: 'POST',
+    });
+    if (r.ok) {
+      status.textContent = '';
+      toast('Rerun dispatched');
+    } else if (r.status === 404 || r.status === 501) {
+      status.textContent = '';
+      toast('Not yet implemented', true);
+    } else {
+      throw new Error(`HTTP ${r.status}`);
+    }
+  } catch (e) {
+    status.textContent = 'Rerun failed: ' + e.message;
+  }
+}
+
+// ─── BULK PANEL ───────────────────────────────────────────────────────────
+
+function openBulkPanel() {
+  document.getElementById('bulkOverlay').classList.add('open');
+  document.getElementById('bulkPanel').classList.add('open');
+  fetchCharactersForBulk();
+}
+
+function closeBulkPanel() {
+  document.getElementById('bulkOverlay').classList.remove('open');
+  document.getElementById('bulkPanel').classList.remove('open');
+}
+
+async function fetchCharactersForBulk() {
+  const list = document.getElementById('bulkCharList');
+  list.innerHTML = '<div class="bulk-char-loading">Loading characters…</div>';
+  try {
+    const r = await fetch(`${API}/api/characters`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const registry = data.registry || {};
+    const names = Object.keys(registry);
+    if (!names.length) {
+      list.innerHTML = '<div class="bulk-char-loading">No characters found.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    for (const name of names) {
+      const char = registry[name];
+      const portraitFile = char.portraitPath || `${name}full.png`;
+      const portraitUrl = `/assets/${encodeURIComponent(portraitFile)}`;
+
+      const item = document.createElement('label');
+      item.className = 'bulk-char-item';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = name;
+      cb.name = 'bulkChar';
+
+      const portrait = document.createElement('img');
+      portrait.className = 'bulk-char-portrait';
+      portrait.src = portraitUrl;
+      portrait.alt = name;
+      portrait.onerror = function() {
+        const ph = document.createElement('div');
+        ph.className = 'bulk-char-placeholder';
+        ph.textContent = name.charAt(0).toUpperCase();
+        this.replaceWith(ph);
+      };
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'bulk-char-name';
+      nameSpan.textContent = name;
+
+      item.appendChild(cb);
+      item.appendChild(portrait);
+      item.appendChild(nameSpan);
+      list.appendChild(item);
+    }
+  } catch (e) {
+    list.innerHTML = `<div class="bulk-char-loading" style="color:var(--danger)">Failed to load: ${e.message}</div>`;
+  }
+}
+
+function bulkSelectAll(checked) {
+  const boxes = document.querySelectorAll('#bulkCharList input[name="bulkChar"]');
+  boxes.forEach(cb => { cb.checked = checked; });
+}
+
+async function runBulkGenerate() {
+  const boxes = document.querySelectorAll('#bulkCharList input[name="bulkChar"]:checked');
+  const characters = Array.from(boxes).map(cb => cb.value);
+  const animation = document.getElementById('bulkAnimSelect').value;
+  const statusEl = document.getElementById('bulkStatus');
+  const runBtn = document.getElementById('bulkRunBtn');
+
+  if (!characters.length) {
+    statusEl.innerHTML = '<span class="err">Select at least one character.</span>';
+    return;
+  }
+
+  runBtn.disabled = true;
+  statusEl.innerHTML = `<span class="info">Dispatching bulk job: ${characters.length} character(s) × ${animation}…</span>`;
+
+  try {
+    const r = await fetch(`${API}/api/animation/apply-bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characters, animation }),
+    });
+
+    let body;
+    try { body = await r.json(); } catch (_) { body = {}; }
+
+    if (r.ok) {
+      const jobs = body.jobs || [];
+      let out = `<span class="ok">Job accepted — ${characters.length} character(s), animation: ${animation}</span>\n`;
+      if (jobs.length) {
+        out += jobs.map(j => `<span class="info">  ${j.character}: ${j.status || 'queued'}</span>`).join('\n');
+      }
+      statusEl.innerHTML = out;
+      toast('Bulk job dispatched');
+    } else if (r.status === 404 || r.status === 501) {
+      statusEl.innerHTML = `<span class="err">Endpoint not yet implemented (${r.status}). Will be available after TASK-6002.</span>`;
+    } else {
+      const msg = body.error || `HTTP ${r.status}`;
+      statusEl.innerHTML = `<span class="err">Error: ${msg}</span>`;
+    }
+  } catch (e) {
+    statusEl.innerHTML = `<span class="err">Request failed: ${e.message}</span>`;
+  } finally {
+    runBtn.disabled = false;
+  }
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────────────
+function el(id) { return document.getElementById(id); }
+</script>
+</body>
+</html>

@@ -1,0 +1,529 @@
+{
+  "totalSpend": 3.8717200000000007,
+  "totalGenerations": 42,
+  "byModel": {
+    "gemini-2.5-flash-image": {
+      "spend": 0.74604,
+      "count": 19
+    },
+    "gemini-3-pro-image-preview": {
+      "spend": 3.1256799999999996,
+      "count": 23
+    }
+  },
+  "byType": {
+    "character": {
+      "spend": 0.9776560000000003,
+      "count": 15
+    },
+    "anchor-replicate": {
+      "spend": 0.81744,
+      "count": 6
+    },
+    "anchor-ball-ref": {
+      "spend": 1.6281599999999998,
+      "count": 12
+    },
+    "anchor-angle": {
+      "spend": 0.44846400000000003,
+      "count": 9
+    }
+  },
+  "history": [
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "pdot-test",
+      "option": 0,
+      "timestamp": "2026-03-26T02:40:52.555Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "pdot-test",
+      "option": 1,
+      "timestamp": "2026-03-26T02:40:53.757Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "pdot-test",
+      "option": 2,
+      "timestamp": "2026-03-26T02:41:10.644Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "pdot-test",
+      "option": 3,
+      "timestamp": "2026-03-26T02:41:13.207Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-replicate",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "sourceCharacter": "99",
+      "targetCharacter": "joaquin",
+      "animation": "static-dribble",
+      "frame": 0,
+      "timestamp": "2026-03-26T03:04:57.426Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-replicate",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "sourceCharacter": "99",
+      "targetCharacter": "joaquin",
+      "animation": "static-dribble",
+      "frame": 1,
+      "timestamp": "2026-03-26T03:05:34.380Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-replicate",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "sourceCharacter": "99",
+      "targetCharacter": "joaquin",
+      "animation": "static-dribble",
+      "frame": 2,
+      "timestamp": "2026-03-26T03:06:07.621Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-replicate",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "sourceCharacter": "99",
+      "targetCharacter": "joaquin",
+      "animation": "static-dribble",
+      "frame": 3,
+      "timestamp": "2026-03-26T03:06:56.197Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00112,
+      "totalCost": 0.13512000000000002,
+      "character": "z",
+      "variant": "dribble-low",
+      "index": 0,
+      "timestamp": "2026-03-26T03:07:13.206Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-replicate",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "sourceCharacter": "99",
+      "targetCharacter": "joaquin",
+      "animation": "static-dribble",
+      "frame": 4,
+      "timestamp": "2026-03-26T03:07:30.413Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00112,
+      "totalCost": 0.13512000000000002,
+      "character": "z",
+      "variant": "dribble-high",
+      "index": 1,
+      "timestamp": "2026-03-26T03:07:41.820Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-replicate",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "sourceCharacter": "99",
+      "targetCharacter": "joaquin",
+      "animation": "static-dribble",
+      "frame": 5,
+      "timestamp": "2026-03-26T03:08:04.502Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00112,
+      "totalCost": 0.13512000000000002,
+      "character": "z",
+      "variant": "carry-hip",
+      "index": 2,
+      "timestamp": "2026-03-26T03:08:17.560Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00112,
+      "totalCost": 0.13512000000000002,
+      "character": "z",
+      "variant": "shoot-release",
+      "index": 3,
+      "timestamp": "2026-03-26T03:08:50.003Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00112,
+      "totalCost": 0.13512000000000002,
+      "character": "z",
+      "variant": "two-hand-chest",
+      "index": 4,
+      "timestamp": "2026-03-26T03:09:27.360Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00112,
+      "totalCost": 0.13512000000000002,
+      "character": "z",
+      "variant": "palming",
+      "index": 5,
+      "timestamp": "2026-03-26T03:10:00.462Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "option": 0,
+      "timestamp": "2026-03-26T03:30:01.551Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "option": 1,
+      "timestamp": "2026-03-26T03:30:01.859Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "option": 2,
+      "timestamp": "2026-03-26T03:30:34.978Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "option": 3,
+      "timestamp": "2026-03-26T03:30:42.763Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "viv",
+      "option": 0,
+      "timestamp": "2026-03-26T03:32:01.402Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "viv",
+      "option": 1,
+      "timestamp": "2026-03-26T03:32:03.415Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "viv",
+      "option": 2,
+      "timestamp": "2026-03-26T03:32:21.148Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "viv",
+      "option": 3,
+      "timestamp": "2026-03-26T03:32:21.577Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "anchor-angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "viv",
+      "angle": "front",
+      "index": 0,
+      "timestamp": "2026-03-26T03:33:06.124Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "anchor-angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "viv",
+      "angle": "front-3/4-L",
+      "index": 1,
+      "timestamp": "2026-03-26T03:33:18.934Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "anchor-angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "viv",
+      "angle": "side-L",
+      "index": 2,
+      "timestamp": "2026-03-26T03:33:30.521Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "anchor-angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "viv",
+      "angle": "back-3/4-L",
+      "index": 3,
+      "timestamp": "2026-03-26T03:33:42.181Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "anchor-angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "viv",
+      "angle": "back",
+      "index": 4,
+      "timestamp": "2026-03-26T03:33:54.356Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "anchor-angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "viv",
+      "angle": "back-3/4-R",
+      "index": 5,
+      "timestamp": "2026-03-26T03:34:06.129Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "anchor-angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "viv",
+      "angle": "side-R",
+      "index": 6,
+      "timestamp": "2026-03-26T03:34:18.220Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "anchor-angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "viv",
+      "angle": "front-3/4-R",
+      "index": 7,
+      "timestamp": "2026-03-26T03:34:29.991Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-angle",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00112,
+      "totalCost": 0.13512000000000002,
+      "character": "viv",
+      "angle": "front-3/4-R",
+      "index": 7,
+      "timestamp": "2026-03-26T03:35:28.001Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "variant": "dribble-low",
+      "index": 0,
+      "timestamp": "2026-03-26T03:41:18.187Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "variant": "dribble-high",
+      "index": 1,
+      "timestamp": "2026-03-26T03:41:55.308Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "variant": "carry-hip",
+      "index": 2,
+      "timestamp": "2026-03-26T03:42:29.995Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "variant": "shoot-release",
+      "index": 3,
+      "timestamp": "2026-03-26T03:43:07.406Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "variant": "two-hand-chest",
+      "index": 4,
+      "timestamp": "2026-03-26T03:43:38.291Z"
+    },
+    {
+      "model": "gemini-3-pro-image-preview",
+      "type": "anchor-ball-ref",
+      "resolution": "2K",
+      "imageCost": 0.134,
+      "inputCost": 0.00224,
+      "totalCost": 0.13624,
+      "character": "viv",
+      "variant": "palming",
+      "index": 5,
+      "timestamp": "2026-03-26T03:44:13.982Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "snoop",
+      "option": 2,
+      "timestamp": "2026-03-26T15:30:45.105Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "snoop",
+      "option": 1,
+      "timestamp": "2026-03-26T15:30:45.473Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "snoop",
+      "option": 3,
+      "timestamp": "2026-03-26T15:31:00.622Z"
+    }
+  ]
+}

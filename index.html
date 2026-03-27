@@ -1049,6 +1049,14 @@
         </div>
       </div>
 
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="section-label" style="padding:0">Prompt</div>
+          <button class="btn btn-secondary btn-sm" onclick="resetCharPrompt()" style="font-size:10px;padding:3px 8px">Reset</button>
+        </div>
+        <textarea class="input" id="charPromptOverride" style="font-family:var(--mono);font-size:10px;line-height:1.5;height:180px;resize:vertical"></textarea>
+      </div>
+
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary" id="createCharBtn" onclick="createCharacter()" style="flex:1">
           <span class="spinner" id="charSpinner"></span>
@@ -1736,6 +1744,36 @@ function loadCharPhoto(file) {
   reader.readAsDataURL(file);
 }
 
+const DEFAULT_CHAR_PROMPT = `Image 1 is the style reference — match this exact pixel art style. Image 2 is the person to convert.
+
+Create a FULL BODY standing character portrait showing the complete person from head to shoes.
+The character must be standing upright, facing forward, arms relaxed at sides, in a neutral standing pose.
+Show the ENTIRE body — head, torso, arms, hands, legs, feet/shoes. Do NOT crop or zoom in.
+
+ACCURACY IS CRITICAL:
+- Match the person's EXACT skin tone — do not lighten or darken it
+- Match their EXACT facial features, face shape, eyes, nose, mouth
+- Match their EXACT hairstyle, hair color, hair texture
+- Match their EXACT outfit, clothing colors, and shoes from the photo
+- Match their body type and proportions
+
+STYLE:
+- 16-bit arcade pixel art, GBA game style — chunky pixels, NOT high-resolution
+- Bold thick black pixel outlines around the entire character body
+- Limited color palette with high contrast arcade shading
+- Sharp pixel edges — NO anti-aliasing, NO blur, NO smooth gradients
+- The character should look like they belong in a retro basketball arcade game
+
+Output on a pure white background (#FFFFFF only).
+FULL BODY only. No environment. No extra elements. No cropping.`;
+
+function resetCharPrompt() {
+  el('charPromptOverride').value = DEFAULT_CHAR_PROMPT;
+}
+
+// Populate prompt on load
+setTimeout(() => { if (el('charPromptOverride')) el('charPromptOverride').value = DEFAULT_CHAR_PROMPT; }, 200);
+
 async function createCharacter() {
   const name = el('newCharName').value.trim().toLowerCase().replace(/\s+/g, '-');
   if (!name) return toast('Name required', true);
@@ -1763,6 +1801,7 @@ async function createCharacter() {
         accent: '#000000',
       },
       changeRequest: el('charChangeRequest')?.value || '',
+      promptOverride: el('charPromptOverride')?.value.trim() || '',
     };
 
     if (STATE.charPhoto) {

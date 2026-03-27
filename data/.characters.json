@@ -111,7 +111,20 @@
     "scaleMultiplier": 1,
     "pixelHeight": 112,
     "completedAnims": [],
-    "status": "new"
+    "status": "new",
+    "anchor": {
+      "portrait": null,
+      "angles": [],
+      "ballRefs": [
+        "z-ball-dribble-low.png",
+        "z-ball-dribble-high.png",
+        "z-ball-carry-hip.png",
+        "z-ball-shoot-release.png",
+        "z-ball-two-hand-chest.png",
+        "z-ball-palming.png"
+      ],
+      "status": "partial"
+    }
   },
   "bron-test": {
     "name": "bron-test",
@@ -148,5 +161,69 @@
       "ballRefs": [],
       "status": "partial"
     }
+  },
+  "viv": {
+    "name": "viv",
+    "id": "viv",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 63,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "",
+    "teamColors": {
+      "primary": "#00fdff",
+      "secondary": "#ff40ff",
+      "accent": "#000000"
+    },
+    "portraitPath": "vivfull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 0.875,
+    "pixelHeight": 98,
+    "completedAnims": [],
+    "status": "portrait_done",
+    "anchor": {
+      "portrait": null,
+      "angles": [
+        "viv-angle-0.png",
+        "viv-angle-1.png",
+        "viv-angle-2.png",
+        "viv-angle-3.png",
+        "viv-angle-4.png",
+        "viv-angle-5.png",
+        "viv-angle-6.png",
+        "viv-angle-7.png"
+      ],
+      "ballRefs": [
+        "viv-ball-dribble-low.png",
+        "viv-ball-dribble-high.png",
+        "viv-ball-carry-hip.png",
+        "viv-ball-shoot-release.png",
+        "viv-ball-two-hand-chest.png",
+        "viv-ball-palming.png"
+      ],
+      "status": "partial"
+    }
+  },
+  "snoop": {
+    "name": "snoop",
+    "id": "snoop",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 72,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "",
+    "teamColors": {
+      "primary": "#263e0f",
+      "secondary": "#aa7942",
+      "accent": "#000000"
+    },
+    "portraitPath": "snoopfull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 1,
+    "pixelHeight": 112,
+    "completedAnims": [],
+    "status": "portrait_done"
   }
 }

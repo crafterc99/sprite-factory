@@ -219,42 +219,46 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
 
   // ─── Character Creation (4-option picker) ──────────────────────────
 
-  function buildCharPrompt(extraInstructions) {
+  function buildCharPrompt(extraInstructions, promptOverride) {
     const styleRef = path.join(ASSETS_DIR, '99full.png');
     const hasStyleRef = fs.existsSync(styleRef);
 
-    const lines = [
-      hasStyleRef
-        ? 'Image 1 is the style reference — match this exact pixel art style. Image 2 is the person to convert.'
-        : 'Convert the uploaded photo into 16-bit arcade pixel art.',
-      '',
-      'Create a FULL BODY standing character portrait showing the complete person from head to shoes.',
-      'The character must be standing upright, facing forward, arms relaxed at sides, in a neutral standing pose.',
-      'Show the ENTIRE body — head, torso, arms, hands, legs, feet/shoes. Do NOT crop or zoom in.',
-      '',
-      'ACCURACY IS CRITICAL:',
-      '- Match the person\'s EXACT skin tone — do not lighten or darken it',
-      '- Match their EXACT facial features, face shape, eyes, nose, mouth',
-      '- Match their EXACT hairstyle, hair color, hair texture',
-      '- Match their EXACT outfit, clothing colors, and shoes from the photo',
-      '- Match their body type and proportions',
-      '',
-      'STYLE:',
-      '- 16-bit arcade pixel art, GBA game style — chunky pixels, NOT high-resolution',
-      '- Bold thick black pixel outlines around the entire character body',
-      '- Limited color palette with high contrast arcade shading',
-      '- Sharp pixel edges — NO anti-aliasing, NO blur, NO smooth gradients',
-      '- The character should look like they belong in a retro basketball arcade game',
-      '',
-      'Output on a pure white background (#FFFFFF only).',
-      'FULL BODY only. No environment. No extra elements. No cropping.',
-    ];
-
-    if (extraInstructions) {
-      lines.push('', 'ADDITIONAL INSTRUCTIONS:', extraInstructions);
+    let prompt;
+    if (promptOverride && promptOverride.trim()) {
+      prompt = promptOverride.trim();
+      if (extraInstructions) prompt += '\n\nADDITIONAL INSTRUCTIONS:\n' + extraInstructions;
+    } else {
+      const lines = [
+        hasStyleRef
+          ? 'Image 1 is the style reference — match this exact pixel art style. Image 2 is the person to convert.'
+          : 'Convert the uploaded photo into 16-bit arcade pixel art.',
+        '',
+        'Create a FULL BODY standing character portrait showing the complete person from head to shoes.',
+        'The character must be standing upright, facing forward, arms relaxed at sides, in a neutral standing pose.',
+        'Show the ENTIRE body — head, torso, arms, hands, legs, feet/shoes. Do NOT crop or zoom in.',
+        '',
+        'ACCURACY IS CRITICAL:',
+        '- Match the person\'s EXACT skin tone — do not lighten or darken it',
+        '- Match their EXACT facial features, face shape, eyes, nose, mouth',
+        '- Match their EXACT hairstyle, hair color, hair texture',
+        '- Match their EXACT outfit, clothing colors, and shoes from the photo',
+        '- Match their body type and proportions',
+        '',
+        'STYLE:',
+        '- 16-bit arcade pixel art, GBA game style — chunky pixels, NOT high-resolution',
+        '- Bold thick black pixel outlines around the entire character body',
+        '- Limited color palette with high contrast arcade shading',
+        '- Sharp pixel edges — NO anti-aliasing, NO blur, NO smooth gradients',
+        '- The character should look like they belong in a retro basketball arcade game',
+        '',
+        'Output on a pure white background (#FFFFFF only).',
+        'FULL BODY only. No environment. No extra elements. No cropping.',
+      ];
+      if (extraInstructions) lines.push('', 'ADDITIONAL INSTRUCTIONS:', extraInstructions);
+      prompt = lines.join('\n');
     }
 
-    return { prompt: lines.join('\n'), hasStyleRef, styleRefPath: hasStyleRef ? styleRef : null };
+    return { prompt, hasStyleRef, styleRefPath: hasStyleRef ? styleRef : null };
   }
 
   // POST /api/character/create — Generate 4 options from photo
@@ -277,7 +281,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         return json(res, { error: 'Photo required' }, 400);
       }
 
-      const { prompt, hasStyleRef, styleRefPath } = buildCharPrompt(changeRequest);
+      const { prompt, hasStyleRef, styleRefPath } = buildCharPrompt(changeRequest, body.promptOverride);
       const client = new NanaBananaClient({ model: model || 'gemini-2.5-flash-image' });
       const numOptions = count || 4;
 
