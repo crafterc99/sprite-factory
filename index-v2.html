@@ -55,6 +55,24 @@
   }
   .roster-card:hover { border-color:var(--border-hi); background:var(--surface3); }
   .roster-card.active { border-color:var(--accent); background:rgba(255,68,0,0.08); }
+  .roster-delete-btn { margin-left:auto; flex-shrink:0; background:none; border:none; color:#50507a; font-size:14px; cursor:pointer; padding:4px 6px; border-radius:4px; line-height:1; }
+  .roster-delete-btn:hover { background:rgba(255,50,50,0.15); color:#ff5555; }
+  .roster-delete-confirm { margin-left:auto; flex-shrink:0; display:flex; align-items:center; gap:4px; }
+  .roster-delete-confirm button { font-family:var(--mono); font-size:9px; padding:3px 7px; border-radius:4px; border:1px solid; cursor:pointer; }
+  .roster-delete-yes { background:rgba(255,50,50,0.15); color:#ff5555; border-color:#ff5555 !important; }
+  .roster-delete-yes:hover { background:rgba(255,50,50,0.3); }
+  .roster-delete-no { background:var(--surface3); color:#aaa; border-color:var(--border) !important; }
+  .roster-delete-no:hover { background:var(--surface); }
+  .dash-card-wrap { position:relative; }
+  .dash-delete-btn { position:absolute; top:8px; right:8px; background:rgba(20,20,30,0.7); border:none; color:#50507a; font-size:13px; cursor:pointer; padding:3px 6px; border-radius:4px; line-height:1; opacity:0; transition:opacity 0.15s; }
+  .dash-card-wrap:hover .dash-delete-btn { opacity:1; }
+  .dash-delete-btn:hover { background:rgba(255,50,50,0.25); color:#ff5555; }
+  .dash-delete-confirm { position:absolute; top:8px; right:8px; display:flex; gap:4px; }
+  .dash-delete-confirm button { font-family:var(--mono); font-size:9px; padding:3px 7px; border-radius:4px; border:1px solid; cursor:pointer; }
+  .dash-delete-yes { background:rgba(255,50,50,0.2); color:#ff5555; border-color:#ff5555 !important; }
+  .dash-delete-yes:hover { background:rgba(255,50,50,0.4); }
+  .dash-delete-no { background:rgba(20,20,30,0.7); color:#aaa; border-color:var(--border) !important; }
+  .dash-delete-no:hover { background:var(--surface); }
   .roster-portrait { width:38px; height:38px; border-radius:6px; object-fit:cover; border:1px solid var(--border); background:var(--surface3); image-rendering:pixelated; flex-shrink:0; }
   .roster-portrait-placeholder { width:38px; height:38px; border-radius:6px; border:1px dashed var(--border); background:var(--surface3); flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:18px; }
   .roster-info { flex:1; min-width:0; }
@@ -690,6 +708,8 @@
       <div id="headshotsGrid" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px"></div>
       <div style="margin:16px 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--accent2)">BODY</div>
       <div id="anglesGrid" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px"></div>
+      <div style="margin:16px 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--accent2)">CLOTHES</div>
+      <div id="clothesGrid" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px"></div>
     </div>
 
     <!-- Done section: revealed after angles complete -->
@@ -949,6 +969,7 @@ function renderRoster() {
           <div class="progress-label">${done}/${TOTAL_ANIMS}</div>
         </div>
       </div>
+      <button class="roster-delete-btn" onclick="event.stopPropagation();rosterDeletePrompt(this,'${char.name}')" title="Delete character">✕</button>
     </div>`;
   }).join('');
 }
@@ -961,11 +982,14 @@ function renderDashboard() {
     const portrait = char.portrait
       ? `<img class="dash-portrait" src="${char.portrait}" onerror="this.style.display='none'" />`
       : `<div class="dash-portrait-empty">🏀</div>`;
-    return `<div class="dash-card ${STATE.selectedChar?.name === char.name ? 'active' : ''}" onclick="selectChar('${char.name}');showPage2('studio')">
-      ${portrait}
-      <div class="dash-name">${char.name}</div>
-      <div class="dash-stat">${done} / ${TOTAL_ANIMS} animations</div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    return `<div class="dash-card-wrap">
+      <div class="dash-card ${STATE.selectedChar?.name === char.name ? 'active' : ''}" onclick="selectChar('${char.name}');showPage2('studio')">
+        ${portrait}
+        <div class="dash-name">${char.name}</div>
+        <div class="dash-stat">${done} / ${TOTAL_ANIMS} animations</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </div>
+      <button class="dash-delete-btn" onclick="event.stopPropagation();dashDeletePrompt(this,'${char.name}')" title="Delete character">✕</button>
     </div>`;
   }).join('');
 
@@ -975,6 +999,42 @@ function renderDashboard() {
   </div>`;
 
   document.getElementById('dashSub').textContent = `${STATE.roster.length} characters · ${TOTAL_ANIMS} animations each`;
+}
+
+async function deleteChar(name) {
+  const res = await fetch(`/api/character/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || 'Delete failed'); return false; }
+  STATE.roster = STATE.roster.filter(c => c.name !== name);
+  if (STATE.selectedChar?.name === name) STATE.selectedChar = null;
+  renderRoster();
+  renderDashboard();
+  return true;
+}
+
+function rosterDeletePrompt(btn, name) {
+  const card = btn.closest('.roster-card');
+  btn.style.display = 'none';
+  const confirm = document.createElement('div');
+  confirm.className = 'roster-delete-confirm';
+  confirm.innerHTML = `<button class="roster-delete-yes" onclick="event.stopPropagation();deleteChar('${name}')">Delete?</button><button class="roster-delete-no" onclick="event.stopPropagation();this.parentElement.remove();document.querySelector('.roster-card [title=\\'Delete character\\']') && (card => { const b = card.querySelector('.roster-delete-btn'); if(b) b.style.display=''; })(this.closest('.roster-card'))">Cancel</button>`;
+  confirm.querySelector('.roster-delete-no').addEventListener('click', e => {
+    e.stopPropagation();
+    confirm.remove();
+    btn.style.display = '';
+  });
+  card.appendChild(confirm);
+}
+
+function dashDeletePrompt(btn, name) {
+  const wrap = btn.closest('.dash-card-wrap');
+  btn.style.display = 'none';
+  const confirm = document.createElement('div');
+  confirm.className = 'dash-delete-confirm';
+  confirm.innerHTML = `<button class="dash-delete-yes">Delete?</button><button class="dash-delete-no">Cancel</button>`;
+  confirm.querySelector('.dash-delete-yes').addEventListener('click', e => { e.stopPropagation(); deleteChar(name); });
+  confirm.querySelector('.dash-delete-no').addEventListener('click', e => { e.stopPropagation(); confirm.remove(); btn.style.display = ''; });
+  wrap.appendChild(confirm);
 }
 
 function showPage2(name) {
@@ -2020,6 +2080,19 @@ async function confirmAndGenerateAngles() {
       </div>`
     ).join('');
 
+    // Build clothes slots
+    const clothesGrid = document.getElementById('clothesGrid');
+    clothesGrid.innerHTML = angleNames.map((label, i) =>
+      `<div id="clothesSlot${i}" style="${slotStyle}">
+        <div style="${imgWrapStyle}">
+          <span class="spinner active" id="clothesSpinner${i}"></span>
+          <img id="clothesImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
+        <button class="btn btn-secondary" id="clothesRerun${i}" style="display:none;font-size:10px;padding:3px 8px" onclick="rerunClothes(${i})">Rerun</button>
+      </div>`
+    ).join('');
+
     const angSec = document.getElementById('anglesSection');
     angSec.style.display = 'block';
     requestAnimationFrame(() => { angSec.style.opacity = '1'; });
@@ -2066,6 +2139,27 @@ async function confirmAndGenerateAngles() {
         } catch(e) {
           document.getElementById(`headSpinner${i}`)?.classList.remove('active');
           const btn = document.getElementById(`headRerun${i}`);
+          if (btn) btn.style.display = 'inline-block';
+        }
+      })),
+      // Clothes angles
+      Promise.all([0,1,2,3,4,5,6,7].map(async (i) => {
+        try {
+          const r = await fetch(`${API}/api/angle/regenerate`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ character: name, angleIndex: i, type: 'clothes' })
+          });
+          const d = await r.json();
+          const url = d.generated?.[0]?.url;
+          document.getElementById(`clothesSpinner${i}`)?.classList.remove('active');
+          const img = document.getElementById(`clothesImg${i}`);
+          if (img && url) { img.src = url; img.style.display = 'block'; }
+          const btn = document.getElementById(`clothesRerun${i}`);
+          if (btn) btn.style.display = 'inline-block';
+        } catch(e) {
+          document.getElementById(`clothesSpinner${i}`)?.classList.remove('active');
+          const btn = document.getElementById(`clothesRerun${i}`);
           if (btn) btn.style.display = 'inline-block';
         }
       }))
@@ -2117,6 +2211,32 @@ async function rerunHeadshot(angleIndex) {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ character: STATE.confirmedName, angleIndex, type: 'headshot' })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    const url = data.generated?.[0]?.url;
+    if (img && url) { img.src = url; img.style.display = 'block'; }
+    if (btn) btn.style.display = 'inline-block';
+  } catch(e) {
+    toast('Error: ' + e.message, true);
+    if (btn) btn.style.display = 'inline-block';
+  } finally {
+    if (spinner) spinner.classList.remove('active');
+  }
+}
+
+async function rerunClothes(angleIndex) {
+  const spinner = document.getElementById(`clothesSpinner${angleIndex}`);
+  const img = document.getElementById(`clothesImg${angleIndex}`);
+  const btn = document.getElementById(`clothesRerun${angleIndex}`);
+  if (spinner) spinner.classList.add('active');
+  if (img) img.style.display = 'none';
+  if (btn) btn.style.display = 'none';
+  try {
+    const resp = await fetch(`${API}/api/angle/regenerate`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ character: STATE.confirmedName, angleIndex, type: 'clothes' })
     });
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
