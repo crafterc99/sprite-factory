@@ -98,11 +98,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
         };
       }
 
-      const isPro = modelId.includes('pro');
-      const concurrency = isPro ? 1 : 2;
-      const interFrameDelay = isPro ? 15000 : 2000;
-      const maxRetries = isPro ? 5 : 3;
-      const retryBaseDelay = isPro ? 20000 : 5000;
+      
+      const concurrency = 1;
+      const interFrameDelay = 15000;
+      const maxRetries = 5;
+      const retryBaseDelay = 20000;
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const checkpointPath = getCheckpointPath(character, timestamp);

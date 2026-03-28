@@ -1,0 +1,690 @@
+{
+  "_comment": "Animation output contract v1.0 — source of truth for all workers. Do not edit without orchestrator sign-off. Schema note: each animation entry may carry an optional 'framePrompts' array (one string per frame, 0-indexed) that stores the base prompt used when that frame was last generated. These are the starting point for per-frame prompt editing; runtime overrides are stored separately in data/frame-prompts.json keyed as 'character.animName.frameIndex'.",
+  "version": "1.0",
+  "frameSize": 180,
+  "format": "PNG",
+  "background": "#00FF00",
+  "style": "16-bit pixel art, GBA style, bold BLACK pixel outlines",
+  "layouts": {
+    "individual": {
+      "description": "One PNG per animation. All frames in a single horizontal row.",
+      "filePattern": "data/assets/{char}-{anim}.png",
+      "servePattern": "/assets/{char}-{anim}.png",
+      "dimensions": "({frames} * 180) x 180 px",
+      "frameOrder": "left to right"
+    },
+    "spritesheet": {
+      "description": "All animations packed into one PNG, one animation per row. Accompanied by a JSON metadata file.",
+      "filePattern": "data/assets/{char}-spritesheet.png",
+      "metaPattern": "data/assets/{char}-spritesheet.json",
+      "dimensions": "(maxFrames * 180) x (animations * 180) px",
+      "frameOrder": "left to right per row, top to bottom per animation",
+      "note": "DISCREPANCY — individual files are the primary output. Spritesheet is a secondary aggregation. breezy-spritesheet.json predates this contract and uses 'row'/'y' keys. New spritesheets must match the schema below.",
+      "metaSchema": {
+        "character": "string",
+        "frameSize": 180,
+        "width": "number — total sheet width",
+        "height": "number — total sheet height",
+        "animations": {
+          "{animName}": {
+            "row": "number — 0-indexed row",
+            "frames": "number — frame count",
+            "y": "number — top pixel of row (row * frameSize)",
+            "width": "number — row width in pixels (frames * frameSize)"
+          }
+        }
+      }
+    }
+  },
+  "primaryOutput": "individual",
+  "animations": {
+    "idle": {
+      "frames": 4,
+      "fps": 6,
+      "loop": true,
+      "hasBall": false,
+      "category": "locomotion",
+      "action": "standing idle, subtle weight shift and breathing",
+      "qcStatus": "ACCEPTED",
+      "qcScore": "92/100",
+      "qcNote": "POLISH-003 complete — visible weight shifts at small scale.",
+      "file": "data/assets/breezy-idle.png",
+      "framePrompts": []
+    },
+    "walk": {
+      "frames": 8,
+      "fps": 10,
+      "loop": true,
+      "hasBall": false,
+      "category": "locomotion",
+      "action": "standard walk cycle, no basketball",
+      "qcStatus": "ACCEPTED",
+      "qcScore": "92/100",
+      "qcNote": "ANIMATION-002 polish-v2 regen — 1440x180, 8f, 93.3% fill, 85/100 auto-QC PASSED, frame variation 56-83. cropToContent pipeline fix applied.",
+      "file": "data/assets/breezy-walk.png",
+      "framePrompts": []
+    },
+    "jump": {
+      "frames": 5,
+      "fps": 8,
+      "loop": false,
+      "hasBall": false,
+      "category": "air",
+      "action": "vertical jump, no basketball",
+      "qcStatus": "ACCEPTED",
+      "qcScore": "97/100",
+      "qcNote": "TASK-6003 regen — 900x180, 5f, 88.9% fill, 97/100 auto-QC. Clear jump arc, strong variation (61-81 avg diff). cropPadding=20 applied. Upgraded from CONDITIONAL 75.",
+      "file": "data/assets/breezy-jump.png"
+    },
+    "static-dribble": {
+      "frames": 6,
+      "fps": 8,
+      "loop": true,
+      "hasBall": true,
+      "category": "ball-handling",
+      "action": "stationary dribble, ball bouncing at side",
+      "poseRef": "breezy-static-dribble.png",
+      "qcStatus": "ACCEPTED",
+      "qcScore": "31/35",
+      "file": "data/assets/breezy-static-dribble.png"
+    },
+    "dribble": {
+      "frames": 8,
+      "fps": 10,
+      "loop": true,
+      "hasBall": true,
+      "category": "ball-handling",
+      "action": "running dribble, full run cycle with basketball",
+      "poseRef": "breezy-dribble.png",
+      "qcStatus": "ACCEPTED",
+      "qcScore": 90,
+      "qcNote": "ANIMATION-001 polish-v2 regen — 1440x180, 8f, 91% fill, 100/100 auto-QC, frame variation 83-125. cropToContent pipeline fix applied. Replaces corrupted 4096x512 file.",
+      "file": "data/assets/breezy-dribble.png",
+      "framePrompts": []
+    },
+    "jumpshot": {
+      "frames": 7,
+      "fps": 8,
+      "loop": false,
+      "hasBall": true,
+      "category": "shooting",
+      "action": "basketball jump shot sequence",
+      "poseRef": "breezy-jumpshot.png",
+      "qcStatus": "ACCEPTED",
+      "qcScore": "32/35",
+      "file": "data/assets/breezy-jumpshot.png"
+    },
+    "stepback": {
+      "frames": 4,
+      "fps": 8,
+      "loop": false,
+      "hasBall": true,
+      "category": "shooting",
+      "action": "stepback jumper creating space",
+      "poseRef": "breezy-stepback.png",
+      "qcStatus": "CONDITIONAL",
+      "qcScore": "29/35",
+      "qcNote": "Minor size variation across frames. Acceptable for prototype.",
+      "file": "data/assets/breezy-stepback.png"
+    },
+    "crossover": {
+      "frames": 4,
+      "fps": 13,
+      "loop": false,
+      "hasBall": true,
+      "category": "ball-handling",
+      "action": "crossover dribble move",
+      "poseRef": "breezy-crossover.png",
+      "qcStatus": "ACCEPTED",
+      "qcScore": "30/35",
+      "file": "data/assets/breezy-crossover.png"
+    },
+    "defense-backpedal": {
+      "frames": 4,
+      "fps": 8,
+      "loop": true,
+      "hasBall": false,
+      "category": "defense",
+      "action": "defensive backpedal, no basketball",
+      "poseRef": "breezy-defense-backpedal.png",
+      "qcStatus": "ACCEPTED",
+      "qcScore": "34/35",
+      "file": "data/assets/breezy-defense-backpedal.png"
+    },
+    "defense-shuffle": {
+      "frames": 2,
+      "fps": 6,
+      "loop": true,
+      "hasBall": false,
+      "category": "defense",
+      "action": "defensive lateral shuffle, no basketball",
+      "poseRef": "breezy-defense-shuffle.png",
+      "qcStatus": "ACCEPTED",
+      "qcScore": "33/35",
+      "file": "data/assets/breezy-defense-shuffle.png"
+    },
+    "steal": {
+      "frames": 3,
+      "fps": 8,
+      "loop": false,
+      "hasBall": false,
+      "category": "defense",
+      "action": "steal attempt reaching for ball",
+      "poseRef": "breezy-steal.png",
+      "qcStatus": "ACCEPTED",
+      "qcScore": "93/100",
+      "qcNote": "REGEN-002 complete — consistent angle, clear steal arc, identity locked.",
+      "file": "data/assets/breezy-steal.png"
+    },
+    "idle_ball": {
+      "frames": 4,
+      "fps": 6,
+      "loop": true,
+      "action": "standing idle holding basketball, stationary — no dribbling, ball stays in hands",
+      "file": "breezy-idle_ball.png",
+      "qcStatus": "PENDING",
+      "qcScore": null,
+      "qcNote": "",
+      "breezyFile": null
+    },
+    "run": {
+      "frames": 8,
+      "fps": 10,
+      "loop": true,
+      "action": "full run cycle, no basketball — side-profile view, character faces left",
+      "file": "breezy-run.png",
+      "qcStatus": "PENDING",
+      "qcScore": null,
+      "qcNote": "",
+      "breezyFile": null
+    },
+    "sprint": {
+      "frames": 6,
+      "fps": 12,
+      "loop": true,
+      "action": "max-speed sprint, no basketball — side-profile, aggressive lean forward",
+      "file": "breezy-sprint.png",
+      "qcStatus": "PENDING",
+      "qcScore": null,
+      "qcNote": "",
+      "breezyFile": null
+    },
+    "stop": {
+      "frames": 4,
+      "fps": 8,
+      "loop": false,
+      "action": "hard stop from full run — plant both feet and brake sharply",
+      "file": "breezy-stop.png",
+      "qcStatus": "PENDING",
+      "qcScore": null,
+      "qcNote": "",
+      "breezyFile": null
+    },
+    "turn": {
+      "frames": 4,
+      "fps": 8,
+      "loop": false,
+      "action": "180-degree pivot turn while running — character reverses direction",
+      "file": "breezy-turn.png",
+      "qcStatus": "PENDING",
+      "qcScore": null,
+      "qcNote": "",
+      "breezyFile": null
+    },
+    "pivot": {
+      "frames": 3,
+      "fps": 8,
+      "loop": false,
+      "action": "stationary pivot on one foot — basketball pivot move",
+      "file": "breezy-pivot.png",
+      "qcStatus": "PENDING",
+      "qcScore": null,
+      "qcNote": "",
+      "breezyFile": null
+    },
+    "defensive-slide-left": {
+      "frames": 6,
+      "fps": 8,
+      "loop": true,
+      "action": "lateral defensive shuffle sliding left — low stance, arms wide, feet never crossing",
+      "file": "breezy-defensive-slide-left.png",
+      "qcStatus": "CONDITIONAL",
+      "qcScore": 88,
+      "qcNote": "Rescued from raw batch — 88/100 CONDITIONAL. Minor size (75-80% fill) and extraction fringing. Prototype-acceptable.",
+      "breezyFile": "breezy-defensive-slide-left.png"
+    },
+    "defensive-slide-right": {
+      "frames": 6,
+      "fps": 8,
+      "loop": true,
+      "action": "lateral defensive shuffle sliding right — low stance, arms wide, feet never crossing",
+      "file": "breezy-defensive-slide-right.png",
+      "qcStatus": "CONDITIONAL",
+      "qcScore": 88,
+      "qcNote": "Rescued from raw batch — 88/100 CONDITIONAL. Mirror of slide-left, same minor issues. Prototype-acceptable.",
+      "breezyFile": "breezy-defensive-slide-right.png"
+    },
+    "idle-dribble": {
+      "frames": 6,
+      "fps": 8,
+      "loop": true,
+      "action": "stationary standing dribble — not running, ball bouncing at right side while character stands in place",
+      "file": "breezy-idle-dribble.png",
+      "qcStatus": "ACCEPTED",
+      "qcScore": 95,
+      "qcNote": "Rescued from raw batch — 95/100 ACCEPTED. Ball arc clear, identity consistent. Prototype-ready.",
+      "breezyFile": "breezy-idle-dribble.png"
+    }
+  },
+  "characters": {
+    "99": {
+      "animations": {
+        "dribble": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": true,
+          "category": "ball-handling",
+          "action": "running dribble, full run cycle with basketball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "86/100",
+          "qcNote": "TASK-6009 — evaluateStrip 86/100 ACCEPTED. 8 frames, 1440x180. avgFrameScore 97, consistencyScore 69. Frame 1 too_large (93.3% fill, major). Size inconsistency 31% deviation (frame 2 at 61.1% vs frames 0-1/3-7 at 82-93%). No green remnants. No edge bleed. Prototype-acceptable. Recommend padding fix to normalize frame sizes.",
+          "file": "data/assets/99-dribble.png"
+        },
+        "static-dribble": {
+          "frames": 6,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1080,
+          "stripHeight": 180,
+          "fps": 8,
+          "loop": true,
+          "hasBall": true,
+          "category": "ball-handling",
+          "action": "stationary dribble, ball bouncing at side",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "85/100",
+          "qcNote": "TASK-6010 — 160x160-within-180x180 padding fix applied. All 6 frames reprocessed. Upgraded from FAILED 74/100.",
+          "file": "data/assets/99-static-dribble.png"
+        },
+        "idle": {
+          "frames": 4,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 720,
+          "stripHeight": 180,
+          "fps": 6,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "standing idle, subtle weight shift and breathing",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6014 — 99 baseline generation (retry). 4 frames, 720x180 confirmed. Padding fix applied.",
+          "file": "data/assets/99-idle.png"
+        },
+        "walk": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "walk cycle, no ball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6014 — 99 baseline generation (retry). 8 frames, 1440x180 confirmed. Padding fix applied.",
+          "file": "data/assets/99-walk.png"
+        }
+      }
+    },
+    "joaquin": {
+      "animations": {
+        "dribble": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": true,
+          "category": "ball-handling",
+          "action": "running dribble, full run cycle with basketball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "92/100",
+          "qcNote": "REVIEW-005 — side-profile run-dribble cycle, 8 frames. Identity consistent. Minor background transparency uncertainty and slight scale variance. Prototype-acceptable.",
+          "file": "data/assets/joaquin-dribble.png"
+        },
+        "stepback": {
+          "frames": 4,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 720,
+          "stripHeight": 180,
+          "fps": 8,
+          "loop": false,
+          "hasBall": true,
+          "category": "shooting",
+          "action": "stepback jumper creating space",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "93/100",
+          "qcNote": "REVIEW-005 — strongest joaquin strip. Clean background, 4 clearly differentiated frames. Minor scale variance and slight angle drift frame 4. Prototype-acceptable.",
+          "file": "data/assets/joaquin-stepback.png"
+        },
+        "static-dribble": {
+          "frames": 6,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1080,
+          "stripHeight": 180,
+          "fps": 8,
+          "loop": true,
+          "hasBall": true,
+          "category": "ball-handling",
+          "action": "stationary dribble, ball bouncing at side",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6007 — frames 4-5 regenerated, all 6 reprocessed with padding fix. 6 frames, 1080x180 confirmed.",
+          "file": "data/assets/joaquin-static-dribble.png"
+        },
+        "idle": {
+          "frames": 4,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 720,
+          "stripHeight": 180,
+          "fps": 6,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "standing idle, subtle weight shift and breathing",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6008 — joaquin baseline generation. 4 frames, 720x180 confirmed.",
+          "file": "data/assets/joaquin-idle.png"
+        },
+        "walk": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "walk cycle, no ball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6008 — joaquin baseline generation. 8 frames, 1440x180 confirmed.",
+          "file": "data/assets/joaquin-walk.png"
+        }
+      }
+    },
+    "snoop": {
+      "animations": {
+        "idle": {
+          "frames": 5,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 900,
+          "stripHeight": 180,
+          "fps": 6,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "standing idle, subtle weight shift and breathing",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "85/100",
+          "qcNote": "Reprocessed from raw via fixed cropToContent pipeline. ANIM-REGEN-SNOOP-IDLE.",
+          "file": "data/assets/snoop-idle.png"
+        },
+        "walk": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "walk cycle, no ball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6012 — snoop baseline generation. 8 frames, 1440x180 confirmed. Padding fix applied.",
+          "file": "data/assets/snoop-walk.png"
+        },
+        "dribble": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": true,
+          "category": "ball-handling",
+          "action": "running dribble, full run cycle with basketball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6013 — clean regen from scratch, empty-frame issue from TASK-6012 avoided. 8 frames, 1440x180. Padding fix applied.",
+          "file": "data/assets/snoop-dribble.png"
+        }
+      }
+    },
+    "z": {
+      "animations": {
+        "dribble": {
+          "frames": 6,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1080,
+          "stripHeight": 180,
+          "fps": 8,
+          "loop": true,
+          "hasBall": true,
+          "category": "ball-handling",
+          "action": "stationary dribble, ball bouncing at side",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "UPLOAD-BGX-001 — frame padding fix applied. 6 frames, 90% fill, consistent identity, background transparent. Evaluator score 100/100 PASSED.",
+          "file": "data/assets/z-dribble.png"
+        },
+        "stepback": {
+          "frames": 4,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 720,
+          "stripHeight": 180,
+          "fps": 8,
+          "loop": false,
+          "hasBall": true,
+          "category": "shooting",
+          "action": "stepback jumper creating space",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "91/100",
+          "qcNote": "ANIM-REGEN-Z-STEPBACK — prior accepted frames restored after flash-model regen failed; re-evaluated 91/100. 4 frames, 720x180 confirmed.",
+          "file": "data/assets/z-stepback.png"
+        },
+        "idle": {
+          "frames": 4,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 720,
+          "stripHeight": 180,
+          "fps": 6,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "standing idle, subtle weight shift and breathing",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6006 — z baseline generation. 4 frames, 720x180 confirmed.",
+          "file": "data/assets/z-idle.png"
+        },
+        "walk": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "walk cycle, no ball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6006 — z baseline generation. 8 frames, 1440x180 confirmed.",
+          "file": "data/assets/z-walk.png"
+        }
+      }
+    },
+    "viv": {
+      "animations": {
+        "dribble": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": true,
+          "category": "ball-handling",
+          "action": "running dribble, full run cycle with basketball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "85/100",
+          "qcNote": "TASK-6001 — viv baseline generation. 8 frames, 1440x180 confirmed. HEAD-DISPATCH-006.",
+          "file": "data/assets/viv-dribble.png"
+        },
+        "walk": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "walk cycle, no ball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "85/100",
+          "qcNote": "TASK-6001 — viv baseline generation. 8 frames, 1440x180 confirmed. HEAD-DISPATCH-006.",
+          "file": "data/assets/viv-walk.png"
+        },
+        "idle": {
+          "frames": 4,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 720,
+          "stripHeight": 180,
+          "fps": 6,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "standing idle, subtle weight shift and breathing",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "100/100",
+          "qcNote": "TASK-6005 — 160x160-within-180x180 padding fix applied. 4 frames, 720x180. All frames 100/100, median fill 88.9%, zero issues.",
+          "file": "data/assets/viv-idle.png"
+        }
+      }
+    },
+    "bron-test": {
+      "animations": {
+        "idle": {
+          "frames": 4,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 720,
+          "stripHeight": 180,
+          "fps": 6,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "standing idle, subtle weight shift and breathing",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "84/100",
+          "qcNote": "TASK-6002 — bron-test idle. 720x180, 4f, 93.3% fill, 84/100 auto-QC PASSED (>80 threshold). One frame at 97.8% (critical flag but score above task threshold). Variation 26-28 (subtle idle).",
+          "file": "data/assets/bron-test-idle.png"
+        },
+        "dribble": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": true,
+          "category": "ball-handling",
+          "action": "running dribble, full run cycle with basketball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "85/100",
+          "qcNote": "TASK-6002 — bron-test dribble. 1440x180, 8f, 92.2% fill, 85/100 auto-QC PASSED (>80 threshold). Strong frame variation 42-65 avg diff.",
+          "file": "data/assets/bron-test-dribble.png"
+        },
+        "walk": {
+          "frames": 8,
+          "frameWidth": 180,
+          "frameHeight": 180,
+          "stripWidth": 1440,
+          "stripHeight": 180,
+          "fps": 10,
+          "loop": true,
+          "hasBall": false,
+          "category": "locomotion",
+          "action": "walk cycle, no ball",
+          "qcStatus": "ACCEPTED",
+          "qcScore": "96/100",
+          "qcNote": "TASK-6011 — bron-test walk generation. 8 frames, 1440x180 confirmed. Padding fix applied.",
+          "file": "data/assets/bron-test-walk.png"
+        }
+      }
+    }
+  },
+  "characterBaseline": {
+    "heightInches": 72,
+    "fillPercent": 85,
+    "feetOnBaseline": true,
+    "ballDiameterPx": 12
+  },
+  "fileOwnership": {
+    "animation": [
+      "lib/sprite-generator/prompts.js",
+      "routes/generation.js",
+      "data/.custom-animations.json",
+      "data/animation-contract.json",
+      "data/assets/{char}-{anim}.png"
+    ],
+    "upload": [
+      "routes/characters.js",
+      "data/.characters.json",
+      "data/assets/{char}full.png",
+      "data/assets/{char}full.webp"
+    ],
+    "review": [
+      "routes/pipeline.js",
+      "routes/evaluation.js"
+    ],
+    "integration": [
+      "index-v2.html",
+      "index.html"
+    ],
+    "shared_readonly": [
+      "server.js",
+      "data/animation-contract.json"
+    ]
+  }
+}

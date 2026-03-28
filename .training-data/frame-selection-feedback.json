@@ -1,0 +1,13 @@
+{
+  "sessions": [],
+  "weights": {
+    "ballPosition": 0.35,
+    "motionPeak": 0.3,
+    "sharpness": 0.15,
+    "evenSpacing": 0.2
+  },
+  "thresholds": {
+    "minSharpness": 0.02
+  },
+  "totalSessions": 0
+}

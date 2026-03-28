@@ -1,0 +1,135 @@
+[
+  {
+    "taskId": "ANIM-REGEN-SNOOP-IDLE",
+    "status": "FAILED",
+    "score": 58,
+    "avgFrameScore": 30,
+    "consistencyScore": 100,
+    "medianFill": 100,
+    "passed": false,
+    "issues": [
+      {
+        "type": "too_large",
+        "severity": "critical",
+        "msg": "Too large (100% fill)",
+        "affectedFrames": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "type": "green_remnant",
+        "severity": "minor",
+        "msg": "Green remnants (65%)",
+        "affectedFrames": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "type": "blob",
+        "severity": "major",
+        "msg": "Blob (100% coverage)",
+        "affectedFrames": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      {
+        "type": "edge_bleed",
+        "severity": "minor",
+        "msg": "Edge bleed (200%)",
+        "affectedFrames": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      }
+    ],
+    "frameScores": [
+      30,
+      30,
+      30,
+      30,
+      30
+    ],
+    "outputPath": "/Users/pshelley/sprite-tools/sprite-factory/data/assets/snoop-idle.png",
+    "rawPath": "/Users/pshelley/sprite-tools/sprite-factory/data/raw-sprites/snoop-idle-regen-raw.png",
+    "error": null
+  },
+  {
+    "taskId": "ANIM-REGEN-Z-STEPBACK",
+    "status": "FAILED",
+    "score": 58,
+    "avgFrameScore": 30,
+    "consistencyScore": 100,
+    "medianFill": 100,
+    "passed": false,
+    "issues": [
+      {
+        "type": "too_large",
+        "severity": "critical",
+        "msg": "Too large (100% fill)",
+        "affectedFrames": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "type": "green_remnant",
+        "severity": "minor",
+        "msg": "Green remnants (56.11%)",
+        "affectedFrames": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "type": "blob",
+        "severity": "major",
+        "msg": "Blob (100% coverage)",
+        "affectedFrames": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "type": "edge_bleed",
+        "severity": "minor",
+        "msg": "Edge bleed (200%)",
+        "affectedFrames": [
+          0,
+          1,
+          2,
+          3
+        ]
+      }
+    ],
+    "frameScores": [
+      30,
+      30,
+      30,
+      30
+    ],
+    "outputPath": "/Users/pshelley/sprite-tools/sprite-factory/data/assets/z-stepback.png",
+    "rawPath": "/Users/pshelley/sprite-tools/sprite-factory/data/raw-sprites/z-stepback-regen-raw.png",
+    "error": null
+  }
+]

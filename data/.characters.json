@@ -18,7 +18,22 @@
     "scaleMultiplier": 1,
     "pixelHeight": 112,
     "completedAnims": [],
-    "status": "active"
+    "status": "portrait_done",
+    "anchor": {
+      "portrait": null,
+      "angles": [
+        "99-angle-0.png",
+        "99-angle-1.png",
+        "99-angle-2.png",
+        "99-angle-3.png",
+        "99-angle-4.png",
+        "99-angle-5.png",
+        "99-angle-6.png",
+        "99-angle-7.png"
+      ],
+      "ballRefs": [],
+      "status": "complete"
+    }
   },
   "breezy": {
     "name": "breezy",
@@ -52,7 +67,14 @@
         "breezy-angle-6.png",
         "breezy-angle-7.png"
       ],
-      "ballRefs": [],
+      "ballRefs": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
       "status": "partial"
     }
   },
@@ -114,7 +136,16 @@
     "status": "new",
     "anchor": {
       "portrait": null,
-      "angles": [],
+      "angles": [
+        "z-angle-0.png",
+        "z-angle-1.png",
+        "z-angle-2.png",
+        "z-angle-3.png",
+        "z-angle-4.png",
+        "z-angle-5.png",
+        "z-angle-6.png",
+        "z-angle-7.png"
+      ],
       "ballRefs": [
         "z-ball-dribble-low.png",
         "z-ball-dribble-high.png",
@@ -123,7 +154,7 @@
         "z-ball-two-hand-chest.png",
         "z-ball-palming.png"
       ],
-      "status": "partial"
+      "status": "complete"
     }
   },
   "bron-test": {
@@ -220,6 +251,119 @@
       "accent": "#000000"
     },
     "portraitPath": "snoopfull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 1,
+    "pixelHeight": 112,
+    "completedAnims": [],
+    "status": "portrait_done",
+    "anchor": {
+      "angles": [
+        "snoop-angle-0.png",
+        "snoop-angle-1.png",
+        "snoop-angle-2.png",
+        "snoop-angle-3.png",
+        "snoop-angle-4.png",
+        "snoop-angle-5.png",
+        "snoop-angle-6.png",
+        "snoop-angle-7.png"
+      ],
+      "ballRefs": [],
+      "status": "complete"
+    }
+  },
+  "test-snoop": {
+    "name": "test-snoop",
+    "id": "test-snoop",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 72,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "",
+    "teamColors": {
+      "primary": "#ff4400",
+      "secondary": "#ffffff",
+      "accent": "#000000"
+    },
+    "portraitPath": "test-snoopfull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 1,
+    "pixelHeight": 112,
+    "completedAnims": [],
+    "status": "portrait_done"
+  },
+  "obama": {
+    "name": "obama",
+    "id": "obama",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 72,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "44",
+    "teamColors": {
+      "primary": "#ff4400",
+      "secondary": "#ffffff",
+      "accent": "#000000"
+    },
+    "portraitPath": "obamafull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 1,
+    "pixelHeight": 112,
+    "completedAnims": [],
+    "status": "portrait_done",
+    "anchor": {
+      "portrait": null,
+      "angles": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "ballRefs": [],
+      "status": "partial"
+    }
+  },
+  "tom": {
+    "name": "tom",
+    "id": "tom",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 72,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "12",
+    "teamColors": {
+      "primary": "#ff4400",
+      "secondary": "#ffffff",
+      "accent": "#000000"
+    },
+    "portraitPath": "tomfull.png",
+    "originalPhotoPath": null,
+    "scaleMultiplier": 1,
+    "pixelHeight": 112,
+    "completedAnims": [],
+    "status": "portrait_done"
+  },
+  "tom-1": {
+    "name": "tom-1",
+    "id": "tom-1",
+    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
+    "style": "16-bit pixel art, GBA style",
+    "heightInches": 72,
+    "weightLbs": 185,
+    "build": "athletic",
+    "jerseyNumber": "12",
+    "teamColors": {
+      "primary": "#ff4400",
+      "secondary": "#ffffff",
+      "accent": "#000000"
+    },
+    "portraitPath": "tom-1full.png",
     "originalPhotoPath": null,
     "scaleMultiplier": 1,
     "pixelHeight": 112,

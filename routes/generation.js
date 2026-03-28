@@ -172,7 +172,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     const { character, animation, model, customPrompt } = body;
 
     try {
-      const modelId = model || 'gemini-3-pro-image-preview';
+      const modelId = model || 'gemini-2.5-flash-image';
       const client = new NanaBananaClient({ model: modelId });
 
       const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
@@ -360,7 +360,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     }
 
     try {
-      const modelId = 'gemini-3-pro-image-preview';
+      const modelId = model || 'gemini-2.5-flash-image';
       const client = new NanaBananaClient({ model: modelId });
 
       const anim = ANIMATIONS[animation];
@@ -522,7 +522,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     const { character, animation, frameIndex, model, customSections, jobId } = body;
 
     try {
-      const modelId = 'gemini-3-pro-image-preview';
+      const modelId = model || 'gemini-2.5-flash-image';
       const client = new NanaBananaClient({ model: modelId });
 
       const anim = ANIMATIONS[animation];
@@ -822,7 +822,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
 
     try {
       const body = await parseBody(req);
-      const modelId = body.model || 'gemini-3-pro-image-preview';
+      const modelId = body.model || 'gemini-2.5-flash-image';
 
       // 1. Resolve prompt: override > contract base > generated default
       const store = loadFramePrompts();

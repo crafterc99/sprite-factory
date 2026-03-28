@@ -150,6 +150,7 @@ require('./routes/pipeline').register(router, ctx);
 require('./routes/prompts').register(router, ctx);
 require('./routes/production').register(router, ctx);
 require('./routes/anchor').register(router, ctx);
+require('./routes/animation-contract').register(router, ctx);
 
 // ─── Server ─────────────────────────────────────────────────────────────
 
@@ -188,7 +189,7 @@ const server = http.createServer(async (req, res) => {
 
   // Serve the web UI
   if (pathname === '/' || pathname === '/index.html') {
-    return serveStatic(res, path.join(__dirname, 'index.html'), 'text/html');
+    return serveStatic(res, path.join(__dirname, 'index-v2.html'), 'text/html');
   }
   if (pathname === '/v2' || pathname === '/v2/') {
     return serveStatic(res, path.join(__dirname, 'index-v2.html'), 'text/html');

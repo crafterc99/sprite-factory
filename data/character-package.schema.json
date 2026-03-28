@@ -1,0 +1,254 @@
+{
+  "_comment": "Character Package Schema v1.1 — defines the layered asset structure for a Soul Jam character. Source of truth for upload terminal and animation pipeline. Do not flatten clothing into base layers.",
+  "version": "1.1",
+
+  "uploadProcessingApi": {
+    "_comment": "Source processing endpoints added in v1.1",
+    "uploadSource": "POST /api/character/upload-source?name=&type=headshot|bodyshot|clothing&category=&label= (binary body) — upload raw image, auto-process returns processed_url + processing metadata",
+    "reprocessSource": "POST /api/character/:name/sources/:type/reprocess — body: { adjustments: { top_trim, bottom_trim, left_trim, right_trim, top_expand, bottom_expand, left_expand, right_expand, zoom } }",
+    "getSourceMeta": "GET /api/character/:name/sources/:type/meta — returns full processing metadata including detected_bounds, crop, bg_color, manual_adjustments, adjustment_history",
+    "serveProcessed": "GET /api/character/image/:name/sources/{type}-processed.png — serve the auto-cropped image"
+  },
+
+  "packageStatusValues": [
+    "intake",
+    "sources_staged",
+    "portrait_ready",
+    "package_ready",
+    "angles_ready",
+    "export_ready"
+  ],
+
+  "clothingCategories": [
+    "top",
+    "bottom",
+    "shoes",
+    "full_outfit",
+    "accessory"
+  ],
+
+  "angleIndex": {
+    "0": "front",
+    "1": "front_right",
+    "2": "right",
+    "3": "back_right",
+    "4": "back",
+    "5": "back_left",
+    "6": "left",
+    "7": "front_left"
+  },
+
+  "angleNames": ["front", "front_right", "right", "back_right", "back", "back_left", "left", "front_left"],
+
+  "fileConventions": {
+    "sourceStagingDir": "data/.video-tmp/characters/{name}/sources/",
+    "headshot": "data/.video-tmp/characters/{name}/sources/headshot.png",
+    "bodyshot": "data/.video-tmp/characters/{name}/sources/bodyshot.png",
+    "clothingItem": "data/.video-tmp/characters/{name}/sources/clothing/{item_id}.png",
+    "packageFile": "data/.video-tmp/characters/{name}/package.json",
+    "portrait": "data/assets/{name}full.png",
+    "angleFile": "data/assets/{name}-angle-{index}.png"
+  },
+
+  "packageSchema": {
+    "character_id": "string — matches name in .characters.json",
+    "version": "string — package schema version",
+    "created_at": "ISO 8601 timestamp",
+    "updated_at": "ISO 8601 timestamp",
+    "status": "string — one of packageStatusValues",
+
+    "sources": {
+      "headshot": {
+        "path": "string | null — absolute path to original staged headshot",
+        "processed_path": "string | null — absolute path to auto-cropped/normalized PNG",
+        "meta_path": "string | null — absolute path to processing metadata JSON",
+        "processing_error": "string | null — set if auto-processing failed (original still valid)",
+        "uploaded_at": "string | null — ISO timestamp",
+        "status": "pending | ready"
+      },
+      "bodyshot": {
+        "path": "string | null — absolute path to original staged bodyshot",
+        "processed_path": "string | null — absolute path to auto-cropped/normalized PNG",
+        "meta_path": "string | null — absolute path to processing metadata JSON",
+        "processing_error": "string | null — set if auto-processing failed",
+        "uploaded_at": "string | null — ISO timestamp",
+        "status": "pending | ready"
+      },
+      "clothing": [
+        {
+          "item_id": "string — unique id, e.g. top-001",
+          "category": "string — one of clothingCategories",
+          "label": "string | null — human label, e.g. white jersey",
+          "path": "string — absolute path to original staged clothing image",
+          "processed_path": "string | null — auto-cropped version",
+          "meta_path": "string | null — processing metadata",
+          "processing_error": "string | null",
+          "uploaded_at": "string — ISO timestamp",
+          "status": "pending | ready"
+        }
+      ]
+    },
+
+    "base": {
+      "head_master": {
+        "path": "string | null",
+        "source": "headshot | extracted_from_bodyshot | generated | null",
+        "status": "pending | ready"
+      },
+      "body_master": {
+        "path": "string | null",
+        "source": "bodyshot | generated | null",
+        "status": "pending | ready"
+      },
+      "portrait": {
+        "path": "string | null — final pixel art portrait (matches {name}full.png)",
+        "url": "string | null — serve URL",
+        "status": "pending | ready"
+      }
+    },
+
+    "clothing": {
+      "_note": "keyed by category. Each value is null or a clothing item record.",
+      "top": {
+        "item_id": "string | null",
+        "source_path": "string | null",
+        "status": "pending | ready | none",
+        "fit": {
+          "offset_x": "number — horizontal shift in pixels (positive = right)",
+          "offset_y": "number — vertical shift in pixels (positive = down)",
+          "scale_x": "number — 1.0 = no scaling",
+          "scale_y": "number — 1.0 = no scaling"
+        },
+        "anchors": {
+          "shoulder_left": { "x": "number", "y": "number" },
+          "shoulder_right": { "x": "number", "y": "number" },
+          "waist": { "x": "number", "y": "number" }
+        }
+      },
+      "bottom": {
+        "item_id": "string | null",
+        "source_path": "string | null",
+        "status": "pending | ready | none",
+        "fit": {
+          "offset_x": "number",
+          "offset_y": "number",
+          "scale_x": "number",
+          "scale_y": "number"
+        },
+        "anchors": {
+          "hip_left": { "x": "number", "y": "number" },
+          "hip_right": { "x": "number", "y": "number" },
+          "knee_left": { "x": "number", "y": "number" },
+          "knee_right": { "x": "number", "y": "number" }
+        }
+      },
+      "shoes": {
+        "item_id": "string | null",
+        "source_path": "string | null",
+        "status": "pending | ready | none",
+        "fit": {
+          "offset_x": "number",
+          "offset_y": "number",
+          "scale_x": "number",
+          "scale_y": "number"
+        },
+        "anchors": {
+          "ankle_left": { "x": "number", "y": "number" },
+          "ankle_right": { "x": "number", "y": "number" }
+        }
+      },
+      "full_outfit": {
+        "item_id": "string | null",
+        "source_path": "string | null",
+        "status": "pending | ready | none",
+        "fit": {
+          "offset_x": "number",
+          "offset_y": "number",
+          "scale_x": "number",
+          "scale_y": "number"
+        },
+        "anchors": {}
+      },
+      "accessories": []
+    },
+
+    "angles": {
+      "front":       { "index": 0, "file": "string | null", "url": "string | null", "status": "pending | ready" },
+      "front_right": { "index": 1, "file": "string | null", "url": "string | null", "status": "pending | ready" },
+      "right":       { "index": 2, "file": "string | null", "url": "string | null", "status": "pending | ready" },
+      "back_right":  { "index": 3, "file": "string | null", "url": "string | null", "status": "pending | ready" },
+      "back":        { "index": 4, "file": "string | null", "url": "string | null", "status": "pending | ready" },
+      "back_left":   { "index": 5, "file": "string | null", "url": "string | null", "status": "pending | ready" },
+      "left":        { "index": 6, "file": "string | null", "url": "string | null", "status": "pending | ready" },
+      "front_left":  { "index": 7, "file": "string | null", "url": "string | null", "status": "pending | ready" }
+    },
+
+    "export": {
+      "status": "pending | ready",
+      "manifest_path": "string | null",
+      "animation_pipeline_ready": "boolean",
+      "exported_at": "string | null — ISO timestamp"
+    }
+  },
+
+  "defaultFitValues": {
+    "offset_x": 0,
+    "offset_y": 0,
+    "scale_x": 1.0,
+    "scale_y": 1.0
+  },
+
+  "angleProductionContract": {
+    "_comment": "Each angle file must be 180x180px, green (#00FF00) background, same style as portrait.",
+    "filePattern": "data/assets/{name}-angle-{index}.png",
+    "servePattern": "/assets/{name}-angle-{index}.png",
+    "dimensions": "180x180 px",
+    "background": "#00FF00",
+    "style": "16-bit pixel art, GBA style, bold BLACK pixel outlines",
+    "count": 8,
+    "indexToDirection": {
+      "0": "front",
+      "1": "front_right",
+      "2": "right",
+      "3": "back_right",
+      "4": "back",
+      "5": "back_left",
+      "6": "left",
+      "7": "front_left"
+    }
+  },
+
+  "exportManifestSchema": {
+    "_comment": "Written to data/.video-tmp/characters/{name}/package.json when status=export_ready. Animation pipeline reads this.",
+    "character_id": "string",
+    "package_version": "string",
+    "portrait_url": "string",
+    "portrait_path": "string",
+    "angles": {
+      "front":       { "url": "string", "path": "string" },
+      "front_right": { "url": "string", "path": "string" },
+      "right":       { "url": "string", "path": "string" },
+      "back_right":  { "url": "string", "path": "string" },
+      "back":        { "url": "string", "path": "string" },
+      "back_left":   { "url": "string", "path": "string" },
+      "left":        { "url": "string", "path": "string" },
+      "front_left":  { "url": "string", "path": "string" }
+    },
+    "clothing_layers": {
+      "top":        { "item_id": "string | null", "url": "string | null", "fit": {} },
+      "bottom":     { "item_id": "string | null", "url": "string | null", "fit": {} },
+      "shoes":      { "item_id": "string | null", "url": "string | null", "fit": {} },
+      "full_outfit":{ "item_id": "string | null", "url": "string | null", "fit": {} }
+    },
+    "character_meta": {
+      "heightInches": "number",
+      "weightLbs": "number",
+      "build": "string",
+      "jerseyNumber": "string",
+      "teamColors": { "primary": "string", "secondary": "string", "accent": "string" },
+      "scaleMultiplier": "number",
+      "pixelHeight": "number"
+    },
+    "exported_at": "string — ISO timestamp"
+  }
+}

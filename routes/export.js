@@ -3,7 +3,14 @@
  */
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 const { buildGrid, GRID_LAYOUT } = require('../lib/sprite-processor/index');
+
+const FRAME_SIZE = 180;
+const SPRITE_FACTORY_ROOT = path.resolve(__dirname, '..');
+const SOUL_JAM_IMAGES_DIR = path.resolve(SPRITE_FACTORY_ROOT, '..', 'soul-jam', 'public', 'assets', 'images');
+const ASSETS_DIR_LOCAL = path.join(SPRITE_FACTORY_ROOT, 'data', 'assets');
+const CONTRACT_PATH = path.join(SPRITE_FACTORY_ROOT, 'data', 'animation-contract.json');
 
 function register(router, { ASSETS_DIR, json, parseBody }) {
 
@@ -112,6 +119,137 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
     } catch (err) {
       return json(res, { error: err.message }, 500);
     }
+  });
+
+  // ─── Soul Jam Atlas Export ───────────────────────────────────────────
+
+  // POST /api/export/soul-jam — Build atlas PNG + JSON for soul-jam game
+  // Body: { character: string, animations?: string[] }
+  router.post('/api/export/soul-jam', async (req, res) => {
+    const body = await parseBody(req);
+    const { character, animations: requestedAnims } = body;
+    if (!character) return json(res, { error: 'character is required' }, 400);
+
+    // Verify soul-jam directory exists
+    if (!fs.existsSync(SOUL_JAM_IMAGES_DIR)) {
+      return json(res, {
+        error: `soul-jam assets directory not found: ${SOUL_JAM_IMAGES_DIR}`,
+        hint: 'Clone the soul-jam repo as a sibling of sprite-factory at ../soul-jam',
+      }, 404);
+    }
+
+    // Load animation contract for frame counts
+    let contract;
+    try {
+      contract = JSON.parse(fs.readFileSync(CONTRACT_PATH, 'utf8'));
+    } catch (e) {
+      return json(res, { error: `Failed to load animation-contract.json: ${e.message}` }, 500);
+    }
+
+    // Determine which animations to include
+    let animNames = requestedAnims;
+    if (!animNames || animNames.length === 0) {
+      // Default: all animations in contract that have files on disk
+      animNames = Object.keys(contract.animations);
+    }
+
+    // Resolve animation strips — verify each file exists and get frame count
+    const strips = [];
+    const missing = [];
+    for (const animName of animNames) {
+      const stripPath = path.join(ASSETS_DIR_LOCAL, `${character}-${animName}.png`);
+      if (!fs.existsSync(stripPath)) {
+        missing.push(animName);
+        continue;
+      }
+      // Frame count: from contract if available, else detect from image width
+      let frames = contract.animations[animName]?.frames;
+      if (!frames) {
+        const meta = await sharp(stripPath).metadata();
+        frames = Math.round(meta.width / FRAME_SIZE);
+      }
+      strips.push({ name: animName, path: stripPath, frames });
+    }
+
+    if (strips.length === 0) {
+      return json(res, {
+        error: `No animation strips found for character "${character}"`,
+        missing,
+        searched: ASSETS_DIR_LOCAL,
+      }, 404);
+    }
+
+    // Sheet dimensions: width = max frames * FRAME_SIZE, height = strips * FRAME_SIZE
+    const maxFrames = Math.max(...strips.map(s => s.frames));
+    const sheetWidth = maxFrames * FRAME_SIZE;
+    const sheetHeight = strips.length * FRAME_SIZE;
+
+    // Composite all strips vertically
+    const composites = [];
+    for (let i = 0; i < strips.length; i++) {
+      composites.push({
+        input: strips[i].path,
+        left: 0,
+        top: i * FRAME_SIZE,
+      });
+    }
+
+    const sheetFile = `${character}-spritesheet.png`;
+    const jsonFile  = `${character}-spritesheet.json`;
+    const sheetPath = path.join(SOUL_JAM_IMAGES_DIR, sheetFile);
+    const jsonPath  = path.join(SOUL_JAM_IMAGES_DIR, jsonFile);
+
+    try {
+      await sharp({
+        create: {
+          width: sheetWidth,
+          height: sheetHeight,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        },
+      })
+        .composite(composites)
+        .png()
+        .toFile(sheetPath);
+    } catch (e) {
+      return json(res, { error: `Failed to composite sheet: ${e.message}` }, 500);
+    }
+
+    // Build atlas JSON — new contract schema (row/y/frames/width per animation)
+    const atlasAnimations = {};
+    for (let i = 0; i < strips.length; i++) {
+      const s = strips[i];
+      atlasAnimations[s.name] = {
+        row: i,
+        frames: s.frames,
+        y: i * FRAME_SIZE,
+        width: s.frames * FRAME_SIZE,
+        fps: contract.animations[s.name]?.fps || 8,
+        loop: contract.animations[s.name]?.loop ?? false,
+      };
+    }
+
+    const atlas = {
+      character,
+      frameSize: FRAME_SIZE,
+      width: sheetWidth,
+      height: sheetHeight,
+      animations: atlasAnimations,
+    };
+
+    fs.writeFileSync(jsonPath, JSON.stringify(atlas, null, 2));
+
+    const totalFrames = strips.reduce((acc, s) => acc + s.frames, 0);
+    return json(res, {
+      success: true,
+      character,
+      sheet_path: sheetPath,
+      json_path: jsonPath,
+      sheet_dimensions: { width: sheetWidth, height: sheetHeight },
+      frame_count: totalFrames,
+      animations_included: strips.map(s => s.name),
+      animations_missing: missing,
+    });
   });
 
   // ─── Deploy to Soul Jam ──────────────────────────────────────────────

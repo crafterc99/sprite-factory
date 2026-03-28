@@ -151,8 +151,9 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
     sseStart(res);
     sseSend(res, 'start', { character, totalAngles: ANGLE_NAMES.length });
 
-    const client = new NanaBananaClient({ model: model || 'gemini-2.5-flash-image' });
-    const angles = [];
+    const modelId = model || 'gemini-2.5-flash-image';
+    const client = new NanaBananaClient({ model: modelId });
+    const angles = new Array(ANGLE_NAMES.length).fill(null);
     let totalCost = 0;
 
     // If regenerate is an array of indices, only regenerate those
@@ -164,7 +165,8 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
     const registry = loadCharacters();
     const existingAngles = registry[character]?.anchor?.angles || [];
 
-    for (const idx of indicesToGenerate) {
+    // Generate angles concurrently (3 at a time) — no sequential delay needed
+    const tasks = indicesToGenerate.map(idx => async () => {
       const angleName = ANGLE_NAMES[idx];
       const fileName = `${character}-angle-${idx}.png`;
       const filePath = path.join(ASSETS_DIR, fileName);
@@ -177,28 +179,29 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
         const result = await client.generate(prompt, {
           referenceImages: [portraitPath],
           aspectRatio: '3:4',
-          resolution: '2K',
-          model: model || 'gemini-2.5-flash-image',
+          resolution: '1K',
+          model: modelId,
         });
 
         fs.writeFileSync(filePath, result.imageBuffer);
-        const cost = recordCost(model || 'gemini-2.5-flash-image', 'anchor-angle', '2K', 1, {
+        const cost = recordCost(modelId, 'anchor-angle', '1K', 1, {
           character, angle: angleName, index: idx,
         });
-        totalCost += cost?.totalCost || 0;
+        const costAmt = cost?.totalCost || 0;
+        totalCost += costAmt;
 
         angles[idx] = fileName;
-        sseSend(res, 'angle_done', { index: idx, angle: angleName, url: `/assets/${fileName}`, cost: cost?.totalCost || 0 });
-
-        // Delay between generations to avoid rate limits
-        if (idx < indicesToGenerate[indicesToGenerate.length - 1]) {
-          await new Promise(r => setTimeout(r, 2000));
-        }
+        sseSend(res, 'angle_done', { index: idx, angle: angleName, url: `/assets/${fileName}`, cost: costAmt });
       } catch (err) {
         sseSend(res, 'angle_error', { index: idx, angle: angleName, error: err.message });
         angles[idx] = existingAngles[idx] || null;
       }
-    }
+    });
+
+    // Run with concurrency limit of 3
+    let qi = 0;
+    async function worker() { while (qi < tasks.length) await tasks[qi++](); }
+    await Promise.all([worker(), worker(), worker()]);
 
     // Merge with existing angles for partial regeneration
     const finalAngles = ANGLE_NAMES.map((_, i) => angles[i] || existingAngles[i] || null);
