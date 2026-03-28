@@ -365,6 +365,11 @@
     </nav>
     <div class="header-right">
       <div class="cost-pill" id="costPill">spend: <span>$0.00</span></div>
+      <select id="globalModel" class="input" style="font-family:var(--mono);font-size:9px;padding:4px 8px;height:28px;min-width:0">
+        <option value="gemini-2.5-flash-image" selected>flash</option>
+        <option value="gemini-3-pro-image-preview">pro 3</option>
+        <option value="gemini-3.1-flash-image-preview">flash 3.1</option>
+      </select>
       <button class="btn btn-bulk btn-sm" onclick="openBulkPanel()" style="font-family:var(--mono);font-size:9px;letter-spacing:1px">Bulk Generate</button>
       <a href="/" class="btn btn-secondary btn-sm" style="font-family:var(--mono);font-size:9px;letter-spacing:1px">v1</a>
     </div>
@@ -681,7 +686,10 @@
 
     <!-- Angles section: 2×4 grid (2 cols, 4 rows), revealed after option pick -->
     <div id="anglesSection" style="display:none;opacity:0;transition:opacity 0.2s;margin-top:20px">
-      <div id="anglesGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"></div>
+      <div style="margin-bottom:8px;font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--accent2)">HEADSHOTS</div>
+      <div id="headshotsGrid" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px"></div>
+      <div style="margin:16px 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--accent2)">BODY</div>
+      <div id="anglesGrid" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px"></div>
     </div>
 
     <!-- Done section: revealed after angles complete -->
@@ -1654,7 +1662,7 @@ async function generateStrip(charName, anim, frames, fps, prompt) {
     const resp = await fetch(`${API}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ character: charName, animation: anim, frames, fps, promptOverride: prompt }),
+      body: JSON.stringify({ character: charName, animation: anim, frames, fps, promptOverride: prompt, model: document.getElementById('globalModel').value }),
     });
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
@@ -1683,7 +1691,7 @@ async function generateFBF(charName, anim, frames, fps, prompt) {
     const resp = await fetch(`${API}/api/generate-fbf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ character: charName, animation: anim, frames, fps, promptOverride: prompt }),
+      body: JSON.stringify({ character: charName, animation: anim, frames, fps, promptOverride: prompt, model: document.getElementById('globalModel').value }),
     });
 
     const reader = resp.body.getReader();
@@ -1768,7 +1776,7 @@ async function startPipeline() {
     const resp = await fetch(`${API}/api/pipeline/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ character: char.name, budget }),
+      body: JSON.stringify({ character: char.name, budget, model: document.getElementById('globalModel').value }),
     });
 
     const reader = resp.body.getReader();
@@ -1924,7 +1932,7 @@ async function generateOptions() {
       jerseyNumber: document.getElementById('newJersey').value,
       teamColors: { primary: document.getElementById('newColor1').value, secondary: document.getElementById('newColor2').value, accent: '#000000' },
       promptOverride: document.getElementById('newCharPrompt').value,
-      model: 'gemini-2.5-flash-image',
+      model: document.getElementById('globalModel').value,
     };
 
     const resp = await fetch(`${API}/api/character/create`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
@@ -1983,12 +1991,14 @@ async function confirmAndGenerateAngles() {
     STATE.confirmedName = name;
     document.getElementById('pinnedCharName').textContent = name;
 
-    // Build angle slots
+    // Build body angle slots
     const angleNames = ['front','front_right','right','back_right','back','back_left','left','front_left'];
+    const slotStyle = 'width:120px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px';
+    const imgWrapStyle = 'width:120px;height:120px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden';
     const grid = document.getElementById('anglesGrid');
     grid.innerHTML = angleNames.map((label, i) =>
-      `<div id="angleSlot${i}" style="display:flex;flex-direction:column;align-items:center;gap:4px">
-        <div style="width:100%;aspect-ratio:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+      `<div id="angleSlot${i}" style="${slotStyle}">
+        <div style="${imgWrapStyle}">
           <span class="spinner active" id="angleSpinner${i}"></span>
           <img id="angleImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
         </div>
@@ -1997,33 +2007,69 @@ async function confirmAndGenerateAngles() {
       </div>`
     ).join('');
 
+    // Build headshot slots
+    const headshotsGrid = document.getElementById('headshotsGrid');
+    headshotsGrid.innerHTML = angleNames.map((label, i) =>
+      `<div id="headSlot${i}" style="${slotStyle}">
+        <div style="${imgWrapStyle}">
+          <span class="spinner active" id="headSpinner${i}"></span>
+          <img id="headImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
+        <button class="btn btn-secondary" id="headRerun${i}" style="display:none;font-size:10px;padding:3px 8px" onclick="rerunHeadshot(${i})">Rerun</button>
+      </div>`
+    ).join('');
+
     const angSec = document.getElementById('anglesSection');
     angSec.style.display = 'block';
     requestAnimationFrame(() => { angSec.style.opacity = '1'; });
 
-    await loadRoster();
     toast('Generating angles...');
-    await Promise.all([0,1,2,3,4,5,6,7].map(async (i) => {
-      try {
-        const r = await fetch(`${API}/api/angle/regenerate`, {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ character: name, angleIndex: i })
-        });
-        const d = await r.json();
-        if (d.error) throw new Error(d.error);
-        const url = d.generated?.[0]?.url;
-        document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
-        const img = document.getElementById(`angleImg${i}`);
-        if (img && url) { img.src = url; img.style.display = 'block'; }
-        const btn = document.getElementById(`angleRerun${i}`);
-        if (btn) btn.style.display = 'inline-block';
-      } catch(e) {
-        document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
-        const btn = document.getElementById(`angleRerun${i}`);
-        if (btn) btn.style.display = 'inline-block';
-      }
-    }));
+    await Promise.all([
+      // Body angles
+      Promise.all([0,1,2,3,4,5,6,7].map(async (i) => {
+        try {
+          const r = await fetch(`${API}/api/angle/regenerate`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ character: name, angleIndex: i })
+          });
+          const d = await r.json();
+          if (d.error) throw new Error(d.error);
+          const url = d.generated?.[0]?.url;
+          document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
+          const img = document.getElementById(`angleImg${i}`);
+          if (img && url) { img.src = url; img.style.display = 'block'; }
+          const btn = document.getElementById(`angleRerun${i}`);
+          if (btn) btn.style.display = 'inline-block';
+        } catch(e) {
+          document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
+          const btn = document.getElementById(`angleRerun${i}`);
+          if (btn) btn.style.display = 'inline-block';
+        }
+      })),
+      // Headshot angles
+      Promise.all([0,1,2,3,4,5,6,7].map(async (i) => {
+        try {
+          const r = await fetch(`${API}/api/angle/regenerate`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ character: name, angleIndex: i, type: 'headshot' })
+          });
+          const d = await r.json();
+          const url = d.generated?.[0]?.url;
+          document.getElementById(`headSpinner${i}`)?.classList.remove('active');
+          const img = document.getElementById(`headImg${i}`);
+          if (img && url) { img.src = url; img.style.display = 'block'; }
+          const btn = document.getElementById(`headRerun${i}`);
+          if (btn) btn.style.display = 'inline-block';
+        } catch(e) {
+          document.getElementById(`headSpinner${i}`)?.classList.remove('active');
+          const btn = document.getElementById(`headRerun${i}`);
+          if (btn) btn.style.display = 'inline-block';
+        }
+      }))
+    ]);
 
     const doneSec = document.getElementById('charDoneSection');
     doneSec.style.display = 'block';
@@ -2045,11 +2091,37 @@ async function rerunAngle(angleIndex) {
     const resp = await fetch(`${API}/api/angle/regenerate`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ character: STATE.confirmedName, angleIndex })
+      body: JSON.stringify({ character: STATE.confirmedName, angleIndex, model: document.getElementById('globalModel').value })
     });
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
     if (img) { img.src = data.generated?.[0]?.url; img.style.display = 'block'; }
+    if (btn) btn.style.display = 'inline-block';
+  } catch(e) {
+    toast('Error: ' + e.message, true);
+    if (btn) btn.style.display = 'inline-block';
+  } finally {
+    if (spinner) spinner.classList.remove('active');
+  }
+}
+
+async function rerunHeadshot(angleIndex) {
+  const spinner = document.getElementById(`headSpinner${angleIndex}`);
+  const img = document.getElementById(`headImg${angleIndex}`);
+  const btn = document.getElementById(`headRerun${angleIndex}`);
+  if (spinner) spinner.classList.add('active');
+  if (img) img.style.display = 'none';
+  if (btn) btn.style.display = 'none';
+  try {
+    const resp = await fetch(`${API}/api/angle/regenerate`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ character: STATE.confirmedName, angleIndex, type: 'headshot' })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    const url = data.generated?.[0]?.url;
+    if (img && url) { img.src = url; img.style.display = 'block'; }
     if (btn) btn.style.display = 'inline-block';
   } catch(e) {
     toast('Error: ' + e.message, true);
