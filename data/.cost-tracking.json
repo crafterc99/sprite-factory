@@ -1,10 +1,10 @@
 {
-  "totalSpend": 13.306032000000021,
-  "totalGenerations": 270,
+  "totalSpend": 14.403408000000026,
+  "totalGenerations": 298,
   "byModel": {
     "gemini-2.5-flash-image": {
-      "spend": 9.499151999999993,
-      "count": 242
+      "spend": 10.596527999999998,
+      "count": 270
     },
     "gemini-3-pro-image-preview": {
       "spend": 3.806879999999999,
@@ -13,8 +13,8 @@
   },
   "byType": {
     "character": {
-      "spend": 3.3896400000000013,
-      "count": 64
+      "spend": 3.5469840000000015,
+      "count": 68
     },
     "anchor-replicate": {
       "spend": 0.81744,
@@ -41,8 +41,8 @@
       "count": 9
     },
     "angle": {
-      "spend": 2.859264000000004,
-      "count": 73
+      "spend": 3.7992960000000062,
+      "count": 97
     },
     "fbf_frame": {
       "spend": 0.314688,
@@ -50,330 +50,6 @@
     }
   },
   "history": [
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "stepback",
-      "frame": 1,
-      "timestamp": "2026-03-26T18:20:48.559Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "stepback",
-      "frame": 2,
-      "timestamp": "2026-03-26T18:22:06.990Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "stepback",
-      "frame": 3,
-      "timestamp": "2026-03-26T18:22:08.907Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "crossover",
-      "frame": 0,
-      "timestamp": "2026-03-26T18:22:22.300Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "crossover",
-      "frame": 1,
-      "timestamp": "2026-03-26T18:22:22.919Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "crossover",
-      "frame": 2,
-      "timestamp": "2026-03-26T18:23:01.139Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "crossover",
-      "frame": 3,
-      "timestamp": "2026-03-26T18:23:02.852Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "defense-backpedal",
-      "frame": 1,
-      "timestamp": "2026-03-26T18:23:45.853Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "defense-backpedal",
-      "frame": 0,
-      "timestamp": "2026-03-26T18:23:49.223Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "defense-backpedal",
-      "frame": 2,
-      "timestamp": "2026-03-26T18:24:21.352Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "defense-backpedal",
-      "frame": 3,
-      "timestamp": "2026-03-26T18:24:24.409Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "defense-shuffle",
-      "frame": 0,
-      "timestamp": "2026-03-26T18:24:52.574Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "defense-shuffle",
-      "frame": 1,
-      "timestamp": "2026-03-26T18:24:53.159Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "steal",
-      "frame": 0,
-      "timestamp": "2026-03-26T18:25:05.854Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "steal",
-      "frame": 1,
-      "timestamp": "2026-03-26T18:25:06.622Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "pipeline_frame",
-      "resolution": "1K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "breezy",
-      "animation": "steal",
-      "frame": 2,
-      "timestamp": "2026-03-26T18:25:21.984Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "breezy",
-      "animation": "walk",
-      "timestamp": "2026-03-26T19:10:22.187Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "breezy",
-      "animation": "jump",
-      "timestamp": "2026-03-26T19:10:23.936Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "breezy",
-      "animation": "idle",
-      "timestamp": "2026-03-26T19:10:24.660Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "breezy",
-      "animation": "idle",
-      "timestamp": "2026-03-26T19:15:11.801Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "breezy",
-      "animation": "walk",
-      "timestamp": "2026-03-26T19:15:13.519Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "breezy",
-      "animation": "jump",
-      "timestamp": "2026-03-26T19:15:15.404Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "breezy",
-      "animation": "walk",
-      "timestamp": "2026-03-26T19:16:43.737Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "breezy",
-      "animation": "jump",
-      "timestamp": "2026-03-26T19:16:43.852Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "character",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "test-snoop",
-      "option": 0,
-      "timestamp": "2026-03-26T22:45:29.494Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "character",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "test-snoop",
-      "option": 1,
-      "timestamp": "2026-03-26T22:45:32.621Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "character",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "test-snoop",
-      "option": 2,
-      "timestamp": "2026-03-26T22:45:46.025Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "character",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "test-snoop",
-      "option": 3,
-      "timestamp": "2026-03-26T22:45:47.893Z"
-    },
     {
       "model": "gemini-2.5-flash-image",
       "type": "strip",
@@ -2281,6 +1957,314 @@
       "animation": "stepback",
       "frame": 3,
       "timestamp": "2026-03-28T17:16:54.559Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "tom",
+      "option": 0,
+      "timestamp": "2026-03-28T22:28:24.909Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "tom",
+      "option": 1,
+      "timestamp": "2026-03-28T22:28:28.500Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "tom",
+      "option": 2,
+      "timestamp": "2026-03-28T22:28:37.744Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "tom",
+      "option": 3,
+      "timestamp": "2026-03-28T22:28:41.450Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "front",
+      "timestamp": "2026-03-28T22:31:52.520Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "back-3/4-L",
+      "timestamp": "2026-03-28T22:31:52.611Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "back",
+      "timestamp": "2026-03-28T22:31:52.837Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "front-3/4-L",
+      "timestamp": "2026-03-28T22:31:53.304Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "side-L",
+      "timestamp": "2026-03-28T22:31:53.386Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "back-3/4-R",
+      "timestamp": "2026-03-28T22:31:53.830Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "front",
+      "timestamp": "2026-03-28T22:32:00.453Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "front-3/4-R",
+      "timestamp": "2026-03-28T22:32:01.542Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "side-R",
+      "timestamp": "2026-03-28T22:32:01.919Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "back-3/4-L",
+      "timestamp": "2026-03-28T22:32:02.132Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "side-L",
+      "timestamp": "2026-03-28T22:32:02.153Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "front-3/4-L",
+      "timestamp": "2026-03-28T22:32:02.241Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "back",
+      "timestamp": "2026-03-28T22:32:08.727Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "side-R",
+      "timestamp": "2026-03-28T22:32:10.879Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "back-3/4-R",
+      "timestamp": "2026-03-28T22:32:11.144Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "front-3/4-R",
+      "timestamp": "2026-03-28T22:32:11.563Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "front-3/4-L",
+      "timestamp": "2026-03-28T22:32:11.608Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "front",
+      "timestamp": "2026-03-28T22:32:12.498Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "side-L",
+      "timestamp": "2026-03-28T22:32:17.682Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "back",
+      "timestamp": "2026-03-28T22:32:19.525Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "side-R",
+      "timestamp": "2026-03-28T22:32:20.703Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "back-3/4-L",
+      "timestamp": "2026-03-28T22:32:20.743Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "back-3/4-R",
+      "timestamp": "2026-03-28T22:32:21.739Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "angle",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000168,
+      "totalCost": 0.039168,
+      "character": "tom",
+      "angleName": "front-3/4-R",
+      "timestamp": "2026-03-28T22:32:22.021Z"
     }
   ]
 }

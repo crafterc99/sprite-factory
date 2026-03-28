@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
-const { CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, buildPoseTransferPrompt, buildTextOnlyAnimPrompt, buildSingleFramePrompt, buildSectionedPrompt, getDefaultSections, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt, buildAnglePrompt, buildBallRefPrompt } = require('../lib/sprite-generator/prompts');
+const { CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, buildPoseTransferPrompt, buildTextOnlyAnimPrompt, buildSingleFramePrompt, buildSectionedPrompt, getDefaultSections, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt, buildAnglePrompt, buildHeadshotAnglePrompt, buildClothesAnglePrompt, buildBallRefPrompt } = require('../lib/sprite-generator/prompts');
 const { processSprite, cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes } = require('../lib/sprite-processor/index');
 const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
@@ -709,7 +709,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
   // Delegates to the same generation logic as POST /api/generate/angles to avoid duplication.
   router.post('/api/angle/regenerate', async (req, res) => {
     const body = await parseBody(req);
-    const { character, angleIndex } = body;
+    const { character, angleIndex, type } = body;
     if (!character) return json(res, { error: 'character required' }, 400);
 
     const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
@@ -727,8 +727,18 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const angleName = ANGLE_NAMES[ai];
       if (!angleName) { results.push({ angleIndex: ai, error: 'invalid angle index' }); continue; }
       try {
-        const { prompt } = buildAnglePrompt(character, angleName, ai, 8);
-        const outputPath = path.join(ASSETS_DIR, `${character}-angle-${ai}.png`);
+        let prompt, outputFilename;
+        if (type === 'headshot') {
+          ({ prompt } = buildHeadshotAnglePrompt(character, angleName, ai, 8));
+          outputFilename = `${character}-headshot-${ai}.png`;
+        } else if (type === 'clothes') {
+          ({ prompt } = buildClothesAnglePrompt(character, angleName, ai, 8));
+          outputFilename = `${character}-clothes-${ai}.png`;
+        } else {
+          ({ prompt } = buildAnglePrompt(character, angleName, ai, 8));
+          outputFilename = `${character}-angle-${ai}.png`;
+        }
+        const outputPath = path.join(ASSETS_DIR, outputFilename);
         await client.generateSprite(prompt, null, portraitPath, {
           aspectRatio: '3:4',
           resolution: '2K',
@@ -736,7 +746,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
           outputPath,
         });
         recordCost(modelId, 'angle', '2K', 1, { character, angleName });
-        results.push({ angleIndex: ai, angleName, url: `/assets/${character}-angle-${ai}.png`, status: 'done' });
+        results.push({ angleIndex: ai, angleName, url: `/assets/${outputFilename}`, status: 'done' });
       } catch (err) {
         results.push({ angleIndex: ai, angleName, error: err.message, status: 'failed' });
       }
@@ -747,6 +757,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     return json(res, {
       success: failed.length === 0,
       character,
+      type: type || 'body',
       mode: angleIndex != null ? 'single' : 'full_set',
       generated: done,
       failed,

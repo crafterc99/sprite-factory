@@ -187,17 +187,20 @@
   .sse-log .warn { color:var(--warning); }
 
   /* ─── DASHBOARD ─── */
-  .dash-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:14px; }
-  .dash-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s; }
-  .dash-card:hover { border-color:var(--border-hi); transform:translateY(-1px); }
+  .dash-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  @media (max-width:1100px) { .dash-grid { grid-template-columns:repeat(3,1fr); } }
+  @media (max-width:720px)  { .dash-grid { grid-template-columns:repeat(2,1fr); } }
+  .dash-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; cursor:pointer; transition:all 0.2s; overflow:hidden; position:relative; aspect-ratio:3/4; }
+  .dash-card:hover { border-color:var(--border-hi); transform:translateY(-2px); box-shadow:0 6px 24px rgba(0,0,0,0.4); }
   .dash-card.active { border-color:var(--accent); }
-  .dash-portrait { width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:8px; border:1px solid var(--border); image-rendering:pixelated; margin-bottom:10px; background:var(--surface3); }
-  .dash-portrait-empty { width:100%; aspect-ratio:3/4; border-radius:8px; border:1px dashed var(--border); background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:36px; margin-bottom:10px; }
-  .dash-name { font-weight:700; font-size:15px; text-transform:capitalize; margin-bottom:6px; }
-  .dash-stat { font-family:var(--mono); font-size:9px; color:#50507a; margin-bottom:8px; }
-  .dash-add { border:2px dashed var(--border); background:transparent; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#40405a; }
+  .dash-portrait { width:100%; height:100%; object-fit:cover; display:block; image-rendering:pixelated; background:var(--surface3); }
+  .dash-portrait-empty { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:48px; background:var(--surface3); }
+  .dash-card-info { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent,rgba(4,4,12,0.92)); padding:32px 12px 10px; }
+  .dash-name { font-weight:700; font-size:13px; text-transform:capitalize; color:#fff; margin-bottom:4px; }
+  .dash-stat { font-family:var(--mono); font-size:9px; color:#aaa; margin-bottom:6px; }
+  .dash-add { border:2px dashed var(--border); background:transparent; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#40405a; border-radius:12px; aspect-ratio:3/4; }
   .dash-add:hover { border-color:var(--accent); color:var(--accent); }
-  .dash-add-icon { font-size:28px; }
+  .dash-add-icon { font-size:32px; }
   .dash-add-label { font-family:var(--mono); font-size:10px; letter-spacing:1px; }
 
   /* ─── SOURCES PAGE ─── */
@@ -945,25 +948,7 @@ async function loadRoster() {
   } catch(e) { toast('Failed to load roster', true); }
 }
 
-function renderRoster() {
-  const list = document.getElementById('rosterList');
-  list.innerHTML = STATE.roster.map(char => {
-    const done = char.completedAnims || 0;
-    const pct = Math.round((done / TOTAL_ANIMS) * 100);
-    const portrait = char.portrait ? `<img class="roster-portrait" src="${char.portrait}" onerror="this.style.display='none'" />` : `<div class="roster-portrait-placeholder">🏀</div>`;
-    return `<div class="roster-card ${STATE.selectedChar?.name === char.name ? 'active' : ''}" onclick="selectChar('${char.name}')">
-      ${portrait}
-      <div class="roster-info">
-        <div class="roster-name">${char.name}</div>
-        <div class="roster-progress">
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-          <div class="progress-label">${done}/${TOTAL_ANIMS}</div>
-        </div>
-      </div>
-      <button class="roster-delete-btn" onclick="event.stopPropagation();rosterDeletePrompt(this,'${char.name}')" title="Delete character">✕</button>
-    </div>`;
-  }).join('');
-}
+function renderRoster() {}
 
 function renderDashboard() {
   const grid = document.getElementById('dashGrid');
@@ -976,9 +961,11 @@ function renderDashboard() {
     return `<div class="dash-card-wrap">
       <div class="dash-card ${STATE.selectedChar?.name === char.name ? 'active' : ''}" onclick="openCharAngles('${char.name}')">
         ${portrait}
-        <div class="dash-name">${char.name}</div>
-        <div class="dash-stat">${done} / ${TOTAL_ANIMS} animations</div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div class="dash-card-info">
+          <div class="dash-name">${char.name}</div>
+          <div class="dash-stat">${done} / ${TOTAL_ANIMS} animations</div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        </div>
       </div>
       <button class="dash-delete-btn" onclick="event.stopPropagation();dashDeletePrompt(this,'${char.name}')" title="Delete character">✕</button>
     </div>`;
