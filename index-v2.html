@@ -393,15 +393,6 @@
     </div>
   </header>
 
-  <!-- ─── SIDEBAR (roster) ─── -->
-  <aside class="sidebar">
-    <div class="sidebar-header">
-      <div class="sidebar-title">Roster</div>
-      <button class="btn btn-primary btn-sm btn-icon" onclick="openAddChar()" title="Add character">+</button>
-    </div>
-    <div class="roster-list" id="rosterList"></div>
-  </aside>
-
   <!-- ─── MAIN ─── -->
   <main class="main">
     <div class="workspace-inner">
@@ -983,7 +974,7 @@ function renderDashboard() {
       ? `<img class="dash-portrait" src="${char.portrait}" onerror="this.style.display='none'" />`
       : `<div class="dash-portrait-empty">🏀</div>`;
     return `<div class="dash-card-wrap">
-      <div class="dash-card ${STATE.selectedChar?.name === char.name ? 'active' : ''}" onclick="selectChar('${char.name}');showPage2('studio')">
+      <div class="dash-card ${STATE.selectedChar?.name === char.name ? 'active' : ''}" onclick="openCharAngles('${char.name}')">
         ${portrait}
         <div class="dash-name">${char.name}</div>
         <div class="dash-stat">${done} / ${TOTAL_ANIMS} animations</div>
@@ -1930,6 +1921,60 @@ function openAddChar() {
 
 function closeAddChar() {
   document.getElementById('addCharModal').classList.remove('open');
+  document.getElementById('charFormSection').style.display = 'block';
+  document.getElementById('anglesSection').style.display = 'none';
+  document.getElementById('anglesSection').style.opacity = '0';
+}
+
+function openCharAngles(name) {
+  STATE.selectedChar = name;
+  STATE.confirmedName = name;
+
+  const angleNames = ['front','front_right','right','back_right','back','back_left','left','front_left'];
+  const slotStyle = 'width:120px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px';
+  const imgWrapStyle = 'width:120px;height:120px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden';
+
+  // Headshots
+  document.getElementById('headshotsGrid').innerHTML = angleNames.map((label, i) =>
+    `<div id="headSlot${i}" style="${slotStyle}">
+      <div style="${imgWrapStyle}">
+        <img id="headImg${i}" src="/assets/${name}-headshot-${i}.png" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" onerror="this.style.display='none'" />
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
+      <button class="btn btn-secondary" style="font-size:10px;padding:3px 8px" onclick="rerunHeadshot(${i})">Rerun</button>
+    </div>`
+  ).join('');
+
+  // Body
+  document.getElementById('anglesGrid').innerHTML = angleNames.map((label, i) =>
+    `<div id="angleSlot${i}" style="${slotStyle}">
+      <div style="${imgWrapStyle}">
+        <img id="angleImg${i}" src="/assets/${name}-angle-${i}.png" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" onerror="this.style.display='none'" />
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
+      <button class="btn btn-secondary" style="font-size:10px;padding:3px 8px" onclick="rerunAngle(${i})">Rerun</button>
+    </div>`
+  ).join('');
+
+  // Clothes
+  document.getElementById('clothesGrid').innerHTML = angleNames.map((label, i) =>
+    `<div id="clothesSlot${i}" style="${slotStyle}">
+      <div style="${imgWrapStyle}">
+        <img id="clothesImg${i}" src="/assets/${name}-clothes-${i}.png" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" onerror="this.style.display='none'" />
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
+      <button class="btn btn-secondary" style="font-size:10px;padding:3px 8px" onclick="rerunClothes(${i})">Rerun</button>
+    </div>`
+  ).join('');
+
+  document.getElementById('charFormSection').style.display = 'none';
+  document.getElementById('charPinnedBar').style.display = 'none';
+  document.getElementById('optionsSection').style.display = 'none';
+  document.getElementById('anglesSection').style.display = 'block';
+  document.getElementById('anglesSection').style.opacity = '1';
+  document.getElementById('charDoneSection').style.display = 'none';
+
+  document.getElementById('addCharModal').classList.add('open');
 }
 
 function goToStep(n) {

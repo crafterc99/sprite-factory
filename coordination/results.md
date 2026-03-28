@@ -1,5 +1,27 @@
 # Results Log
 
+### UI-DELETE-CHAR-001 (2026-03-28)
+- Task ID: UI-DELETE-CHAR-001
+- Status: DONE
+- Owner: Integration (UI terminal)
+
+#### Delete Character button added to roster sidebar and dashboard grid
+
+**Files changed:**
+- `index-v2.html`
+
+**What changed:**
+- Added CSS for delete buttons and "Are you sure?" confirmation states (roster + dashboard variants)
+- `renderRoster()`: each card now has a `✕` button that on click swaps to inline "Delete? / Cancel" confirmation
+- `renderDashboard()`: each card is wrapped in `.dash-card-wrap`; a `✕` button appears on hover (top-right), swaps to "Delete? / Cancel" confirmation on click
+- Added `deleteChar(name)` — calls `DELETE /api/character/:name` (already existed in routes/characters.js:534), removes character from STATE.roster, re-renders both roster and dashboard
+- Added `rosterDeletePrompt(btn, name)` and `dashDeletePrompt(btn, name)` — handle confirmation flow inline without page reload
+- Protected characters ('breezy', '99') will receive a server-side 400 error which is shown via alert
+
+**Validation:** No backend changes needed — DELETE endpoint was already implemented. JS syntax verified by inspection.
+
+---
+
 ### HEAD-DISPATCH-013 (2026-03-27)
 - Task ID: HEAD-DISPATCH-013
 - Status: DONE

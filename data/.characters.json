@@ -271,27 +271,6 @@
       "status": "complete"
     }
   },
-  "test-snoop": {
-    "name": "test-snoop",
-    "id": "test-snoop",
-    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
-    "style": "16-bit pixel art, GBA style",
-    "heightInches": 72,
-    "weightLbs": 185,
-    "build": "athletic",
-    "jerseyNumber": "",
-    "teamColors": {
-      "primary": "#ff4400",
-      "secondary": "#ffffff",
-      "accent": "#000000"
-    },
-    "portraitPath": "test-snoopfull.png",
-    "originalPhotoPath": null,
-    "scaleMultiplier": 1,
-    "pixelHeight": 112,
-    "completedAnims": [],
-    "status": "portrait_done"
-  },
   "obama": {
     "name": "obama",
     "id": "obama",
@@ -343,27 +322,6 @@
       "accent": "#000000"
     },
     "portraitPath": "tomfull.png",
-    "originalPhotoPath": null,
-    "scaleMultiplier": 1,
-    "pixelHeight": 112,
-    "completedAnims": [],
-    "status": "portrait_done"
-  },
-  "tom-1": {
-    "name": "tom-1",
-    "id": "tom-1",
-    "description": "the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions",
-    "style": "16-bit pixel art, GBA style",
-    "heightInches": 72,
-    "weightLbs": 185,
-    "build": "athletic",
-    "jerseyNumber": "12",
-    "teamColors": {
-      "primary": "#ff4400",
-      "secondary": "#ffffff",
-      "accent": "#000000"
-    },
-    "portraitPath": "tom-1full.png",
     "originalPhotoPath": null,
     "scaleMultiplier": 1,
     "pixelHeight": 112,
