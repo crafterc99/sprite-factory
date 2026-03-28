@@ -1924,6 +1924,7 @@ async function generateOptions() {
       jerseyNumber: document.getElementById('newJersey').value,
       teamColors: { primary: document.getElementById('newColor1').value, secondary: document.getElementById('newColor2').value, accent: '#000000' },
       promptOverride: document.getElementById('newCharPrompt').value,
+      model: 'gemini-2.5-flash-image',
     };
 
     const resp = await fetch(`${API}/api/character/create`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
@@ -2002,23 +2003,27 @@ async function confirmAndGenerateAngles() {
 
     await loadRoster();
     toast('Generating angles...');
-
-    const angResp = await fetch(`${API}/api/generate/angles`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ character: name })
-    });
-    const angData = await angResp.json();
-    if (angData.error) throw new Error(angData.error);
-
-    (angData.generated || []).forEach(angle => {
-      const i = angle.angleIndex;
-      document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
-      const img = document.getElementById(`angleImg${i}`);
-      if (img) { img.src = angle.url; img.style.display = 'block'; }
-      const btn = document.getElementById(`angleRerun${i}`);
-      if (btn) btn.style.display = 'inline-block';
-    });
+    await Promise.all([0,1,2,3,4,5,6,7].map(async (i) => {
+      try {
+        const r = await fetch(`${API}/api/angle/regenerate`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ character: name, angleIndex: i })
+        });
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        const url = d.generated?.[0]?.url;
+        document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
+        const img = document.getElementById(`angleImg${i}`);
+        if (img && url) { img.src = url; img.style.display = 'block'; }
+        const btn = document.getElementById(`angleRerun${i}`);
+        if (btn) btn.style.display = 'inline-block';
+      } catch(e) {
+        document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
+        const btn = document.getElementById(`angleRerun${i}`);
+        if (btn) btn.style.display = 'inline-block';
+      }
+    }));
 
     const doneSec = document.getElementById('charDoneSection');
     doneSec.style.display = 'block';
