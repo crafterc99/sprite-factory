@@ -3,12 +3,49 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
-const { CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, buildPoseTransferPrompt, buildSingleFramePrompt, buildSectionedPrompt, getDefaultSections, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt, buildAnglePrompt, buildBallRefPrompt } = require('../lib/sprite-generator/prompts');
+const { CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, buildPoseTransferPrompt, buildTextOnlyAnimPrompt, buildSingleFramePrompt, buildSectionedPrompt, getDefaultSections, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt, buildAnglePrompt, buildBallRefPrompt } = require('../lib/sprite-generator/prompts');
 const { processSprite, cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes } = require('../lib/sprite-processor/index');
 const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
 const jobStore = require('../job-store');
+
+const FRAME_PROMPTS_PATH = path.join(__dirname, '../data/frame-prompts.json');
+
+// Module-level store for bulk animation jobs. Keyed by bulkJobId (UUID).
+// Each value: { bulkJobId, animation, model, createdAt, jobs: [...] }
+// Each job: { jobId, character, animation, status: 'pending'|'running'|'done'|'failed', error? }
+const bulkJobs = new Map();
+
+// Run an array of async task functions with a concurrency limit.
+// Each task is a zero-argument function that returns a Promise.
+async function runWithConcurrency(tasks, limit) {
+  const results = [];
+  const executing = [];
+  for (const task of tasks) {
+    const p = task().then(r => { executing.splice(executing.indexOf(p), 1); return r; });
+    executing.push(p);
+    results.push(p);
+    if (executing.length >= limit) await Promise.race(executing);
+  }
+  return Promise.all(results);
+}
+
+function loadFramePrompts() {
+  try {
+    if (!fs.existsSync(FRAME_PROMPTS_PATH)) {
+      return { _comment: 'Per-frame prompt overrides. Keyed by character.animationName.frameIndex.', overrides: {} };
+    }
+    return JSON.parse(fs.readFileSync(FRAME_PROMPTS_PATH, 'utf8'));
+  } catch (err) {
+    return { overrides: {} };
+  }
+}
+
+function saveFramePrompts(data) {
+  fs.writeFileSync(FRAME_PROMPTS_PATH, JSON.stringify(data, null, 2) + '\n', 'utf8');
+}
 
 function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parseBody }) {
 
@@ -135,7 +172,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     const { character, animation, model, customPrompt } = body;
 
     try {
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = model || 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
@@ -161,8 +198,13 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
         let prompt;
         if (customPrompt) {
           prompt = customPrompt;
-        } else {
+        } else if (poseRef) {
+          // Pose transfer mode: Image 1 = pose strip, Image 2 = character portrait
           const data = buildPoseTransferPrompt(character, animation);
+          prompt = data.prompt;
+        } else {
+          // Text-only mode: Image 1 = character portrait (identity anchor), no pose reference
+          const data = buildTextOnlyAnimPrompt(character, animation);
           prompt = data.prompt;
         }
 
@@ -189,6 +231,14 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
           completedFrames: processed.frameCount,
           completedAt: new Date().toISOString(),
         });
+
+        // Persist customPrompt as the base prompt for frame 0 so it is visible in the prompt editor
+        if (customPrompt) {
+          const store = loadFramePrompts();
+          const key = `${character}.${animation}.0`;
+          store.overrides[key] = { prompt: customPrompt, updatedAt: new Date().toISOString() };
+          saveFramePrompts(store);
+        }
 
         return json(res, {
           success: true,
@@ -219,7 +269,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
         const miniStripPath = path.join(RAW_DIR, `${character}-${animation}-batch${b}-ref.png`);
         await buildRefStrip(batch.frames, miniStripPath, { targetHeight: 180 });
 
-        const batchPrompt = [
+        const batchPrompt = customPrompt || [
           `REPLICATE Image 1 EXACTLY. Keep every body position, pose, limb placement, and composition identical. ONLY replace the character's identity with Image 2.`,
           ``,
           `Image 1 shows ${batch.count} frames of a ${anim.action} animation (frames ${batch.start + 1}-${batch.end} of ${totalFrames}).`,
@@ -268,7 +318,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       }
 
       const finalStripPath = path.join(ASSETS_DIR, `${character}-${animation}.png`);
-      await buildRefStrip(allFramePaths, finalStripPath, { targetHeight: 180 });
+      await buildRefStrip(allFramePaths, finalStripPath, { height: 180 });
 
       const costData = loadCostData();
       jobStore.updateJob(job.id, {
@@ -310,7 +360,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     }
 
     try {
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const anim = ANIMATIONS[animation];
@@ -354,11 +404,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
 
       sse({ type: 'prep_done', framesReady: upscaledPaths.length });
 
-      const isPro = modelId.includes('pro');
-      const concurrency = isPro ? 1 : 2;
-      const interFrameDelay = isPro ? 15000 : 2000;
-      const maxRetries = isPro ? 5 : 3;
-      const retryBaseDelay = isPro ? 20000 : 5000;
+      
+      const concurrency = 1;
+      const interFrameDelay = 15000;
+      const maxRetries = 5;
+      const retryBaseDelay = 20000;
 
       const rawOutputPaths = [];
 
@@ -472,7 +522,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     const { character, animation, frameIndex, model, customSections, jobId } = body;
 
     try {
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const anim = ANIMATIONS[animation];
@@ -590,6 +640,47 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     }
   });
 
+  // POST /api/generate/angles — generate all 8 angle reference sprites for a character
+  router.post('/api/generate/angles', async (req, res) => {
+    const body = await parseBody(req);
+    const { character, angleIndex } = body; // angleIndex optional: if provided, generate only that angle (0-7)
+    if (!character) return json(res, { error: 'character required' }, 400);
+
+    const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
+    if (!fs.existsSync(portraitPath)) return json(res, { error: `Portrait not found: ${character}full.png` }, 400);
+
+    const modelId = body.model && ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image'].includes(body.model)
+      ? body.model
+      : 'gemini-2.5-flash-image';
+    const client = new NanaBananaClient({ model: modelId });
+
+    const indices = angleIndex != null ? [parseInt(angleIndex)] : [0, 1, 2, 3, 4, 5, 6, 7];
+    const results = [];
+
+    for (const ai of indices) {
+      const angleName = ANGLE_NAMES[ai];
+      if (!angleName) { results.push({ angleIndex: ai, error: 'invalid angle index' }); continue; }
+      try {
+        const { prompt } = buildAnglePrompt(character, angleName, ai, 8);
+        const outputPath = path.join(ASSETS_DIR, `${character}-angle-${ai}.png`);
+        await client.generateSprite(prompt, null, portraitPath, {
+          aspectRatio: '3:4',
+          resolution: '2K',
+          model: modelId,
+          outputPath,
+        });
+        recordCost(modelId, 'angle', '2K', 1, { character, angleName });
+        results.push({ angleIndex: ai, angleName, url: `/assets/${character}-angle-${ai}.png`, status: 'done' });
+      } catch (err) {
+        results.push({ angleIndex: ai, angleName, error: err.message, status: 'failed' });
+      }
+    }
+
+    const done = results.filter(r => r.status === 'done');
+    const failed = results.filter(r => r.status === 'failed');
+    return json(res, { success: failed.length === 0, character, generated: done, failed });
+  });
+
   // GET /api/jobs — List generation jobs
   router.get('/api/jobs', (req, res, params, query) => {
     const filter = {};
@@ -611,6 +702,399 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
   router.get('/api/jobs/:id/attempts/:frame', (req, res, params) => {
     const attempts = jobStore.getFrameAttempts(params.id, parseInt(params.frame));
     return json(res, { attempts });
+  });
+
+  // POST /api/angle/regenerate — alias for /api/generate/angles with richer response shape
+  // Accepts { character, angleIndex? } and reruns the targeted angle(s).
+  // Delegates to the same generation logic as POST /api/generate/angles to avoid duplication.
+  router.post('/api/angle/regenerate', async (req, res) => {
+    const body = await parseBody(req);
+    const { character, angleIndex } = body;
+    if (!character) return json(res, { error: 'character required' }, 400);
+
+    const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
+    if (!fs.existsSync(portraitPath)) return json(res, { error: `Portrait not found: ${character}full.png` }, 400);
+
+    const modelId = body.model && ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image'].includes(body.model)
+      ? body.model
+      : 'gemini-2.5-flash-image';
+    const client = new NanaBananaClient({ model: modelId });
+
+    const indices = angleIndex != null ? [parseInt(angleIndex)] : [0, 1, 2, 3, 4, 5, 6, 7];
+    const results = [];
+
+    for (const ai of indices) {
+      const angleName = ANGLE_NAMES[ai];
+      if (!angleName) { results.push({ angleIndex: ai, error: 'invalid angle index' }); continue; }
+      try {
+        const { prompt } = buildAnglePrompt(character, angleName, ai, 8);
+        const outputPath = path.join(ASSETS_DIR, `${character}-angle-${ai}.png`);
+        await client.generateSprite(prompt, null, portraitPath, {
+          aspectRatio: '3:4',
+          resolution: '2K',
+          model: modelId,
+          outputPath,
+        });
+        recordCost(modelId, 'angle', '2K', 1, { character, angleName });
+        results.push({ angleIndex: ai, angleName, url: `/assets/${character}-angle-${ai}.png`, status: 'done' });
+      } catch (err) {
+        results.push({ angleIndex: ai, angleName, error: err.message, status: 'failed' });
+      }
+    }
+
+    const done = results.filter(r => r.status === 'done');
+    const failed = results.filter(r => r.status === 'failed');
+    return json(res, {
+      success: failed.length === 0,
+      character,
+      mode: angleIndex != null ? 'single' : 'full_set',
+      generated: done,
+      failed,
+    });
+  });
+
+  // GET /api/frame-prompts/:character/:animName
+  // Returns the framePrompts array for an animation, merging contract base prompts with disk overrides.
+  router.get('/api/frame-prompts/:character/:animName', (req, res, params) => {
+    const { character, animName } = params;
+    try {
+      const anim = ANIMATIONS[animName];
+      const totalFrames = anim ? anim.frames : 0;
+
+      // Build base array from contract framePrompts (if present) or empty strings
+      const contractPrompts = (anim && Array.isArray(anim.framePrompts)) ? anim.framePrompts : [];
+      const base = [];
+      for (let i = 0; i < totalFrames; i++) {
+        base.push(contractPrompts[i] || '');
+      }
+
+      // Merge overrides from frame-prompts.json
+      const store = loadFramePrompts();
+      const merged = base.map((bp, i) => {
+        const key = `${character}.${animName}.${i}`;
+        const override = store.overrides[key];
+        return {
+          frameIndex: i,
+          prompt: override ? override.prompt : bp,
+          hasOverride: !!override,
+          updatedAt: override ? override.updatedAt : null,
+        };
+      });
+
+      return json(res, { character, animName, totalFrames, frames: merged });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/frame-prompts/:character/:animName/:frameIndex
+  // Saves a prompt override for a specific frame. Body: { prompt: "..." }
+  router.post('/api/frame-prompts/:character/:animName/:frameIndex', async (req, res, params) => {
+    const { character, animName, frameIndex } = params;
+    const fi = parseInt(frameIndex, 10);
+    if (isNaN(fi) || fi < 0) return json(res, { error: 'Invalid frameIndex' }, 400);
+
+    try {
+      const body = await parseBody(req);
+      const { prompt } = body;
+      if (typeof prompt !== 'string') return json(res, { error: 'prompt (string) required in body' }, 400);
+
+      const store = loadFramePrompts();
+      const key = `${character}.${animName}.${fi}`;
+      store.overrides[key] = { prompt, updatedAt: new Date().toISOString() };
+      saveFramePrompts(store);
+
+      return json(res, { success: true, key, prompt, updatedAt: store.overrides[key].updatedAt });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/frame-prompts/:character/:animName/:frameIndex/rerun
+  // Regenerates a single frame using the stored override prompt (or contract base prompt),
+  // then splices the result back into the existing strip at data/assets/{character}-{animName}.png.
+  // Body (optional): { model: "gemini-..." }
+  router.post('/api/frame-prompts/:character/:animName/:frameIndex/rerun', async (req, res, params) => {
+    const sharp = require('sharp');
+    const { character, animName, frameIndex } = params;
+    const fi = parseInt(frameIndex, 10);
+    if (isNaN(fi) || fi < 0) return json(res, { error: 'Invalid frameIndex' }, 400);
+
+    try {
+      const body = await parseBody(req);
+      const modelId = body.model || 'gemini-3-pro-image-preview';
+
+      // 1. Resolve prompt: override > contract base > generated default
+      const store = loadFramePrompts();
+      const key = `${character}.${animName}.${fi}`;
+      const override = store.overrides[key];
+      let prompt;
+      if (override && override.prompt) {
+        prompt = override.prompt;
+      } else {
+        const anim = ANIMATIONS[animName];
+        if (anim && anim.prompt) {
+          prompt = anim.prompt;
+        } else if (anim) {
+          prompt = `${anim.action || animName} — frame ${fi + 1}`;
+        } else {
+          prompt = `${animName} animation — frame ${fi + 1}`;
+        }
+      }
+
+      // 2. Load character portrait
+      const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
+      if (!fs.existsSync(portraitPath)) {
+        return json(res, { error: `Portrait not found: ${portraitPath}` }, 404);
+      }
+
+      // 3. Generate the new frame to a temp path
+      const tmpPath = `/tmp/${character}-${animName}-frame${fi}-override.png`;
+      const client = new NanaBananaClient({ model: modelId });
+      await client.generateSingleFrame(prompt, null, portraitPath, {
+        outputPath: tmpPath,
+        aspectRatio: '1:1',
+        resolution: '1K',
+        model: modelId,
+      });
+
+      // 4. Process the new frame to 180x180
+      const { processSingleFrame } = require('../lib/sprite-processor/index');
+      const processedTmpPath = `/tmp/${character}-${animName}-frame${fi}-override-proc.png`;
+      await processSingleFrame(tmpPath, processedTmpPath, { width: 180, height: 180 });
+
+      // 5. Splice the processed frame into the existing strip
+      const stripPath = path.join(ASSETS_DIR, `${character}-${animName}.png`);
+      if (!fs.existsSync(stripPath)) {
+        return json(res, { error: `Strip not found: ${stripPath}` }, 404);
+      }
+
+      const stripMeta = await sharp(stripPath).metadata();
+      const stripWidth = stripMeta.width;
+      const stripHeight = stripMeta.height;
+
+      const newFrameBuf = await sharp(processedTmpPath)
+        .resize(180, 180, { fit: 'fill' })
+        .toBuffer();
+
+      await sharp(stripPath)
+        .composite([{
+          input: newFrameBuf,
+          left: fi * 180,
+          top: 0,
+        }])
+        .resize(stripWidth, stripHeight, { fit: 'fill', kernel: 'nearest' })
+        .toFile(stripPath + '.tmp.png');
+
+      fs.renameSync(stripPath + '.tmp.png', stripPath);
+
+      // Clean up temp files
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
+      try { fs.unlinkSync(processedTmpPath); } catch (_) {}
+
+      return json(res, {
+        success: true,
+        frameIndex: fi,
+        outputPath: `data/assets/${character}-${animName}.png`,
+      });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/animation/apply-bulk
+  // Body: { characters: [...], animation: "dribble", model?: "gemini-2.5-flash-image" }
+  // Creates a pending job per character, returns immediately with { bulkJobId, jobs },
+  // then runs generation for each character in series (TASK-6003 adds parallelism).
+  router.post('/api/animation/apply-bulk', async (req, res) => {
+    const body = await parseBody(req);
+    const { characters, animation, model, concurrency: concurrencyRaw } = body;
+
+    if (!Array.isArray(characters) || characters.length === 0) {
+      return json(res, { error: 'characters must be a non-empty array' }, 400);
+    }
+    if (!animation) {
+      return json(res, { error: 'animation is required' }, 400);
+    }
+
+    const bulkJobId = crypto.randomUUID();
+    const modelId = model || 'gemini-2.5-flash-image';
+    const concurrency = Math.min(Math.max(Number(concurrencyRaw) || 3, 1), 5);
+
+    const jobs = characters.map(character => ({
+      jobId: crypto.randomUUID(),
+      character,
+      animation,
+      status: 'pending',
+    }));
+
+    bulkJobs.set(bulkJobId, {
+      bulkJobId,
+      animation,
+      model: modelId,
+      concurrency,
+      createdAt: new Date().toISOString(),
+      jobs,
+    });
+
+    // Respond immediately before kicking off generation
+    json(res, { bulkJobId, jobs });
+
+    // Run generation in parallel with concurrency limit (non-blocking — caller already has a response)
+    setImmediate(() => {
+      const tasks = jobs.map(job => async () => {
+        job.status = 'running';
+        try {
+          const { character: char, animation: anim } = job;
+          const clientModelId = modelId;
+          const client = new NanaBananaClient({ model: clientModelId });
+
+          const portraitPath = path.join(ASSETS_DIR, `${char}full.png`);
+          if (!CHARACTERS[char] && fs.existsSync(portraitPath)) {
+            CHARACTERS[char] = {
+              description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
+              style: '16-bit pixel art, GBA style',
+            };
+          }
+
+          const animData = ANIMATIONS[anim];
+          const totalFrames = animData ? animData.frames : 6;
+          const charRef = fs.existsSync(portraitPath) ? portraitPath : null;
+          const poseRef = (animData && animData.breezyFile)
+            ? path.join(ASSETS_DIR, animData.breezyFile)
+            : null;
+
+          fs.mkdirSync(RAW_DIR, { recursive: true });
+
+          const MAX_FRAMES_PER_BATCH = 4;
+
+          if (totalFrames <= MAX_FRAMES_PER_BATCH || !poseRef) {
+            let prompt;
+            if (poseRef) {
+              const data = buildPoseTransferPrompt(char, anim);
+              prompt = data.prompt;
+            } else {
+              const data = buildTextOnlyAnimPrompt(char, anim);
+              prompt = data.prompt;
+            }
+
+            const outputPath = path.join(RAW_DIR, `${char}-${anim}-raw.png`);
+            await client.generateSprite(prompt, poseRef, charRef, {
+              aspectRatio: '16:9',
+              resolution: '2K',
+              model: clientModelId,
+              outputPath,
+            });
+
+            recordCost(clientModelId, 'strip', '2K', (poseRef ? 1 : 0) + (charRef ? 1 : 0), { character: char, animation: anim });
+
+            await processSprite(outputPath, `${char}-${anim}`, {
+              frameCount: totalFrames,
+              targetSize: 180,
+              outputDir: ASSETS_DIR,
+            });
+          } else {
+            // Batch mode for 5+ frames with pose reference
+            const refFramesDir = path.join(RAW_DIR, `${char}-${anim}-ref-frames`);
+            fs.mkdirSync(refFramesDir, { recursive: true });
+            const cutResult = await cutFrames(poseRef, refFramesDir, { frameCount: totalFrames });
+            const refFramePaths = cutResult.frames;
+
+            const batches = [];
+            for (let i = 0; i < totalFrames; i += MAX_FRAMES_PER_BATCH) {
+              const end = Math.min(i + MAX_FRAMES_PER_BATCH, totalFrames);
+              batches.push({ start: i, end, count: end - i, frames: refFramePaths.slice(i, end) });
+            }
+
+            const batchOutputs = [];
+            for (let b = 0; b < batches.length; b++) {
+              const batch = batches[b];
+              const miniStripPath = path.join(RAW_DIR, `${char}-${anim}-batch${b}-ref.png`);
+              await buildRefStrip(batch.frames, miniStripPath, { targetHeight: 180 });
+
+              const batchPrompt = [
+                `REPLICATE Image 1 EXACTLY. Keep every body position, pose, limb placement, and composition identical. ONLY replace the character's identity with Image 2.`,
+                ``,
+                `Image 1 shows ${batch.count} frames of a ${animData.action} animation (frames ${batch.start + 1}-${batch.end} of ${totalFrames}).`,
+                `Copy these ${batch.count} frames frame-for-frame — same poses, same spacing — but with Image 2's character.`,
+                ``,
+                `CRITICAL — BODY POSITION:`,
+                `- Body position, pose, and composition in EVERY frame must match Image 1 EXACTLY`,
+                `- Same arm positions, leg positions, body angle, ball placement`,
+                `- Treat Image 1 as motion capture — do NOT reinterpret`,
+                ``,
+                `OUTPUT:`,
+                `- Single horizontal strip, EXACTLY ${batch.count} frames, equally-sized, no gaps, no borders`,
+                `- LARGE detailed characters filling most of each frame's height — NOT tiny`,
+                `- Style: 16-bit pixel art, GBA style, bold BLACK pixel outlines around character`,
+                `- Background: solid bright green (#00FF00) — NO black, NO dark backgrounds`,
+                `- NO green on the character itself`,
+                `- Same character size in every frame, feet on same baseline`,
+              ].join('\n');
+
+              const batchOutputPath = path.join(RAW_DIR, `${char}-${anim}-batch${b}-raw.png`);
+              await client.generateSprite(batchPrompt, miniStripPath, charRef, {
+                aspectRatio: '16:9',
+                resolution: '2K',
+                model: clientModelId,
+                outputPath: batchOutputPath,
+              });
+
+              recordCost(clientModelId, 'strip_batch', '2K', (charRef ? 2 : 1), { character: char, animation: anim, batch: b });
+
+              const batchProcessed = await processSprite(batchOutputPath, `${char}-${anim}-batch${b}`, {
+                frameCount: batch.count,
+                targetSize: 180,
+                outputDir: RAW_DIR,
+              });
+
+              batchOutputs.push(batchProcessed);
+            }
+
+            const allFramePaths = [];
+            for (let b = 0; b < batchOutputs.length; b++) {
+              const framesDir = batchOutputs[b].framesDir;
+              if (fs.existsSync(framesDir)) {
+                const frameFiles = fs.readdirSync(framesDir).filter(f => f.endsWith('.png')).sort();
+                frameFiles.forEach(f => allFramePaths.push(path.join(framesDir, f)));
+              }
+            }
+
+            const finalStripPath = path.join(ASSETS_DIR, `${char}-${anim}.png`);
+            await buildRefStrip(allFramePaths, finalStripPath, { height: 180 });
+          }
+
+          job.status = 'done';
+        } catch (err) {
+          job.status = 'failed';
+          job.error = err.message;
+        }
+      });
+      runWithConcurrency(tasks, concurrency);
+    });
+  });
+
+  // GET /api/animation/apply-bulk/:bulkJobId
+  // Returns current status for all jobs in a bulk batch.
+  router.get('/api/animation/apply-bulk/:bulkJobId', (req, res, params) => {
+    const entry = bulkJobs.get(params.bulkJobId);
+    if (!entry) return json(res, { error: 'Bulk job not found' }, 404);
+
+    const total = entry.jobs.length;
+    const done = entry.jobs.filter(j => j.status === 'done').length;
+    const failed = entry.jobs.filter(j => j.status === 'failed').length;
+    const running = entry.jobs.filter(j => j.status === 'running').length;
+    const pending = entry.jobs.filter(j => j.status === 'pending').length;
+
+    return json(res, {
+      bulkJobId: entry.bulkJobId,
+      animation: entry.animation,
+      model: entry.model,
+      concurrency: entry.concurrency,
+      createdAt: entry.createdAt,
+      summary: { total, done, failed, running, pending },
+      jobs: entry.jobs,
+    });
   });
 }
 
