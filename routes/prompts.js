@@ -6,7 +6,14 @@
 const fs = require('fs');
 const path = require('path');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
-const { CHARACTERS, ANIMATIONS, buildSectionedPrompt, getDefaultSections, loadTraining } = require('../lib/sprite-generator/prompts');
+const {
+  CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, PROMPT_SECTIONS,
+  buildSectionedPrompt, getDefaultSections, loadTraining,
+  buildAnglePrompt, buildHeadshotAnglePrompt, buildClothesAnglePrompt, buildBallRefPrompt,
+  buildFilmToSpritePrompt, buildFilmToSingleFramePrompt,
+  loadOverrides, setPromptOverride, getPromptOverride, getOverrideHistory, clearPromptOverride,
+  getActiveSections, getActivePrompt,
+} = require('../lib/sprite-generator/prompts');
 const { cutFrames, upscaleNN, processSingleFrame } = require('../lib/sprite-processor/index');
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
 const jobStore = require('../job-store');
@@ -202,6 +209,278 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody }) {
         },
         totalCost: +(resultA.cost + resultB.cost).toFixed(4),
       });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // ─── Prompt Manager Endpoints ──────────────────────────────────────────
+
+  // GET /api/prompt-manager/all — All prompt types with current active text
+  router.get('/api/prompt-manager/all', (req, res, params, query) => {
+    try {
+      const character = query.character || '99';
+      const overridesData = loadOverrides();
+      const categories = { animation: [], anchor: [], video: [] };
+
+      // Ensure character exists
+      if (!CHARACTERS[character]) {
+        const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
+        if (fs.existsSync(portraitPath)) {
+          CHARACTERS[character] = {
+            description: 'the character shown in Image 2',
+            style: '16-bit pixel art, GBA style',
+          };
+        }
+      }
+
+      // Animation prompts (strip + fbf for each animation)
+      for (const [animName, anim] of Object.entries(ANIMATIONS)) {
+        // Strip mode
+        const stripKey = `strip:${animName}`;
+        const stripOverrides = overridesData.sectionOverrides[stripKey] || {};
+        let stripSections;
+        try {
+          const defaults = getDefaultSections(character, animName, {});
+          stripSections = {};
+          for (const [sKey, sec] of Object.entries(defaults)) {
+            const ov = stripOverrides[sKey];
+            stripSections[sKey] = {
+              label: sec.label,
+              defaultText: sec.text,
+              activeText: ov ? ov.text : sec.text,
+              isCustom: !!ov,
+            };
+          }
+        } catch { stripSections = null; }
+
+        // FBF mode
+        const fbfKey = `fbf:${animName}`;
+        const fbfOverrides = overridesData.sectionOverrides[fbfKey] || {};
+        let fbfSections;
+        try {
+          const defaults = getDefaultSections(character, animName, { frameIndex: 0, totalFrames: anim.frames });
+          fbfSections = {};
+          for (const [sKey, sec] of Object.entries(defaults)) {
+            const ov = fbfOverrides[sKey];
+            fbfSections[sKey] = {
+              label: sec.label,
+              defaultText: sec.text,
+              activeText: ov ? ov.text : sec.text,
+              isCustom: !!ov,
+            };
+          }
+        } catch { fbfSections = null; }
+
+        const hasCustom = Object.values(stripOverrides).length > 0 || Object.values(fbfOverrides).length > 0;
+        categories.animation.push({
+          name: animName,
+          frames: anim.frames,
+          fps: anim.fps,
+          hasBreezyRef: !!anim.breezyFile,
+          hasCustom,
+          strip: stripSections,
+          fbf: fbfSections,
+        });
+      }
+
+      // Anchor prompts: angles, headshots, clothes, ball
+      for (let i = 0; i < ANGLE_NAMES.length; i++) {
+        const angleName = ANGLE_NAMES[i];
+        for (const type of ['angle', 'headshot', 'clothes']) {
+          const key = `${type}:${angleName}`;
+          const ov = overridesData.sectionOverrides[key]?.['full'];
+          let defaultText;
+          try {
+            if (type === 'angle') defaultText = buildAnglePrompt(character, angleName, i, 8).prompt;
+            else if (type === 'headshot') defaultText = buildHeadshotAnglePrompt(character, angleName, i, 8).prompt;
+            else defaultText = buildClothesAnglePrompt(character, angleName, i, 8).prompt;
+          } catch { defaultText = ''; }
+          categories.anchor.push({
+            name: `${type}:${angleName}`,
+            promptType: type,
+            angleName,
+            angleIndex: i,
+            defaultText,
+            activeText: ov ? ov.text : defaultText,
+            isCustom: !!ov,
+            sectioned: false,
+          });
+        }
+      }
+
+      // Ball variants
+      for (let i = 0; i < BALL_VARIANTS.length; i++) {
+        const variant = BALL_VARIANTS[i];
+        const key = `ball:${variant}`;
+        const ov = overridesData.sectionOverrides[key]?.['full'];
+        let defaultText;
+        try { defaultText = buildBallRefPrompt(character, variant, i).prompt; } catch { defaultText = ''; }
+        categories.anchor.push({
+          name: `ball:${variant}`,
+          promptType: 'ball',
+          variant,
+          variantIndex: i,
+          defaultText,
+          activeText: ov ? ov.text : defaultText,
+          isCustom: !!ov,
+          sectioned: false,
+        });
+      }
+
+      return json(res, { character, categories });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/prompt-manager/save — Save an override
+  router.post('/api/prompt-manager/save', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      const { promptType, context, section, text } = body;
+      if (!promptType || !context || !section || text == null) {
+        return json(res, { error: 'promptType, context, section, and text required' }, 400);
+      }
+      const data = setPromptOverride(promptType, context, section, text);
+      const history = getOverrideHistory(promptType, context);
+      return json(res, { success: true, history: history.slice(-20) });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/prompt-manager/test — Generate a test frame with modified prompt
+  router.post('/api/prompt-manager/test', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      const { promptType, context, character, section, text, model } = body;
+      if (!promptType || !context || !character) {
+        return json(res, { error: 'promptType, context, and character required' }, 400);
+      }
+
+      const modelId = model || 'gemini-2.5-flash-image';
+      const client = new NanaBananaClient({ model: modelId });
+      const animation = context; // context is the animation name for sectioned prompts
+
+      // For sectioned prompts (strip/fbf), reuse the prompt lab test flow
+      if (promptType === 'strip' || promptType === 'fbf') {
+        const anim = ANIMATIONS[animation];
+        if (!anim) return json(res, { error: `Unknown animation: ${animation}` }, 400);
+        if (!anim.breezyFile) return json(res, { error: `No Breezy reference for ${animation}` }, 400);
+
+        const fi = promptType === 'fbf' ? 0 : undefined;
+        const ref = await prepareRefFrame(character, animation, 0);
+
+        // Build sections: start with active, override the test section
+        const active = getActiveSections(character, animation,
+          promptType === 'fbf' ? { frameIndex: 0, totalFrames: anim.frames } : {}
+        );
+        const customSections = {};
+        for (const [k, v] of Object.entries(active)) {
+          customSections[k] = { enabled: true, text: v.text };
+        }
+        if (section && text != null) {
+          customSections[section] = { enabled: true, text };
+        }
+
+        const result = await generateTestFrame(
+          client, modelId, character, animation,
+          ref.frameIndex, ref.totalFrames,
+          ref.upPath, ref.portraitPath, ref.labDir,
+          customSections, 'pm-test'
+        );
+
+        return json(res, {
+          success: true,
+          imageUrl: result.imageUrl,
+          processedUrl: result.processedUrl,
+          cost: +result.cost.toFixed(4),
+        });
+      }
+
+      // For non-sectioned prompts (angle/ball/headshot/clothes), generate standalone
+      const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
+      if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found' }, 400);
+
+      const testPrompt = text || getPromptOverride(promptType, context, 'full') || '';
+      if (!testPrompt) return json(res, { error: 'No prompt text to test' }, 400);
+
+      const labDir = path.join(RAW_DIR, `${character}-pm-test`);
+      fs.mkdirSync(labDir, { recursive: true });
+      const outPath = path.join(labDir, `test-${promptType}-${context}-${Date.now()}.png`);
+
+      await client.generate(testPrompt, {
+        referenceImages: [portraitPath],
+        aspectRatio: '3:4',
+        resolution: '1K',
+        model: modelId,
+        outputPath: outPath,
+      });
+
+      if (!fs.existsSync(outPath)) return json(res, { error: 'Generation produced no image' }, 500);
+
+      const costInfo = recordCost(modelId, 'pm_test', '1K', 1, { promptType, context, character });
+      const relDir = path.relative(RAW_DIR, labDir);
+      const imageUrl = `/fbf-working/${relDir}/${path.basename(outPath)}`;
+
+      return json(res, {
+        success: true,
+        imageUrl,
+        cost: +(costInfo?.totalCost || 0).toFixed(4),
+      });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/prompt-manager/revert — Revert to a previous version from history
+  router.post('/api/prompt-manager/revert', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      const { promptType, context, section, historyIndex } = body;
+      if (!promptType || !context || !section || historyIndex == null) {
+        return json(res, { error: 'promptType, context, section, and historyIndex required' }, 400);
+      }
+      const history = getOverrideHistory(promptType, context);
+      const sectionHistory = history.filter(h => h.section === section);
+      if (historyIndex < 0 || historyIndex >= sectionHistory.length) {
+        return json(res, { error: 'Invalid history index' }, 400);
+      }
+      const entry = sectionHistory[historyIndex];
+      if (entry.previousText == null) {
+        // Revert to default — clear the override
+        clearPromptOverride(promptType, context, section);
+        return json(res, { success: true, reverted: true, text: null, message: 'Reverted to code default' });
+      }
+      setPromptOverride(promptType, context, section, entry.previousText);
+      return json(res, { success: true, reverted: true, text: entry.previousText });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // DELETE /api/prompt-manager/override — Remove override, revert to default
+  router.delete('/api/prompt-manager/override', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      const { promptType, context, section } = body;
+      if (!promptType || !context || !section) {
+        return json(res, { error: 'promptType, context, and section required' }, 400);
+      }
+      clearPromptOverride(promptType, context, section);
+
+      // Return the default text so the UI can restore it
+      let defaultText = '';
+      if (promptType === 'strip' || promptType === 'fbf') {
+        try {
+          const character = '99';
+          const opts = promptType === 'fbf' ? { frameIndex: 0, totalFrames: ANIMATIONS[context]?.frames || 6 } : {};
+          const defaults = getDefaultSections(character, context, opts);
+          defaultText = defaults[section]?.text || '';
+        } catch {}
+      }
+      return json(res, { success: true, defaultText });
     } catch (err) {
       return json(res, { error: err.message }, 500);
     }

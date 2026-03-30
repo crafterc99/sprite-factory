@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
-const { CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, buildPoseTransferPrompt, buildTextOnlyAnimPrompt, buildSingleFramePrompt, buildSectionedPrompt, getDefaultSections, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt, buildAnglePrompt, buildHeadshotAnglePrompt, buildClothesAnglePrompt, buildBallRefPrompt } = require('../lib/sprite-generator/prompts');
+const { CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, buildPoseTransferPrompt, buildTextOnlyAnimPrompt, buildSingleFramePrompt, buildSectionedPrompt, getDefaultSections, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt, buildAnglePrompt, buildHeadshotAnglePrompt, buildClothesAnglePrompt, buildBallRefPrompt, getActiveSections, getActivePrompt } = require('../lib/sprite-generator/prompts');
 const { processSprite, cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes } = require('../lib/sprite-processor/index');
 const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
@@ -120,8 +120,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
         case 'angle': {
           const ai = parseInt(angleIndex) || 0;
           const angleName = ANGLE_NAMES[ai] || 'front';
-          const data = buildAnglePrompt(charName, angleName, ai, 8);
-          prompt = data.prompt || data;
+          prompt = getActivePrompt('angle', angleName, buildAnglePrompt, charName, angleName, ai, 8);
           if (hasPortrait) references.push({ type: 'portrait', path: `${charName}full.png` });
           settings = { mode: 'angle', angleName, angleIndex: ai, totalAngles: 8 };
           break;
@@ -129,8 +128,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
         case 'ball': {
           const v = variant || (BALL_VARIANTS && BALL_VARIANTS[0]) || 'right-hand-low';
           const vi = parseInt(angleIndex) || 0;
-          const data = buildBallRefPrompt(charName, v, vi);
-          prompt = data.prompt || data;
+          prompt = getActivePrompt('ball', v, buildBallRefPrompt, charName, v, vi);
           if (hasPortrait) references.push({ type: 'portrait', path: `${charName}full.png` });
           settings = { mode: 'ball', variant: v, variantIndex: vi };
           break;
@@ -423,8 +421,17 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
             customSections,
           });
         } else {
-          const promptData = buildSingleFramePrompt(character, animation, i, totalFrames);
-          prompt = promptData.prompt;
+          // Use saved overrides if available, otherwise fall back to default
+          const active = getActiveSections(character, animation, { frameIndex: i, totalFrames });
+          const hasOverrides = Object.values(active).some(s => s.isCustom);
+          if (hasOverrides) {
+            const merged = {};
+            for (const [k, v] of Object.entries(active)) merged[k] = { enabled: true, text: v.text };
+            prompt = buildSectionedPrompt(character, animation, { frameIndex: i, totalFrames, customSections: merged });
+          } else {
+            const promptData = buildSingleFramePrompt(character, animation, i, totalFrames);
+            prompt = promptData.prompt;
+          }
         }
 
         const outPath = path.join(fbfDir, `raw-frame-${String(i).padStart(3, '0')}.png`);
@@ -563,8 +570,16 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
           customSections,
         });
       } else {
-        const promptData = buildSingleFramePrompt(character, animation, frameIndex, totalFrames);
-        prompt = promptData.prompt;
+        const active = getActiveSections(character, animation, { frameIndex, totalFrames });
+        const hasOverrides = Object.values(active).some(s => s.isCustom);
+        if (hasOverrides) {
+          const merged = {};
+          for (const [k, v] of Object.entries(active)) merged[k] = { enabled: true, text: v.text };
+          prompt = buildSectionedPrompt(character, animation, { frameIndex, totalFrames, customSections: merged });
+        } else {
+          const promptData = buildSingleFramePrompt(character, animation, frameIndex, totalFrames);
+          prompt = promptData.prompt;
+        }
       }
 
       // Generate
@@ -661,7 +676,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const angleName = ANGLE_NAMES[ai];
       if (!angleName) { results.push({ angleIndex: ai, error: 'invalid angle index' }); continue; }
       try {
-        const { prompt } = buildAnglePrompt(character, angleName, ai, 8);
+        const prompt = getActivePrompt('angle', angleName, buildAnglePrompt, character, angleName, ai, 8);
         const outputPath = path.join(ASSETS_DIR, `${character}-angle-${ai}.png`);
         await client.generateSprite(prompt, null, portraitPath, {
           aspectRatio: '3:4',
@@ -752,13 +767,13 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       try {
         let prompt, outputFilename;
         if (type === 'headshot') {
-          ({ prompt } = buildHeadshotAnglePrompt(character, angleName, ai, 8));
+          prompt = getActivePrompt('headshot', angleName, buildHeadshotAnglePrompt, character, angleName, ai, 8);
           outputFilename = `${character}-headshot-${ai}.png`;
         } else if (type === 'clothes') {
-          ({ prompt } = buildClothesAnglePrompt(character, angleName, ai, 8));
+          prompt = getActivePrompt('clothes', angleName, buildClothesAnglePrompt, character, angleName, ai, 8);
           outputFilename = `${character}-clothes-${ai}.png`;
         } else {
-          ({ prompt } = buildAnglePrompt(character, angleName, ai, 8));
+          prompt = getActivePrompt('angle', angleName, buildAnglePrompt, character, angleName, ai, 8);
           outputFilename = `${character}-angle-${ai}.png`;
         }
         const outputPath = path.join(ASSETS_DIR, outputFilename);

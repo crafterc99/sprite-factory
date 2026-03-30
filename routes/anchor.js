@@ -14,6 +14,7 @@ const path = require('path');
 const {
   CHARACTERS, ANGLE_NAMES, BALL_VARIANTS,
   buildAnglePrompt, buildBallRefPrompt,
+  getActivePrompt,
 } = require('../lib/sprite-generator/prompts');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { processSingleFrame } = require('../lib/sprite-processor');
@@ -174,7 +175,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
       sseSend(res, 'angle_start', { index: idx, angle: angleName });
 
       try {
-        const { prompt } = buildAnglePrompt(character, angleName, idx, ANGLE_NAMES.length);
+        const prompt = getActivePrompt('angle', angleName, buildAnglePrompt, character, angleName, idx, ANGLE_NAMES.length);
 
         const result = await client.generate(prompt, {
           referenceImages: [portraitPath],
@@ -282,7 +283,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
       sseSend(res, 'ballref_start', { index: idx, variant });
 
       try {
-        const { prompt } = buildBallRefPrompt(character, variant, idx);
+        const prompt = getActivePrompt('ball', variant, buildBallRefPrompt, character, variant, idx);
 
         const result = await client.generate(prompt, {
           referenceImages,

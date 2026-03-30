@@ -452,6 +452,51 @@
   .btn-bulk { background:var(--accent3); color:#fff; }
   .btn-bulk:hover { background:#5599ff; }
   .btn-bulk:disabled { opacity:0.4; cursor:not-allowed; }
+
+  /* ─── PROMPT MANAGER ─── */
+  .prompt-mgr-layout { display:flex; height:calc(100vh - 52px); overflow:hidden; }
+  .prompt-mgr-sidebar { width:260px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; background:var(--surface); }
+  .prompt-mgr-sidebar .pm-char-select { padding:10px 12px; border-bottom:1px solid var(--border); }
+  .prompt-mgr-sidebar .pm-char-select select { width:100%; }
+  .pm-category { border-bottom:1px solid var(--border); }
+  .pm-category-header { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; cursor:pointer; font-family:var(--mono); font-size:10px; letter-spacing:1px; text-transform:uppercase; color:#60608a; user-select:none; }
+  .pm-category-header:hover { background:var(--surface2); }
+  .pm-category-header .pm-chevron { transition:transform 0.2s; font-size:12px; }
+  .pm-category.open .pm-chevron { transform:rotate(90deg); }
+  .pm-category-items { display:none; }
+  .pm-category.open .pm-category-items { display:block; }
+  .pm-item { display:flex; align-items:center; gap:8px; padding:7px 12px 7px 20px; cursor:pointer; font-size:12px; color:var(--text); transition:all 0.1s; border-left:3px solid transparent; }
+  .pm-item:hover { background:var(--surface2); }
+  .pm-item.active { background:rgba(255,68,0,0.08); border-left-color:var(--accent); }
+  .pm-item.has-custom { border-left-color:var(--accent2); }
+  .pm-item.has-custom.active { border-left-color:var(--accent); }
+  .pm-item-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pm-badge-custom { font-family:var(--mono); font-size:8px; background:rgba(0,255,136,0.15); color:var(--accent2); padding:1px 5px; border-radius:3px; flex-shrink:0; }
+  .pm-editor { flex:1; overflow-y:auto; padding:20px 24px; }
+  .pm-editor-empty { display:flex; align-items:center; justify-content:center; height:100%; color:#40405a; font-size:14px; }
+  .pm-editor-title { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .pm-editor-sub { font-family:var(--mono); font-size:10px; color:#50507a; margin-bottom:16px; }
+  .pm-mode-tabs { display:flex; gap:6px; margin-bottom:16px; }
+  .pm-mode-tab { font-family:var(--mono); font-size:10px; padding:4px 12px; border-radius:4px; border:1px solid var(--border); background:var(--surface2); color:#60608a; cursor:pointer; }
+  .pm-mode-tab.active { border-color:var(--accent); color:var(--accent); background:rgba(255,68,0,0.08); }
+  .pm-section-card { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .pm-section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .pm-section-label { font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#60608a; }
+  .pm-textarea { width:100%; min-height:80px; max-height:200px; resize:vertical; font-family:var(--mono); font-size:11px; line-height:1.5; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px 10px; }
+  .pm-textarea:focus { outline:none; border-color:var(--accent); }
+  .pm-section-actions { display:flex; gap:6px; margin-top:8px; }
+  .pm-section-actions .btn { font-size:9px; padding:4px 10px; }
+  .pm-test-thumb { margin-top:8px; max-width:120px; max-height:120px; border-radius:6px; border:1px solid var(--border); image-rendering:pixelated; }
+  .pm-composite { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; margin-top:16px; }
+  .pm-composite-title { font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#50507a; margin-bottom:8px; cursor:pointer; user-select:none; }
+  .pm-composite-text { font-family:var(--mono); font-size:10px; line-height:1.6; color:#808098; white-space:pre-wrap; max-height:200px; overflow-y:auto; display:none; }
+  .pm-composite.open .pm-composite-text { display:block; }
+  .pm-history { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; margin-top:12px; }
+  .pm-history-title { font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#50507a; margin-bottom:8px; cursor:pointer; user-select:none; }
+  .pm-history-list { display:none; max-height:200px; overflow-y:auto; }
+  .pm-history.open .pm-history-list { display:block; }
+  .pm-history-entry { display:flex; align-items:center; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:9px; color:#60608a; }
+  .pm-history-entry:last-child { border-bottom:none; }
 </style>
 </head>
 <body>
@@ -466,6 +511,7 @@
       <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
       <button class="nav-btn" onclick="showPage('studio')">Studio</button>
       <button class="nav-btn" onclick="showPage('video')">Video</button>
+      <button class="nav-btn" onclick="showPage('prompts')">Prompts</button>
     </nav>
     <div class="header-right">
       <div class="cost-pill" id="costPill">spend: <span>$0.00</span></div>
@@ -756,6 +802,25 @@
           <img id="videoResultImg" style="max-width:100%;height:auto;min-height:200px;border-radius:8px;image-rendering:pixelated;display:block" />
           <div id="videoResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:8px"></div>
           <div id="videoFrameStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:600px;overflow-y:auto;margin-top:14px"></div>
+        </div>
+      </div>
+
+      <!-- PAGE: Prompts -->
+      <div class="page" id="page-prompts">
+        <div class="prompt-mgr-layout">
+          <!-- Left sidebar -->
+          <div class="prompt-mgr-sidebar">
+            <div class="pm-char-select">
+              <select class="input" id="pmCharSelect" onchange="loadPromptManager()">
+                <option value="99">99</option>
+              </select>
+            </div>
+            <div id="pmSidebarContent"></div>
+          </div>
+          <!-- Right editor -->
+          <div class="pm-editor" id="pmEditor">
+            <div class="pm-editor-empty">Select a prompt type from the sidebar</div>
+          </div>
         </div>
       </div>
 
@@ -1084,6 +1149,7 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   event.target.classList.add('active');
   if (name === 'video') initVideoPage();
+  if (name === 'prompts') loadPromptManager();
   if (name === 'studio') {
     if (STATE.selectedChar) {
       selectChar(STATE.selectedChar.name);
@@ -3086,6 +3152,358 @@ function openVideoFrameEditor(thumbEl, frameIndex) {
       overlay.remove();
     }
   });
+}
+
+// ─── PROMPT MANAGER ──────────────────────────────────────────────────────
+let PM = { data: null, selectedKey: null, mode: 'strip' };
+
+async function loadPromptManager() {
+  const charSel = document.getElementById('pmCharSelect');
+  // Populate character dropdown from roster
+  if (STATE.roster.length > 0) {
+    const opts = STATE.roster.map(c => `<option value="${c.name}" ${c.name === '99' ? 'selected' : ''}>${c.name}</option>`).join('');
+    charSel.innerHTML = opts;
+  }
+  const character = charSel.value || '99';
+  try {
+    const r = await fetch(`${API}/api/prompt-manager/all?character=${character}`);
+    PM.data = await r.json();
+    renderPMSidebar();
+  } catch (e) {
+    toast('Failed to load prompts', true);
+  }
+}
+
+function renderPMSidebar() {
+  if (!PM.data?.categories) return;
+  const { animation, anchor } = PM.data.categories;
+  const sb = document.getElementById('pmSidebarContent');
+
+  const renderItems = (items, keyFn) => items.map(item => {
+    const key = keyFn(item);
+    const isActive = PM.selectedKey === key;
+    const hasCustom = item.hasCustom || item.isCustom;
+    return `<div class="pm-item ${isActive ? 'active' : ''} ${hasCustom ? 'has-custom' : ''}" onclick="selectPMType('${key}')">
+      <span class="pm-item-name">${item.name || key}</span>
+      ${hasCustom ? '<span class="pm-badge-custom">CUSTOM</span>' : ''}
+    </div>`;
+  }).join('');
+
+  // Group anchors by type
+  const angles = anchor.filter(a => a.promptType === 'angle');
+  const headshots = anchor.filter(a => a.promptType === 'headshot');
+  const clothes = anchor.filter(a => a.promptType === 'clothes');
+  const balls = anchor.filter(a => a.promptType === 'ball');
+
+  sb.innerHTML = `
+    <div class="pm-category open">
+      <div class="pm-category-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Animation Prompts (${animation.length})</span>
+        <span class="pm-chevron">▶</span>
+      </div>
+      <div class="pm-category-items">${renderItems(animation, a => a.name)}</div>
+    </div>
+    <div class="pm-category">
+      <div class="pm-category-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Angle Prompts (${angles.length})</span>
+        <span class="pm-chevron">▶</span>
+      </div>
+      <div class="pm-category-items">${renderItems(angles, a => a.name)}</div>
+    </div>
+    <div class="pm-category">
+      <div class="pm-category-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Headshot Prompts (${headshots.length})</span>
+        <span class="pm-chevron">▶</span>
+      </div>
+      <div class="pm-category-items">${renderItems(headshots, a => a.name)}</div>
+    </div>
+    <div class="pm-category">
+      <div class="pm-category-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Clothes Prompts (${clothes.length})</span>
+        <span class="pm-chevron">▶</span>
+      </div>
+      <div class="pm-category-items">${renderItems(clothes, a => a.name)}</div>
+    </div>
+    <div class="pm-category">
+      <div class="pm-category-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>Ball Prompts (${balls.length})</span>
+        <span class="pm-chevron">▶</span>
+      </div>
+      <div class="pm-category-items">${renderItems(balls, a => a.name)}</div>
+    </div>
+  `;
+}
+
+function selectPMType(key) {
+  PM.selectedKey = key;
+  renderPMSidebar();
+  renderPMEditor(key);
+}
+
+function renderPMEditor(key) {
+  const editor = document.getElementById('pmEditor');
+  const { animation, anchor } = PM.data.categories;
+
+  // Check if it's an animation prompt (sectioned)
+  const animItem = animation.find(a => a.name === key);
+  if (animItem) {
+    renderPMAnimEditor(editor, key, animItem);
+    return;
+  }
+
+  // Otherwise it's an anchor prompt (non-sectioned)
+  const anchorItem = anchor.find(a => a.name === key);
+  if (anchorItem) {
+    renderPMAnchorEditor(editor, key, anchorItem);
+    return;
+  }
+
+  editor.innerHTML = '<div class="pm-editor-empty">Unknown prompt type</div>';
+}
+
+function renderPMAnimEditor(editor, animName, item) {
+  const mode = PM.mode || 'strip';
+  const sections = mode === 'strip' ? item.strip : item.fbf;
+  if (!sections) {
+    editor.innerHTML = '<div class="pm-editor-empty">No sections available for this mode</div>';
+    return;
+  }
+
+  const sectionCards = Object.entries(sections).map(([sKey, sec]) => `
+    <div class="pm-section-card" id="pm-sec-${sKey}">
+      <div class="pm-section-header">
+        <span class="pm-section-label">${sec.label}</span>
+        ${sec.isCustom ? '<span class="pm-badge-custom">CUSTOMIZED</span>' : ''}
+      </div>
+      <textarea class="pm-textarea" id="pm-ta-${sKey}" rows="4">${escPM(sec.activeText)}</textarea>
+      <div class="pm-section-actions">
+        <button class="btn btn-secondary" onclick="pmReset('${animName}','${sKey}')">Reset</button>
+        <button class="btn btn-primary" onclick="pmTest('${animName}','${sKey}')">Test</button>
+        <button class="btn btn-primary" style="background:var(--accent2);color:#000" onclick="pmSave('${animName}','${sKey}')">Save</button>
+      </div>
+      <div id="pm-thumb-${sKey}"></div>
+    </div>
+  `).join('');
+
+  editor.innerHTML = `
+    <div class="pm-editor-title">${animName}</div>
+    <div class="pm-editor-sub">${item.frames} frames / ${item.fps} fps${item.hasBreezyRef ? ' / has breezy ref' : ''}</div>
+    <div class="pm-mode-tabs">
+      <div class="pm-mode-tab ${mode === 'strip' ? 'active' : ''}" onclick="PM.mode='strip';renderPMEditor('${animName}')">Strip</div>
+      <div class="pm-mode-tab ${mode === 'fbf' ? 'active' : ''}" onclick="PM.mode='fbf';renderPMEditor('${animName}')">FBF</div>
+    </div>
+    ${sectionCards}
+    <div class="pm-composite" onclick="this.classList.toggle('open')">
+      <div class="pm-composite-title">Full Assembled Prompt ▼</div>
+      <div class="pm-composite-text" id="pmCompositeText"></div>
+    </div>
+    <div class="pm-history" onclick="this.classList.toggle('open')">
+      <div class="pm-history-title">Override History ▼</div>
+      <div class="pm-history-list" id="pmHistoryList">Loading...</div>
+    </div>
+  `;
+
+  renderCompositePreview(animName);
+  loadPMHistory(PM.mode, animName);
+}
+
+function renderPMAnchorEditor(editor, key, item) {
+  const parts = key.split(':');
+  const promptType = parts[0];
+  const context = parts.slice(1).join(':');
+
+  editor.innerHTML = `
+    <div class="pm-editor-title">${key}</div>
+    <div class="pm-editor-sub">${promptType} prompt${item.angleName ? ' / angle: ' + item.angleName : ''}${item.variant ? ' / variant: ' + item.variant : ''}</div>
+    <div class="pm-section-card">
+      <div class="pm-section-header">
+        <span class="pm-section-label">Full Prompt</span>
+        ${item.isCustom ? '<span class="pm-badge-custom">CUSTOMIZED</span>' : ''}
+      </div>
+      <textarea class="pm-textarea" id="pm-ta-full" rows="12">${escPM(item.activeText)}</textarea>
+      <div class="pm-section-actions">
+        <button class="btn btn-secondary" onclick="pmResetAnchor('${promptType}','${context}')">Reset</button>
+        <button class="btn btn-primary" onclick="pmTestAnchor('${promptType}','${context}')">Test</button>
+        <button class="btn btn-primary" style="background:var(--accent2);color:#000" onclick="pmSaveAnchor('${promptType}','${context}')">Save</button>
+      </div>
+      <div id="pm-thumb-full"></div>
+    </div>
+    <div class="pm-history" onclick="this.classList.toggle('open')">
+      <div class="pm-history-title">Override History ▼</div>
+      <div class="pm-history-list" id="pmHistoryList">Loading...</div>
+    </div>
+  `;
+
+  loadPMHistory(promptType, context);
+}
+
+function escPM(text) {
+  return (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderCompositePreview(animName) {
+  const el = document.getElementById('pmCompositeText');
+  if (!el) return;
+  const sections = PM.mode === 'strip'
+    ? PM.data.categories.animation.find(a => a.name === animName)?.strip
+    : PM.data.categories.animation.find(a => a.name === animName)?.fbf;
+  if (!sections) { el.textContent = ''; return; }
+
+  // Use current textarea values
+  const parts = [];
+  for (const [sKey, sec] of Object.entries(sections)) {
+    const ta = document.getElementById(`pm-ta-${sKey}`);
+    parts.push(ta ? ta.value : sec.activeText);
+  }
+  el.textContent = parts.join('\n\n');
+}
+
+async function pmSave(animName, section) {
+  const ta = document.getElementById(`pm-ta-${section}`);
+  if (!ta) return;
+  try {
+    const r = await fetch(`${API}/api/prompt-manager/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ promptType: PM.mode, context: animName, section, text: ta.value }),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    toast('Saved override');
+    await loadPromptManager();
+    PM.selectedKey = animName;
+    renderPMSidebar();
+    renderPMEditor(animName);
+  } catch (e) { toast('Save failed: ' + e.message, true); }
+}
+
+async function pmTest(animName, section) {
+  const ta = document.getElementById(`pm-ta-${section}`);
+  const thumb = document.getElementById(`pm-thumb-${section}`);
+  if (!ta || !thumb) return;
+  const character = document.getElementById('pmCharSelect').value || '99';
+  const model = document.getElementById('globalModel').value;
+  thumb.innerHTML = '<span class="spinner active" style="margin:8px 0"></span>';
+  try {
+    const r = await fetch(`${API}/api/prompt-manager/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ promptType: PM.mode, context: animName, character, section, text: ta.value, model }),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    thumb.innerHTML = `<img class="pm-test-thumb" src="${data.processedUrl || data.imageUrl}?t=${Date.now()}" />
+      <span style="font-family:var(--mono);font-size:9px;color:#50507a;margin-left:8px">$${(data.cost || 0).toFixed(4)}</span>`;
+  } catch (e) {
+    thumb.innerHTML = `<span style="color:var(--danger);font-size:11px">${e.message}</span>`;
+  }
+}
+
+async function pmReset(animName, section) {
+  try {
+    const r = await fetch(`${API}/api/prompt-manager/override`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ promptType: PM.mode, context: animName, section }),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    toast('Reset to default');
+    await loadPromptManager();
+    PM.selectedKey = animName;
+    renderPMSidebar();
+    renderPMEditor(animName);
+  } catch (e) { toast('Reset failed: ' + e.message, true); }
+}
+
+async function pmSaveAnchor(promptType, context) {
+  const ta = document.getElementById('pm-ta-full');
+  if (!ta) return;
+  try {
+    const r = await fetch(`${API}/api/prompt-manager/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ promptType, context, section: 'full', text: ta.value }),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    toast('Saved override');
+    await loadPromptManager();
+    PM.selectedKey = `${promptType}:${context}`;
+    renderPMSidebar();
+    renderPMEditor(PM.selectedKey);
+  } catch (e) { toast('Save failed: ' + e.message, true); }
+}
+
+async function pmTestAnchor(promptType, context) {
+  const ta = document.getElementById('pm-ta-full');
+  const thumb = document.getElementById('pm-thumb-full');
+  if (!ta || !thumb) return;
+  const character = document.getElementById('pmCharSelect').value || '99';
+  const model = document.getElementById('globalModel').value;
+  thumb.innerHTML = '<span class="spinner active" style="margin:8px 0"></span>';
+  try {
+    const r = await fetch(`${API}/api/prompt-manager/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ promptType, context, character, section: 'full', text: ta.value, model }),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    thumb.innerHTML = `<img class="pm-test-thumb" src="${data.imageUrl}?t=${Date.now()}" />
+      <span style="font-family:var(--mono);font-size:9px;color:#50507a;margin-left:8px">$${(data.cost || 0).toFixed(4)}</span>`;
+  } catch (e) {
+    thumb.innerHTML = `<span style="color:var(--danger);font-size:11px">${e.message}</span>`;
+  }
+}
+
+async function pmResetAnchor(promptType, context) {
+  try {
+    const r = await fetch(`${API}/api/prompt-manager/override`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ promptType, context, section: 'full' }),
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    toast('Reset to default');
+    await loadPromptManager();
+    PM.selectedKey = `${promptType}:${context}`;
+    renderPMSidebar();
+    renderPMEditor(PM.selectedKey);
+  } catch (e) { toast('Reset failed: ' + e.message, true); }
+}
+
+async function loadPMHistory(promptType, context) {
+  const list = document.getElementById('pmHistoryList');
+  if (!list) return;
+  try {
+    // Fetch from save endpoint with the override data we already have
+    const data = PM.data;
+    const overrides = data ? (await (await fetch(`${API}/api/prompt-manager/all?character=${document.getElementById('pmCharSelect').value || '99'}`)).json()) : null;
+
+    // Pull history from the loaded overrides file via a simple approach
+    const r = await fetch(`${API}/api/prompt-lab/history`);
+    const hist = await r.json();
+    const key = `${promptType}:${context}`;
+    // Show relevant entries
+    const entries = (hist.versions || []).filter(v =>
+      v.animation === context || v.overrides?.[context]
+    ).slice(0, 20);
+
+    if (entries.length === 0) {
+      list.innerHTML = '<div style="font-family:var(--mono);font-size:9px;color:#40405a;padding:4px 0">No history yet</div>';
+      return;
+    }
+    list.innerHTML = entries.map(e => `
+      <div class="pm-history-entry">
+        <span>${e.source} ${e.timestamp ? new Date(e.timestamp).toLocaleDateString() : ''}</span>
+        <span>${e.score != null ? 'Score: ' + e.score : ''} ${e.notes || ''}</span>
+      </div>
+    `).join('');
+  } catch {
+    list.innerHTML = '<div style="font-family:var(--mono);font-size:9px;color:#40405a;padding:4px 0">No history yet</div>';
+  }
 }
 </script>
 </body>

@@ -1,10 +1,10 @@
 {
-  "totalSpend": 33.50711999999977,
-  "totalGenerations": 785,
+  "totalSpend": 33.82180799999976,
+  "totalGenerations": 793,
   "byModel": {
     "gemini-2.5-flash-image": {
-      "spend": 29.700239999999912,
-      "count": 757
+      "spend": 30.0149279999999,
+      "count": 765
     },
     "gemini-3-pro-image-preview": {
       "spend": 3.806879999999999,
@@ -13,8 +13,8 @@
   },
   "byType": {
     "character": {
-      "spend": 4.17636,
-      "count": 84
+      "spend": 4.333703999999998,
+      "count": 88
     },
     "anchor-replicate": {
       "spend": 0.81744,
@@ -37,8 +37,8 @@
       "count": 81
     },
     "strip_batch": {
-      "spend": 2.084808000000001,
-      "count": 53
+      "spend": 2.2421520000000013,
+      "count": 57
     },
     "angle": {
       "spend": 7.794432000000016,
@@ -66,96 +66,6 @@
     }
   },
   "history": [
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip_batch",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "viv",
-      "animation": "static-dribble",
-      "batch": 0,
-      "timestamp": "2026-03-29T21:02:20.065Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "snoop",
-      "animation": "defensive-slide-left",
-      "timestamp": "2026-03-29T21:02:20.792Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "snoop",
-      "animation": "defensive-slide-right",
-      "timestamp": "2026-03-29T21:02:22.720Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "snoop",
-      "animation": "idle-dribble",
-      "timestamp": "2026-03-29T21:02:23.285Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000168,
-      "totalCost": 0.039168,
-      "character": "viv",
-      "animation": "jump",
-      "timestamp": "2026-03-29T21:02:28.737Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip_batch",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "viv",
-      "animation": "jumpshot",
-      "batch": 0,
-      "timestamp": "2026-03-29T21:02:28.912Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "viv",
-      "animation": "stepback",
-      "timestamp": "2026-03-29T21:02:30.506Z"
-    },
-    {
-      "model": "gemini-2.5-flash-image",
-      "type": "strip",
-      "resolution": "2K",
-      "imageCost": 0.039,
-      "inputCost": 0.000336,
-      "totalCost": 0.039336,
-      "character": "viv",
-      "animation": "defense-backpedal",
-      "timestamp": "2026-03-29T21:02:30.525Z"
-    },
     {
       "model": "gemini-2.5-flash-image",
       "type": "strip_batch",
@@ -2295,6 +2205,98 @@
       "character": "99",
       "angleIndex": 1,
       "timestamp": "2026-03-30T02:25:30.624Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "kai",
+      "option": 0,
+      "timestamp": "2026-03-30T07:47:33.279Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "kai",
+      "option": 1,
+      "timestamp": "2026-03-30T07:47:36.341Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "kai",
+      "option": 2,
+      "timestamp": "2026-03-30T07:47:48.953Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "character",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "kai",
+      "option": 3,
+      "timestamp": "2026-03-30T07:47:50.594Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "strip_batch",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "obama",
+      "animation": "jumpshot",
+      "batch": 0,
+      "timestamp": "2026-03-30T07:58:25.390Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "strip_batch",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "tom",
+      "animation": "jumpshot",
+      "batch": 0,
+      "timestamp": "2026-03-30T07:58:29.060Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "strip_batch",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "obama",
+      "animation": "jumpshot",
+      "batch": 1,
+      "timestamp": "2026-03-30T07:58:37.445Z"
+    },
+    {
+      "model": "gemini-2.5-flash-image",
+      "type": "strip_batch",
+      "resolution": "2K",
+      "imageCost": 0.039,
+      "inputCost": 0.000336,
+      "totalCost": 0.039336,
+      "character": "tom",
+      "animation": "jumpshot",
+      "batch": 1,
+      "timestamp": "2026-03-30T07:58:43.799Z"
     }
   ]
 }
