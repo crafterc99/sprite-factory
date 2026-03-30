@@ -1,4 +1,5 @@
 {
+  "buildCommand": "mkdir -p public/assets && cp -r data/assets/* public/assets/ && mkdir -p public/raw",
   "rewrites": [
     { "source": "/(.*)", "destination": "/api/index" }
   ],
