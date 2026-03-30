@@ -31,12 +31,8 @@ done
 
 echo "[start-dev] Starting ngrok tunnel..."
 
-# Use static domain if configured, otherwise let ngrok pick
-if [ -n "$NGROK_DOMAIN" ]; then
-  nohup ngrok http 3456 --domain="$NGROK_DOMAIN" --log=stdout > "$LOGDIR/ngrok.log" 2>&1 &
-else
-  nohup ngrok http 3456 --log=stdout > "$LOGDIR/ngrok.log" 2>&1 &
-fi
+NGROK_DOMAIN="fictional-nondeistically-miles.ngrok-free.dev"
+nohup ngrok http 3456 --domain="$NGROK_DOMAIN" --log=stdout > "$LOGDIR/ngrok.log" 2>&1 &
 NGROK_PID=$!
 echo $NGROK_PID > "$LOGDIR/ngrok.pid"
 
