@@ -3,6 +3,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 const { CHARACTERS, ANIMATIONS } = require('../lib/sprite-generator/prompts');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
@@ -480,6 +481,20 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         status: 'portrait_done',
       };
       saveCharacters(registry);
+
+      // Fire-and-forget: kick off animation gap-fill for this character in the background.
+      // Does not block the confirm response.
+      (() => {
+        const port = process.env.PORT || 3456;
+        const body = JSON.stringify({ model: 'gemini-2.5-flash-image' });
+        const req = http.request(
+          { hostname: 'localhost', port, path: `/api/pipeline/fill-gaps/${encodeURIComponent(name)}`, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
+          res => { res.resume(); } // drain response, don't block
+        );
+        req.on('error', err => console.error(`[fill-gaps] background trigger failed for ${name}:`, err.message));
+        req.write(body);
+        req.end();
+      })();
 
       // Save training feedback
       const trainingFile = path.join(TMP_DIR, 'characters', 'training.json');
@@ -1325,6 +1340,168 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       if (registry.items.length === before) return json(res, { error: `Item '${id}' not found` }, 404);
       saveClothingRegistry(registry);
       return json(res, { success: true, deleted: id });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/character/:name/head-override
+  // Body: { angle, body: { sourceAngle }, clothes: { sourceAngle } }
+  // Saves a head-override entry for the given angle into package.json headOverrides.
+  router.post('/api/character/:name/head-override', async (req, res, params) => {
+    try {
+      const { name } = params;
+      const body = await parseBody(req);
+      const { angle, body: bodyOverride, clothes: clothesOverride } = body;
+      if (!angle) return json(res, { error: 'angle required' }, 400);
+
+      const pkg = loadPackage(name, TMP_DIR) || initPackage(name);
+      if (!pkg.headOverrides) pkg.headOverrides = {};
+      pkg.headOverrides[angle] = {};
+      if (bodyOverride)   pkg.headOverrides[angle].body    = bodyOverride;
+      if (clothesOverride) pkg.headOverrides[angle].clothes = clothesOverride;
+
+      savePackage(pkg, name, TMP_DIR);
+      return json(res, { success: true, angle, headOverride: pkg.headOverrides[angle] });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // DELETE /api/character/:name/head-override/:angle
+  // Removes the head-override entry for the given angle from package.json headOverrides.
+  router.delete('/api/character/:name/head-override/:angle', (req, res, params) => {
+    try {
+      const { name, angle } = params;
+      const pkg = loadPackage(name, TMP_DIR) || initPackage(name);
+
+      if (!pkg.headOverrides || !pkg.headOverrides[angle]) {
+        return json(res, { error: `No head override found for angle '${angle}'` }, 404);
+      }
+
+      delete pkg.headOverrides[angle];
+      savePackage(pkg, name, TMP_DIR);
+      return json(res, { success: true, deleted: angle });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  const VALID_ANGLE_NAMES = ['front', 'front-3/4-L', 'side-L', 'back-3/4-L', 'back', 'back-3/4-R', 'side-R', 'front-3/4-R'];
+
+  // POST /api/characters/:name/head-override
+  // Body: { targetAngle, targetLayer, sourceAngle }
+  // Merges a single layer override into headOverrides[targetAngle][targetLayer].
+  router.post('/api/characters/:name/head-override', async (req, res, params) => {
+    try {
+      const { name } = params;
+      const body = await parseBody(req);
+      const { targetAngle, targetLayer, sourceAngle } = body;
+
+      if (!VALID_ANGLE_NAMES.includes(targetAngle)) {
+        return json(res, { error: `Invalid targetAngle — must be one of: ${VALID_ANGLE_NAMES.join(', ')}` }, 400);
+      }
+      if (targetLayer !== 'body' && targetLayer !== 'clothes') {
+        return json(res, { error: 'Invalid layer — must be "body" or "clothes"' }, 400);
+      }
+      if (targetAngle !== sourceAngle) {
+        return json(res, { error: 'Angle mismatch — use the matching headshot angle' }, 400);
+      }
+
+      const pkg = loadPackage(name, TMP_DIR) || initPackage(name);
+      if (!pkg.headOverrides) pkg.headOverrides = {};
+      if (!pkg.headOverrides[targetAngle]) pkg.headOverrides[targetAngle] = {};
+      pkg.headOverrides[targetAngle][targetLayer] = { sourceAngle };
+
+      savePackage(pkg, name, TMP_DIR);
+      return json(res, { success: true, headOverrides: pkg.headOverrides });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // DELETE /api/characters/:name/head-override/:angle/:layer
+  // Removes headOverrides[angle][layer]; prunes the angle key if it becomes empty.
+  router.delete('/api/characters/:name/head-override/:angle/:layer', (req, res, params) => {
+    try {
+      const { name, angle, layer } = params;
+
+      if (layer !== 'body' && layer !== 'clothes') {
+        return json(res, { error: 'Invalid layer — must be "body" or "clothes"' }, 400);
+      }
+
+      const pkg = loadPackage(name, TMP_DIR) || initPackage(name);
+      if (!pkg.headOverrides || !pkg.headOverrides[angle] || !pkg.headOverrides[angle][layer]) {
+        return json(res, { error: `No override found for angle '${angle}', layer '${layer}'` }, 404);
+      }
+
+      delete pkg.headOverrides[angle][layer];
+      if (Object.keys(pkg.headOverrides[angle]).length === 0) {
+        delete pkg.headOverrides[angle];
+      }
+
+      savePackage(pkg, name, TMP_DIR);
+      return json(res, { success: true, headOverrides: pkg.headOverrides });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/characters/:name/rebuild-override/:angle
+  // Body: { bodySrc, clothesSrc?, headSrc?, angleIndex }
+  // Exactly one of clothesSrc or headSrc must be provided alongside bodySrc.
+  router.post('/api/characters/:name/rebuild-override/:angle', async (req, res, params) => {
+    try {
+      const { name, angle } = params;
+      const body = await parseBody(req);
+      const { bodySrc, headSrc, clothesSrc, angleIndex } = body;
+
+      if (!bodySrc) return json(res, { error: 'bodySrc required' }, 400);
+      if (!clothesSrc && !headSrc) return json(res, { error: 'clothesSrc or headSrc required' }, 400);
+
+      function srcToPath(src) {
+        if (!src) return null;
+        const filename = src.replace(/^\/assets\//, '');
+        const p = path.join(ASSETS_DIR, filename);
+        return fs.existsSync(p) ? p : null;
+      }
+
+      const bodyPath = srcToPath(bodySrc);
+      if (!bodyPath) return json(res, { error: `Body reference not found: ${bodySrc}` }, 404);
+
+      const isClothes = !!clothesSrc;
+      const refPath = isClothes ? srcToPath(clothesSrc) : srcToPath(headSrc);
+      if (!refPath) return json(res, { error: `Reference image not found: ${isClothes ? clothesSrc : headSrc}` }, 404);
+
+      const idx = angleIndex ?? angle;
+
+      let prompt, outFilename;
+      if (isClothes) {
+        prompt = 'Image 1 is the body pose reference. Image 2 is the clothing reference. Generate a pixel art sprite of this character wearing the exact outfit from Image 2 in the exact pose from Image 1. Keep body proportions, pose, and position from Image 1. Replace the outfit entirely with what is shown in Image 2. Same pixel art style, green background #00FF00.';
+        outFilename = `${name}-angle-rebuilt-${idx}.png`;
+      } else {
+        prompt = 'Image 1 is the body pose reference. Image 2 is the head/face reference. Generate a pixel art sprite replacing the head in Image 1 with the face from Image 2. Keep body pose, outfit, and proportions from Image 1. Replace only the head and face with Image 2. Same pixel art style, green background #00FF00.';
+        outFilename = `${name}-angle-head-rebuilt-${idx}.png`;
+      }
+
+      const client = new NanaBananaClient({ model: 'gemini-2.5-flash-image' });
+      const result = await client.generateSprite(prompt, bodyPath, refPath, {
+        aspectRatio: '1:1',
+        resolution: '1K',
+        model: 'gemini-2.5-flash-image',
+      });
+
+      const outPath = path.join(ASSETS_DIR, outFilename);
+      fs.mkdirSync(ASSETS_DIR, { recursive: true });
+      fs.writeFileSync(outPath, result.imageBuffer);
+
+      recordCost('gemini-2.5-flash-image', 'rebuild', '1K', 2, {
+        character: name,
+        angleIndex: idx,
+        type: isClothes ? 'clothes' : 'head',
+      });
+
+      return json(res, { success: true, url: `/assets/${outFilename}`, angleIndex: idx });
     } catch (err) {
       return json(res, { error: err.message }, 500);
     }

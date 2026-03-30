@@ -678,6 +678,29 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
 
     const done = results.filter(r => r.status === 'done');
     const failed = results.filter(r => r.status === 'failed');
+
+    // After a full 8-angle body generation, check if auto-pipeline should fire
+    if (angleIndex == null && done.length === 8) {
+      try {
+        const { loadCharacters } = require('./characters');
+        const chars = loadCharacters();
+        const char = chars[character];
+        if (char &&
+            char.anchor && char.anchor.status === 'complete' &&
+            char.headshotAnglesComplete === true &&
+            char.clothesAnglesComplete === true) {
+          console.log(`[auto-pipeline] All assets ready for ${character} — starting pipeline`);
+          const { runAutoPipeline } = require('../lib/auto-pipeline');
+          runAutoPipeline(character).catch(err =>
+            console.error(`[auto-pipeline] Pipeline failed for ${character}:`, err.message)
+          );
+        }
+      } catch (err) {
+        // Non-fatal — log and continue so the angle response is not affected
+        console.error('[auto-pipeline] Pre-check error:', err.message);
+      }
+    }
+
     return json(res, { success: failed.length === 0, character, generated: done, failed });
   });
 
@@ -1106,6 +1129,193 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       summary: { total, done, failed, running, pending },
       jobs: entry.jobs,
     });
+  });
+
+  // ─── Fill-Gaps Helper ────────────────────────────────────────────────────
+  // Replicates POST /api/generate logic (single-call + batch paths) without
+  // going through HTTP. Returns { frames, cost } on success; throws on failure.
+  async function generateMissingStrip(character, animKey, modelId, client) {
+    const anim = ANIMATIONS[animKey];
+    if (!anim) throw new Error(`Unknown animation: ${animKey}`);
+
+    const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
+    if (!CHARACTERS[character] && fs.existsSync(portraitPath)) {
+      CHARACTERS[character] = {
+        description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
+        style: '16-bit pixel art, GBA style',
+      };
+    }
+
+    const totalFrames = anim.frames;
+    const charRef = fs.existsSync(portraitPath) ? portraitPath : null;
+    const poseRefCandidate = anim.breezyFile ? path.join(ASSETS_DIR, anim.breezyFile) : null;
+    const poseRef = poseRefCandidate && fs.existsSync(poseRefCandidate) ? poseRefCandidate : null;
+
+    fs.mkdirSync(RAW_DIR, { recursive: true });
+
+    const MAX_FRAMES_PER_BATCH = 4;
+
+    if (totalFrames <= MAX_FRAMES_PER_BATCH || !poseRef) {
+      const prompt = poseRef
+        ? buildPoseTransferPrompt(character, animKey).prompt
+        : buildTextOnlyAnimPrompt(character, animKey).prompt;
+
+      const outputPath = path.join(RAW_DIR, `${character}-${animKey}-raw.png`);
+      await client.generateSprite(prompt, poseRef, charRef, {
+        aspectRatio: '16:9', resolution: '2K', model: modelId, outputPath,
+      });
+
+      const costInfo = recordCost(modelId, 'strip', '2K', (poseRef ? 1 : 0) + (charRef ? 1 : 0), { character, animation: animKey });
+      const processed = await processSprite(outputPath, `${character}-${animKey}`, {
+        frameCount: totalFrames, targetSize: 180, outputDir: ASSETS_DIR,
+      });
+      return { frames: processed.frameCount, cost: costInfo.totalCost };
+    }
+
+    // Batch mode — same logic as POST /api/generate batch path
+    const refFramesDir = path.join(RAW_DIR, `${character}-${animKey}-ref-frames`);
+    fs.mkdirSync(refFramesDir, { recursive: true });
+    const cutResult = await cutFrames(poseRef, refFramesDir, { frameCount: totalFrames });
+    const refFramePaths = cutResult.frames;
+
+    const batches = [];
+    for (let i = 0; i < totalFrames; i += MAX_FRAMES_PER_BATCH) {
+      const end = Math.min(i + MAX_FRAMES_PER_BATCH, totalFrames);
+      batches.push({ start: i, end, count: end - i, frames: refFramePaths.slice(i, end) });
+    }
+
+    const batchOutputs = [];
+    for (let b = 0; b < batches.length; b++) {
+      const batch = batches[b];
+      const miniStripPath = path.join(RAW_DIR, `${character}-${animKey}-batch${b}-ref.png`);
+      await buildRefStrip(batch.frames, miniStripPath, { targetHeight: 180 });
+
+      const batchPrompt = [
+        `REPLICATE Image 1 EXACTLY. Keep every body position, pose, limb placement, and composition identical. ONLY replace the character's identity with Image 2.`,
+        ``,
+        `Image 1 shows ${batch.count} frames of a ${anim.action} animation (frames ${batch.start + 1}-${batch.end} of ${totalFrames}).`,
+        `Copy these ${batch.count} frames frame-for-frame — same poses, same spacing — but with Image 2's character.`,
+        ``,
+        `CRITICAL — BODY POSITION:`,
+        `- Body position, pose, and composition in EVERY frame must match Image 1 EXACTLY`,
+        `- Same arm positions, leg positions, body angle, ball placement`,
+        `- Treat Image 1 as motion capture — do NOT reinterpret`,
+        ``,
+        `OUTPUT:`,
+        `- Single horizontal strip, EXACTLY ${batch.count} frames, equally-sized, no gaps, no borders`,
+        `- LARGE detailed characters filling most of each frame's height — NOT tiny`,
+        `- Style: 16-bit pixel art, GBA style, bold BLACK pixel outlines around character`,
+        `- Background: solid bright green (#00FF00) — NO black, NO dark backgrounds`,
+        `- NO green on the character itself`,
+        `- Same size character in EVERY frame`,
+      ].join('\n');
+
+      const batchOutputPath = path.join(RAW_DIR, `${character}-${animKey}-batch${b}-raw.png`);
+      await client.generateSprite(batchPrompt, miniStripPath, charRef, {
+        aspectRatio: '16:9', resolution: '2K', model: modelId, outputPath: batchOutputPath,
+      });
+
+      recordCost(modelId, 'strip_batch', '2K', (charRef ? 2 : 1), { character, animation: animKey, batch: b });
+      const batchProcessed = await processSprite(batchOutputPath, `${character}-${animKey}-batch${b}`, {
+        frameCount: batch.count, targetSize: 180, outputDir: RAW_DIR,
+      });
+      batchOutputs.push(batchProcessed);
+    }
+
+    const allFramePaths = [];
+    for (let b = 0; b < batchOutputs.length; b++) {
+      const framesDir = batchOutputs[b].framesDir;
+      if (fs.existsSync(framesDir)) {
+        fs.readdirSync(framesDir).filter(f => f.endsWith('.png')).sort()
+          .forEach(f => allFramePaths.push(path.join(framesDir, f)));
+      }
+    }
+
+    const finalStripPath = path.join(ASSETS_DIR, `${character}-${animKey}.png`);
+    await buildRefStrip(allFramePaths, finalStripPath, { height: 180 });
+    return { frames: allFramePaths.length, cost: batches.length * getImageCost(modelId, '2K') };
+  }
+
+  // Shared gap-scan + run logic used by both fill-gaps routes.
+  // characters: string[] — names to check
+  // Returns details[] (already includes skipped entries); generates missing ones with concurrency 3.
+  async function runFillGaps(characters, modelId) {
+    const animKeys = Object.keys(ANIMATIONS);
+    const client = new NanaBananaClient({ model: modelId });
+    const skipped = [];
+    const tasks = [];
+
+    for (const character of characters) {
+      for (const animKey of animKeys) {
+        const stripPath = path.join(ASSETS_DIR, `${character}-${animKey}.png`);
+        if (fs.existsSync(stripPath)) {
+          skipped.push({ character, animKey, status: 'skipped' });
+          continue;
+        }
+        tasks.push(async () => {
+          try {
+            const result = await generateMissingStrip(character, animKey, modelId, client);
+            return { character, animKey, status: 'generated', frames: result.frames, cost: result.cost };
+          } catch (err) {
+            return { character, animKey, status: 'failed', error: err.message };
+          }
+        });
+      }
+    }
+
+    const taskResults = await runWithConcurrency(tasks, 6);
+    const details = [...skipped, ...taskResults];
+
+    return {
+      total: details.length,
+      generated: taskResults.filter(r => r.status === 'generated').length,
+      skipped: skipped.length,
+      failed: taskResults.filter(r => r.status === 'failed').length,
+      details,
+    };
+  }
+
+  // POST /api/pipeline/fill-gaps — Fill missing animation strips for all characters
+  // Body: { model? }
+  router.post('/api/pipeline/fill-gaps', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      const modelId = (body.model && ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image'].includes(body.model))
+        ? body.model : 'gemini-2.5-flash-image';
+
+      // Discover roster from *full.png files in ASSETS_DIR
+      const portraits = fs.existsSync(ASSETS_DIR)
+        ? fs.readdirSync(ASSETS_DIR).filter(f => f.endsWith('full.png')).map(f => f.replace('full.png', ''))
+        : [];
+
+      if (portraits.length === 0) return json(res, { error: 'No characters found in assets directory' }, 404);
+
+      const report = await runFillGaps(portraits, modelId);
+      return json(res, { ...report, characters: portraits, model: modelId });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/pipeline/fill-gaps/:character — Fill missing animation strips for one character
+  // Body: { model? }
+  router.post('/api/pipeline/fill-gaps/:character', async (req, res, params) => {
+    try {
+      const { character } = params;
+      const body = await parseBody(req);
+      const modelId = (body.model && ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image'].includes(body.model))
+        ? body.model : 'gemini-2.5-flash-image';
+
+      const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
+      if (!fs.existsSync(portraitPath)) {
+        return json(res, { error: `Portrait not found: ${character}full.png` }, 404);
+      }
+
+      const report = await runFillGaps([character], modelId);
+      return json(res, { ...report, character, model: modelId });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
   });
 }
 

@@ -530,6 +530,37 @@ A task is COMPLETE only if:
 
 ---
 
+## PHASE 8 — UI / VIDEO PIPELINE
+
+### UI-VIDEO-TAB-001 -- Add Video tab to index-v2.html
+
+**Owner:** UI
+**Status:** DONE — 2026-03-28
+**What was built:**
+- Nav button "Video" added to header
+- 3-step page: Upload → Select Frames → Configure & Generate
+- Drag/drop video upload → POST /api/video/upload (raw binary)
+- Frame extraction at configurable FPS → POST /api/video/extract → thumbnail gallery
+- Click-to-select frames + Smart Select (POST /api/video/smart-select) with count input
+- Confirm selection → POST /api/video/select-manual → shows selected strip preview
+- Config: character dropdown (from roster), anim name, action description, target frames, FPS, loop
+- Strip mode: POST /api/video/strip → POST /api/video/generate → result card
+- FBF mode: POST /api/video/generate-fbf (SSE) → progress ring + log → result card
+- Result shows sprite sheet image + save path
+**Files changed:** index-v2.html
+**Validation:** UI renders, all API endpoints exist in routes/video.js
+
+---
+
+### UI-DASHBOARD-FIX-001 -- Fix dashboard layout (phantom sidebar column)
+
+**Owner:** UI
+**Status:** DONE — 2026-03-28
+**What changed:** .app changed from grid (260px 1fr) to flex column — sidebar HTML was removed in a prior commit but grid column remained, forcing main content into 260px slot. Fix: display:flex; flex-direction:column with flex:1 on .main.
+**Files changed:** index-v2.html
+
+---
+
 ## GLOBAL RULES
 
 * Do NOT skip phases

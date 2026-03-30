@@ -35,7 +35,16 @@ Your role: **Frontend development only** — HTML, CSS, JavaScript inside `index
 - `GET  /api/prompts/frame/:characterId/:animName/:frameIndex` — get per-frame prompt
 - `POST /api/character/generate-angle` — generate single body angle
 - `POST /api/character/generate-angles` — generate all 8 body angles
-- `POST /api/video/upload` — upload video, extract frames
+- `POST /api/video/upload` — upload video (raw binary body), returns `{ sessionId }`
+- `POST /api/video/extract` — extract frames `{ sessionId, fps }` → `{ frames: [{url, file}] }`
+- `POST /api/video/smart-select` — auto-pick key frames `{ sessionId, count }` → `{ selectedIndices, selectedFileNames }`
+- `POST /api/video/select-manual` — confirm manual selection `{ sessionId, frameFiles[] }`
+- `POST /api/video/strip` — build reference strip from selected `{ sessionId }`
+- `POST /api/video/generate` — strip-mode generation `{ sessionId, character, animName, frameCount, fps, loop, action }` → `{ processed, frames, cost }`
+- `POST /api/video/generate-fbf` — FBF generation SSE `{ sessionId, character, animName, fps, loop, action }` → events: start, frame_start, frame_done, complete, error
+- `GET  /api/video/frame/:session/:file` — serve extracted frame
+- `GET  /api/video/selected/:session/:file` — serve selected frame
+- `GET  /api/video/strip-image/:session` — serve built reference strip
 
 All generation endpoints accept `model` in the request body (`gemini-2.5-flash-image` default, `gemini-3-pro-image-preview` available).
 

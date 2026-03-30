@@ -34,6 +34,25 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     }
   });
 
+  // POST /api/video/from-url — Download TikTok/YouTube URL via yt-dlp
+  router.post('/api/video/from-url', async (req, res) => {
+    const body = await parseBody(req);
+    const { url } = body;
+    if (!url) return json(res, { error: 'url required' }, 400);
+    const sessionId = Date.now().toString(36);
+    const sessionDir = path.join(TMP_DIR, sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+    try {
+      const videoPath = await new Promise((resolve, reject) => {
+        try { resolve(require('../lib/sprite-generator/video-extractor').downloadYouTube(url, sessionDir)); }
+        catch (e) { reject(e); }
+      });
+      return json(res, { sessionId, videoPath, size: fs.statSync(videoPath).size });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
   // POST /api/video/from-path — Use existing video file on disk
   router.post('/api/video/from-path', async (req, res) => {
     const body = await parseBody(req);
@@ -351,6 +370,151 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     }
 
     res.end();
+  });
+
+  // POST /api/video/regenerate-frame — Regenerate a single frame from a completed video animation
+  router.post('/api/video/regenerate-frame', async (req, res) => {
+    const body = await parseBody(req);
+    const { sessionId, character, animName, frameIndex, customPrompt, model } = body;
+    if (!sessionId || !character || !animName || frameIndex == null) {
+      return json(res, { error: 'sessionId, character, animName, frameIndex required' }, 400);
+    }
+
+    const safeName = animName.replace(/[^a-zA-Z0-9_-]/g, '-');
+    const framesOutputDir = path.join(ASSETS_DIR, `${character}-${safeName}-frames`);
+    const frameOutputPath = path.join(framesOutputDir, `frame-${frameIndex}.png`);
+
+    if (!fs.existsSync(framesOutputDir)) {
+      return json(res, { error: `Frames directory not found: ${framesOutputDir}` }, 404);
+    }
+
+    // Find matching reference frame from session selected dir
+    const selectDir = path.join(TMP_DIR, sessionId, 'selected');
+    const selectedFiles = fs.existsSync(selectDir)
+      ? fs.readdirSync(selectDir).filter(f => f.endsWith('.png')).sort()
+      : [];
+    const videoRefPath = selectedFiles[frameIndex]
+      ? path.join(selectDir, selectedFiles[frameIndex])
+      : null;
+
+    try {
+      const totalFrames = fs.readdirSync(framesOutputDir).filter(f => f.endsWith('.png')).length;
+      const promptData = buildFilmToSingleFramePrompt(character, safeName, frameIndex, totalFrames);
+      const fullPrompt = customPrompt
+        ? `${promptData.prompt}\n\nSPECIFIC INSTRUCTION: ${customPrompt}\nKeep everything else identical.`
+        : promptData.prompt;
+
+      const charRef = CHARACTERS[character] ? path.join(ASSETS_DIR, `${character === '99' ? '99' : character}full.png`) : null;
+      const rawPath = path.join(RAW_DIR, `${character}-${safeName}-frame-${frameIndex}-regen-raw.png`);
+      fs.mkdirSync(RAW_DIR, { recursive: true });
+
+      const client = new NanaBananaClient({ model: model || 'gemini-2.5-flash-image' });
+      const refImage = videoRefPath && fs.existsSync(videoRefPath) ? videoRefPath : charRef;
+
+      await client.generateSprite(fullPrompt, refImage, charRef && refImage !== charRef ? charRef : null, {
+        aspectRatio: '1:1',
+        resolution: '1K',
+        model: model || 'gemini-2.5-flash-image',
+        outputPath: rawPath,
+      });
+
+      recordCost(model || 'gemini-2.5-flash-image', 'video_fbf_frame', '1K', (refImage ? 1 : 0) + (charRef && refImage !== charRef ? 1 : 0), {
+        character, animation: safeName, frame: frameIndex,
+      });
+
+      // Process the regenerated frame
+      const tmpProcessDir = path.join(TMP_DIR, sessionId, `regen-proc-${frameIndex}-${Date.now()}`);
+      fs.mkdirSync(tmpProcessDir, { recursive: true });
+      try {
+        const processed = await processSprite(rawPath, `regen-${frameIndex}`, {
+          frameCount: 1,
+          targetSize: 180,
+          outputDir: tmpProcessDir,
+        });
+        const processedFrame = path.join(tmpProcessDir, `regen-${frameIndex}-frames`, 'frame-0.png');
+        if (fs.existsSync(processedFrame)) {
+          fs.copyFileSync(processedFrame, frameOutputPath);
+        } else if (processed.outputPath && fs.existsSync(processed.outputPath)) {
+          fs.copyFileSync(processed.outputPath, frameOutputPath);
+        } else {
+          fs.copyFileSync(rawPath, frameOutputPath);
+        }
+      } catch {
+        fs.copyFileSync(rawPath, frameOutputPath);
+      } finally {
+        fs.rmSync(tmpProcessDir, { recursive: true, force: true });
+      }
+
+      // Rebuild full strip from all frames
+      const allFramePaths = fs.readdirSync(framesOutputDir)
+        .filter(f => f.endsWith('.png'))
+        .sort((a, b) => {
+          const ai = parseInt(a.match(/\d+/)?.[0] ?? '0');
+          const bi = parseInt(b.match(/\d+/)?.[0] ?? '0');
+          return ai - bi;
+        })
+        .map(f => path.join(framesOutputDir, f));
+
+      const stripPath = path.join(ASSETS_DIR, `${character}-${safeName}.png`);
+      await buildRefStrip(allFramePaths, stripPath, { targetHeight: 180 });
+
+      return json(res, {
+        success: true,
+        frameUrl: `/assets/${character}-${safeName}-frames/frame-${frameIndex}.png`,
+        stripUrl: `/assets/${character}-${safeName}.png`,
+      });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/video/extract-subjects — Background removal for selected frames
+  router.post('/api/video/extract-subjects', async (req, res) => {
+    const body = await parseBody(req);
+    const { sessionId, frameFiles, customPrompt } = body;
+    if (!sessionId || !frameFiles || !frameFiles.length) {
+      return json(res, { error: 'sessionId and frameFiles[] required' }, 400);
+    }
+
+    const framesDir = path.join(TMP_DIR, sessionId, 'frames');
+    if (!fs.existsSync(framesDir)) return json(res, { error: 'Frames not found' }, 404);
+
+    const subjectsDir = path.join(TMP_DIR, sessionId, 'subjects');
+    fs.mkdirSync(subjectsDir, { recursive: true });
+
+    let prompt = 'Extract the person and basketball from this image. Remove the background completely. Output ONLY the person and ball on a transparent background. Keep exact pose, proportions, and position. No background, no floor, no court markings.';
+    if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
+    const client = new NanaBananaClient({ model: 'gemini-2.5-flash-image' });
+    const subjects = [];
+
+    for (let i = 0; i < frameFiles.length; i++) {
+      const framePath = path.join(framesDir, frameFiles[i]);
+      if (!fs.existsSync(framePath)) {
+        subjects.push({ frameIndex: i, error: 'Frame not found' });
+        continue;
+      }
+      try {
+        const result = await client.generate(prompt, {
+          referenceImages: [framePath],
+          aspectRatio: '1:1',
+          resolution: '1K',
+          model: 'gemini-2.5-flash-image',
+        });
+        const outFile = `subject-${i}.png`;
+        fs.writeFileSync(path.join(subjectsDir, outFile), result.imageBuffer);
+        recordCost('gemini-2.5-flash-image', 'subject-extract', '1K', 1, { sessionId, frameIndex: i });
+        subjects.push({ frameIndex: i, url: `/api/video/subject/${sessionId}/${outFile}` });
+      } catch (err) {
+        subjects.push({ frameIndex: i, error: err.message });
+      }
+    }
+
+    return json(res, { subjects });
+  });
+
+  // GET /api/video/subject/:session/:file — Serve extracted subject
+  router.get('/api/video/subject/:session/:file', (req, res, params) => {
+    return serveImage(res, path.join(TMP_DIR, params.session, 'subjects', params.file));
   });
 
   // POST /api/video/feedback — Frame selection feedback

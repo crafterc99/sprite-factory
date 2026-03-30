@@ -32,10 +32,9 @@
   ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
   /* ─── LAYOUT ─── */
-  .app { display:grid; grid-template-columns:260px 1fr; grid-template-rows:52px 1fr; height:100vh; }
-  .header { grid-column:1/-1; display:flex; align-items:center; gap:16px; padding:0 20px; border-bottom:1px solid var(--border); background:rgba(8,8,16,0.98); position:sticky; top:0; z-index:100; }
-  .sidebar { border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; background:var(--surface); }
-  .main { overflow-y:auto; }
+  .app { display:flex; flex-direction:column; height:100vh; }
+  .header { flex-shrink:0; display:flex; align-items:center; gap:16px; padding:0 20px; border-bottom:1px solid var(--border); background:rgba(8,8,16,0.98); position:sticky; top:0; z-index:100; height:52px; }
+  .main { flex:1; overflow-y:auto; min-width:0; }
 
   /* ─── HEADER ─── */
   .logo { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:3px; color:var(--accent); white-space:nowrap; }
@@ -63,6 +62,22 @@
   .roster-delete-yes:hover { background:rgba(255,50,50,0.3); }
   .roster-delete-no { background:var(--surface3); color:#aaa; border-color:var(--border) !important; }
   .roster-delete-no:hover { background:var(--surface); }
+
+  /* ─── STUDIO LAYOUT ─── */
+  .studio-layout { display:flex; height:calc(100vh - 52px); overflow:hidden; }
+  .studio-sidebar { width:220px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; background:var(--surface); }
+  .studio-sidebar-header { padding:12px 14px; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:#50507a; display:flex; align-items:center; justify-content:space-between; }
+  .studio-roster-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:4px; }
+  .studio-roster-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; border:1px solid transparent; cursor:pointer; transition:all 0.15s; }
+  .studio-roster-item:hover { border-color:var(--border-hi); background:var(--surface2); }
+  .studio-roster-item.active { border-color:var(--accent); background:rgba(255,68,0,0.08); }
+  .studio-roster-thumb { width:36px; height:36px; border-radius:5px; object-fit:contain; image-rendering:pixelated; background:var(--surface3); flex-shrink:0; display:block; }
+  .studio-roster-thumb-empty { width:36px; height:36px; border-radius:5px; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .studio-roster-info { flex:1; min-width:0; }
+  .studio-roster-name { font-weight:700; font-size:11px; text-transform:capitalize; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text); }
+  .studio-roster-count { font-family:var(--mono); font-size:9px; color:#50507a; }
+  .studio-main { flex:1; overflow-y:auto; min-width:0; }
+
   .dash-card-wrap { position:relative; }
   .dash-delete-btn { position:absolute; top:8px; right:8px; background:rgba(20,20,30,0.7); border:none; color:#50507a; font-size:13px; cursor:pointer; padding:3px 6px; border-radius:4px; line-height:1; opacity:0; transition:opacity 0.15s; }
   .dash-card-wrap:hover .dash-delete-btn { opacity:1; }
@@ -85,7 +100,7 @@
   .add-char-btn:hover { border-color:var(--accent); color:var(--accent); }
 
   /* ─── MAIN WORKSPACE ─── */
-  .workspace-inner { padding:24px; max-width:1200px; }
+  .workspace-inner { padding:24px; }
   .page { display:none; }
   .page.active { display:block; }
 
@@ -187,21 +202,90 @@
   .sse-log .warn { color:var(--warning); }
 
   /* ─── DASHBOARD ─── */
-  .dash-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
-  @media (max-width:1100px) { .dash-grid { grid-template-columns:repeat(3,1fr); } }
-  @media (max-width:720px)  { .dash-grid { grid-template-columns:repeat(2,1fr); } }
-  .dash-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; cursor:pointer; transition:all 0.2s; overflow:hidden; position:relative; aspect-ratio:3/4; }
+  /* ─── DASHBOARD ─── */
+  /* STATE 1 — GRID */
+  .dash-container { display:block; }
+  .dash-hero { display:none; width:100%; height:calc(100vh - 100px); }
+  .dashboard--selected .dash-hero { display:flex; flex-direction:row; gap:24px; }
+  .dashboard--selected .dash-grid { display:none; }
+  .dashboard--selected .dash-section-header { display:none; }
+
+  .hero-left { width:40%; display:flex; flex-direction:column; gap:12px; }
+  .hero-back-btn { background:none; border:1px solid var(--border); color:#aaa; font-family:var(--mono); font-size:10px; padding:6px 12px; border-radius:6px; cursor:pointer; width:fit-content; }
+  .hero-back-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .hero-portrait-wrap { flex:1; background:var(--surface3); border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  .hero-portrait-wrap img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; }
+  .hero-portrait-empty { font-size:80px; }
+  .hero-bottom { display:flex; align-items:center; justify-content:space-between; }
+  .hero-name { font-size:20px; font-weight:700; text-transform:capitalize; color:#fff; }
+
+  .hero-right { width:60%; display:flex; flex-direction:column; gap:8px; overflow-y:auto; height:100%; }
+  .hero-strip { display:flex; flex-direction:column; gap:4px; }
+  .hero-strip-label { font-family:var(--mono); font-size:8px; letter-spacing:2px; text-transform:uppercase; color:#50507a; flex-shrink:0; margin-bottom:2px; }
+  .hero-strip-row { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
+  .hero-thumb { background:var(--surface3); border-radius:6px; overflow:hidden; display:flex; align-items:center; justify-content:center; width:250px; height:250px; }
+  .hero-thumb img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; display:block; }
+  .hero-thumb { position:relative; }
+  .hero-thumb.dragging { opacity:0.45; }
+  .hero-thumb.drop-target { border:2px solid var(--accent); background:rgba(255,68,0,0.12); }
+  .override-badge { position:absolute; bottom:4px; left:4px; font-family:var(--mono); font-size:8px; background:#ff6600; color:#fff; border-radius:3px; padding:2px 5px; display:flex; align-items:center; gap:3px; line-height:1; z-index:2; }
+  .override-badge-x { background:none; border:none; color:#fff; font-size:10px; line-height:1; cursor:pointer; padding:0; margin:0; }
+  .hero-thumb.has-override { border:2px solid var(--accent); }
+  .override-badge-hc { position:absolute; top:4px; right:4px; display:flex; gap:3px; z-index:3; }
+  .override-badge-hc span { font-family:var(--mono); font-size:8px; padding:2px 5px; border-radius:3px; cursor:pointer; line-height:1; }
+  .override-badge-hc .badge-h { background:#ff6600; color:#fff; }
+  .override-badge-hc .badge-c { background:#0055ff; color:#fff; }
+  .angle-prompt-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:99998; }
+  .angle-prompt-popover { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:99999; background:var(--surface); border:1px solid var(--border-hi); border-radius:8px; padding:16px; min-width:340px; box-shadow:0 8px 32px rgba(0,0,0,0.7); display:flex; flex-direction:column; gap:10px; max-height:80vh; overflow-y:auto; }
+  .angle-prompt-popover-label { font-family:var(--mono); font-size:9px; letter-spacing:1px; text-transform:uppercase; color:#50507a; }
+  .angle-prompt-popover textarea { font-family:var(--mono); font-size:11px; background:var(--surface3); border:1px solid var(--border); border-radius:4px; color:var(--text); padding:8px; resize:vertical; height:120px; width:100%; box-sizing:border-box; }
+  .angle-prompt-popover-actions { display:flex; gap:6px; }
+  .angle-prompt-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; border-radius:6px; z-index:100; }
+
+  .dash-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; }
+  .dash-card-wrap { position:relative; }
+  .dash-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; cursor:pointer; transition:all 0.2s; overflow:hidden; position:relative; aspect-ratio:2/3; display:flex; flex-direction:column; }
   .dash-card:hover { border-color:var(--border-hi); transform:translateY(-2px); box-shadow:0 6px 24px rgba(0,0,0,0.4); }
-  .dash-card.active { border-color:var(--accent); }
-  .dash-portrait { width:100%; height:100%; object-fit:cover; display:block; image-rendering:pixelated; background:var(--surface3); }
-  .dash-portrait-empty { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:48px; background:var(--surface3); }
-  .dash-card-info { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent,rgba(4,4,12,0.92)); padding:32px 12px 10px; }
-  .dash-name { font-weight:700; font-size:13px; text-transform:capitalize; color:#fff; margin-bottom:4px; }
-  .dash-stat { font-family:var(--mono); font-size:9px; color:#aaa; margin-bottom:6px; }
-  .dash-add { border:2px dashed var(--border); background:transparent; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#40405a; border-radius:12px; aspect-ratio:3/4; }
+  .dash-card.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .dash-portrait { width:100%; height:85%; object-fit:contain; display:block; image-rendering:pixelated; background:var(--surface3); flex-shrink:0; }
+  .dash-portrait-empty { width:100%; height:85%; display:flex; align-items:center; justify-content:center; font-size:48px; background:var(--surface3); flex-shrink:0; }
+  .dash-card-info { height:15%; display:flex; align-items:center; padding:0 10px; background:rgba(4,4,12,0.85); }
+  .dash-name { font-weight:700; font-size:11px; text-transform:capitalize; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dash-add { border:2px dashed var(--border); background:transparent; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#40405a; border-radius:12px; aspect-ratio:2/3; }
   .dash-add:hover { border-color:var(--accent); color:var(--accent); }
   .dash-add-icon { font-size:32px; }
   .dash-add-label { font-family:var(--mono); font-size:10px; letter-spacing:1px; }
+  .workspace-inner.dash-expanded { padding:0; }
+  .dashboard--selected { height:calc(100vh - 52px); overflow:hidden; display:flex; flex-direction:column; }
+  /* ─── VIDEO PAGE ─── */
+  .video-frame-gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:6px; max-height:600px; overflow-y:auto; }
+  .video-frame-thumb { position:relative; min-height:200px; border:2px solid var(--border); border-radius:6px; overflow:hidden; cursor:pointer; transition:border-color 0.15s; background:var(--surface2); }
+  .video-frame-thumb:hover { border-color:var(--border-hi); }
+  .video-frame-thumb.selected { border-color:var(--accent2); }
+  .video-frame-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .video-frame-num { position:absolute; bottom:2px; left:3px; font-family:var(--mono); font-size:8px; color:#fff; background:rgba(0,0,0,0.6); padding:1px 3px; border-radius:2px; }
+  .video-frame-thumb.selected::after { content:'✓'; position:absolute; top:3px; right:3px; background:var(--accent2); color:#000; font-size:9px; font-weight:700; width:14px; height:14px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .video-selected-container { display:flex; flex-direction:column; gap:16px; }
+  .vst-section-label { font-family:var(--mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:#50507a; margin-bottom:6px; }
+  .video-selected-strip { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:8px; max-height:600px; overflow-y:auto; }
+  .video-selected-thumb { width:100%; border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+  .vst-raw { min-height:180px; display:flex; align-items:center; justify-content:center; background:var(--surface3); }
+  .vst-raw img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; }
+  .vst-subject { min-height:180px; display:flex; align-items:center; justify-content:center; background:var(--surface3); cursor:pointer; }
+  .vst-subject img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; }
+  .vst-label { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:#50507a; text-align:center; padding:3px 0; background:var(--surface2); border-top:1px solid var(--border); }
+  .video-result-frame { position:relative; min-height:180px; border:1px solid var(--border); border-radius:6px; overflow:hidden; background:var(--surface3); cursor:pointer; transition:border-color 0.15s; }
+  .video-result-frame:hover { border-color:var(--border-hi); }
+  .video-result-frame img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; display:block; }
+  .video-result-frame-num { position:absolute; bottom:3px; left:4px; font-family:var(--mono); font-size:8px; color:#fff; background:rgba(0,0,0,0.6); padding:1px 4px; border-radius:2px; pointer-events:none; }
+  .video-preset-grid { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+  .video-preset-btn { font-family:var(--mono); font-size:9px; letter-spacing:1px; padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:#60608a; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+  .video-preset-btn:hover { border-color:var(--border-hi); color:var(--text); }
+  .video-preset-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(255,68,0,0.08); }
+  .video-sel-status { font-family:var(--mono); font-size:10px; }
+  .video-sel-status.ok { color:var(--accent2); }
+  .video-sel-status.over { color:var(--warning); }
+  .video-sel-status.none { color:#50507a; }
 
   /* ─── SOURCES PAGE ─── */
   .source-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px; }
@@ -381,8 +465,7 @@
     <nav class="nav">
       <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
       <button class="nav-btn" onclick="showPage('studio')">Studio</button>
-      <button class="nav-btn" onclick="showPage('pipeline')">Pipeline</button>
-      <button class="nav-btn" onclick="showPage('sources')">Sources</button>
+      <button class="nav-btn" onclick="showPage('video')">Video</button>
     </nav>
     <div class="header-right">
       <div class="cost-pill" id="costPill">spend: <span>$0.00</span></div>
@@ -402,215 +485,277 @@
 
       <!-- PAGE: Dashboard -->
       <div class="page active" id="page-dashboard">
-        <div class="section-header">
-          <div>
-            <div class="section-title">Characters</div>
-            <div class="section-sub" id="dashSub">— / 63 animations per character</div>
+        <div class="dash-container" id="dashContainer">
+          <!-- Section header — hidden in STATE 2 -->
+          <div class="dash-section-header section-header">
+            <div>
+              <div class="section-title">Characters</div>
+              <div class="section-sub" id="dashSub">— characters</div>
+            </div>
+            <button class="btn btn-primary" onclick="openAddChar()">+ New Character</button>
           </div>
-          <button class="btn btn-primary" onclick="openAddChar()">+ New Character</button>
+          <!-- Hero zone — STATE 2 only -->
+          <div class="dash-hero" id="dashHero">
+            <div class="hero-left">
+              <button class="hero-back-btn" onclick="deselectDashChar()">← Back</button>
+              <div class="hero-portrait-wrap" id="heroPortraitWrap"></div>
+              <div class="hero-bottom">
+                <div class="hero-name" id="heroName"></div>
+                <button class="btn btn-primary btn-sm" onclick="openCharAngles(STATE.dashSelected)">Edit</button>
+              </div>
+            </div>
+            <div class="hero-right">
+              <div class="hero-strip">
+                <div class="hero-strip-label">Headshots</div>
+                <div class="hero-strip-row" id="detailHeadshots"></div>
+              </div>
+              <div class="hero-strip">
+                <div class="hero-strip-label">Body</div>
+                <div class="hero-strip-row" id="detailBody"></div>
+              </div>
+              <div class="hero-strip">
+                <div class="hero-strip-label">Clothes</div>
+                <div class="hero-strip-row" id="detailClothes"></div>
+              </div>
+            </div>
+          </div>
+          <!-- Grid — STATE 1 only (hidden in STATE 2) -->
+          <div class="dash-grid" id="dashGrid"></div>
         </div>
-        <div class="dash-grid" id="dashGrid"></div>
       </div>
 
       <!-- PAGE: Studio -->
       <div class="page" id="page-studio">
-        <div class="section-header">
-          <div>
-            <div class="section-title" id="studioTitle">Select a character</div>
-            <div class="section-sub" id="studioSub">Pick from the roster to start generating animations</div>
+        <div class="studio-layout">
+
+          <!-- Left: Roster sidebar -->
+          <div class="studio-sidebar">
+            <div class="studio-sidebar-header">
+              <span>Characters</span>
+              <button class="btn btn-primary btn-sm" onclick="openAddChar()">+</button>
+            </div>
+            <div class="studio-roster-list" id="studioRosterList"></div>
           </div>
-          <div style="display:flex;gap:8px" id="studioActions"></div>
-        </div>
 
-        <div id="studioEmpty" class="empty-state">
-          <div class="empty-icon">🏀</div>
-          <div class="empty-text">Select a character from the roster</div>
-        </div>
-
-        <div id="studioContent" style="display:none">
-          <!-- Animation grid -->
-          <div class="anim-categories" id="animCategories"></div>
-
-          <!-- Generation panel -->
-          <div class="card" id="genPanel" style="display:none;margin-top:20px">
-            <div class="card-title" id="genPanelTitle">Generate</div>
-            <div class="gen-panel">
+          <!-- Right: Animation area -->
+          <div class="studio-main">
+            <div class="section-header">
               <div>
-                <div class="anim-info-row" id="animInfoRow" style="margin-bottom:12px"></div>
-                <div class="form-group">
-                  <label class="form-label">Mode</label>
-                  <div class="mode-toggle">
-                    <button class="mode-btn active" onclick="setMode('fbf')" id="modeFbf">Frame-by-Frame</button>
-                    <button class="mode-btn" onclick="setMode('strip')" id="modeStrip">Strip</button>
+                <div class="section-title" id="studioTitle">—</div>
+                <div class="section-sub" id="studioSub"></div>
+              </div>
+              <div style="display:flex;gap:8px" id="studioActions"></div>
+            </div>
+
+            <div id="studioContent" style="padding:0 24px 24px">
+              <!-- Animation grid -->
+              <div class="anim-categories" id="animCategories"></div>
+
+              <!-- Generation panel -->
+              <div class="card" id="genPanel" style="display:none;margin-top:20px">
+                <div class="card-title" id="genPanelTitle">Generate</div>
+                <div class="gen-panel">
+                  <div>
+                    <div class="anim-info-row" id="animInfoRow" style="margin-bottom:12px"></div>
+                    <div class="form-group">
+                      <label class="form-label">Mode</label>
+                      <div class="mode-toggle">
+                        <button class="mode-btn active" onclick="setMode('fbf')" id="modeFbf">Frame-by-Frame</button>
+                        <button class="mode-btn" onclick="setMode('strip')" id="modeStrip">Strip</button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+                        Prompt
+                        <button class="btn btn-secondary btn-sm" style="font-size:9px;padding:2px 8px" onclick="resetStudioPrompt()">Reset</button>
+                      </label>
+                      <textarea class="prompt-box" id="studioPrompt"></textarea>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                      <button class="btn btn-primary" id="genBtn" onclick="generateAnimation()" style="flex:1">
+                        <span class="spinner" id="genSpinner"></span>
+                        Generate
+                      </button>
+                      <button class="btn btn-secondary" onclick="closeGenPanel()">Cancel</button>
+                    </div>
+                    <div class="sse-log" id="genLog" style="margin-top:12px;display:none"></div>
+                  </div>
+                  <div class="gen-controls">
+                    <div class="gen-preview" id="genPreview">
+                      <div class="gen-preview-empty">No preview yet</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Frames</label>
+                      <input class="input" type="number" id="genFrames" min="2" max="32" value="8" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">FPS</label>
+                      <input class="input" type="number" id="genFps" min="4" max="24" value="12" />
+                    </div>
                   </div>
                 </div>
-                <div class="form-group">
-                  <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
-                    Prompt
-                    <button class="btn btn-secondary btn-sm" style="font-size:9px;padding:2px 8px" onclick="resetStudioPrompt()">Reset</button>
-                  </label>
-                  <textarea class="prompt-box" id="studioPrompt"></textarea>
-                </div>
-                <div style="display:flex;gap:8px">
-                  <button class="btn btn-primary" id="genBtn" onclick="generateAnimation()" style="flex:1">
-                    <span class="spinner" id="genSpinner"></span>
-                    Generate
-                  </button>
-                  <button class="btn btn-secondary" onclick="closeGenPanel()">Cancel</button>
-                </div>
-                <div class="sse-log" id="genLog" style="margin-top:12px;display:none"></div>
               </div>
-              <div class="gen-controls">
-                <div class="gen-preview" id="genPreview">
-                  <div class="gen-preview-empty">No preview yet</div>
+
+              <!-- SSE progress (full FBF) -->
+              <div class="card" id="fbfProgress" style="display:none;margin-top:20px">
+                <div class="card-title">Generating frames</div>
+                <div class="progress-ring" id="fbfRing" style="margin-bottom:12px">
+                  <svg class="ring-chart" viewBox="0 0 52 52">
+                    <circle cx="26" cy="26" r="22" fill="none" stroke="#1e1e30" stroke-width="4"/>
+                    <circle id="fbfRingFill" cx="26" cy="26" r="22" fill="none" stroke="#00ff88" stroke-width="4"
+                      stroke-dasharray="138" stroke-dashoffset="138" stroke-linecap="round"
+                      transform="rotate(-90 26 26)" style="transition:stroke-dashoffset 0.4s"/>
+                  </svg>
+                  <div class="ring-info">
+                    <div class="ring-label" id="fbfRingLabel">0/0</div>
+                    <div class="ring-sub">FRAMES DONE</div>
+                  </div>
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Frames</label>
-                  <input class="input" type="number" id="genFrames" min="2" max="32" value="8" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label">FPS</label>
-                  <input class="input" type="number" id="genFps" min="4" max="24" value="12" />
-                </div>
+                <div class="sse-log" id="fbfLog"></div>
               </div>
             </div>
           </div>
 
-          <!-- SSE progress (full FBF) -->
-          <div class="card" id="fbfProgress" style="display:none;margin-top:20px">
-            <div class="card-title">Generating frames</div>
-            <div class="progress-ring" id="fbfRing" style="margin-bottom:12px">
-              <svg class="ring-chart" viewBox="0 0 52 52">
-                <circle cx="26" cy="26" r="22" fill="none" stroke="#1e1e30" stroke-width="4"/>
-                <circle id="fbfRingFill" cx="26" cy="26" r="22" fill="none" stroke="#00ff88" stroke-width="4"
-                  stroke-dasharray="138" stroke-dashoffset="138" stroke-linecap="round"
-                  transform="rotate(-90 26 26)" style="transition:stroke-dashoffset 0.4s"/>
-              </svg>
-              <div class="ring-info">
-                <div class="ring-label" id="fbfRingLabel">0/0</div>
-                <div class="ring-sub">FRAMES DONE</div>
-              </div>
-            </div>
-            <div class="sse-log" id="fbfLog"></div>
-          </div>
         </div>
       </div>
 
-      <!-- PAGE: Pipeline -->
-      <div class="page" id="page-pipeline">
+
+      <!-- PAGE: Video -->
+      <div class="page" id="page-video">
         <div class="section-header">
           <div>
-            <div class="section-title">Full Pipeline</div>
-            <div class="section-sub">Generate all 63 animations for a character</div>
+            <div class="section-title">Video → Sprite</div>
+            <div class="section-sub" id="videoSub">Upload a clip, pick your frames, generate the animation</div>
           </div>
         </div>
-        <div class="card" id="pipelineCard">
-          <div id="pipelineEmpty" class="empty-state">
-            <div class="empty-icon">⚡</div>
-            <div class="empty-text">Select a character from the roster</div>
+
+        <!-- Step 1: Upload + Extract -->
+        <div class="card" id="videoUploadCard">
+          <div class="card-title">1 — Upload Video</div>
+          <div class="drop-zone" id="videoDropZone" style="margin-bottom:10px">
+            <div class="drop-icon">🎬</div>
+            <div>Drop video file here or click to browse</div>
+            <input type="file" id="videoFileInput" accept="video/*" onchange="handleVideoFile(this.files[0])" />
           </div>
-          <div id="pipelineContent" style="display:none">
-            <div style="display:flex;gap:16px;align-items:start;margin-bottom:16px">
-              <div style="flex:1">
-                <div class="form-group">
-                  <label class="form-label">Budget limit (USD)</label>
-                  <input class="input" type="number" id="pipelineBudget" value="5.00" step="0.50" />
-                </div>
-              </div>
-              <div style="text-align:right">
-                <div style="font-size:11px;color:#50507a;font-family:var(--mono);margin-bottom:6px">EST. ANIMATIONS</div>
-                <div style="font-size:28px;font-weight:900;" id="pipelineAnimCount">63</div>
-              </div>
-            </div>
-            <button class="btn btn-primary" id="pipelineBtn" onclick="startPipeline()" style="width:100%">
-              <span class="spinner" id="pipelineSpinner"></span>
-              Start Full Pipeline
+          <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+            <input class="input" id="videoUrlInput" placeholder="TikTok or YouTube URL" style="flex:1" />
+            <button class="btn btn-secondary" id="videoUrlBtn" onclick="loadVideoFromUrl()">
+              <span class="spinner" id="videoUrlSpinner"></span>
+              Load URL
             </button>
-            <div class="sse-log" id="pipelineLog" style="margin-top:12px;display:none"></div>
+          </div>
+          <div id="videoFileInfo" style="display:none;font-family:var(--mono);font-size:10px;color:#50507a;margin-bottom:10px"></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label class="form-label" style="margin:0;white-space:nowrap">FPS</label>
+            <input class="input" type="number" id="videoFps" value="10" min="1" max="30" style="width:60px" />
+            <button class="btn btn-primary" id="videoExtractBtn" onclick="extractVideoFrames()" disabled>
+              <span class="spinner" id="videoExtractSpinner"></span>
+              Extract Frames
+            </button>
           </div>
         </div>
-      </div>
 
-      <!-- PAGE: Sources -->
-      <div class="page" id="page-sources">
-        <div class="section-header">
-          <div>
-            <div class="section-title" id="sourcesTitle">Sources</div>
-            <div class="section-sub" id="sourcesSub">Upload reference photos for sprite generation</div>
+        <!-- Step 2: Frame gallery -->
+        <div class="card" id="videoGalleryCard" style="display:none;margin-top:16px">
+          <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span>2 — Select Frames <span id="videoFrameTotal" style="color:#50507a;font-weight:400"></span></span>
+            <span id="videoSelCount" class="video-sel-status none">0 selected</span>
           </div>
-          <div id="pkgStatusBadge" class="pkg-status-badge intake">intake</div>
+          <div class="video-frame-gallery" id="videoFrameGallery"></div>
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+            <button class="btn btn-secondary btn-sm" onclick="clearVideoSelection()">Clear</button>
+            <div style="flex:1"></div>
+            <input class="input" type="number" id="videoSmartCount" value="6" min="2" max="12" style="width:50px;text-align:center" />
+            <button class="btn btn-secondary btn-sm" id="videoSmartBtn" onclick="smartSelectVideoFrames()">
+              <span class="spinner" id="videoSmartSpinner"></span>
+              Smart Select
+            </button>
+            <button class="btn btn-primary btn-sm" id="videoConfirmSelBtn" onclick="confirmVideoSelection()" disabled>
+              Confirm →
+            </button>
+          </div>
         </div>
 
-        <div id="sourcesEmpty" class="empty-state">
-          <div class="empty-icon">📁</div>
-          <div class="empty-text">Select a character from the roster</div>
+        <!-- Step 3→4: Config + Generate -->
+        <div class="card" id="videoConfigCard" style="display:none;margin-top:16px">
+          <div class="card-title">3 — Configure &amp; Generate</div>
+          <div class="video-selected-strip" id="videoSelectedStrip" style="margin-bottom:14px"></div>
+          <!-- Animation presets -->
+          <div style="margin-bottom:14px">
+            <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Animation Preset</div>
+            <div class="video-preset-grid" id="videoPresetGrid"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div class="form-group">
+              <label class="form-label">Character</label>
+              <select class="input" id="videoCharSelect"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Animation Name</label>
+              <input class="input" id="videoAnimName" placeholder="spin-move" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Action Description</label>
+              <input class="input" id="videoAnimAction" placeholder="spin dribble move" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Target Frames</label>
+              <input class="input" type="number" id="videoTargetFrames" value="6" min="2" max="12" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Output FPS</label>
+              <input class="input" type="number" id="videoAnimFps" value="8" min="4" max="24" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Loop</label>
+              <select class="input" id="videoAnimLoop">
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div class="mode-toggle" id="videoModeToggle">
+              <button class="mode-btn active" onclick="setVideoMode('strip')">Strip</button>
+              <button class="mode-btn" onclick="setVideoMode('fbf')">Frame-by-Frame</button>
+            </div>
+            <div style="flex:1"></div>
+            <button class="btn btn-primary" id="videoGenBtn" onclick="generateVideoSprite()">
+              <span class="spinner" id="videoGenSpinner"></span>
+              Generate
+            </button>
+          </div>
         </div>
 
-        <div id="sourcesContent" style="display:none">
-
-          <div class="source-grid">
-            <!-- Headshot (JS-rendered) -->
-            <div class="source-slot" id="slotHeadshot">
-              <div class="source-slot-header"><div class="source-slot-label">Headshot</div></div>
-              <div class="source-preview-area"><div class="source-upload-prompt"><div class="source-upload-icon">+</div><div class="source-upload-text">No source</div></div></div>
-            </div>
-
-            <!-- Bodyshot (JS-rendered) -->
-            <div class="source-slot" id="slotBodyshot">
-              <div class="source-slot-header"><div class="source-slot-label">Bodyshot</div></div>
-              <div class="source-preview-area"><div class="source-upload-prompt"><div class="source-upload-icon">+</div><div class="source-upload-text">No source</div></div></div>
-            </div>
-
-            <!-- Clothing -->
-            <div class="source-slot">
-              <div class="source-slot-label">Clothing</div>
-              <div id="clothingSlots"></div>
+        <!-- FBF Progress -->
+        <div class="card" id="videoFbfProgress" style="display:none;margin-top:16px">
+          <div class="card-title">Generating frames</div>
+          <div class="progress-ring" style="margin-bottom:12px">
+            <svg class="ring-chart" viewBox="0 0 52 52">
+              <circle cx="26" cy="26" r="22" fill="none" stroke="#1e1e30" stroke-width="4"/>
+              <circle id="videoFbfRingFill" cx="26" cy="26" r="22" fill="none" stroke="#00ff88" stroke-width="4"
+                stroke-dasharray="138" stroke-dashoffset="138" stroke-linecap="round"
+                transform="rotate(-90 26 26)" style="transition:stroke-dashoffset 0.4s"/>
+            </svg>
+            <div class="ring-info">
+              <div class="ring-label" id="videoFbfRingLabel">0/0</div>
+              <div class="ring-sub">FRAMES DONE</div>
             </div>
           </div>
+          <div class="sse-log" id="videoFbfLog"></div>
+        </div>
 
-          <!-- Adjust Panel (inline reprocess) -->
-          <div id="adjPanelWrap" class="card" style="display:none;margin-bottom:16px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-              <div class="card-title" id="adjPanelTitle" style="margin-bottom:0">Adjust Source</div>
-              <button class="btn btn-secondary btn-sm" onclick="closeAdjPanel()">Cancel</button>
-            </div>
-            <div style="display:grid;grid-template-columns:200px 1fr;gap:20px;align-items:start">
-              <!-- Preview -->
-              <div>
-                <div style="background:#05050e;border:1px solid var(--border);border-radius:8px;overflow:hidden;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center">
-                  <img id="adjPanelImg" src="" alt="" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated;display:block" />
-                </div>
-                <div style="font-family:var(--mono);font-size:8px;color:#40405a;margin-top:6px;text-align:center;line-height:1.6" id="adjPanelNote">current processed result</div>
-              </div>
-              <!-- Controls -->
-              <div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Top trim</span><span class="adjust-range-val" id="valTopTrim">0px</span></div><input class="adjust-range" type="range" id="rTopTrim" min="0" max="100" value="0" step="1" oninput="onAdjSlider('top_trim',this.value)"></div>
-                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Bottom trim</span><span class="adjust-range-val" id="valBottomTrim">0px</span></div><input class="adjust-range" type="range" id="rBottomTrim" min="0" max="100" value="0" step="1" oninput="onAdjSlider('bottom_trim',this.value)"></div>
-                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Left trim</span><span class="adjust-range-val" id="valLeftTrim">0px</span></div><input class="adjust-range" type="range" id="rLeftTrim" min="0" max="100" value="0" step="1" oninput="onAdjSlider('left_trim',this.value)"></div>
-                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Right trim</span><span class="adjust-range-val" id="valRightTrim">0px</span></div><input class="adjust-range" type="range" id="rRightTrim" min="0" max="100" value="0" step="1" oninput="onAdjSlider('right_trim',this.value)"></div>
-                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Top expand</span><span class="adjust-range-val" id="valTopExpand">0px</span></div><input class="adjust-range" type="range" id="rTopExpand" min="0" max="100" value="0" step="1" oninput="onAdjSlider('top_expand',this.value)"></div>
-                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Bottom expand</span><span class="adjust-range-val" id="valBottomExpand">0px</span></div><input class="adjust-range" type="range" id="rBottomExpand" min="0" max="100" value="0" step="1" oninput="onAdjSlider('bottom_expand',this.value)"></div>
-                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Left expand</span><span class="adjust-range-val" id="valLeftExpand">0px</span></div><input class="adjust-range" type="range" id="rLeftExpand" min="0" max="100" value="0" step="1" oninput="onAdjSlider('left_expand',this.value)"></div>
-                  <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Right expand</span><span class="adjust-range-val" id="valRightExpand">0px</span></div><input class="adjust-range" type="range" id="rRightExpand" min="0" max="100" value="0" step="1" oninput="onAdjSlider('right_expand',this.value)"></div>
-                </div>
-                <div class="adjust-range-group"><div class="adjust-range-header"><span class="adjust-range-name">Zoom</span><span class="adjust-range-val" id="valZoom">1.0×</span></div><input class="adjust-range" type="range" id="rZoom" min="0.5" max="2.0" value="1.0" step="0.05" oninput="onAdjSlider('zoom',this.value)"></div>
-                <div class="divider"></div>
-                <div style="display:flex;gap:8px">
-                  <button class="btn btn-secondary btn-sm" onclick="resetAdjPanel()" style="flex:1">Reset</button>
-                  <button class="btn btn-secondary btn-sm" id="adjPreviewBtn" onclick="previewAdj()" style="flex:1"><span class="spinner" id="adjPreviewSpinner"></span> Preview</button>
-                  <button class="btn btn-primary btn-sm" id="adjSaveBtn" onclick="saveAdj()" style="flex:1"><span class="spinner" id="adjSaveSpinner"></span> Save</button>
-                </div>
-              </div>
-            </div>
-          </div>
+        <!-- Strip progress log -->
+        <div class="card" id="videoStripProgress" style="display:none;margin-top:16px">
+          <div class="sse-log" id="videoStripLog"></div>
+        </div>
 
-          <!-- Angles -->
-          <div class="card">
-            <div class="card-title">8-Angle Reference Set</div>
-            <div class="angle-grid" id="angleGrid"></div>
-          </div>
-
+        <!-- Result -->
+        <div class="card" id="videoResultCard" style="display:none;margin-top:16px">
+          <div class="card-title">Result</div>
+          <img id="videoResultImg" style="max-width:100%;height:auto;min-height:200px;border-radius:8px;image-rendering:pixelated;display:block" />
+          <div id="videoResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:8px"></div>
+          <div id="videoFrameStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:600px;overflow-y:auto;margin-top:14px"></div>
         </div>
       </div>
 
@@ -707,8 +852,12 @@
     </div>
 
     <!-- Done section: revealed after angles complete -->
-    <div id="charDoneSection" style="display:none;opacity:0;transition:opacity 0.2s">
-      <button class="btn btn-success" onclick="finishSetup()" style="width:100%;margin-top:16px">Open in Studio →</button>
+    <div id="charDoneSection" style="display:none;opacity:0;transition:opacity 0.2s;margin-top:16px">
+      <div id="charPipelineStatus" style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-bottom:8px;display:none">
+        <span id="charPipelineLabel">⚡ Generating animations in background…</span>
+        <div class="sse-log" id="charPipelineLog" style="margin-top:6px;max-height:120px"></div>
+      </div>
+      <button class="btn btn-success" onclick="finishSetup()" style="width:100%;margin-top:8px">Open in Studio →</button>
     </div>
   </div>
 </div>
@@ -899,6 +1048,7 @@ FULL BODY only. No environment. No extra elements. No cropping.`;
 // ─── STATE ───────────────────────────────────────────────────────────────
 const STATE = {
   roster: [],
+  dashSelected: null,
   selectedChar: null,
   selectedAnim: null,
   genMode: 'fbf',
@@ -933,8 +1083,14 @@ function showPage(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
   event.target.classList.add('active');
-  if (name === 'pipeline') renderPipelinePanel();
-  if (name === 'sources') renderSourcesPanel();
+  if (name === 'video') initVideoPage();
+  if (name === 'studio') {
+    if (STATE.selectedChar) {
+      selectChar(STATE.selectedChar.name);
+    } else if (STATE.roster.length > 0) {
+      selectChar(STATE.roster[0].name);
+    }
+  }
 }
 
 // ─── ROSTER ───────────────────────────────────────────────────────────────
@@ -945,6 +1101,7 @@ async function loadRoster() {
     STATE.roster = data.roster || [];
     renderRoster();
     renderDashboard();
+    renderStudioRoster();
   } catch(e) { toast('Failed to load roster', true); }
 }
 
@@ -953,19 +1110,14 @@ function renderRoster() {}
 function renderDashboard() {
   const grid = document.getElementById('dashGrid');
   const cards = STATE.roster.map(char => {
-    const done = char.completedAnims || 0;
-    const pct = Math.round((done / TOTAL_ANIMS) * 100);
+    const isSelected = STATE.dashSelected === char.name;
     const portrait = char.portrait
       ? `<img class="dash-portrait" src="${char.portrait}" onerror="this.style.display='none'" />`
       : `<div class="dash-portrait-empty">🏀</div>`;
     return `<div class="dash-card-wrap">
-      <div class="dash-card ${STATE.selectedChar?.name === char.name ? 'active' : ''}" onclick="openCharAngles('${char.name}')">
+      <div class="dash-card ${isSelected ? 'active' : ''}" onclick="selectDashChar('${char.name}')">
         ${portrait}
-        <div class="dash-card-info">
-          <div class="dash-name">${char.name}</div>
-          <div class="dash-stat">${done} / ${TOTAL_ANIMS} animations</div>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        </div>
+        <div class="dash-card-info"><div class="dash-name">${char.name}</div></div>
       </div>
       <button class="dash-delete-btn" onclick="event.stopPropagation();dashDeletePrompt(this,'${char.name}')" title="Delete character">✕</button>
     </div>`;
@@ -976,7 +1128,213 @@ function renderDashboard() {
     <div class="dash-add-label">Add Character</div>
   </div>`;
 
-  document.getElementById('dashSub').textContent = `${STATE.roster.length} characters · ${TOTAL_ANIMS} animations each`;
+  document.getElementById('dashSub').textContent = `${STATE.roster.length} characters`;
+}
+
+function selectDashChar(name) {
+  const char = STATE.roster.find(c => c.name === name);
+  if (!char) return;
+  if (STATE.dashSelected === name) { deselectDashChar(); return; }
+
+  STATE.dashSelected = name;
+
+  document.getElementById('heroPortraitWrap').innerHTML = char.portrait
+    ? `<img src="${char.portrait}" onerror="this.style.display='none'" />`
+    : `<div class="hero-portrait-empty">🏀</div>`;
+  document.getElementById('heroName').textContent = name;
+
+  const ANGLE_NAMES = ['front','front-3/4-R','side-R','back-3/4-R','back','back-3/4-L','side-L','front-3/4-L'];
+
+  const makeHeadshotStrip = () => [0,1,2,3,4,5,6,7].map(i => {
+    const angle = ANGLE_NAMES[i];
+    return `<div class="hero-thumb" draggable="true" data-angle="${angle}" data-layer="headshot" data-index="${i}" ondblclick="openAnglePromptEditor(this,'${name}',${i},'headshot')">` +
+      `<img src="/assets/${name}-headshot-${i}.png" onerror="this.style.display='none'" /></div>`;
+  }).join('');
+
+  const makeBodyStrip = (prefix, layer) => [0,1,2,3,4,5,6,7].map(i => {
+    const angle = ANGLE_NAMES[i];
+    return `<div class="hero-thumb" data-angle="${angle}" data-layer="${layer}" data-index="${i}" ondblclick="openAnglePromptEditor(this,'${name}',${i},'${layer}')">` +
+      `<img src="/assets/${name}-${prefix}-${i}.png" onerror="this.style.display='none'" /></div>`;
+  }).join('');
+
+  document.getElementById('detailHeadshots').innerHTML = makeHeadshotStrip();
+  document.getElementById('detailBody').innerHTML = makeBodyStrip('angle', 'body');
+  document.getElementById('detailClothes').innerHTML = makeBodyStrip('clothes', 'clothes');
+
+  attachDashDragDrop(name);
+
+  document.getElementById('dashContainer').classList.add('dashboard--selected');
+  document.querySelector('.workspace-inner').classList.add('dash-expanded');
+}
+
+function deselectDashChar() {
+  STATE.dashSelected = null;
+  document.getElementById('dashContainer').classList.remove('dashboard--selected');
+  document.querySelector('.workspace-inner').classList.remove('dash-expanded');
+  renderDashboard();
+}
+
+// ─── DASHBOARD HEAD OVERRIDE ──────────────────────────────────────────────
+// Visual-only overrides stored until Rebuild is clicked.
+// { charName: { angleIndex: { head?: {src,angle}, clothes?: {src,angle} } } }
+function attachDashDragDrop(charName) {
+  // Headshot AND clothes thumbs are draggable sources
+  ['#detailHeadshots .hero-thumb', '#detailClothes .hero-thumb'].forEach(sel => {
+    document.querySelectorAll(sel).forEach(thumb => {
+      thumb.setAttribute('draggable', 'true');
+      thumb.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', JSON.stringify({
+          angle: thumb.dataset.angle,
+          layer: thumb.dataset.layer,
+          index: parseInt(thumb.dataset.index),
+        }));
+        thumb.classList.add('dragging');
+      });
+      thumb.addEventListener('dragend', () => thumb.classList.remove('dragging'));
+    });
+  });
+
+  // Headshot and clothes thumbs reject drops — sources only
+  ['#detailHeadshots .hero-thumb', '#detailClothes .hero-thumb'].forEach(sel => {
+    document.querySelectorAll(sel).forEach(thumb => {
+      thumb.addEventListener('dragover', e => { e.preventDefault(); thumb.classList.add('drop-target'); });
+      thumb.addEventListener('dragleave', () => thumb.classList.remove('drop-target'));
+      thumb.addEventListener('drop', e => {
+        e.preventDefault();
+        thumb.classList.remove('drop-target');
+        toast('Can only drop onto body angles', true);
+      });
+    });
+  });
+
+  // Body thumbs accept drops — triggers immediate Gemini rebuild
+  document.querySelectorAll('#detailBody .hero-thumb').forEach(thumb => {
+    thumb.addEventListener('dragover', e => { e.preventDefault(); thumb.classList.add('drop-target'); });
+    thumb.addEventListener('dragleave', () => thumb.classList.remove('drop-target'));
+    thumb.addEventListener('drop', e => {
+      e.preventDefault();
+      thumb.classList.remove('drop-target');
+
+      let drag;
+      try { drag = JSON.parse(e.dataTransfer.getData('text/plain')); } catch { return; }
+
+      const targetAngle = thumb.dataset.angle;
+      const targetIndex = parseInt(thumb.dataset.index);
+
+      if (drag.angle !== targetAngle) {
+        toast(`Use the matching angle (${targetAngle})`, true);
+        return;
+      }
+
+      const isClothes = drag.layer === 'clothes';
+      const bodySrc = `/assets/${charName}-angle-${targetIndex}.png`;
+      const payload = isClothes
+        ? { clothesSrc: `/assets/${charName}-clothes-${targetIndex}.png`, bodySrc, angleIndex: targetIndex }
+        : { headSrc: `/assets/${charName}-headshot-${targetIndex}.png`, bodySrc, angleIndex: targetIndex };
+
+      rebuildAngle(charName, targetIndex, thumb, payload);
+    });
+  });
+}
+
+// Immediately calls the rebuild API on drop, shows spinner while Gemini runs.
+async function rebuildAngle(charName, angleIndex, thumb, payload) {
+  const img = thumb.querySelector('img');
+  const spinner = document.createElement('span');
+  spinner.className = 'spinner active';
+  spinner.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5';
+  thumb.style.position = 'relative';
+  thumb.appendChild(spinner);
+  if (img) img.style.opacity = '0.35';
+
+  try {
+    const res = await fetch(`/api/characters/${encodeURIComponent(charName)}/rebuild-override/${angleIndex}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed');
+    if (img && data.url) img.src = data.url + '?t=' + Date.now();
+    toast('Frame rebuilt');
+  } catch (err) {
+    toast('Rebuild failed: ' + err.message, true);
+  } finally {
+    spinner.remove();
+    if (img) img.style.opacity = '';
+  }
+}
+
+// ─── ANGLE PROMPT EDITOR (shared) ────────────────────────────────────────
+let _anglePopoverEl = null;
+let _angleBackdropEl = null;
+
+function _createPopover() {
+  if (_anglePopoverEl) { _anglePopoverEl.remove(); _anglePopoverEl = null; }
+  if (_angleBackdropEl) { _angleBackdropEl.remove(); _angleBackdropEl = null; }
+  const backdrop = document.createElement('div');
+  backdrop.className = 'angle-prompt-backdrop';
+  document.body.appendChild(backdrop);
+  _angleBackdropEl = backdrop;
+  const pop = document.createElement('div');
+  pop.className = 'angle-prompt-popover';
+  document.body.appendChild(pop);
+  _anglePopoverEl = pop;
+  const close = () => {
+    pop.remove(); backdrop.remove();
+    if (_anglePopoverEl === pop) _anglePopoverEl = null;
+    if (_angleBackdropEl === backdrop) _angleBackdropEl = null;
+  };
+  backdrop.addEventListener('click', close);
+  return { pop, close };
+}
+
+function openAnglePromptEditor(thumbEl, character, angleIndex, type) {
+  const { pop, close } = _createPopover();
+  pop.innerHTML =
+    `<div class="angle-prompt-popover-label">${type} · angle ${angleIndex}</div>` +
+    `<textarea id="_angPopTxt" placeholder="Custom prompt (leave blank for default)"></textarea>` +
+    `<div class="angle-prompt-popover-actions">` +
+      `<button class="btn btn-primary btn-sm" id="_angPopRegen" style="flex:1">Regenerate</button>` +
+      `<button class="btn btn-secondary btn-sm" id="_angPopCancel">Cancel</button>` +
+    `</div>`;
+  pop.querySelector('#_angPopTxt').focus();
+  pop.querySelector('#_angPopCancel').addEventListener('click', close);
+
+  pop.querySelector('#_angPopRegen').addEventListener('click', async () => {
+    const customPrompt = pop.querySelector('#_angPopTxt').value.trim() || undefined;
+    close();
+
+    // Spinner overlay on the thumb
+    const overlay = document.createElement('div');
+    overlay.className = 'angle-prompt-overlay';
+    overlay.innerHTML = '<span class="spinner active" style="width:24px;height:24px"></span>';
+    thumbEl.appendChild(overlay);
+    const img = thumbEl.querySelector('img');
+
+    try {
+      const body = { character, angleIndex };
+      const modelEl = document.getElementById('globalModel');
+      if (modelEl) body.model = modelEl.value;
+      if (type && type !== 'body') body.type = type;
+      if (customPrompt) body.customPrompt = customPrompt;
+
+      const res = await fetch(`${API}/api/angle/regenerate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Regenerate failed');
+      const url = data.generated?.[0]?.url;
+      if (img && url) { img.src = url + '?t=' + Date.now(); img.style.display = 'block'; }
+      toast('Angle regenerated');
+    } catch (e) {
+      toast('Regen failed: ' + e.message, true);
+    } finally {
+      overlay.remove();
+    }
+  });
 }
 
 async function deleteChar(name) {
@@ -985,6 +1343,7 @@ async function deleteChar(name) {
   if (!res.ok) { alert(data.error || 'Delete failed'); return false; }
   STATE.roster = STATE.roster.filter(c => c.name !== name);
   if (STATE.selectedChar?.name === name) STATE.selectedChar = null;
+  if (STATE.dashSelected === name) { STATE.dashSelected = null; document.getElementById('dashContainer').classList.remove('dashboard--selected'); document.querySelector('.workspace-inner').classList.remove('dash-expanded'); }
   renderRoster();
   renderDashboard();
   return true;
@@ -1021,8 +1380,14 @@ function showPage2(name) {
   document.getElementById('page-' + name).classList.add('active');
   const btn = [...document.querySelectorAll('.nav-btn')].find(b => b.textContent.toLowerCase().startsWith(name));
   if (btn) btn.classList.add('active');
-  if (name === 'pipeline') renderPipelinePanel();
-  if (name === 'sources') renderSourcesPanel();
+  if (name === 'video') initVideoPage();
+  if (name === 'studio') {
+    if (STATE.selectedChar) {
+      selectChar(STATE.selectedChar.name);
+    } else if (STATE.roster.length > 0) {
+      selectChar(STATE.roster[0].name);
+    }
+  }
 }
 
 async function selectChar(name) {
@@ -1031,6 +1396,7 @@ async function selectChar(name) {
   STATE.charPackage = null;
   renderRoster();
   renderDashboard();
+  renderStudioRoster();
   renderStudio();
   await Promise.all([loadSprites(name), loadCharPackage(name)]);
 }
@@ -1049,475 +1415,38 @@ async function loadCharPackage(name) {
     const r = await fetch(`${API}/api/character/${name}/package`);
     const data = await r.json();
     STATE.charPackage = data.package || null;
-    renderSourcesPanel();
   } catch(e) {}
 }
 
-// ─── SOURCES ──────────────────────────────────────────────────────────────
-const ANGLE_NAMES = ['front','front_right','right','back_right','back','back_left','left','front_left'];
-const CLOTHING_CATEGORIES = ['top','bottom','shoes','full_outfit'];
-
-function renderSourcesPanel() {
-  const char = STATE.selectedChar;
-  const pkg = STATE.charPackage;
-
-  document.getElementById('sourcesTitle').textContent = char ? char.name : 'Sources';
-  document.getElementById('sourcesSub').textContent = char ? `Package for ${char.name}` : 'Upload reference photos for sprite generation';
-
-  if (!char) {
-    document.getElementById('sourcesEmpty').style.display = 'block';
-    document.getElementById('sourcesContent').style.display = 'none';
-    return;
-  }
-  document.getElementById('sourcesEmpty').style.display = 'none';
-  document.getElementById('sourcesContent').style.display = 'block';
-
-  const status = pkg?.status || 'intake';
-  const badge = document.getElementById('pkgStatusBadge');
-  badge.className = `pkg-status-badge ${status}`;
-  badge.textContent = status.replace(/_/g, ' ');
-
-  // Headshot + Bodyshot — rendered via helper
-  document.getElementById('slotHeadshot').innerHTML = renderSourceSlot('headshot', pkg?.sources?.headshot, char.name);
-  document.getElementById('slotBodyshot').innerHTML = renderSourceSlot('bodyshot', pkg?.sources?.bodyshot, char.name);
-
-  // Clothing rows
-  const clothingContainer = document.getElementById('clothingSlots');
-  clothingContainer.innerHTML = CLOTHING_CATEGORIES.map(cat => {
-    const slot = pkg?.clothing?.[cat];
-    const isReady = slot?.status === 'ready';
-    const thumbHtml = isReady && slot.source_path
-      ? `<div class="clothing-thumb"><img src="${API}/api/character/image/${char.name}/sources/clothing/${slot.source_path.split('/').pop()}?t=${Date.now()}" onerror="this.parentNode.innerHTML='?'" /></div>`
-      : `<div class="clothing-thumb">+</div>`;
-    const statusHtml = isReady
-      ? `<span class="clothing-status ready">ready</span>`
-      : `<span class="clothing-status none">none</span>`;
-    return `<div class="clothing-row">
-      ${thumbHtml}
-      <span class="clothing-cat">${cat.replace('_',' ')}</span>
-      ${statusHtml}
-      <label class="btn btn-secondary btn-sm upload-btn-wrap" style="padding:3px 8px;font-size:9px">
-        Upload
-        <input type="file" accept="image/*" onchange="handleSourceFile('clothing','${cat}',this.files[0]);this.value=''"/>
-      </label>
-    </div>`;
-  }).join('');
-
-  // Angles grid
-  const angleGrid = document.getElementById('angleGrid');
-  angleGrid.innerHTML = ANGLE_NAMES.map((angleName, i) => {
-    const angle = pkg?.angles?.[angleName];
-    const isReady = angle?.status === 'ready';
-    const content = isReady && angle.url
-      ? `<img src="${angle.url}?t=${Date.now()}" onerror="this.style.display='none'" />`
-      : `<div class="angle-cell-pending">—</div>`;
-    return `<div class="angle-cell ${isReady ? 'ready' : ''}">
-      ${content}
-      <div class="angle-cell-label">${angleName.replace(/_/g,' ')}</div>
-    </div>`;
-  }).join('');
-}
-
-async function handleSourceFile(type, category, file) {
-  if (!file) return;
-  const char = STATE.selectedChar;
-  if (!char) return toast('Select a character first', true);
-
-  const params = new URLSearchParams({ name: char.name, type });
-  if (type === 'clothing' && category) params.set('category', category);
-
-  // Show processing state immediately for headshot/bodyshot
-  if (type === 'headshot' || type === 'bodyshot') {
-    const slotEl = document.getElementById(`slot${type.charAt(0).toUpperCase() + type.slice(1)}`);
-    if (slotEl) {
-      // Patch local state to processing so slot renders correctly
-      if (!STATE.charPackage) STATE.charPackage = { sources: {} };
-      if (!STATE.charPackage.sources) STATE.charPackage.sources = {};
-      STATE.charPackage.sources[type] = { ...(STATE.charPackage.sources[type] || {}), status: 'processing' };
-      slotEl.innerHTML = renderSourceSlot(type, STATE.charPackage.sources[type], char.name);
-    }
-  }
-
-  try {
-    const resp = await fetch(`${API}/api/character/upload-source?${params}`, {
-      method: 'POST',
-      body: file,
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    const procOk = data.processing?.status === 'ok';
-    toast(procOk ? `${type} processed ✓` : `${type} uploaded — check result`);
-    await loadCharPackage(char.name);
-    // Patch processing metadata into loaded package (not persisted server-side in full detail)
-    if (data.processing && STATE.charPackage?.sources?.[type]) {
-      STATE.charPackage.sources[type]._processing = data.processing;
-      renderSourcesPanel();
-    }
-  } catch(e) {
-    toast(`Upload failed: ${e.message}`, true);
-    await loadCharPackage(char.name);
-  }
-}
-
-function renderSourceSlot(type, source, charName) {
-  const label = type.charAt(0).toUpperCase() + type.slice(1);
-  const isProcessing = source?.status === 'processing';
-  const hasSource = source && (source.processed_path || source.path) && ['ready','processed'].includes(source.status);
-  const isAdjusted = hasSource && source.user_adjusted;
-  const procFailed = source?._processing?.status === 'failed';
-  const bgDetection = source?._processing?.bg_detection;
-
-  let statusClass, statusText;
-  if (isProcessing)       { statusClass = 'processing'; statusText = 'processing'; }
-  else if (isAdjusted)    { statusClass = 'adjusted';   statusText = 'adjusted'; }
-  else if (hasSource && procFailed) { statusClass = 'uploaded'; statusText = 'uploaded'; }
-  else if (hasSource)     { statusClass = 'ready';      statusText = 'processed ✓'; }
-  else                    { statusClass = 'pending';    statusText = 'pending'; }
-
-  // Image URL — prefer processed over original
-  let imgUrl = null;
-  if (hasSource) {
-    const displayPath = source.processed_path || source.path;
-    const fname = displayPath.split('/').pop();
-    imgUrl = `${API}/api/character/image/${charName}/sources/${fname}?t=${Date.now()}`;
-  }
-
-  // Preview content
-  let previewHtml;
-  if (isProcessing) {
-    previewHtml = `<div class="source-processing"><div class="spinner active" style="border-top-color:var(--warning);border-color:rgba(255,170,0,0.2)"></div><div class="source-processing-label">Processing...</div></div>`;
-  } else if (imgUrl) {
-    const t = source.transform || { x:0, y:0, scale:1 };
-    previewHtml = `<img src="${imgUrl}" style="transform:translate(${t.x}px,${t.y}px) scale(${t.scale})"
-      onerror="this.parentNode.innerHTML='<div class=\\'source-upload-prompt\\'><div class=\\'source-upload-icon\\'>!</div><div class=\\'source-upload-text\\'>Load error</div></div>'" />`;
-  } else {
-    previewHtml = `<div class="source-upload-prompt"><div class="source-upload-icon">+</div><div class="source-upload-text">No source</div></div>`;
-  }
-
-  // BG detection indicator (only shown after upload, when _processing is populated)
-  let bgNote = '';
-  if (bgDetection === 'fallback_full_image') {
-    bgNote = `<div class="source-bg-note fallback">fallback — check result</div>`;
-  } else if (bgDetection === 'corner_sample') {
-    bgNote = `<div class="source-bg-note ok">bg detected</div>`;
-  }
-
-  const adjustBtn = hasSource
-    ? `<button class="btn btn-secondary btn-sm" onclick="openAdjustPanel('${type}')">Adjust</button>`
-    : '';
-
-  return `
-    <div class="source-slot-header">
-      <div class="source-slot-label">${label}</div>
-      <div class="source-status-pill ${statusClass}">${statusText}</div>
-    </div>
-    <div class="source-preview-area">${previewHtml}</div>
-    ${bgNote}
-    <div class="source-actions-row">
-      <label class="btn btn-secondary btn-sm upload-btn-wrap">
-        Upload
-        <input type="file" accept="image/*" onchange="handleSourceFile('${type}',null,this.files[0]);this.value=''"/>
-      </label>
-      ${adjustBtn}
-    </div>`;
-}
-
-// ─── ADJUST PANEL (inline reprocess) ─────────────────────────────────────
-
-const ADJ_SLIDER_IDS = [
-  ['top_trim','rTopTrim','valTopTrim'],
-  ['bottom_trim','rBottomTrim','valBottomTrim'],
-  ['left_trim','rLeftTrim','valLeftTrim'],
-  ['right_trim','rRightTrim','valRightTrim'],
-  ['top_expand','rTopExpand','valTopExpand'],
-  ['bottom_expand','rBottomExpand','valBottomExpand'],
-  ['left_expand','rLeftExpand','valLeftExpand'],
-  ['right_expand','rRightExpand','valRightExpand'],
-];
-
-function openAdjustPanel(type) {
-  const char = STATE.selectedChar;
-  const pkg  = STATE.charPackage;
-  if (!char || !pkg) return;
-
-  const source = pkg.sources?.[type];
-  const displayPath = source?.processed_path || source?.path;
-  if (!displayPath) return;
-
-  const fname = displayPath.split('/').pop();
-  const url   = `${API}/api/character/image/${char.name}/sources/${fname}?t=${Date.now()}`;
-
-  STATE.adjPanel.type = type;
-  STATE.adjPanel.adjustments = { top_trim:0, bottom_trim:0, left_trim:0, right_trim:0, top_expand:0, bottom_expand:0, left_expand:0, right_expand:0, zoom:1.0 };
-
-  document.getElementById('adjPanelTitle').textContent = `Adjust ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-  document.getElementById('adjPanelImg').src = url;
-  document.getElementById('adjPanelNote').textContent = source.processed_path
-    ? 'current auto-processed result'
-    : 'original upload (processing not yet run)';
-
-  syncAdjSliders();
-  const panel = document.getElementById('adjPanelWrap');
-  panel.style.display = 'block';
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function closeAdjPanel() {
-  document.getElementById('adjPanelWrap').style.display = 'none';
-  STATE.adjPanel.type = null;
-}
-
-function onAdjSlider(key, rawVal) {
-  const val = key === 'zoom' ? parseFloat(rawVal) : parseInt(rawVal, 10);
-  STATE.adjPanel.adjustments[key] = val;
-  syncAdjSliders();
-}
-
-function syncAdjSliders() {
-  const adj = STATE.adjPanel.adjustments;
-  ADJ_SLIDER_IDS.forEach(([key, sliderId, valId]) => {
-    document.getElementById(sliderId).value = adj[key];
-    document.getElementById(valId).textContent = adj[key] + 'px';
-  });
-  document.getElementById('rZoom').value = adj.zoom;
-  document.getElementById('valZoom').textContent = adj.zoom.toFixed(2) + '×';
-}
-
-function resetAdjPanel() {
-  STATE.adjPanel.adjustments = { top_trim:0, bottom_trim:0, left_trim:0, right_trim:0, top_expand:0, bottom_expand:0, left_expand:0, right_expand:0, zoom:1.0 };
-  syncAdjSliders();
-  // Restore original processed image
-  const char = STATE.selectedChar;
-  const pkg  = STATE.charPackage;
-  const type = STATE.adjPanel.type;
-  if (char && pkg && type) {
-    const source = pkg.sources?.[type];
-    const displayPath = source?.processed_path || source?.path;
-    if (displayPath) {
-      const fname = displayPath.split('/').pop();
-      document.getElementById('adjPanelImg').src = `${API}/api/character/image/${char.name}/sources/${fname}?t=${Date.now()}`;
-      document.getElementById('adjPanelNote').textContent = 'reset to auto result';
-    }
-  }
-}
-
-async function _callReprocess(save) {
-  const char = STATE.selectedChar;
-  const type = STATE.adjPanel.type;
-  if (!char || !type) return null;
-
-  try {
-    const resp = await fetch(`${API}/api/character/${char.name}/sources/${type}/reprocess`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adjustments: STATE.adjPanel.adjustments, save }),
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    return data;
-  } catch(e) {
-    toast(`Reprocess failed: ${e.message}`, true);
-    return null;
-  }
-}
-
-async function previewAdj() {
-  const previewBtn = document.getElementById('adjPreviewBtn');
-  const spinner    = document.getElementById('adjPreviewSpinner');
-  previewBtn.disabled = true;
-  spinner.classList.add('active');
-
-  const data = await _callReprocess(false);
-  if (data?.processed_url) {
-    document.getElementById('adjPanelImg').src = data.processed_url + '?t=' + Date.now();
-    document.getElementById('adjPanelNote').textContent = 'preview result (not saved)';
-  }
-
-  previewBtn.disabled = false;
-  spinner.classList.remove('active');
-}
-
-async function saveAdj() {
-  const saveBtn = document.getElementById('adjSaveBtn');
-  const spinner = document.getElementById('adjSaveSpinner');
-  saveBtn.disabled = true;
-  spinner.classList.add('active');
-
-  const data = await _callReprocess(true);
-  if (data) {
-    toast(`${STATE.adjPanel.type} adjustment saved`);
-    closeAdjPanel();
-    await loadCharPackage(STATE.selectedChar.name);
-  }
-
-  saveBtn.disabled = false;
-  spinner.classList.remove('active');
-}
-
-// ─── ADJUST MODAL ─────────────────────────────────────────────────────────
-
-function openAdjustModal(type) {
-  const char = STATE.selectedChar;
-  const pkg  = STATE.charPackage;
-  if (!char || !pkg) return;
-
-  const source = pkg.sources?.[type];
-  if (!source) return;
-
-  const displayPath = source.processed_path || source.path;
-  if (!displayPath) return;
-
-  const fname = displayPath.split('/').pop();
-  const url   = `${API}/api/character/image/${char.name}/sources/${fname}?t=${Date.now()}`;
-
-  STATE.adjust.type = type;
-  STATE.adjust.transform = { ...(source.transform || { x:0, y:0, scale:1 }) };
-
-  const label = type.charAt(0).toUpperCase() + type.slice(1);
-  document.getElementById('adjustModalTitle').textContent = `Adjust ${label}`;
-  document.getElementById('adjustImg').src = url;
-
-  const note = source.processed_path
-    ? 'Showing auto-processed result.'
-    : 'Showing original upload (auto-processing not yet run).';
-  document.getElementById('adjustSaveNote').textContent = note;
-
-  applyAdjustTransform();
-  syncAdjustSliders();
-  document.getElementById('adjustModal').classList.add('open');
-}
-
-function closeAdjustModal() {
-  document.getElementById('adjustModal').classList.remove('open');
-  STATE.adjust.type = null;
-}
-
-function applyAdjustTransform() {
-  const t = STATE.adjust.transform;
-  document.getElementById('adjustImg').style.transform = `translate(${t.x}px,${t.y}px) scale(${t.scale})`;
-}
-
-function syncAdjustSliders() {
-  const t = STATE.adjust.transform;
-  document.getElementById('adjustX').value    = t.x;
-  document.getElementById('adjustY').value    = t.y;
-  document.getElementById('adjustZoom').value = t.scale;
-  document.getElementById('adjustXVal').textContent    = Math.round(t.x) + 'px';
-  document.getElementById('adjustYVal').textContent    = Math.round(t.y) + 'px';
-  document.getElementById('adjustZoomVal').textContent = Math.round(t.scale * 100) + '%';
-}
-
-function onAdjustSlider(axis, rawVal) {
-  const val = parseFloat(rawVal);
-  const t   = STATE.adjust.transform;
-  if      (axis === 'x')    t.x     = val;
-  else if (axis === 'y')    t.y     = val;
-  else if (axis === 'zoom') t.scale = val;
-  applyAdjustTransform();
-  syncAdjustSliders();
-}
-
-function resetAdjust() {
-  STATE.adjust.transform = { x:0, y:0, scale:1 };
-  applyAdjustTransform();
-  syncAdjustSliders();
-}
-
-async function saveAdjust() {
-  const char = STATE.selectedChar;
-  const type = STATE.adjust.type;
-  if (!char || !type) return;
-
-  const btn = document.getElementById('adjustSaveBtn');
-  btn.disabled = true;
-
-  try {
-    const resp = await fetch(`${API}/api/character/${char.name}/source/${type}/adjust`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(STATE.adjust.transform),
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    toast(`${type} adjustment saved`);
-    closeAdjustModal();
-    await loadCharPackage(char.name);
-  } catch(e) {
-    // Endpoint not yet wired — save to local package state so UI reflects the adjustment
-    if (STATE.charPackage?.sources?.[type]) {
-      STATE.charPackage.sources[type].transform    = { ...STATE.adjust.transform };
-      STATE.charPackage.sources[type].user_adjusted = true;
-      renderSourcesPanel();
-    }
-    toast('Saved locally — server endpoint pending from upload terminal');
-    closeAdjustModal();
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// Drag + scroll interaction — set up once at init
-let _adjDragging = false, _adjDragX = 0, _adjDragY = 0;
-
-function initAdjustInteraction() {
-  const viewport = document.getElementById('adjustViewport');
-
-  viewport.addEventListener('mousedown', e => {
-    _adjDragging = true;
-    _adjDragX = e.clientX;
-    _adjDragY = e.clientY;
-    e.preventDefault();
-  });
-
-  document.addEventListener('mousemove', e => {
-    if (!_adjDragging) return;
-    const t = STATE.adjust.transform;
-    t.x += e.clientX - _adjDragX;
-    t.y += e.clientY - _adjDragY;
-    _adjDragX = e.clientX;
-    _adjDragY = e.clientY;
-    // Clamp offsets to prevent losing the image entirely
-    t.x = Math.max(-300, Math.min(300, t.x));
-    t.y = Math.max(-300, Math.min(300, t.y));
-    applyAdjustTransform();
-    syncAdjustSliders();
-  });
-
-  document.addEventListener('mouseup', () => { _adjDragging = false; });
-
-  viewport.addEventListener('wheel', e => {
-    e.preventDefault();
-    const t = STATE.adjust.transform;
-    t.scale = Math.max(0.3, Math.min(3, t.scale - e.deltaY * 0.001));
-    applyAdjustTransform();
-    syncAdjustSliders();
-  }, { passive: false });
-
-  // Close modal on overlay click (not modal click)
-  document.getElementById('adjustModal').addEventListener('click', e => {
-    if (e.target === document.getElementById('adjustModal')) closeAdjustModal();
-  });
-}
 
 // ─── STUDIO ───────────────────────────────────────────────────────────────
+function renderStudioRoster() {
+  const list = document.getElementById('studioRosterList');
+  if (!list) return;
+  const activeName = STATE.selectedChar?.name;
+  list.innerHTML = STATE.roster.map(char => {
+    const thumb = char.portrait
+      ? `<img class="studio-roster-thumb" src="${char.portrait}" onerror="this.style.display='none'" />`
+      : `<div class="studio-roster-thumb-empty">🏀</div>`;
+    const count = char.completedAnims || 0;
+    return `<div class="studio-roster-item ${activeName === char.name ? 'active' : ''}" onclick="selectChar('${char.name}')">
+      ${thumb}
+      <div class="studio-roster-info">
+        <div class="studio-roster-name">${char.name}</div>
+        <div class="studio-roster-count">${count} / ${TOTAL_ANIMS}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderStudio() {
   const char = STATE.selectedChar;
-  if (!char) {
-    document.getElementById('studioEmpty').style.display = 'block';
-    document.getElementById('studioContent').style.display = 'none';
-    document.getElementById('studioTitle').textContent = 'Select a character';
-    document.getElementById('studioSub').textContent = 'Pick from the roster to start generating animations';
-    return;
-  }
-  document.getElementById('studioEmpty').style.display = 'none';
-  document.getElementById('studioContent').style.display = 'block';
+  if (!char) return;
   document.getElementById('studioTitle').textContent = char.name;
   document.getElementById('studioSub').textContent = `${(char.completedAnims||0)} / ${TOTAL_ANIMS} animations complete`;
 
   const actions = document.getElementById('studioActions');
   actions.innerHTML = `
-    <button class="btn btn-secondary btn-sm" onclick="showPage2('sources')">Sources 📁</button>
-    <button class="btn btn-secondary btn-sm" onclick="showPage2('pipeline')">Full Pipeline ⚡</button>
     <button class="btn btn-secondary btn-sm" id="exportSJBtn" onclick="exportToSoulJam()">
       <span class="spinner" id="exportSJSpinner"></span>Export → Soul Jam
     </button>`;
@@ -1541,7 +1470,7 @@ function renderAnimGrid() {
       const dataAttrs = done ? `data-frames="${frames}" data-fps="${fps}" data-sprite="${sprite.url}"` : '';
       const previewDiv = done ? `<div class="anim-cell-preview" style="background-image:url('${sprite.url}')"></div>` : '';
       const clickHandler = done
-        ? `openDetailPanel('${STATE.selectedChar}','${anim}','${sprite.url}',${fps},${frames},null,null)`
+        ? `openDetailPanel('${STATE.selectedChar.name}','${anim}','${sprite.url}',${fps},${frames},null,null)`
         : `selectAnim('${anim}','${cat}')`;
       return `<div class="anim-cell ${done ? 'done' : ''} ${isActive ? 'active' : ''}" onclick="${clickHandler}" ${dataAttrs}>
         ${previewDiv}
@@ -1789,87 +1718,6 @@ function updateRing(done, total) {
   document.getElementById('fbfRingLabel').textContent = `${done}/${total}`;
 }
 
-// ─── PIPELINE ─────────────────────────────────────────────────────────────
-function renderPipelinePanel() {
-  const char = STATE.selectedChar;
-  document.getElementById('pipelineEmpty').style.display = char ? 'none' : 'block';
-  document.getElementById('pipelineContent').style.display = char ? 'block' : 'none';
-}
-
-async function startPipeline() {
-  const char = STATE.selectedChar;
-  if (!char) return toast('Select a character first', true);
-
-  const budget = parseFloat(document.getElementById('pipelineBudget').value) || 5;
-
-  const btn = document.getElementById('pipelineBtn');
-  const spinner = document.getElementById('pipelineSpinner');
-  const log = document.getElementById('pipelineLog');
-  btn.disabled = true;
-  spinner.classList.add('active');
-  log.style.display = 'block';
-  log.innerHTML = `<span class="info">Starting pipeline for ${char.name}...</span>\n`;
-
-  try {
-    const resp = await fetch(`${API}/api/pipeline/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ character: char.name, budget, model: document.getElementById('globalModel').value }),
-    });
-
-    const reader = resp.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        try {
-          const ev = JSON.parse(line.slice(5));
-          if (ev.type === 'anim_start') {
-            log.innerHTML += `<span class="info">→ ${ev.animation} (${ev.index + 1}/${ev.total})</span>\n`;
-            log.scrollTop = log.scrollHeight;
-          } else if (ev.type === 'anim_complete') {
-            log.innerHTML += `<span class="ok">✓ ${ev.animation} — ${ev.frames}/${ev.totalFrames} frames, score ${ev.score}</span>\n`;
-            log.scrollTop = log.scrollHeight;
-          } else if (ev.type === 'anim_skip') {
-            log.innerHTML += `<span class="err">✗ ${ev.animation} skipped: ${ev.reason}</span>\n`;
-            log.scrollTop = log.scrollHeight;
-          } else if (ev.type === 'budget_stop') {
-            log.innerHTML += `<span class="err">✗ Budget limit reached — spent $${ev.spent}, needed $${ev.needed} for ${ev.animation}</span>\n`;
-            log.scrollTop = log.scrollHeight;
-          } else if (ev.type === 'frame_done') {
-            log.innerHTML += `<span class="info">  ✓ ${ev.animation} frame ${ev.frame + 1}/${ev.totalFrames}</span>\n`;
-            log.scrollTop = log.scrollHeight;
-          } else if (ev.type === 'frame_error') {
-            log.innerHTML += `<span class="err">  ✗ ${ev.animation} frame ${ev.frame + 1} failed: ${ev.error}</span>\n`;
-            log.scrollTop = log.scrollHeight;
-          } else if (ev.type === 'pipeline_complete') {
-            log.innerHTML += `<span class="ok">✓ Pipeline complete — ${ev.completedAnims?.length || '?'} animations, $${ev.totalCost}</span>\n`;
-            await loadRoster();
-            await loadSprites(char.name);
-            toast('Pipeline complete');
-          } else if (ev.type === 'error') {
-            log.innerHTML += `<span class="err">✗ ${ev.message}</span>\n`;
-            toast('Pipeline error: ' + ev.message, true);
-          }
-        } catch {}
-      }
-    }
-  } catch(e) {
-    log.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
-    toast('Pipeline failed: ' + e.message, true);
-  } finally {
-    btn.disabled = false;
-    spinner.classList.remove('active');
-  }
-}
-
 // ─── EXPORT ───────────────────────────────────────────────────────────────
 
 async function exportToSoulJam() {
@@ -1924,7 +1772,7 @@ function openCharAngles(name) {
   // Headshots
   document.getElementById('headshotsGrid').innerHTML = angleNames.map((label, i) =>
     `<div id="headSlot${i}" style="${slotStyle}">
-      <div style="${imgWrapStyle}">
+      <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'headshot')">
         <img id="headImg${i}" src="/assets/${name}-headshot-${i}.png" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" onerror="this.style.display='none'" />
       </div>
       <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
@@ -1935,7 +1783,7 @@ function openCharAngles(name) {
   // Body
   document.getElementById('anglesGrid').innerHTML = angleNames.map((label, i) =>
     `<div id="angleSlot${i}" style="${slotStyle}">
-      <div style="${imgWrapStyle}">
+      <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'body')">
         <img id="angleImg${i}" src="/assets/${name}-angle-${i}.png" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" onerror="this.style.display='none'" />
       </div>
       <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
@@ -1946,7 +1794,7 @@ function openCharAngles(name) {
   // Clothes
   document.getElementById('clothesGrid').innerHTML = angleNames.map((label, i) =>
     `<div id="clothesSlot${i}" style="${slotStyle}">
-      <div style="${imgWrapStyle}">
+      <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'clothes')">
         <img id="clothesImg${i}" src="/assets/${name}-clothes-${i}.png" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" onerror="this.style.display='none'" />
       </div>
       <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
@@ -2090,7 +1938,7 @@ async function confirmAndGenerateAngles() {
     const grid = document.getElementById('anglesGrid');
     grid.innerHTML = angleNames.map((label, i) =>
       `<div id="angleSlot${i}" style="${slotStyle}">
-        <div style="${imgWrapStyle}">
+        <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'body')">
           <span class="spinner active" id="angleSpinner${i}"></span>
           <img id="angleImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
         </div>
@@ -2103,7 +1951,7 @@ async function confirmAndGenerateAngles() {
     const headshotsGrid = document.getElementById('headshotsGrid');
     headshotsGrid.innerHTML = angleNames.map((label, i) =>
       `<div id="headSlot${i}" style="${slotStyle}">
-        <div style="${imgWrapStyle}">
+        <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'headshot')">
           <span class="spinner active" id="headSpinner${i}"></span>
           <img id="headImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
         </div>
@@ -2116,7 +1964,7 @@ async function confirmAndGenerateAngles() {
     const clothesGrid = document.getElementById('clothesGrid');
     clothesGrid.innerHTML = angleNames.map((label, i) =>
       `<div id="clothesSlot${i}" style="${slotStyle}">
-        <div style="${imgWrapStyle}">
+        <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'clothes')">
           <span class="spinner active" id="clothesSpinner${i}"></span>
           <img id="clothesImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
         </div>
@@ -2200,7 +2048,10 @@ async function confirmAndGenerateAngles() {
     const doneSec = document.getElementById('charDoneSection');
     doneSec.style.display = 'block';
     requestAnimationFrame(() => { doneSec.style.opacity = '1'; });
-    toast('Character ready');
+    toast('Angles done — generating animations…');
+
+    // Auto-trigger fill-gaps pipeline (SSE) so all animations are ready when Studio opens
+    autoRunPipelineForChar(name);
   } catch(e) {
     toast('Error: ' + e.message, true);
   }
@@ -2280,6 +2131,62 @@ async function rerunClothes(angleIndex) {
     if (btn) btn.style.display = 'inline-block';
   } finally {
     if (spinner) spinner.classList.remove('active');
+  }
+}
+
+async function autoRunPipelineForChar(name) {
+  const statusEl = document.getElementById('charPipelineStatus');
+  const logEl = document.getElementById('charPipelineLog');
+  const labelEl = document.getElementById('charPipelineLabel');
+  statusEl.style.display = 'block';
+  logEl.innerHTML = '';
+
+  try {
+    const resp = await fetch(`${API}/api/pipeline/fill-gaps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: name }),
+    });
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    let doneCount = 0, skipCount = 0;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const ev = JSON.parse(line.slice(5));
+          if (ev.type === 'start') {
+            labelEl.textContent = `⚡ Generating ${ev.total} animations…`;
+          } else if (ev.type === 'anim_start') {
+            logEl.innerHTML += `<span class="info">→ ${ev.animKey}…</span>\n`;
+          } else if (ev.type === 'anim_done') {
+            doneCount++;
+            logEl.innerHTML += `<span class="ok">✓ ${ev.animKey}</span>\n`;
+            labelEl.textContent = `⚡ ${doneCount} done, ${skipCount} skipped…`;
+          } else if (ev.type === 'skip') {
+            skipCount++;
+          } else if (ev.type === 'anim_error') {
+            logEl.innerHTML += `<span class="err">✗ ${ev.animKey}: ${ev.error}</span>\n`;
+          } else if (ev.type === 'complete') {
+            labelEl.textContent = `✓ All animations ready — ${doneCount} generated, ${skipCount} already existed`;
+            logEl.innerHTML += `<span class="ok">✓ Studio-ready</span>\n`;
+            // Refresh roster so completedAnims count updates
+            loadRoster();
+          }
+          logEl.scrollTop = logEl.scrollHeight;
+        } catch {}
+      }
+    }
+  } catch (e) {
+    logEl.innerHTML += `<span class="err">Pipeline error: ${e.message}</span>\n`;
   }
 }
 
@@ -2561,6 +2468,625 @@ async function runBulkGenerate() {
 
 // ─── UTILS ────────────────────────────────────────────────────────────────
 function el(id) { return document.getElementById(id); }
+
+// ─── VIDEO PAGE ───────────────────────────────────────────────────────────
+const VIDEO_PRESETS = [
+  { label: 'idle',              frames: 4,  fps: 6,  extractFps: 8,  action: 'standing idle, slight weight shift' },
+  { label: 'walk',              frames: 8,  fps: 8,  extractFps: 12, action: 'walking forward' },
+  { label: 'dribble',           frames: 8,  fps: 12, extractFps: 15, action: 'dribbling basketball while moving' },
+  { label: 'static-dribble',    frames: 6,  fps: 10, extractFps: 12, action: 'standing in place dribbling basketball' },
+  { label: 'idle-dribble',      frames: 6,  fps: 8,  extractFps: 10, action: 'idle dribble in place' },
+  { label: 'crossover',         frames: 6,  fps: 12, extractFps: 15, action: 'crossover dribble move' },
+  { label: 'stepback',          frames: 8,  fps: 12, extractFps: 15, action: 'step back move with basketball' },
+  { label: 'jumpshot',          frames: 10, fps: 12, extractFps: 15, action: 'jump shot, ball release' },
+  { label: 'jump',              frames: 8,  fps: 12, extractFps: 15, action: 'jumping up' },
+  { label: 'steal',             frames: 6,  fps: 12, extractFps: 15, action: 'steal attempt, reaching for ball' },
+  { label: 'defense-shuffle',   frames: 6,  fps: 8,  extractFps: 10, action: 'defensive shuffle side to side' },
+  { label: 'defense-backpedal', frames: 6,  fps: 8,  extractFps: 10, action: 'defensive backpedal' },
+];
+
+const VID = { sessionId: null, frames: [], selected: new Set(), mode: 'strip', file: null, preset: null };
+
+function initVideoPage() {
+  const sel = document.getElementById('videoCharSelect');
+  sel.innerHTML = STATE.roster.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  // Render preset buttons
+  const grid = document.getElementById('videoPresetGrid');
+  if (grid) {
+    grid.innerHTML = VIDEO_PRESETS.map((p, i) =>
+      `<button class="video-preset-btn" onclick="applyVideoPreset(${i})">${p.label}</button>`
+    ).join('');
+  }
+}
+
+function applyVideoPreset(i) {
+  const p = VIDEO_PRESETS[i];
+  VID.preset = i;
+  // Update preset button active state
+  document.querySelectorAll('.video-preset-btn').forEach((btn, j) => {
+    btn.classList.toggle('active', j === i);
+  });
+  // Set extraction FPS
+  const fpsEl = document.getElementById('videoFps');
+  if (fpsEl) fpsEl.value = p.extractFps;
+  // Set smart select count
+  const smEl = document.getElementById('videoSmartCount');
+  if (smEl) smEl.value = p.frames;
+  // Set target frames
+  const tfEl = document.getElementById('videoTargetFrames');
+  if (tfEl) tfEl.value = p.frames;
+  // Set output FPS
+  const afEl = document.getElementById('videoAnimFps');
+  if (afEl) afEl.value = p.fps;
+  // Set animation name if empty or matches a preset label (user hasn't customized it)
+  const nameEl = document.getElementById('videoAnimName');
+  if (nameEl) {
+    const isPresetLabel = VIDEO_PRESETS.some(x => x.label === nameEl.value);
+    if (!nameEl.value || isPresetLabel) nameEl.value = p.label;
+  }
+  // Set action (only if empty)
+  const actionEl = document.getElementById('videoAnimAction');
+  if (actionEl && !actionEl.value) actionEl.value = p.action;
+  updateVideoSelCount();
+}
+
+async function loadVideoFromUrl() {
+  const url = document.getElementById('videoUrlInput').value.trim();
+  if (!url) return toast('Paste a TikTok or YouTube URL', true);
+  const btn = document.getElementById('videoUrlBtn');
+  const spinner = document.getElementById('videoUrlSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+  const info = document.getElementById('videoFileInfo');
+  info.textContent = 'Downloading…';
+  info.style.display = 'block';
+  try {
+    const res = await fetch(`${API}/api/video/from-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Download failed');
+    VID.sessionId = data.sessionId;
+    VID.file = null;
+    info.textContent = `Downloaded · ${(data.size / 1024 / 1024).toFixed(1)} MB`;
+    document.getElementById('videoExtractBtn').disabled = false;
+    toast('Video downloaded');
+  } catch (e) {
+    info.textContent = '';
+    info.style.display = 'none';
+    toast('Download failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+function handleVideoFile(file) {
+  if (!file) return;
+  VID.file = file;
+  const info = document.getElementById('videoFileInfo');
+  info.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
+  info.style.display = 'block';
+  document.getElementById('videoExtractBtn').disabled = false;
+  // drag/drop highlight reset
+  document.getElementById('videoDropZone').classList.remove('dragover');
+}
+
+// Drag and drop support
+document.addEventListener('DOMContentLoaded', () => {
+  const dz = document.getElementById('videoDropZone');
+  if (!dz) return;
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('video/')) handleVideoFile(f);
+  });
+});
+
+async function extractVideoFrames() {
+  const btn = document.getElementById('videoExtractBtn');
+  const spinner = document.getElementById('videoExtractSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+  document.getElementById('videoGalleryCard').style.display = 'none';
+  document.getElementById('videoConfigCard').style.display = 'none';
+  document.getElementById('videoResultCard').style.display = 'none';
+
+  try {
+    // Upload video file if not already downloaded from URL
+    if (!VID.sessionId) {
+      const upRes = await fetch(`${API}/api/video/upload`, {
+        method: 'POST',
+        body: VID.file,
+        headers: { 'Content-Type': VID.file.type },
+      });
+      const upData = await upRes.json();
+      if (!upRes.ok) throw new Error(upData.error || 'Upload failed');
+      VID.sessionId = upData.sessionId;
+    }
+
+    // Extract frames
+    const fps = parseInt(document.getElementById('videoFps').value) || 10;
+    const exRes = await fetch(`${API}/api/video/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: VID.sessionId, fps }),
+    });
+    const exData = await exRes.json();
+    if (!exRes.ok) throw new Error(exData.error || 'Extract failed');
+
+    VID.frames = exData.frames;
+    VID.selected.clear();
+    renderVideoGallery();
+    document.getElementById('videoFrameTotal').textContent = `· ${exData.frameCount} frames`;
+    document.getElementById('videoGalleryCard').style.display = 'block';
+    updateVideoSelCount();
+    toast(`Extracted ${exData.frameCount} frames`);
+  } catch (e) {
+    toast('Extract failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+function renderVideoGallery() {
+  const gallery = document.getElementById('videoFrameGallery');
+  gallery.innerHTML = VID.frames.map((f, i) => `
+    <div class="video-frame-thumb ${VID.selected.has(f.file) ? 'selected' : ''}" onclick="toggleVideoFrame(${i})">
+      <img src="${f.url}" loading="lazy" />
+      <span class="video-frame-num">${i + 1}</span>
+    </div>
+  `).join('');
+}
+
+function toggleVideoFrame(i) {
+  const f = VID.frames[i];
+  if (VID.selected.has(f.file)) {
+    VID.selected.delete(f.file);
+  } else {
+    VID.selected.add(f.file);
+  }
+  // Update just the clicked thumb
+  const thumbs = document.querySelectorAll('.video-frame-thumb');
+  thumbs[i].classList.toggle('selected', VID.selected.has(f.file));
+  updateVideoSelCount();
+}
+
+function updateVideoSelCount() {
+  const n = VID.selected.size;
+  const el = document.getElementById('videoSelCount');
+  const target = VID.preset !== null ? VIDEO_PRESETS[VID.preset].frames : null;
+  if (target) {
+    const diff = n - target;
+    if (n === 0) {
+      el.className = 'video-sel-status none';
+      el.textContent = `0 / ${target} frames`;
+    } else if (diff === 0) {
+      el.className = 'video-sel-status ok';
+      el.textContent = `${n} / ${target} ✓`;
+    } else if (diff > 0) {
+      el.className = 'video-sel-status over';
+      el.textContent = `${n} / ${target} — deselect ${diff}`;
+    } else {
+      el.className = 'video-sel-status none';
+      el.textContent = `${n} / ${target} frames`;
+    }
+  } else {
+    el.className = n > 0 ? 'video-sel-status ok' : 'video-sel-status none';
+    el.textContent = `${n} selected`;
+  }
+  document.getElementById('videoConfirmSelBtn').disabled = n < 2;
+}
+
+function clearVideoSelection() {
+  VID.selected.clear();
+  renderVideoGallery();
+  updateVideoSelCount();
+}
+
+async function smartSelectVideoFrames() {
+  const btn = document.getElementById('videoSmartBtn');
+  const spinner = document.getElementById('videoSmartSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+  try {
+    const count = VID.preset !== null
+      ? VIDEO_PRESETS[VID.preset].frames
+      : (parseInt(document.getElementById('videoSmartCount').value) || 6);
+    const res = await fetch(`${API}/api/video/smart-select`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: VID.sessionId, count }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Smart select failed');
+
+    // Apply selection
+    VID.selected.clear();
+    data.selectedFileNames.forEach(f => VID.selected.add(f));
+    renderVideoGallery();
+    updateVideoSelCount();
+    toast(`Smart selected ${data.count} frames`);
+  } catch (e) {
+    toast('Smart select failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+async function confirmVideoSelection() {
+  const ordered = VID.frames.filter(f => VID.selected.has(f.file)).map(f => f.file);
+  try {
+    const res = await fetch(`${API}/api/video/select-manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: VID.sessionId, frameFiles: ordered }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Selection failed');
+
+    // Show selected strip preview — two sections: originals + subject slots
+    const strip = document.getElementById('videoSelectedStrip');
+    const originalsHtml = ordered.map((file, i) => {
+      const frame = VID.frames.find(f => f.file === file);
+      return `<div class="video-selected-thumb">
+        <div class="vst-raw"><img src="${frame.url}" /></div>
+        <div class="vst-label">frame ${i + 1}</div>
+      </div>`;
+    }).join('');
+    const subjectsHtml = ordered.map((file, i) =>
+      `<div class="video-selected-thumb" data-frame-index="${i}" data-frame-file="${file}">
+        <div class="vst-subject vst-pending"><span class="spinner active"></span></div>
+        <div class="vst-label">pose reference ${i + 1}</div>
+      </div>`
+    ).join('');
+    strip.innerHTML =
+      `<div class="video-selected-container">` +
+        `<div><div class="vst-section-label">Original Frames</div><div class="video-selected-strip">${originalsHtml}</div></div>` +
+        `<div><div class="vst-section-label">Pose References</div><div class="video-selected-strip" id="vstSubjectGrid">${subjectsHtml}</div></div>` +
+      `</div>`;
+
+    // Set default target frames to match selection count
+    document.getElementById('videoTargetFrames').value = ordered.length;
+
+    // Populate character dropdown
+    initVideoPage();
+
+    document.getElementById('videoConfigCard').style.display = 'block';
+    document.getElementById('videoConfigCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Kick off background extraction — non-blocking
+    extractVideoSubjects(ordered);
+  } catch (e) {
+    toast('Confirm failed: ' + e.message, true);
+  }
+}
+
+async function extractVideoSubjects(frameFiles) {
+  try {
+    const res = await fetch(`${API}/api/video/extract-subjects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: VID.sessionId, frameFiles }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Extraction failed');
+
+    for (const subject of data.subjects) {
+      const thumb = document.querySelector(`#vstSubjectGrid [data-frame-index="${subject.frameIndex}"]`);
+      if (!thumb) continue;
+      const slot = thumb.querySelector('.vst-subject');
+      if (!slot) continue;
+      if (subject.error) {
+        slot.innerHTML = `<span style="font-size:9px;color:var(--danger)">${subject.error}</span>`;
+      } else {
+        const img = document.createElement('img');
+        img.src = subject.url;
+        slot.innerHTML = '';
+        slot.appendChild(img);
+        const frameFile = thumb.dataset.frameFile;
+        const frameIndex = subject.frameIndex;
+        slot.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slot, frameIndex, frameFile); };
+        slot.title = 'Double-click to edit';
+      }
+      slot.classList.remove('vst-pending');
+    }
+  } catch (e) {
+    // Non-fatal — show dash in each pending slot
+    document.querySelectorAll('#vstSubjectGrid .vst-subject.vst-pending').forEach(slot => {
+      slot.innerHTML = `<span style="font-size:9px;color:var(--text-muted)">—</span>`;
+      slot.classList.remove('vst-pending');
+    });
+    console.warn('[extract-subjects]', e.message);
+  }
+}
+
+function openSubjectEditor(slotEl, frameIndex, frameFile) {
+  const { pop, close } = _createPopover();
+  pop.innerHTML =
+    `<div class="angle-prompt-popover-label">Edit pose reference frame ${frameIndex + 1}</div>` +
+    `<textarea placeholder="Describe changes...">Keep the same pose and person except: </textarea>` +
+    `<div class="angle-prompt-popover-actions">` +
+      `<button class="btn btn-primary btn-sm" id="_subjectRegenBtn">Regenerate</button>` +
+      `<button class="btn btn-secondary btn-sm" id="_subjectCancelBtn">Cancel</button>` +
+    `</div>`;
+
+  const ta = pop.querySelector('textarea');
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  pop.querySelector('#_subjectCancelBtn').onclick = close;
+
+  pop.querySelector('#_subjectRegenBtn').onclick = async () => {
+    const customPrompt = ta.value.trim();
+    close();
+
+    const prevHTML = slotEl.innerHTML;
+    slotEl.innerHTML = '<span class="spinner active"></span>';
+    slotEl.classList.add('vst-pending');
+
+    try {
+      const res = await fetch(`${API}/api/video/extract-subjects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: VID.sessionId, frameFiles: [frameFile], customPrompt }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Extraction failed');
+      const subject = data.subjects[0];
+      if (subject.error) throw new Error(subject.error);
+      const img = document.createElement('img');
+      img.src = subject.url + '?t=' + Date.now();
+      slotEl.innerHTML = '';
+      slotEl.appendChild(img);
+      slotEl.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slotEl, frameIndex, frameFile); };
+      slotEl.title = 'Double-click to edit';
+    } catch (e) {
+      slotEl.innerHTML = prevHTML;
+      toast('Regen failed: ' + e.message, true);
+    } finally {
+      slotEl.classList.remove('vst-pending');
+    }
+  };
+}
+
+function setVideoMode(mode) {
+  VID.mode = mode;
+  document.querySelectorAll('#videoModeToggle .mode-btn').forEach((b, i) => {
+    b.classList.toggle('active', (i === 0 && mode === 'strip') || (i === 1 && mode === 'fbf'));
+  });
+}
+
+async function generateVideoSprite() {
+  if (VID.mode === 'fbf') {
+    await generateVideoFBF();
+  } else {
+    await generateVideoStrip();
+  }
+}
+
+async function generateVideoStrip() {
+  const btn = document.getElementById('videoGenBtn');
+  const spinner = document.getElementById('videoGenSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+
+  const log = document.getElementById('videoStripLog');
+  const prog = document.getElementById('videoStripProgress');
+  prog.style.display = 'block';
+  log.innerHTML = '<span class="info">Building reference strip…</span>\n';
+
+  try {
+    // Build strip from selected frames
+    const stripRes = await fetch(`${API}/api/video/strip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: VID.sessionId }),
+    });
+    const stripData = await stripRes.json();
+    if (!stripRes.ok) throw new Error(stripData.error || 'Strip build failed');
+    log.innerHTML += '<span class="ok">✓ Reference strip built</span>\n';
+
+    // Generate sprite
+    const character = document.getElementById('videoCharSelect').value;
+    const animName = document.getElementById('videoAnimName').value.trim() || 'custom';
+    const action = document.getElementById('videoAnimAction').value.trim() || animName;
+    const frameCount = parseInt(document.getElementById('videoTargetFrames').value) || 6;
+    const fps = parseInt(document.getElementById('videoAnimFps').value) || 8;
+    const loop = document.getElementById('videoAnimLoop').value === 'true';
+    const model = document.getElementById('globalModel').value;
+
+    log.innerHTML += '<span class="info">Generating sprite sheet…</span>\n';
+    log.scrollTop = log.scrollHeight;
+
+    const genRes = await fetch(`${API}/api/video/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: VID.sessionId, character, animName, frameCount, fps, loop, action, model }),
+    });
+    const genData = await genRes.json();
+    if (!genRes.ok) throw new Error(genData.error || 'Generation failed');
+
+    prog.style.display = 'none';
+    showVideoResult(genData.processed, genData.animName, genData.frames, fps, character);
+    toast('Sprite sheet complete');
+  } catch (e) {
+    log.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
+    toast('Generation failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+    prog.style.display = 'none';
+  }
+}
+
+async function generateVideoFBF() {
+  const btn = document.getElementById('videoGenBtn');
+  const spinner = document.getElementById('videoGenSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
+
+  const fbfProgress = document.getElementById('videoFbfProgress');
+  const fbfLog = document.getElementById('videoFbfLog');
+  fbfProgress.style.display = 'block';
+  fbfLog.innerHTML = '';
+  videoUpdateRing(0, 1);
+
+  const character = document.getElementById('videoCharSelect').value;
+  const animName = document.getElementById('videoAnimName').value.trim() || 'custom';
+  const action = document.getElementById('videoAnimAction').value.trim() || animName;
+  const fps = parseInt(document.getElementById('videoAnimFps').value) || 8;
+  const loop = document.getElementById('videoAnimLoop').value === 'true';
+  const model = document.getElementById('globalModel').value;
+
+  try {
+    const resp = await fetch(`${API}/api/video/generate-fbf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: VID.sessionId, character, animName, action, fps, loop, model }),
+    });
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const ev = JSON.parse(line.slice(5));
+          if (ev.type === 'start') {
+            videoUpdateRing(0, ev.totalFrames);
+            fbfLog.innerHTML += `<span class="info">Starting ${ev.totalFrames} frames for ${ev.animName}…</span>\n`;
+          } else if (ev.type === 'frame_done') {
+            videoUpdateRing(ev.frameIndex + 1, ev.totalFrames);
+            fbfLog.innerHTML += `<span class="ok">✓ Frame ${ev.frameIndex + 1}/${ev.totalFrames}</span>\n`;
+          } else if (ev.type === 'frame_start') {
+            fbfLog.innerHTML += `<span class="info">→ Frame ${ev.frameIndex + 1}…</span>\n`;
+          } else if (ev.type === 'complete') {
+            fbfLog.innerHTML += `<span class="ok">✓ Complete — ${ev.totalFrames} frames assembled</span>\n`;
+            showVideoResult(ev.stripUrl, ev.animName, ev.totalFrames, fps, character);
+            toast('Animation complete');
+          } else if (ev.type === 'error') {
+            fbfLog.innerHTML += `<span class="err">✗ ${ev.message}</span>\n`;
+            toast('Error: ' + ev.message, true);
+          }
+          fbfLog.scrollTop = fbfLog.scrollHeight;
+        } catch {}
+      }
+    }
+  } catch (e) {
+    fbfLog.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
+    toast('Failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+function videoUpdateRing(done, total) {
+  const circ = 138;
+  const pct = total > 0 ? done / total : 0;
+  document.getElementById('videoFbfRingFill').style.strokeDashoffset = circ - (circ * pct);
+  document.getElementById('videoFbfRingLabel').textContent = `${done}/${total}`;
+}
+
+function showVideoResult(url, animName, frames, fps, character) {
+  // Store for frame regeneration
+  VID.resultAnimName = animName;
+  VID.resultCharacter = character || document.getElementById('videoCharSelect')?.value;
+
+  const card = document.getElementById('videoResultCard');
+  document.getElementById('videoResultImg').src = url + '?t=' + Date.now();
+  document.getElementById('videoResultMeta').textContent = `${animName} · ${frames} frames · ${fps}fps · saved to ${url}`;
+
+  // Render individual frame thumbs
+  const strip = document.getElementById('videoFrameStrip');
+  strip.innerHTML = '';
+  for (let i = 0; i < frames; i++) {
+    const frameUrl = `/assets/${VID.resultCharacter}-${animName}-frames/frame-${i}.png`;
+    const thumb = document.createElement('div');
+    thumb.className = 'video-result-frame';
+    thumb.dataset.frameIndex = i;
+    thumb.innerHTML =
+      `<img src="${frameUrl}?t=${Date.now()}" onerror="this.style.opacity=0.3" />` +
+      `<div class="video-result-frame-num">${i + 1}</div>`;
+    thumb.addEventListener('dblclick', () => openVideoFrameEditor(thumb, i));
+    strip.appendChild(thumb);
+  }
+
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function openVideoFrameEditor(thumbEl, frameIndex) {
+  const { pop, close } = _createPopover();
+  pop.innerHTML =
+    `<div class="angle-prompt-popover-label">Edit frame ${frameIndex + 1}</div>` +
+    `<textarea id="_vidFrameTxt" placeholder="Keep everything exactly the same except: "></textarea>` +
+    `<div class="angle-prompt-popover-actions">` +
+      `<button class="btn btn-primary btn-sm" id="_vidFrameRegen" style="flex:1">Regenerate</button>` +
+      `<button class="btn btn-secondary btn-sm" id="_vidFrameCancel">Cancel</button>` +
+    `</div>`;
+
+  const ta = pop.querySelector('#_vidFrameTxt');
+  ta.focus();
+  pop.querySelector('#_vidFrameCancel').addEventListener('click', close);
+
+  pop.querySelector('#_vidFrameRegen').addEventListener('click', async () => {
+    const customPrompt = pop.querySelector('#_vidFrameTxt').value.trim();
+    close();
+
+    // Spinner overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'angle-prompt-overlay';
+    overlay.innerHTML = '<span class="spinner active" style="width:24px;height:24px"></span>';
+    thumbEl.appendChild(overlay);
+
+    try {
+      const res = await fetch(`${API}/api/video/regenerate-frame`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: VID.sessionId,
+          character: VID.resultCharacter,
+          animName: VID.resultAnimName,
+          frameIndex,
+          customPrompt,
+          model: document.getElementById('globalModel')?.value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Regenerate failed');
+
+      // Update frame thumb
+      const img = thumbEl.querySelector('img');
+      if (img && data.frameUrl) img.src = data.frameUrl + '?t=' + Date.now();
+
+      // Update full strip
+      if (data.stripUrl) {
+        const stripImg = document.getElementById('videoResultImg');
+        stripImg.src = data.stripUrl + '?t=' + Date.now();
+      }
+      toast(`Frame ${frameIndex + 1} regenerated`);
+    } catch (e) {
+      toast('Regen failed: ' + e.message, true);
+    } finally {
+      overlay.remove();
+    }
+  });
+}
 </script>
 </body>
 </html>

@@ -1,5 +1,16 @@
 {
-  "sessions": [],
+  "sessions": [
+    {
+      "id": {
+        "test": 1
+      },
+      "timestamp": "2026-03-29T23:35:39.532Z",
+      "moveType": "unknown",
+      "preferredFrameIndices": [],
+      "rejectedFrameIndices": [],
+      "selectedFrameIndices": []
+    }
+  ],
   "weights": {
     "ballPosition": 0.35,
     "motionPeak": 0.3,
@@ -9,5 +20,5 @@
   "thresholds": {
     "minSharpness": 0.02
   },
-  "totalSessions": 0
+  "totalSessions": 1
 }

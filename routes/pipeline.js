@@ -12,6 +12,7 @@ const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-t
 const jobStore = require('../job-store');
 
 const PIPELINE_DIR = path.resolve(__dirname, '../../../.pipeline-data');
+const CHARACTERS_FILE = process.env.CHARACTERS_FILE || path.resolve(__dirname, '../data/.characters.json');
 
 const DEFAULT_ANIM_ORDER = [
   'static-dribble',
@@ -358,6 +359,20 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
   router.get('/api/pipeline/status/:character', (req, res, params) => {
     const character = params.character;
 
+    // Load studioReady / pipelineCompletedAt from character registry
+    let studioReady = false;
+    let pipelineCompletedAt = null;
+    try {
+      if (fs.existsSync(CHARACTERS_FILE)) {
+        const chars = JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
+        const char = chars[character];
+        if (char) {
+          studioReady = char.studioReady || false;
+          pipelineCompletedAt = char.pipelineCompletedAt || null;
+        }
+      }
+    } catch {}
+
     const checkpoint = loadLatestCheckpoint(character);
     if (!checkpoint) {
       return json(res, {
@@ -367,6 +382,8 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
         currentAnim: null,
         totalCost: 0,
         startedAt: null,
+        studioReady,
+        pipelineCompletedAt,
       });
     }
 
@@ -381,7 +398,60 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       animResults: checkpoint.animResults,
       startedAt: checkpoint.startedAt,
       completedAt: checkpoint.completedAt,
+      studioReady,
+      pipelineCompletedAt,
     });
+  });
+
+  // POST /api/pipeline/run — Manually trigger auto-pipeline for a character
+  router.post('/api/pipeline/run', async (req, res) => {
+    const body = await parseBody(req);
+    const { character } = body;
+    if (!character) return json(res, { error: 'character required' }, 400);
+    const { runAutoPipeline } = require('../lib/auto-pipeline');
+    runAutoPipeline(character).catch(err =>
+      console.error(`[pipeline/run] failed for ${character}:`, err.message)
+    );
+    return json(res, { status: 'started', character });
+  });
+
+  // POST /api/pipeline/auto-run — Fire full pipeline for a new character (no asset-completion check)
+  // Called from UI after angles finish. Fire-and-forget — returns immediately.
+  router.post('/api/pipeline/auto-run', async (req, res) => {
+    const body = await parseBody(req);
+    const { character } = body;
+    if (!character) return json(res, { error: 'character required' }, 400);
+    const { fillGaps } = require('../lib/auto-pipeline');
+    fillGaps(character).catch(err =>
+      console.error(`[pipeline/auto-run] failed for ${character}:`, err.message)
+    );
+    return json(res, { status: 'started', character });
+  });
+
+  // POST /api/pipeline/fill-gaps — SSE stream: generate only missing animations for a character
+  router.post('/api/pipeline/fill-gaps', async (req, res) => {
+    const body = await parseBody(req);
+    const { character } = body;
+    if (!character) return json(res, { error: 'character required' }, 400);
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+    });
+
+    const send = (type, data) => res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+
+    const { fillGaps } = require('../lib/auto-pipeline');
+    try {
+      await fillGaps(character, {
+        onProgress: (event, data) => send(event, data),
+      });
+    } catch (err) {
+      send('error', { message: err.message });
+    }
+    res.end();
   });
 
   // POST /api/pipeline/deploy/:character — Deploy character to Soul Jam (build grid sheet)

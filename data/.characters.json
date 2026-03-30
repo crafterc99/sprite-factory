@@ -33,7 +33,9 @@
       ],
       "ballRefs": [],
       "status": "complete"
-    }
+    },
+    "headshotAnglesComplete": true,
+    "clothesAnglesComplete": true
   },
   "breezy": {
     "name": "breezy",
@@ -75,8 +77,10 @@
         null,
         null
       ],
-      "status": "partial"
-    }
+      "status": "complete"
+    },
+    "headshotAnglesComplete": true,
+    "clothesAnglesComplete": true
   },
   "joaquin": {
     "name": "joaquin",
@@ -111,8 +115,10 @@
         "joaquin-angle-7.png"
       ],
       "ballRefs": [],
-      "status": "partial"
-    }
+      "status": "complete"
+    },
+    "headshotAnglesComplete": true,
+    "clothesAnglesComplete": true
   },
   "z": {
     "name": "z",
@@ -155,7 +161,9 @@
         "z-ball-palming.png"
       ],
       "status": "complete"
-    }
+    },
+    "headshotAnglesComplete": true,
+    "clothesAnglesComplete": true
   },
   "bron-test": {
     "name": "bron-test",
@@ -190,8 +198,10 @@
         "bron-test-angle-7.png"
       ],
       "ballRefs": [],
-      "status": "partial"
-    }
+      "status": "complete"
+    },
+    "headshotAnglesComplete": true,
+    "clothesAnglesComplete": true
   },
   "viv": {
     "name": "viv",
@@ -233,8 +243,10 @@
         "viv-ball-two-hand-chest.png",
         "viv-ball-palming.png"
       ],
-      "status": "partial"
-    }
+      "status": "complete"
+    },
+    "headshotAnglesComplete": true,
+    "clothesAnglesComplete": true
   },
   "snoop": {
     "name": "snoop",
@@ -269,7 +281,9 @@
       ],
       "ballRefs": [],
       "status": "complete"
-    }
+    },
+    "headshotAnglesComplete": true,
+    "clothesAnglesComplete": true
   },
   "obama": {
     "name": "obama",
@@ -294,18 +308,20 @@
     "anchor": {
       "portrait": null,
       "angles": [
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null
+        "obama-angle-0.png",
+        "obama-angle-1.png",
+        "obama-angle-2.png",
+        "obama-angle-3.png",
+        "obama-angle-4.png",
+        "obama-angle-5.png",
+        "obama-angle-6.png",
+        "obama-angle-7.png"
       ],
       "ballRefs": [],
-      "status": "partial"
-    }
+      "status": "complete"
+    },
+    "headshotAnglesComplete": true,
+    "clothesAnglesComplete": true
   },
   "tom": {
     "name": "tom",
