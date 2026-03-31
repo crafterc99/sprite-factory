@@ -14,5 +14,9 @@
     "start": "node server.js",
     "dev": "nodemon server.js --ignore data/ --ignore coordination/ --ignore .video-tmp/"
   },
-  "main": "server.js"
+  "main": "server.js",
+  "bin": {
+    "sf": "./cli.js"
+  },
+  "name": "sprite-factory"
 }
