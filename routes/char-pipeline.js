@@ -370,29 +370,50 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
   // POST /api/char-pipeline/body-sheet — Step 5: Generate 6-angle body strip
   router.post('/api/char-pipeline/body-sheet', async (req, res) => {
     const body = await parseBody(req);
-    const { name, model, promptOverride } = body;
+    const { name, model, promptOverride, clothingNote, clothingImages } = body;
     if (!name) return json(res, { error: 'name required' }, 400);
 
     const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
     if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found' }, 400);
 
     try {
-      const prompt = promptOverride?.trim() || buildBodySheetPrompt();
+      const charDir = path.join(TMP_DIR, 'characters', name);
+      fs.mkdirSync(charDir, { recursive: true });
+
+      // Save any clothing reference images to temp files
+      const clothingPaths = [];
+      if (Array.isArray(clothingImages) && clothingImages.length > 0) {
+        const clothingDir = path.join(charDir, 'clothing-refs');
+        fs.mkdirSync(clothingDir, { recursive: true });
+        for (let i = 0; i < clothingImages.length; i++) {
+          const data = clothingImages[i].replace(/^data:image\/\w+;base64,/, '');
+          const p = path.join(clothingDir, `ref-${i}.png`);
+          fs.writeFileSync(p, Buffer.from(data, 'base64'));
+          clothingPaths.push(p);
+        }
+      }
+
+      // Build prompt — add clothing context note if present
+      let basePrompt = promptOverride?.trim() || buildBodySheetPrompt();
+      if (clothingNote) {
+        basePrompt += `\n\n${clothingNote.trim()}`;
+        basePrompt += '\nMatch the outfit from the additional clothing reference images exactly.';
+      }
+
       const modelId = model || 'gemini-2.5-flash-image';
       const client = new NanaBananaClient({ model: modelId });
+      const referenceImages = [portraitPath, ...clothingPaths];
 
-      const result = await client.generate(prompt, {
-        referenceImages: [portraitPath],
+      const result = await client.generate(basePrompt, {
+        referenceImages,
         aspectRatio: '16:9',
         resolution: '2K',
         model: modelId,
       });
 
-      const charDir = path.join(TMP_DIR, 'characters', name);
-      fs.mkdirSync(charDir, { recursive: true });
       const sheetPath = path.join(charDir, 'body-sheet.png');
       fs.writeFileSync(sheetPath, result.imageBuffer);
-      recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'body-sheet' });
+      recordCost(modelId, 'char_pipeline', '2K', referenceImages.length, { character: name, step: 'body-sheet' });
 
       return json(res, {
         success: true, name,
