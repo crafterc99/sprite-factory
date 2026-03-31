@@ -1923,57 +1923,47 @@ async function generateOptions() {
   const spinner = document.getElementById('optSpinner');
   btn.disabled = true;
   spinner.classList.add('active');
-
-  // Update pinned bar name in case user typed it after photo upload
   document.getElementById('pinnedCharName').textContent = name;
 
   try {
     const body = {
       name,
       photoBase64: STATE.charPhoto,
-      count: 4,
       heightInches: parseInt(document.getElementById('newHeight').value) || 72,
       weightLbs: parseInt(document.getElementById('newWeight').value) || 185,
       build: document.getElementById('newBuild').value,
       jerseyNumber: document.getElementById('newJersey').value,
       teamColors: { primary: document.getElementById('newColor1').value, secondary: document.getElementById('newColor2').value, accent: '#000000' },
-      promptOverride: document.getElementById('newCharPrompt').value,
-      model: document.getElementById('globalModel').value,
     };
 
     const resp = await fetch(`${API}/api/character/create`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
 
-    const grid = document.getElementById('optionsGrid');
-    grid.innerHTML = (data.options || []).map((opt) =>
-      `<div class="char-option" id="opt${opt.index}" onclick="pickOption(${opt.index}, '${opt.url}')">
-        <div class="opt-label">#${opt.index + 1}</div>
-        <img src="${opt.url}" />
-      </div>`
-    ).join('');
+    const opt = data.options?.[0];
+    if (!opt) throw new Error('No result returned');
 
-    STATE.selectedOption = -1;
+    STATE.selectedOption = 0;
+    const grid = document.getElementById('optionsGrid');
+    grid.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:16px;width:100%">
+        <img src="${opt.url}?t=${Date.now()}" style="max-height:320px;object-fit:contain;image-rendering:pixelated;border-radius:8px;border:1px solid var(--border)" />
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-primary" style="min-width:140px" onclick="confirmAndGenerateAngles()">Use This</button>
+          <button class="btn btn-secondary" style="min-width:140px" onclick="generateOptions()">Try Again</button>
+        </div>
+      </div>`;
+
     const sec = document.getElementById('optionsSection');
     sec.style.display = 'block';
     requestAnimationFrame(() => { sec.style.opacity = '1'; });
-    toast('Options ready — pick the best one');
+    toast('Portrait ready — confirm or try again');
   } catch(e) {
     toast('Error: ' + e.message, true);
   } finally {
     btn.disabled = false;
     spinner.classList.remove('active');
   }
-}
-
-function pickOption(idx, url) {
-  STATE.selectedOption = idx;
-  document.querySelectorAll('.char-option').forEach(el => el.classList.remove('selected'));
-  document.getElementById('opt' + idx)?.classList.add('selected');
-  const pinnedOpt = document.getElementById('pinnedOptionThumb');
-  pinnedOpt.src = url;
-  pinnedOpt.style.visibility = 'visible';
-  confirmAndGenerateAngles();
 }
 
 async function confirmAndGenerateAngles() {

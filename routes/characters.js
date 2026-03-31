@@ -331,52 +331,37 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
 
   // ─── Character Creation (4-option picker) ──────────────────────────
 
-  function buildCharPrompt(extraInstructions, promptOverride) {
-    const styleRef = path.join(ASSETS_DIR, '99full.png');
-    const hasStyleRef = fs.existsSync(styleRef);
+  const STEP1_PROMPT = [
+    'Transform the uploaded image into 16-bit arcade pixel art.',
+    'IMPORTANT RULES:',
+    'Do NOT change the pose.',
+    'Do NOT change facial features.',
+    'Do NOT add new objects.',
+    'Do NOT change clothing design.',
+    'Do NOT modify hairstyle.',
+    'Do NOT add accessories.',
+    'Do NOT change proportions.',
+    'Do NOT add background elements.',
+    'Only convert the image into clean 16-bit arcade pixel style with:',
+    'Sharp pixel edges',
+    'Limited color palette',
+    'black outlines',
+    'High contrast arcade shading',
+    'No anti-aliasing',
+    'No blur',
+    'Keep the character exactly as shown.',
+    'Output on a pure white background (#FFFFFF only).',
+    'No environment. No extra elements. Only the character.',
+  ].join('\n');
 
-    let prompt;
-    if (promptOverride && promptOverride.trim()) {
-      prompt = promptOverride.trim();
-      if (extraInstructions) prompt += '\n\nADDITIONAL INSTRUCTIONS:\n' + extraInstructions;
-    } else {
-      const lines = [
-        hasStyleRef
-          ? 'Image 1 is the style reference — match this exact pixel art style. Image 2 is the person to convert.'
-          : 'Convert the uploaded photo into 16-bit arcade pixel art.',
-        '',
-        'Create a FULL BODY standing character portrait showing the complete person from head to shoes.',
-        'The character must be standing upright, facing forward, arms relaxed at sides, in a neutral standing pose.',
-        'Show the ENTIRE body — head, torso, arms, hands, legs, feet/shoes. Do NOT crop or zoom in.',
-        '',
-        'ACCURACY IS CRITICAL:',
-        '- Match the person\'s EXACT skin tone — do not lighten or darken it',
-        '- Match their EXACT facial features, face shape, eyes, nose, mouth',
-        '- Match their EXACT hairstyle, hair color, hair texture',
-        '- Match their EXACT outfit, clothing colors, and shoes from the photo',
-        '- Match their body type and proportions',
-        '',
-        'STYLE:',
-        '- 16-bit arcade pixel art, GBA game style — chunky pixels, NOT high-resolution',
-        '- Bold thick black pixel outlines around the entire character body',
-        '- Limited color palette with high contrast arcade shading',
-        '- Sharp pixel edges — NO anti-aliasing, NO blur, NO smooth gradients',
-        '- The character should look like they belong in a retro basketball arcade game',
-        '',
-        'Output on a pure white background (#FFFFFF only).',
-        'FULL BODY only. No environment. No extra elements. No cropping.',
-      ];
-      if (extraInstructions) lines.push('', 'ADDITIONAL INSTRUCTIONS:', extraInstructions);
-      prompt = lines.join('\n');
-    }
+  const STEP2_PROMPT = 'give the full image of this character standing naturally with a white background.';
 
-    return { prompt, hasStyleRef, styleRefPath: hasStyleRef ? styleRef : null };
-  }
-
-  // POST /api/character/create — Generate 4 options from photo
+  // POST /api/character/create — 2-step portrait generation using Nano Banana Pro
+  // Step 1: Convert uploaded photo to pixel art (exact prompt, no pose changes)
+  // Step 2: Use step 1 output to get a clean standing full-body portrait
   router.post('/api/character/create', async (req, res) => {
     const body = await parseBody(req);
-    const { name, photoBase64, photoPath, model, changeRequest, count } = body;
+    const { name, photoBase64, photoPath } = body;
     if (!name) return json(res, { error: 'Character name required' }, 400);
 
     try {
@@ -393,46 +378,37 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         return json(res, { error: 'Photo required' }, 400);
       }
 
-      const { prompt, hasStyleRef, styleRefPath } = buildCharPrompt(changeRequest, body.promptOverride);
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
-      const numOptions = count || 4;
 
-      const referenceImages = [];
-      if (styleRefPath) referenceImages.push(styleRefPath);
-      referenceImages.push(originalPath);
+      // Step 1: convert photo to pixel art, keeping everything as-is
+      const step1Result = await client.generate(STEP1_PROMPT, {
+        referenceImages: [originalPath],
+        aspectRatio: '3:4',
+        resolution: '2K',
+        model: modelId,
+      });
+      const step1Path = path.join(charDir, 'step1-pixel.png');
+      fs.writeFileSync(step1Path, step1Result.imageBuffer);
+      recordCost(modelId, 'character-step1', '2K', 1, { character: name });
 
-      const optionTasks = [];
-      for (let i = 0; i < numOptions; i++) {
-        const idx = i;
-        optionTasks.push(async () => {
-          try {
-            const result = await client.generate(prompt, {
-              referenceImages,
-              aspectRatio: '3:4',
-              resolution: '2K',
-              model: modelId,
-            });
-            const optPath = path.join(charDir, `option-${idx}.png`);
-            fs.writeFileSync(optPath, result.imageBuffer);
-            const charCost = recordCost(modelId, 'character', '2K', referenceImages.length, { character: name, option: idx });
-            return { index: idx, url: `/api/character/image/${name}/option-${idx}.png`, cost: charCost };
-          } catch (err) {
-            return { index: idx, error: err.message };
-          }
-        });
-      }
-
-      const options = await runWithConcurrency(optionTasks, 2, 3000);
-      const successful = options.filter(o => !o.error);
+      // Step 2: use step 1 output as the only reference, get clean standing portrait
+      const step2Result = await client.generate(STEP2_PROMPT, {
+        referenceImages: [step1Path],
+        aspectRatio: '3:4',
+        resolution: '2K',
+        model: modelId,
+      });
+      const optPath = path.join(charDir, 'option-0.png');
+      fs.writeFileSync(optPath, step2Result.imageBuffer);
+      recordCost(modelId, 'character-step2', '2K', 1, { character: name });
 
       return json(res, {
         success: true,
         name,
         originalUrl: `/api/character/image/${name}/original.png`,
-        options: successful,
-        errors: options.filter(o => o.error),
-        changeRequest: changeRequest || null,
+        step1Url: `/api/character/image/${name}/step1-pixel.png`,
+        options: [{ index: 0, url: `/api/character/image/${name}/option-0.png` }],
       });
     } catch (err) {
       return json(res, { error: err.message }, 500);
