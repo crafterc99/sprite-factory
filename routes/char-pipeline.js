@@ -27,6 +27,7 @@ const { cutFrames } = require('../lib/sprite-processor/index');
 const { CHARACTERS } = require('../lib/sprite-generator/prompts');
 
 const CHARACTERS_FILE = path.resolve(__dirname, '../data/.characters.json');
+const CHAR_PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
 
 function loadCharacters() {
   try {
@@ -41,6 +42,21 @@ function saveCharacters(data) {
   fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(data, null, 2));
 }
 
+function loadCharPrompts() {
+  try {
+    if (fs.existsSync(CHAR_PROMPTS_FILE)) {
+      return { ...getDefaultPrompts(), ...JSON.parse(fs.readFileSync(CHAR_PROMPTS_FILE, 'utf8')) };
+    }
+  } catch {}
+  return getDefaultPrompts();
+}
+
+function saveCharPrompts(data) {
+  const dir = path.dirname(CHAR_PROMPTS_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(CHAR_PROMPTS_FILE, JSON.stringify(data, null, 2));
+}
+
 function computeScale(heightInches) {
   const baseHeight = 72;
   const scaleMultiplier = +(heightInches / baseHeight).toFixed(3);
@@ -52,30 +68,43 @@ const ANGLE_LABELS_8 = ['front', 'front_right_45', 'right_90', 'back_right_135',
 
 // ── Prompt builders ─────────────────────────────────────────────────────────
 
-const STEP1_PROMPT = [
-  'Transform the uploaded image into 16-bit arcade pixel art.',
-  'IMPORTANT RULES:',
-  'Do NOT change the pose.',
-  'Do NOT change facial features.',
-  'Do NOT add new objects.',
-  'Do NOT change clothing design.',
-  'Do NOT modify hairstyle.',
-  'Do NOT add accessories.',
-  'Do NOT change proportions.',
-  'Do NOT add background elements.',
-  'Only convert the image into clean 16-bit arcade pixel style with:',
-  'Sharp pixel edges',
-  'Limited color palette',
-  'black outlines',
-  'High contrast arcade shading',
-  'No anti-aliasing',
-  'No blur',
-  'Keep the character exactly as shown.',
-  'Output on a pure white background (#FFFFFF only).',
-  'No environment. No extra elements. Only the character.',
-].join('\n');
+function getDefaultStep1Prompt() {
+  return [
+    'Transform the uploaded image into 16-bit arcade pixel art.',
+    'IMPORTANT RULES:',
+    'Do NOT change the pose.',
+    'Do NOT change facial features.',
+    'Do NOT add new objects.',
+    'Do NOT change clothing design.',
+    'Do NOT modify hairstyle.',
+    'Do NOT add accessories.',
+    'Do NOT change proportions.',
+    'Do NOT add background elements.',
+    'Only convert the image into clean 16-bit arcade pixel style with:',
+    'Sharp pixel edges',
+    'Limited color palette',
+    'black outlines',
+    'High contrast arcade shading',
+    'No anti-aliasing',
+    'No blur',
+    'Keep the character exactly as shown.',
+    'Output on a pure white background (#FFFFFF only).',
+    'No environment. No extra elements. Only the character.',
+  ].join('\n');
+}
 
-const STEP2_PROMPT = 'give the full image of this character standing naturally with a white background.';
+function getDefaultStep2Prompt() {
+  return 'give the full image of this character standing naturally with a white background.';
+}
+
+function getDefaultPrompts() {
+  return {
+    step1: getDefaultStep1Prompt(),
+    step2: getDefaultStep2Prompt(),
+    bodySheet: buildBodySheetPrompt(),
+    headSheet: buildHeadSheetPrompt(),
+  };
+}
 
 function buildBodySheetPrompt() {
   return [
@@ -186,12 +215,19 @@ async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
     // 2-row × 4-column grid
     const fw = Math.floor(meta.width / 4);
     const fh = Math.floor(meta.height / 2);
+    // 1px inset on each edge to avoid picking up divider lines between cells
+    const inset = 1;
     let idx = 0;
     for (let row = 0; row < 2; row++) {
       for (let col = 0; col < 4; col++) {
         const outPath = path.join(outputDir, `frame-${idx}.png`);
         await sharp(sheetPath)
-          .extract({ left: col * fw, top: row * fh, width: fw, height: fh })
+          .extract({
+            left: col * fw + inset,
+            top: row * fh + inset,
+            width: fw - inset * 2,
+            height: fh - inset * 2,
+          })
           .toFile(outPath);
         const dest = destPattern.replace('{i}', idx);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -286,6 +322,24 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     });
   });
 
+  // GET /api/char-pipeline/prompts — Return current character generation prompts
+  router.get('/api/char-pipeline/prompts', (req, res) => {
+    return json(res, loadCharPrompts());
+  });
+
+  // POST /api/char-pipeline/prompts — Save updated prompts
+  router.post('/api/char-pipeline/prompts', async (req, res) => {
+    const body = await parseBody(req);
+    const current = loadCharPrompts();
+    const updated = { ...current };
+    if (body.step1 !== undefined) updated.step1 = body.step1;
+    if (body.step2 !== undefined) updated.step2 = body.step2;
+    if (body.bodySheet !== undefined) updated.bodySheet = body.bodySheet;
+    if (body.headSheet !== undefined) updated.headSheet = body.headSheet;
+    saveCharPrompts(updated);
+    return json(res, { success: true, prompts: updated });
+  });
+
   // POST /api/char-pipeline/pixel-char/step1 — Start async: save photo + convert to pixel art
   router.post('/api/char-pipeline/pixel-char/step1', async (req, res) => {
     const body = await parseBody(req);
@@ -309,7 +363,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       try {
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
-        const step1 = await client.generate(STEP1_PROMPT, {
+        const step1 = await client.generate(loadCharPrompts().step1, {
           referenceImages: [originalPath],
           aspectRatio: '3:4',
           resolution: '2K',
@@ -343,7 +397,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       try {
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
-        const step2 = await client.generate(STEP2_PROMPT, {
+        const step2 = await client.generate(loadCharPrompts().step2, {
           referenceImages: [step1Path],
           aspectRatio: '3:4',
           resolution: '2K',
@@ -418,7 +472,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found — complete Step 2 first' }, 400);
 
     try {
-      const prompt = promptOverride?.trim() || buildHeadSheetPrompt();
+      const prompt = promptOverride?.trim() || loadCharPrompts().headSheet;
       const modelId = 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
@@ -498,7 +552,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       }
 
       // Build prompt — add clothing context note if present
-      let basePrompt = promptOverride?.trim() || buildBodySheetPrompt();
+      let basePrompt = promptOverride?.trim() || loadCharPrompts().bodySheet;
       if (clothingNote) {
         basePrompt += `\n\n${clothingNote.trim()}`;
         basePrompt += '\nMatch the outfit from the additional clothing reference images exactly.';
@@ -580,7 +634,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       }
     }
 
-    let basePrompt = promptOverride?.trim() || buildBodySheetPrompt();
+    let basePrompt = promptOverride?.trim() || loadCharPrompts().bodySheet;
     if (clothingNote) {
       basePrompt += `\n\n${clothingNote.trim()}`;
       basePrompt += '\nMatch the outfit from the additional clothing reference images exactly.';
@@ -636,7 +690,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const prompt = promptOverride?.trim() || buildHeadSheetPrompt();
+        const prompt = promptOverride?.trim() || loadCharPrompts().headSheet;
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 

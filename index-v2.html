@@ -918,11 +918,20 @@
         <!-- ── Pipeline top bar ── -->
         <div class="pt-topbar">
           <div class="pt-topbar-left">
-            <select class="input" id="ptCharSelect" onchange="ptLoad()" style="width:100px"></select>
-            <select class="input" id="ptAnimSelect" onchange="ptLoad()" style="width:160px"></select>
-            <div class="pt-mode-tabs">
-              <div class="pt-mode-tab active" id="ptModeStrip" onclick="ptSetMode('strip')">Strip</div>
-              <div class="pt-mode-tab" id="ptModeFbf" onclick="ptSetMode('fbf')">FBF</div>
+            <div class="pt-mode-tabs" style="margin-right:8px">
+              <div class="pt-mode-tab active" id="ptViewAnim" onclick="ptViewSwitch('anim')">Animations</div>
+              <div class="pt-mode-tab" id="ptViewCharGen" onclick="ptViewSwitch('chargen')">Char Gen</div>
+            </div>
+            <div id="ptAnimControls" style="display:flex;align-items:center;gap:8px">
+              <select class="input" id="ptCharSelect" onchange="ptLoad()" style="width:100px"></select>
+              <select class="input" id="ptAnimSelect" onchange="ptLoad()" style="width:160px"></select>
+              <div class="pt-mode-tabs">
+                <div class="pt-mode-tab active" id="ptModeStrip" onclick="ptSetMode('strip')">Strip</div>
+                <div class="pt-mode-tab" id="ptModeFbf" onclick="ptSetMode('fbf')">FBF</div>
+              </div>
+            </div>
+            <div id="ptCharGenControls" style="display:none;align-items:center;gap:8px">
+              <select class="input" id="ptCharGenSelect" onchange="ptCharGenLoadImages()" style="width:140px"></select>
             </div>
           </div>
           <div class="pt-topbar-right">
@@ -931,8 +940,52 @@
           </div>
         </div>
 
+        <!-- ── Char Gen Prompts panel ── -->
+        <div id="ptCharGenPanel" style="display:none;flex:1;overflow-y:auto;padding:16px;gap:16px;flex-direction:column">
+
+          <!-- Images row -->
+          <div id="ptCharGenImages" style="display:flex;gap:12px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--border)"></div>
+
+          <!-- 4 prompt editors -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+            <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+              <div class="pt-panel-header" style="justify-content:space-between">
+                Step 1 — Photo → Pixel Art
+                <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('step1')">Save</button>
+              </div>
+              <textarea id="ptPromptStep1" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
+            </div>
+
+            <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+              <div class="pt-panel-header" style="justify-content:space-between">
+                Step 2 — Pixel Art → Standing Portrait
+                <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('step2')">Save</button>
+              </div>
+              <textarea id="ptPromptStep2" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
+            </div>
+
+            <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+              <div class="pt-panel-header" style="justify-content:space-between">
+                Body Angles Sheet (8 views, 2×4)
+                <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('bodySheet')">Save</button>
+              </div>
+              <textarea id="ptPromptBodySheet" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
+            </div>
+
+            <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+              <div class="pt-panel-header" style="justify-content:space-between">
+                Head Angles Sheet (8 headshots, 2×4)
+                <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('headSheet')">Save</button>
+              </div>
+              <textarea id="ptPromptHeadSheet" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
+            </div>
+
+          </div>
+        </div>
+
         <!-- ── 3-panel layout ── -->
-        <div class="pt-layout">
+        <div id="ptAnimPanel" class="pt-layout">
 
           <!-- LEFT: Module Library -->
           <div class="pt-panel pt-library">
@@ -966,7 +1019,7 @@
             <div id="ptTestResult"></div>
           </div>
 
-        </div>
+        </div><!-- end ptAnimPanel -->
       </div>
 
     </div>
@@ -3975,6 +4028,82 @@ function ptSetMode(mode) {
   document.getElementById('ptModeStrip').classList.toggle('active', mode === 'strip');
   document.getElementById('ptModeFbf').classList.toggle('active', mode === 'fbf');
   ptRebuild();
+}
+
+// ── Char Gen Prompts ──────────────────────────────────────────────────────
+
+let ptCurrentView = 'anim';
+
+function ptViewSwitch(view) {
+  ptCurrentView = view;
+  document.getElementById('ptViewAnim').classList.toggle('active', view === 'anim');
+  document.getElementById('ptViewCharGen').classList.toggle('active', view === 'chargen');
+  document.getElementById('ptAnimControls').style.display = view === 'anim' ? 'flex' : 'none';
+  document.getElementById('ptCharGenControls').style.display = view === 'chargen' ? 'flex' : 'none';
+  document.getElementById('ptAnimPanel').style.display = view === 'anim' ? 'flex' : 'none';
+  document.getElementById('ptCharGenPanel').style.display = view === 'chargen' ? 'flex' : 'none';
+  if (view === 'chargen') ptCharGenLoad();
+}
+
+async function ptCharGenLoad() {
+  // Load prompts
+  try {
+    const r = await fetch(`${API}/api/char-pipeline/prompts`);
+    const d = await r.json();
+    document.getElementById('ptPromptStep1').value = d.step1 || '';
+    document.getElementById('ptPromptStep2').value = d.step2 || '';
+    document.getElementById('ptPromptBodySheet').value = d.bodySheet || '';
+    document.getElementById('ptPromptHeadSheet').value = d.headSheet || '';
+  } catch(e) { console.error('Failed to load char prompts', e); }
+
+  // Populate character selector from STATE.roster
+  const sel = document.getElementById('ptCharGenSelect');
+  sel.innerHTML = '<option value="">— select character —</option>';
+  (STATE.roster || []).forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id || c.name;
+    o.textContent = c.name || c.id;
+    sel.appendChild(o);
+  });
+}
+
+async function ptSavePrompt(key) {
+  const idMap = { step1: 'ptPromptStep1', step2: 'ptPromptStep2', bodySheet: 'ptPromptBodySheet', headSheet: 'ptPromptHeadSheet' };
+  const text = document.getElementById(idMap[key])?.value;
+  if (text === undefined) return;
+  try {
+    const r = await fetch(`${API}/api/char-pipeline/prompts`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: text }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    toast('Prompt saved');
+  } catch(e) { toast('Save failed: ' + e.message, true); }
+}
+
+async function ptCharGenLoadImages() {
+  const name = document.getElementById('ptCharGenSelect').value;
+  const el = document.getElementById('ptCharGenImages');
+  if (!name) { el.innerHTML = ''; return; }
+
+  const imgs = [
+    { label: 'Original Photo', src: `/api/character/image/${name}/original.png` },
+    { label: 'Step 1 — Pixel Art', src: `/api/character/image/${name}/step1-pixel.png` },
+    { label: 'Portrait', src: `/assets/${name}full.png` },
+    { label: 'Body Sheet', src: `/api/character/image/${name}/body-sheet.png` },
+    { label: 'Head Sheet', src: `/api/character/image/${name}/head-sheet.png` },
+  ];
+
+  el.innerHTML = imgs.map(img => `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div style="font-family:var(--mono);font-size:9px;color:#60608a;letter-spacing:0.5px;text-transform:uppercase">${img.label}</div>
+      <img src="${img.src}?t=${Date.now()}" style="max-height:120px;max-width:200px;border:1px solid var(--border);border-radius:4px;background:#111"
+        onerror="this.style.display='none';this.nextSibling.style.display='flex'"
+        onload="this.nextSibling.style.display='none'" />
+      <div style="display:none;width:80px;height:80px;border:1px solid var(--border);border-radius:4px;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;color:#40406a">no image</div>
+    </div>
+  `).join('');
 }
 
 // ── Render Library ────────────────────────────────────────────────────────
