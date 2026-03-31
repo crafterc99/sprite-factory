@@ -23,7 +23,7 @@ const path = require('path');
 const sharp = require('sharp');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
-const { cutFrames } = require('../lib/sprite-processor/index');
+const { cutFrames, removeBackground, cropToContent } = require('../lib/sprite-processor/index');
 const { CHARACTERS } = require('../lib/sprite-generator/prompts');
 
 const CHARACTERS_FILE = path.resolve(__dirname, '../data/.characters.json');
@@ -162,6 +162,11 @@ function buildBodySheetPrompt() {
     'OUTPUT GOAL',
     '',
     'A clean, consistent 8-angle turnaround sheet for animation reference.',
+    '',
+    '',
+    'BACKGROUND',
+    '',
+    'Solid bright green (#00FF00) behind every character cell. No other colors in the background.',
   ].join('\n');
 }
 
@@ -668,6 +673,16 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const sliceDir = path.join(charDir, 'body-frames');
         const destPattern = path.join(ASSETS_DIR, `${name}-angle-{i}.png`);
         const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
+
+        // Remove green background and crop each angle to a clean transparent PNG
+        for (let i = 0; i < sliced.length; i++) {
+          const framePath = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
+          if (fs.existsSync(framePath)) {
+            await removeBackground(framePath, framePath);
+            await cropToContent(framePath, framePath, { width: 180, height: 180, padding: 10 });
+          }
+        }
+
         const frames = sliced.map((f, i) => ({
           ...f,
           label: ANGLE_LABELS_8[i] || f.label,
@@ -929,6 +944,90 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     } catch (err) {
       return json(res, { error: err.message }, 500);
     }
+  });
+
+  // POST /api/char-pipeline/apply-outfit — Apply top and/or bottom garments to a portrait
+  // Runs sequentially: top first, then bottom applied to the top result.
+  // Returns a new portrait base64 with the outfit swapped in.
+  router.post('/api/char-pipeline/apply-outfit', async (req, res) => {
+    const body = await parseBody(req);
+    const { portraitBase64, topId, bottomId } = body;
+    if (!portraitBase64) return json(res, { error: 'portraitBase64 required' }, 400);
+    if (!topId && !bottomId) return json(res, { error: 'topId or bottomId required' }, 400);
+
+    const WARDROBE_DIR = path.resolve(__dirname, '../data/wardrobe');
+    const WARDROBE_INDEX = path.resolve(__dirname, '../data/wardrobe.json');
+    let wardrobe = [];
+    try {
+      if (fs.existsSync(WARDROBE_INDEX)) wardrobe = JSON.parse(fs.readFileSync(WARDROBE_INDEX, 'utf8'));
+    } catch {}
+
+    const jobId = startJob();
+
+    setImmediate(async () => {
+      try {
+        const modelId = 'gemini-3-pro-image-preview';
+        const client = new NanaBananaClient({ model: modelId });
+
+        const tmpDir = path.join(TMP_DIR, 'outfit-tmp');
+        fs.mkdirSync(tmpDir, { recursive: true });
+        const tmpId = Date.now().toString(36);
+
+        // Save starting portrait to temp file
+        let currentPortraitPath = path.join(tmpDir, `portrait-${tmpId}.png`);
+        const portraitData = portraitBase64.replace(/^data:image\/\w+;base64,/, '');
+        fs.writeFileSync(currentPortraitPath, Buffer.from(portraitData, 'base64'));
+
+        // Step 1: Apply top garment
+        if (topId) {
+          const topPath = path.join(WARDROBE_DIR, `${topId}.png`);
+          if (!fs.existsSync(topPath)) throw new Error(`Top wardrobe image not found (id: ${topId})`);
+
+          const topPrompt = 'Keep everything about this pixelated character the exact same just substitute their top garments for the second uploaded image.';
+          const topResult = await client.generate(topPrompt, {
+            referenceImages: [currentPortraitPath, topPath],
+            aspectRatio: '3:4',
+            resolution: '2K',
+            model: modelId,
+            maxRetries: 1,
+            timeoutMs: 80000,
+          });
+
+          const topResultPath = path.join(tmpDir, `after-top-${tmpId}.png`);
+          fs.writeFileSync(topResultPath, topResult.imageBuffer);
+          currentPortraitPath = topResultPath;
+          recordCost(modelId, 'char_pipeline', '2K', 2, { step: 'apply-top' });
+        }
+
+        // Step 2: Apply bottom garment (to the top-applied result, or original if no top)
+        if (bottomId) {
+          const bottomPath = path.join(WARDROBE_DIR, `${bottomId}.png`);
+          if (!fs.existsSync(bottomPath)) throw new Error(`Bottom wardrobe image not found (id: ${bottomId})`);
+
+          const bottomPrompt = 'Keep everything about this pixelated character the exact same just substitute their bottom garments for the second uploaded image.';
+          const bottomResult = await client.generate(bottomPrompt, {
+            referenceImages: [currentPortraitPath, bottomPath],
+            aspectRatio: '3:4',
+            resolution: '2K',
+            model: modelId,
+            maxRetries: 1,
+            timeoutMs: 80000,
+          });
+
+          const bottomResultPath = path.join(tmpDir, `after-bottom-${tmpId}.png`);
+          fs.writeFileSync(bottomResultPath, bottomResult.imageBuffer);
+          currentPortraitPath = bottomResultPath;
+          recordCost(modelId, 'char_pipeline', '2K', 2, { step: 'apply-bottom' });
+        }
+
+        const imageBase64 = 'data:image/png;base64,' + fs.readFileSync(currentPortraitPath).toString('base64');
+        finishJob(jobId, { success: true, imageBase64 });
+      } catch (err) {
+        failJob(jobId, err.message);
+      }
+    });
+
+    return json(res, { jobId, status: 'started' });
   });
 }
 

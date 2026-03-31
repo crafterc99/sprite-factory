@@ -605,6 +605,33 @@
   .cp-angle-thumb span { font-family:var(--mono); font-size:8px; color:#50507a; }
   .cp-label-input { font-family:var(--mono); font-size:8px; color:#aaa; background:transparent; border:none; border-bottom:1px solid #333; text-align:center; width:72px; outline:none; padding:1px 2px; }
   .cp-label-input:focus { border-bottom-color:#7c6aff; color:#fff; }
+
+  /* ─── OUTFIT PICKER (in new char modal) ─── */
+  .cp-outfit-panel { border:1px solid var(--border); border-radius:8px; padding:8px; min-height:80px; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; max-height:160px; overflow-y:auto; background:var(--surface2); }
+  .cp-wardrobe-item { width:64px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:grab; border:1px solid var(--border); border-radius:6px; padding:4px; background:var(--surface3); transition:border-color 0.15s; }
+  .cp-wardrobe-item:hover { border-color:var(--accent); }
+  .cp-wardrobe-item img { width:56px; height:56px; object-fit:contain; image-rendering:pixelated; border-radius:4px; background:var(--surface); }
+  .cp-wardrobe-item-name { font-family:var(--mono); font-size:7px; color:#6060a0; text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cp-outfit-drop-zone { border:2px dashed var(--border); border-radius:10px; padding:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; background:var(--surface2); transition:border-color 0.2s, background 0.2s; min-height:180px; }
+  .cp-outfit-drop-zone.dragover { border-color:var(--accent); background:rgba(255,68,0,0.05); }
+  .cp-outfit-drop-zone img { max-height:160px; image-rendering:pixelated; object-fit:contain; border-radius:6px; }
+  .cp-outfit-drop-hint { font-family:var(--mono); font-size:9px; color:#30304a; text-align:center; pointer-events:none; }
+  .cp-outfit-badge { display:flex; align-items:center; gap:4px; background:var(--surface3); border:1px solid var(--border); border-radius:4px; padding:3px 7px; font-family:var(--mono); font-size:9px; color:#aaaacc; }
+  .cp-outfit-badge button { background:none; border:none; color:#50507a; cursor:pointer; font-size:10px; padding:0; line-height:1; }
+  .cp-outfit-badge button:hover { color:var(--danger); }
+
+  /* ─── WARDROBE PAGE ─── */
+  .wardrobe-upload-zone { border:2px dashed var(--border); border-radius:10px; width:100px; height:110px; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; overflow:hidden; background:var(--surface2); transition:border-color 0.15s; }
+  .wardrobe-upload-zone:hover, .wardrobe-upload-zone.dragover { border-color:var(--accent); }
+  .wardrobe-item-card { position:relative; width:100px; display:flex; flex-direction:column; align-items:center; gap:5px; border:1px solid var(--border); border-radius:8px; padding:8px; background:var(--surface2); transition:border-color 0.15s; }
+  .wardrobe-item-card:hover { border-color:var(--border-hi); }
+  .wardrobe-item-card img { width:84px; height:84px; object-fit:contain; image-rendering:pixelated; border-radius:4px; background:var(--surface); }
+  .wardrobe-item-label { font-family:var(--mono); font-size:8px; color:#aaaacc; text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wardrobe-delete-btn { position:absolute; top:4px; right:4px; background:var(--surface3); border:1px solid var(--border); border-radius:3px; color:#50507a; cursor:pointer; font-size:10px; width:18px; height:18px; display:flex; align-items:center; justify-content:center; }
+  .wardrobe-delete-btn:hover { background:var(--danger); color:#fff; border-color:var(--danger); }
+  .wardrobe-grid { display:flex; flex-wrap:wrap; gap:10px; }
+  .wardrobe-section-heading { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#50507a; margin-bottom:10px; margin-top:20px; }
+  .wardrobe-empty { font-family:var(--mono); font-size:10px; color:#30304a; padding:16px 0; }
 </style>
 </head>
 <body>
@@ -619,6 +646,7 @@
       <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
       <button class="nav-btn" onclick="showPage('studio')">Studio</button>
       <button class="nav-btn" onclick="showPage('video')">Video</button>
+      <button class="nav-btn" onclick="showPage('wardrobe')">Wardrobe</button>
       <button class="nav-btn" onclick="showPage('prompts')">Prompts</button>
     </nav>
     <div class="header-right">
@@ -1022,6 +1050,54 @@
         </div><!-- end ptAnimPanel -->
       </div>
 
+      <!-- ─── PAGE: Wardrobe ─── -->
+      <div class="page" id="page-wardrobe" style="padding:20px 24px;max-width:900px">
+
+        <!-- Upload form -->
+        <div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:24px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
+          <!-- Image drop zone -->
+          <div id="wdDropZone" class="wardrobe-upload-zone" onclick="document.getElementById('wdPhotoFile').click()">
+            <input type="file" id="wdPhotoFile" accept="image/*" style="display:none" onchange="wdHandlePhoto(this.files[0])" />
+            <img id="wdPhotoThumb" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
+            <div id="wdPhotoPlaceholder" style="text-align:center;color:#30304a">
+              <div style="font-size:24px;margin-bottom:2px">👕</div>
+              <div style="font-family:var(--mono);font-size:8px">drop image</div>
+            </div>
+          </div>
+          <!-- Fields -->
+          <div style="display:flex;flex-direction:column;gap:10px;flex:1">
+            <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a">ADD TO WARDROBE</div>
+            <div style="display:flex;gap:10px">
+              <div style="flex:2">
+                <label style="font-family:var(--mono);font-size:8px;color:#50507a;display:block;margin-bottom:4px">NAME</label>
+                <input class="input" id="wdName" placeholder="e.g. Blue jersey" style="width:100%" />
+              </div>
+              <div style="flex:1">
+                <label style="font-family:var(--mono);font-size:8px;color:#50507a;display:block;margin-bottom:4px">TYPE</label>
+                <select class="input" id="wdType" style="width:100%">
+                  <option value="top">Top</option>
+                  <option value="bottom">Bottom</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="wdAdd()" style="align-self:flex-start;padding:8px 20px">Save to Wardrobe</button>
+          </div>
+        </div>
+
+        <!-- Tops section -->
+        <div class="wardrobe-section-heading">TOPS</div>
+        <div id="wardrobeTopsGrid" class="wardrobe-grid">
+          <div class="wardrobe-empty">No tops saved yet.</div>
+        </div>
+
+        <!-- Bottoms section -->
+        <div class="wardrobe-section-heading">BOTTOMS</div>
+        <div id="wardrobeBottomsGrid" class="wardrobe-grid">
+          <div class="wardrobe-empty">No bottoms saved yet.</div>
+        </div>
+
+      </div><!-- /page-wardrobe -->
+
     </div>
   </main>
 
@@ -1108,13 +1184,64 @@
       <div id="cpProgress" style="display:none;margin-top:16px">
         <div class="cp-log" id="cpLog"></div>
 
-        <!-- Portrait confirmation — shown after portrait generates, before angles -->
+        <!-- Portrait confirmation — shown after portrait generates -->
         <div id="cpPortraitConfirm" style="display:none;margin-top:16px;text-align:center">
           <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:10px">PORTRAIT — CONFIRM TO CONTINUE</div>
           <img id="cpPortraitPreview" style="max-height:280px;object-fit:contain;image-rendering:pixelated;border:1px solid var(--border);border-radius:8px;margin-bottom:14px" />
           <div style="display:flex;gap:10px;justify-content:center">
-            <button class="btn btn-primary" style="min-width:130px" onclick="cpConfirmAndGenerateAngles()">Use This →</button>
+            <button class="btn btn-primary" style="min-width:130px" onclick="cpUsePortrait()">Use This →</button>
             <button class="btn btn-secondary" style="min-width:130px" onclick="cpGenerate()">Try Again</button>
+          </div>
+        </div>
+
+        <!-- Outfit picker — shown after portrait confirmed, before angle generation -->
+        <div id="cpOutfitPicker" style="display:none;margin-top:16px">
+          <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:12px">OUTFIT — DRAG TOP &amp; BOTTOM ONTO CHARACTER</div>
+
+          <!-- Three-column layout: tops | character drop zone | bottoms -->
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start">
+
+            <!-- Tops panel -->
+            <div>
+              <div style="font-family:var(--mono);font-size:8px;color:#50507a;letter-spacing:1px;margin-bottom:6px">TOPS</div>
+              <div id="cpTopsPanel" class="cp-outfit-panel">
+                <div style="color:#30304a;font-family:var(--mono);font-size:9px;width:100%;text-align:center;padding:8px 0">Loading…</div>
+              </div>
+            </div>
+
+            <!-- Character drop zone (center) -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;min-width:140px">
+              <div id="cpOutfitDropZone" class="cp-outfit-drop-zone"
+                   ondragover="cpOutfitDragOver(event)" ondragleave="cpOutfitDragLeave(event)" ondrop="cpOutfitDrop(event)">
+                <img id="cpDressedPreview" style="max-height:180px;image-rendering:pixelated;display:none" />
+                <div class="cp-outfit-drop-hint" id="cpOutfitDropHint">Drop top or bottom<br>onto character</div>
+              </div>
+              <!-- Applied outfit badges -->
+              <div id="cpAppliedTop" style="display:none" class="cp-outfit-badge">
+                <span id="cpAppliedTopName"></span>
+                <button onclick="cpClearOutfitPiece('top')" title="Remove top">×</button>
+              </div>
+              <div id="cpAppliedBottom" style="display:none" class="cp-outfit-badge">
+                <span id="cpAppliedBottomName"></span>
+                <button onclick="cpClearOutfitPiece('bottom')" title="Remove bottom">×</button>
+              </div>
+              <!-- Spinner while applying -->
+              <div id="cpOutfitApplyStatus" style="display:none;font-family:var(--mono);font-size:9px;color:var(--accent3)">
+                <span class="spinner active" style="display:inline-block;width:10px;height:10px;vertical-align:middle;margin-right:4px"></span>
+                Applying…
+              </div>
+              <button class="btn btn-primary" onclick="cpProceedToAngles()" style="width:100%;padding:10px;font-size:11px;margin-top:4px">Generate Angles →</button>
+              <button class="btn" onclick="cpProceedToAngles()" style="width:100%;padding:8px;font-size:10px;background:transparent;border-color:var(--border-hi);color:#6060a0">Skip Outfit</button>
+            </div>
+
+            <!-- Bottoms panel -->
+            <div>
+              <div style="font-family:var(--mono);font-size:8px;color:#50507a;letter-spacing:1px;margin-bottom:6px">BOTTOMS</div>
+              <div id="cpBottomsPanel" class="cp-outfit-panel">
+                <div style="color:#30304a;font-family:var(--mono);font-size:9px;width:100%;text-align:center;padding:8px 0">Loading…</div>
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -1352,6 +1479,13 @@ window.addEventListener('DOMContentLoaded', () => {
     cz.ondragleave = () => cz.classList.remove('dragover');
     cz.ondrop = e => { e.preventDefault(); cz.classList.remove('dragover'); if (e.dataTransfer.files.length) cpAddClothing(e.dataTransfer.files); };
   }
+
+  const wdDz = document.getElementById('wdDropZone');
+  if (wdDz) {
+    wdDz.ondragover = e => { e.preventDefault(); wdDz.classList.add('dragover'); };
+    wdDz.ondragleave = () => wdDz.classList.remove('dragover');
+    wdDz.ondrop = e => { e.preventDefault(); wdDz.classList.remove('dragover'); if (e.dataTransfer.files[0]) wdHandlePhoto(e.dataTransfer.files[0]); };
+  }
 });
 
 // ─── NAVIGATION ───────────────────────────────────────────────────────────
@@ -1362,6 +1496,7 @@ function showPage(name) {
   event.target.classList.add('active');
   if (name === 'video') initVideoPage();
   if (name === 'prompts') { ptInitSelects().then(() => { ptLoadLibrary(); ptLoad(); }); }
+  if (name === 'wardrobe') loadWardrobePage();
   if (name === 'studio') {
     if (STATE.selectedChar) {
       selectChar(STATE.selectedChar.name);
@@ -2028,10 +2163,11 @@ async function exportToSoulJam() {
 }
 
 // ─── NEW CHARACTER ─────────────────────────────────────────────────────────
-const CP = { name: '', photo: null, clothing: [] };
+const CP = { name: '', photo: null, clothing: [], portraitBase64: null, dressedPortraitBase64: null };
+const WD = { photo: null }; // wardrobe upload state
 
 function openAddChar() {
-  CP.name = ''; CP.photo = null; CP.clothing = [];
+  CP.name = ''; CP.photo = null; CP.clothing = []; CP.portraitBase64 = null; CP.dressedPortraitBase64 = null;
   document.getElementById('cpName').value = '';
   document.getElementById('cpJersey').value = '';
   document.getElementById('cpHeight').value = '72';
@@ -2047,6 +2183,7 @@ function openAddChar() {
   document.getElementById('cpProgress').style.display = 'none';
   document.getElementById('cpAngleResults').style.display = 'none';
   document.getElementById('cpPortraitConfirm').style.display = 'none';
+  document.getElementById('cpOutfitPicker').style.display = 'none';
   document.getElementById('cpLog').innerHTML = '';
   document.getElementById('addCharModal').classList.add('open');
 }
@@ -2183,6 +2320,132 @@ async function cpGenerate() {
   } finally {
     spinner.classList.remove('active');
   }
+}
+
+// Called by "Use This →" — hides portrait confirm, shows outfit picker
+async function cpUsePortrait() {
+  document.getElementById('cpPortraitConfirm').style.display = 'none';
+  CP.dressedPortraitBase64 = CP.portraitBase64;
+  document.getElementById('cpOutfitPicker').style.display = 'block';
+
+  // Set initial preview
+  const preview = document.getElementById('cpDressedPreview');
+  preview.src = CP.portraitBase64;
+  preview.style.display = 'block';
+  document.getElementById('cpOutfitDropHint').style.display = 'none';
+
+  // Reset applied badges
+  document.getElementById('cpAppliedTop').style.display = 'none';
+  document.getElementById('cpAppliedBottom').style.display = 'none';
+
+  // Load wardrobe into panels
+  try {
+    const r = await fetch(`${API}/api/wardrobe`);
+    const data = await r.json();
+    const tops = (data.items || []).filter(i => i.type === 'top');
+    const bottoms = (data.items || []).filter(i => i.type === 'bottom');
+
+    document.getElementById('cpTopsPanel').innerHTML = tops.length === 0
+      ? '<div style="color:#30304a;font-family:var(--mono);font-size:9px;width:100%;text-align:center;padding:12px 0">No tops in wardrobe</div>'
+      : tops.map(item => `
+        <div class="cp-wardrobe-item" draggable="true"
+             ondragstart="cpDragOutfit(event,'${item.id}','top','${item.name.replace(/'/g,'&#39;')}')"
+             title="${item.name}">
+          <img src="${API}/api/wardrobe/image/${item.id}" />
+          <div class="cp-wardrobe-item-name">${item.name}</div>
+        </div>`).join('');
+
+    document.getElementById('cpBottomsPanel').innerHTML = bottoms.length === 0
+      ? '<div style="color:#30304a;font-family:var(--mono);font-size:9px;width:100%;text-align:center;padding:12px 0">No bottoms in wardrobe</div>'
+      : bottoms.map(item => `
+        <div class="cp-wardrobe-item" draggable="true"
+             ondragstart="cpDragOutfit(event,'${item.id}','bottom','${item.name.replace(/'/g,'&#39;')}')"
+             title="${item.name}">
+          <img src="${API}/api/wardrobe/image/${item.id}" />
+          <div class="cp-wardrobe-item-name">${item.name}</div>
+        </div>`).join('');
+  } catch (e) {
+    cpLog('Could not load wardrobe: ' + e.message, 'err');
+  }
+}
+
+function cpDragOutfit(e, id, type, name) {
+  e.dataTransfer.setData('text/plain', JSON.stringify({ id, type, name }));
+  e.dataTransfer.effectAllowed = 'copy';
+}
+
+function cpOutfitDragOver(e) {
+  e.preventDefault();
+  document.getElementById('cpOutfitDropZone').classList.add('dragover');
+}
+
+function cpOutfitDragLeave(e) {
+  document.getElementById('cpOutfitDropZone').classList.remove('dragover');
+}
+
+async function cpOutfitDrop(e) {
+  e.preventDefault();
+  document.getElementById('cpOutfitDropZone').classList.remove('dragover');
+  try {
+    const { id, type, name } = JSON.parse(e.dataTransfer.getData('text/plain'));
+    await cpApplyOutfitItem(id, type, name);
+  } catch {}
+}
+
+async function cpApplyOutfitItem(id, type, name) {
+  const statusEl = document.getElementById('cpOutfitApplyStatus');
+  statusEl.style.display = 'flex';
+  cpLog(`Applying ${type} "${name}"…`);
+
+  try {
+    const r = await fetch(`${API}/api/char-pipeline/apply-outfit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        portraitBase64: CP.dressedPortraitBase64,
+        topId: type === 'top' ? id : undefined,
+        bottomId: type === 'bottom' ? id : undefined,
+      }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    const result = await waitForJob(d.jobId, cpLog, `Applying ${type}`);
+
+    CP.dressedPortraitBase64 = result.imageBase64;
+    const preview = document.getElementById('cpDressedPreview');
+    preview.src = result.imageBase64;
+    preview.style.display = 'block';
+    document.getElementById('cpOutfitDropHint').style.display = 'none';
+
+    // Show applied badge
+    const badgeEl = document.getElementById(type === 'top' ? 'cpAppliedTop' : 'cpAppliedBottom');
+    const nameEl = document.getElementById(type === 'top' ? 'cpAppliedTopName' : 'cpAppliedBottomName');
+    nameEl.textContent = name;
+    badgeEl.style.display = 'flex';
+
+    cpLog(`✓ ${type} "${name}" applied`, 'ok');
+  } catch (e) {
+    cpLog(`Error: ${e.message}`, 'err');
+    toast(`Failed to apply ${type}: ${e.message}`, true);
+  } finally {
+    statusEl.style.display = 'none';
+  }
+}
+
+function cpClearOutfitPiece(type) {
+  // Revert to original portrait and clear badge
+  CP.dressedPortraitBase64 = CP.portraitBase64;
+  document.getElementById('cpDressedPreview').src = CP.portraitBase64;
+  document.getElementById(type === 'top' ? 'cpAppliedTop' : 'cpAppliedBottom').style.display = 'none';
+  cpLog(`${type} removed — reverted to original portrait`);
+}
+
+// Called by "Generate Angles →" or "Skip Outfit"
+async function cpProceedToAngles() {
+  document.getElementById('cpOutfitPicker').style.display = 'none';
+  // Use dressed portrait (may be same as original if no outfit applied)
+  CP.portraitBase64 = CP.dressedPortraitBase64 || CP.portraitBase64;
+  await cpConfirmAndGenerateAngles();
 }
 
 // Phase 2: called after user confirms portrait — generate both angle sheets
@@ -2536,6 +2799,93 @@ async function cpComplete() {
 function openCharAngles(name) {
   openAddChar();
   document.getElementById('cpName').value = name;
+}
+
+// ─── WARDROBE PAGE ────────────────────────────────────────────────────────
+
+let WARDROBE_ITEMS = [];
+
+async function loadWardrobePage() {
+  try {
+    const r = await fetch(`${API}/api/wardrobe`);
+    const d = await r.json();
+    WARDROBE_ITEMS = d.items || [];
+    renderWardrobePage();
+  } catch (e) {
+    console.error('Wardrobe load error', e);
+  }
+}
+
+function renderWardrobePage() {
+  const tops = WARDROBE_ITEMS.filter(i => i.type === 'top');
+  const bottoms = WARDROBE_ITEMS.filter(i => i.type === 'bottom');
+
+  document.getElementById('wardrobeTopsGrid').innerHTML = tops.length === 0
+    ? '<div class="wardrobe-empty">No tops saved yet.</div>'
+    : tops.map(item => wardrobeCardHtml(item)).join('');
+
+  document.getElementById('wardrobeBottomsGrid').innerHTML = bottoms.length === 0
+    ? '<div class="wardrobe-empty">No bottoms saved yet.</div>'
+    : bottoms.map(item => wardrobeCardHtml(item)).join('');
+}
+
+function wardrobeCardHtml(item) {
+  return `<div class="wardrobe-item-card">
+    <img src="${API}/api/wardrobe/image/${item.id}" alt="${item.name}" />
+    <div class="wardrobe-item-label">${item.name}</div>
+    <button class="wardrobe-delete-btn" onclick="wdDelete('${item.id}')" title="Remove">×</button>
+  </div>`;
+}
+
+function wdHandlePhoto(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    WD.photo = e.target.result;
+    const thumb = document.getElementById('wdPhotoThumb');
+    thumb.src = e.target.result;
+    thumb.style.display = 'block';
+    document.getElementById('wdPhotoPlaceholder').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function wdAdd() {
+  const name = document.getElementById('wdName').value.trim();
+  const type = document.getElementById('wdType').value;
+  if (!name) return toast('Name required', true);
+  if (!WD.photo) return toast('Upload an image first', true);
+
+  try {
+    const r = await fetch(`${API}/api/wardrobe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, type, imageBase64: WD.photo }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    WARDROBE_ITEMS.push(d.item);
+    renderWardrobePage();
+    // Reset form
+    document.getElementById('wdName').value = '';
+    WD.photo = null;
+    document.getElementById('wdPhotoThumb').style.display = 'none';
+    document.getElementById('wdPhotoPlaceholder').style.display = 'block';
+    toast(`${type === 'top' ? 'Top' : 'Bottom'} "${name}" saved to wardrobe`);
+  } catch (e) {
+    toast('Save failed: ' + e.message, true);
+  }
+}
+
+async function wdDelete(id) {
+  try {
+    await fetch(`${API}/api/wardrobe/${id}`, { method: 'DELETE' });
+    WARDROBE_ITEMS = WARDROBE_ITEMS.filter(i => i.id !== id);
+    renderWardrobePage();
+    toast('Item removed');
+  } catch (e) {
+    toast('Delete failed', true);
+  }
 }
 
 // ─── COSTS ────────────────────────────────────────────────────────────────

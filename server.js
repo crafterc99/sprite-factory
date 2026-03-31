@@ -153,6 +153,7 @@ require('./routes/production').register(router, ctx);
 require('./routes/anchor').register(router, ctx);
 require('./routes/animation-contract').register(router, ctx);
 require('./routes/char-pipeline').register(router, ctx);
+require('./routes/wardrobe').register(router);
 
 // ─── Deploy Endpoint ─────────────────────────────────────────────────────
 const { execSync } = require('child_process');
