@@ -368,6 +368,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           aspectRatio: '3:4',
           resolution: '2K',
           model: modelId,
+          maxRetries: 1,
+          timeoutMs: 80000,
         });
         const step1Path = path.join(charDir, 'step1-pixel.png');
         fs.writeFileSync(step1Path, step1.imageBuffer);
@@ -402,6 +404,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           aspectRatio: '3:4',
           resolution: '2K',
           model: modelId,
+          maxRetries: 1,
+          timeoutMs: 80000,
         });
         recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step2' });
         const imageBase64 = 'data:image/png;base64,' + step2.imageBuffer.toString('base64');
@@ -567,6 +571,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         aspectRatio: '16:9',
         resolution: '2K',
         model: modelId,
+        maxRetries: 1,
+        timeoutMs: 80000,
       });
 
       const sheetPath = path.join(charDir, 'body-sheet.png');
@@ -699,6 +705,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           aspectRatio: '16:9',
           resolution: '2K',
           model: modelId,
+          maxRetries: 1,
+          timeoutMs: 80000,
         });
 
         const charDir = path.join(TMP_DIR, 'characters', name);
