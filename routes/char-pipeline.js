@@ -508,6 +508,119 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     }
   });
 
+  // POST /api/char-pipeline/generate-body-angles — Generate body sheet AND slice in one request
+  router.post('/api/char-pipeline/generate-body-angles', async (req, res) => {
+    const body = await parseBody(req);
+    const { name, promptOverride, clothingNote, clothingImages } = body;
+    if (!name) return json(res, { error: 'name required' }, 400);
+
+    const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
+    if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found' }, 400);
+
+    try {
+      const charDir = path.join(TMP_DIR, 'characters', name);
+      fs.mkdirSync(charDir, { recursive: true });
+
+      const clothingPaths = [];
+      if (Array.isArray(clothingImages) && clothingImages.length > 0) {
+        const clothingDir = path.join(charDir, 'clothing-refs');
+        fs.mkdirSync(clothingDir, { recursive: true });
+        for (let i = 0; i < clothingImages.length; i++) {
+          const data = clothingImages[i].replace(/^data:image\/\w+;base64,/, '');
+          const p = path.join(clothingDir, `ref-${i}.png`);
+          fs.writeFileSync(p, Buffer.from(data, 'base64'));
+          clothingPaths.push(p);
+        }
+      }
+
+      let basePrompt = promptOverride?.trim() || buildBodySheetPrompt();
+      if (clothingNote) {
+        basePrompt += `\n\n${clothingNote.trim()}`;
+        basePrompt += '\nMatch the outfit from the additional clothing reference images exactly.';
+      }
+
+      const modelId = 'gemini-3-pro-image-preview';
+      const client = new NanaBananaClient({ model: modelId });
+      const referenceImages = [portraitPath, ...clothingPaths];
+
+      const result = await client.generate(basePrompt, {
+        referenceImages,
+        aspectRatio: '16:9',
+        resolution: '2K',
+        model: modelId,
+      });
+
+      const sheetPath = path.join(charDir, 'body-sheet.png');
+      fs.writeFileSync(sheetPath, result.imageBuffer);
+      recordCost(modelId, 'char_pipeline', '2K', referenceImages.length, { character: name, step: 'body-sheet' });
+
+      // Slice immediately while we still have the file in memory
+      const sliceDir = path.join(charDir, 'body-frames');
+      const destPattern = path.join(ASSETS_DIR, `${name}-angle-{i}.png`);
+      const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
+      const frames = sliced.map((f, i) => ({
+        ...f,
+        label: ANGLE_LABELS_8[i] || f.label,
+        url: `/assets/${name}-angle-${i}.png`,
+      }));
+
+      return json(res, {
+        success: true, name,
+        sheetUrl: `/api/character/image/${name}/body-sheet.png`,
+        frames,
+      });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/char-pipeline/generate-head-angles — Generate head sheet AND slice in one request
+  router.post('/api/char-pipeline/generate-head-angles', async (req, res) => {
+    const body = await parseBody(req);
+    const { name, promptOverride } = body;
+    if (!name) return json(res, { error: 'name required' }, 400);
+
+    const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
+    if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found — complete Step 2 first' }, 400);
+
+    try {
+      const prompt = promptOverride?.trim() || buildHeadSheetPrompt();
+      const modelId = 'gemini-3-pro-image-preview';
+      const client = new NanaBananaClient({ model: modelId });
+
+      const result = await client.generate(prompt, {
+        referenceImages: [portraitPath],
+        aspectRatio: '16:9',
+        resolution: '2K',
+        model: modelId,
+      });
+
+      const charDir = path.join(TMP_DIR, 'characters', name);
+      fs.mkdirSync(charDir, { recursive: true });
+      const sheetPath = path.join(charDir, 'head-sheet.png');
+      fs.writeFileSync(sheetPath, result.imageBuffer);
+      recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'head-sheet' });
+
+      // Slice immediately
+      const sliceDir = path.join(charDir, 'head-frames');
+      const destPattern = path.join(ASSETS_DIR, `${name}-headshot-{i}.png`);
+      const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
+      const frames = sliced.map((f, i) => ({
+        ...f,
+        label: ANGLE_LABELS_8[i] || f.label,
+        url: `/assets/${name}-headshot-${i}.png`,
+      }));
+
+      return json(res, {
+        success: true, name,
+        sheetUrl: `/api/character/image/${name}/head-sheet.png`,
+        frames,
+      });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
   // POST /api/char-pipeline/final-frames — Step 7: AI-generate one clean frame per angle
   router.post('/api/char-pipeline/final-frames', async (req, res) => {
     const body = await parseBody(req);

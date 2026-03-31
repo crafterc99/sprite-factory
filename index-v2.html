@@ -2128,36 +2128,20 @@ async function cpConfirmAndGenerateAngles() {
       ? `\nCharacter is wearing the outfit shown in the additional reference images (${CP.clothing.length} clothing photo${CP.clothing.length > 1 ? 's' : ''} provided).`
       : '';
 
-    // Generate body sheet and headshot sheet in parallel
-    cpLog('Generating body turnaround sheet + headshot sheet…');
-    const [d3body, d3head] = await Promise.all([
-      fetch(`${API}/api/char-pipeline/body-sheet`, {
+    // Generate + slice body and head angles in parallel (single request each = no race condition)
+    cpLog('Generating body turnaround + headshot angles…');
+    const [d4body, d4head] = await Promise.all([
+      fetch(`${API}/api/char-pipeline/generate-body-angles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, clothingNote, clothingImages: CP.clothing.map(c => c.data) }),
       }).then(r => r.json()),
-      fetch(`${API}/api/char-pipeline/head-sheet`, {
+      fetch(`${API}/api/char-pipeline/generate-head-angles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       }).then(r => r.json()),
     ]);
-    if (d3body.error) throw new Error('Body sheet: ' + d3body.error);
-    if (d3head.error) throw new Error('Head sheet: ' + d3head.error);
-    cpLog('✓ Both sheets generated', 'ok');
-
-    // Slice both sheets in parallel
-    cpLog('Slicing frames…');
-    const [d4body, d4head] = await Promise.all([
-      fetch(`${API}/api/char-pipeline/body-slice`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      }).then(r => r.json()),
-      fetch(`${API}/api/char-pipeline/head-slice`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      }).then(r => r.json()),
-    ]);
-    if (d4body.error) throw new Error('Body slice: ' + d4body.error);
-    if (d4head.error) throw new Error('Head slice: ' + d4head.error);
+    if (d4body.error) throw new Error('Body angles: ' + d4body.error);
+    if (d4head.error) throw new Error('Head angles: ' + d4head.error);
     cpLog(`✓ ${d4body.frames.length} body angles + ${d4head.frames.length} headshot angles ready`, 'ok');
 
     await fetch(`${API}/api/char-pipeline/complete`, {
