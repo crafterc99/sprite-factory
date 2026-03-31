@@ -516,6 +516,76 @@
   .pm-history-entry { display:flex; align-items:center; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:9px; color:#60608a; }
   .pm-history-entry:last-child { border-bottom:none; }
   .pm-divider { border:none; border-top:1px solid var(--border); margin:20px 0; }
+
+  /* ─── Prompt Pipeline (3-panel) ──────────────────────────────────── */
+  .pt-topbar { display:flex; align-items:center; justify-content:space-between; padding:8px 14px; border-bottom:1px solid var(--border); background:var(--surface); flex-shrink:0; gap:10px; flex-wrap:wrap; }
+  .pt-topbar-left { display:flex; align-items:center; gap:8px; }
+  .pt-topbar-right { display:flex; align-items:center; gap:8px; }
+  .pt-mode-tabs { display:flex; border:1px solid var(--border); border-radius:5px; overflow:hidden; }
+  .pt-mode-tab { font-family:var(--mono); font-size:10px; padding:4px 12px; background:var(--surface2); color:#60608a; cursor:pointer; transition:all 0.1s; }
+  .pt-mode-tab.active { background:rgba(255,68,0,0.12); color:var(--accent); }
+  .pt-valid-badge { font-family:var(--mono); font-size:9px; padding:2px 8px; border-radius:10px; }
+  .pt-valid-badge.valid { background:rgba(0,255,136,0.1); color:var(--accent2); }
+  .pt-valid-badge.invalid { background:rgba(255,68,0,0.1); color:var(--accent); }
+
+  /* 3-panel layout */
+  .pt-layout { display:flex; flex:1; overflow:hidden; height:calc(100vh - 95px); }
+  .pt-panel { display:flex; flex-direction:column; overflow:hidden; border-right:1px solid var(--border); }
+  .pt-panel:last-child { border-right:none; }
+  .pt-panel-header { font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#50507a; padding:10px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; flex-shrink:0; }
+  .pt-library { width:200px; flex-shrink:0; overflow-y:auto; background:var(--surface); }
+  .pt-builder { width:300px; flex-shrink:0; overflow:hidden; background:var(--surface); }
+  .pt-preview { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+
+  /* Module library */
+  .pt-lib-group { border-bottom:1px solid var(--border); }
+  .pt-lib-group-header { display:flex; align-items:center; justify-content:space-between; padding:7px 12px; cursor:pointer; font-family:var(--mono); font-size:9px; letter-spacing:1px; text-transform:uppercase; color:#40405a; background:rgba(255,255,255,0.02); user-select:none; }
+  .pt-lib-group-header:hover { background:var(--surface2); }
+  .pt-lib-group-items { display:none; }
+  .pt-lib-group.open .pt-lib-group-items { display:block; }
+  .pt-lib-item { padding:5px 12px 5px 18px; font-size:11px; color:#808098; cursor:pointer; transition:all 0.1s; border-left:2px solid transparent; display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .pt-lib-item:hover { background:var(--surface2); color:var(--text); }
+  .pt-lib-item.in-pipeline { border-left-color:var(--accent2); color:var(--accent2); }
+  .pt-lib-add-btn { font-size:9px; opacity:0; padding:1px 5px; border-radius:3px; background:rgba(255,68,0,0.15); color:var(--accent); border:1px solid var(--accent); cursor:pointer; }
+  .pt-lib-item:hover .pt-lib-add-btn { opacity:1; }
+
+  /* Pipeline builder */
+  .pt-pipeline-list { flex:1; overflow-y:auto; padding:8px 0; }
+  .pt-module-card { margin:4px 8px; border:1px solid var(--border); border-radius:7px; background:var(--surface2); transition:all 0.15s; cursor:grab; }
+  .pt-module-card:active { cursor:grabbing; }
+  .pt-module-card.dragging { opacity:0.4; }
+  .pt-module-card.drag-over { border-color:var(--accent); background:rgba(255,68,0,0.06); }
+  .pt-module-card.disabled { opacity:0.45; }
+  .pt-module-card.custom-mod { border-color:rgba(0,255,136,0.3); }
+  .pt-module-header { display:flex; align-items:center; gap:6px; padding:7px 10px; }
+  .pt-drag-handle { color:#303050; font-size:11px; cursor:grab; flex-shrink:0; user-select:none; }
+  .pt-module-type-badge { font-family:var(--mono); font-size:7px; letter-spacing:1px; text-transform:uppercase; padding:2px 5px; border-radius:3px; flex-shrink:0; }
+  .pt-type-identity { background:rgba(255,180,0,0.15); color:#FFB400; }
+  .pt-type-base { background:rgba(100,100,255,0.15); color:#8888FF; }
+  .pt-type-variant { background:rgba(255,68,0,0.15); color:var(--accent); }
+  .pt-type-angle { background:rgba(0,200,200,0.15); color:#00CCCC; }
+  .pt-type-outfit { background:rgba(200,100,255,0.15); color:#CC66FF; }
+  .pt-type-style { background:rgba(100,200,100,0.15); color:#88CC88; }
+  .pt-type-post { background:rgba(150,150,150,0.15); color:#888888; }
+  .pt-module-title { flex:1; font-size:11px; font-weight:600; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pt-module-toggle { width:20px; height:12px; border-radius:6px; border:1px solid var(--border); background:var(--surface); cursor:pointer; position:relative; flex-shrink:0; transition:background 0.15s; }
+  .pt-module-toggle.on { background:var(--accent2); border-color:var(--accent2); }
+  .pt-module-toggle::after { content:''; position:absolute; width:8px; height:8px; border-radius:50%; background:#fff; top:1px; left:1px; transition:left 0.15s; }
+  .pt-module-toggle.on::after { left:9px; }
+  .pt-module-body { padding:0 10px 8px; display:none; }
+  .pt-module-card.expanded .pt-module-body { display:block; }
+  .pt-module-textarea { width:100%; min-height:80px; max-height:180px; resize:vertical; font-family:var(--mono); font-size:10px; line-height:1.5; background:var(--surface); border:1px solid var(--border); border-radius:4px; color:var(--text); padding:6px 8px; box-sizing:border-box; }
+  .pt-module-textarea:focus { outline:none; border-color:var(--accent); }
+  .pt-module-actions { display:flex; gap:5px; margin-top:6px; }
+  .pt-module-actions .btn { font-size:9px; padding:3px 8px; }
+  .pt-order-badge { font-family:var(--mono); font-size:8px; color:#30305a; padding:1px 4px; border-radius:3px; background:var(--surface); flex-shrink:0; }
+
+  /* Compiled preview */
+  .pt-compiled { flex:1; resize:none; font-family:var(--mono); font-size:10px; line-height:1.6; background:var(--surface2); border:none; border-bottom:1px solid var(--border); color:var(--text); padding:14px 16px; outline:none; }
+  .pt-preview-actions { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  #ptTestResult { flex:1; overflow-y:auto; padding:14px; }
+  .pt-test-img { max-width:180px; max-height:180px; border-radius:6px; border:1px solid var(--border); image-rendering:pixelated; margin-top:8px; }
+  .pt-warning { font-family:var(--mono); font-size:9px; color:var(--warning); padding:6px 10px; background:rgba(255,180,0,0.07); border-radius:4px; margin-top:6px; }
 </style>
 </head>
 <body>
@@ -826,21 +896,57 @@
 
       <!-- PAGE: Prompts -->
       <div class="page" id="page-prompts">
-        <div class="prompt-mgr-layout">
-          <!-- Left sidebar -->
-          <div class="prompt-mgr-sidebar">
-            <div class="pm-top-bar">
-              <select class="input" id="pmCharSelect" onchange="loadPromptManager()">
-                <option value="99">99</option>
-              </select>
-              <button class="pm-deploy-btn" onclick="pmDeploy()" title="Push to Railway">↑ Deploy</button>
+        <!-- ── Pipeline top bar ── -->
+        <div class="pt-topbar">
+          <div class="pt-topbar-left">
+            <select class="input" id="ptCharSelect" onchange="ptLoad()" style="width:100px"></select>
+            <select class="input" id="ptAnimSelect" onchange="ptLoad()" style="width:160px"></select>
+            <div class="pt-mode-tabs">
+              <div class="pt-mode-tab active" id="ptModeStrip" onclick="ptSetMode('strip')">Strip</div>
+              <div class="pt-mode-tab" id="ptModeFbf" onclick="ptSetMode('fbf')">FBF</div>
             </div>
-            <div id="pmSidebarContent"></div>
           </div>
-          <!-- Right editor -->
-          <div class="pm-editor" id="pmEditor">
-            <div class="pm-editor-empty">Select a prompt type from the sidebar</div>
+          <div class="pt-topbar-right">
+            <span id="ptValidBadge" class="pt-valid-badge"></span>
+            <button class="pm-deploy-btn" onclick="pmDeploy()" title="Push to Railway">↑ Deploy</button>
           </div>
+        </div>
+
+        <!-- ── 3-panel layout ── -->
+        <div class="pt-layout">
+
+          <!-- LEFT: Module Library -->
+          <div class="pt-panel pt-library">
+            <div class="pt-panel-header">Module Library</div>
+            <div id="ptLibrary"></div>
+          </div>
+
+          <!-- CENTER: Pipeline Builder -->
+          <div class="pt-panel pt-builder">
+            <div class="pt-panel-header">
+              Pipeline
+              <span id="ptPipelineCount" style="font-size:9px;color:#50507a;margin-left:6px"></span>
+            </div>
+            <div id="ptPipeline" class="pt-pipeline-list"></div>
+            <div style="padding:10px 12px;border-top:1px solid var(--border)">
+              <button class="btn btn-secondary" style="font-size:10px;width:100%;padding:6px" onclick="ptAddCustom()">+ Add Custom Module</button>
+            </div>
+          </div>
+
+          <!-- RIGHT: Compiled Prompt + Preview -->
+          <div class="pt-panel pt-preview">
+            <div class="pt-panel-header">
+              Compiled Prompt
+              <button class="btn btn-secondary" style="font-size:9px;padding:3px 9px;margin-left:8px" onclick="ptCopy()">Copy</button>
+            </div>
+            <textarea class="pt-compiled" id="ptCompiled" readonly placeholder="Select an animation to see the compiled prompt…"></textarea>
+            <div class="pt-preview-actions">
+              <button class="btn btn-primary" onclick="ptTest()" id="ptTestBtn">Test Generation</button>
+              <span id="ptTestCost" style="font-family:var(--mono);font-size:9px;color:#50507a"></span>
+            </div>
+            <div id="ptTestResult"></div>
+          </div>
+
         </div>
       </div>
 
@@ -1169,7 +1275,7 @@ function showPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   event.target.classList.add('active');
   if (name === 'video') initVideoPage();
-  if (name === 'prompts') loadPromptManager();
+  if (name === 'prompts') { ptInitSelects().then(() => { ptLoadLibrary(); ptLoad(); }); }
   if (name === 'studio') {
     if (STATE.selectedChar) {
       selectChar(STATE.selectedChar.name);
@@ -3594,6 +3700,374 @@ async function loadPMHistory(promptType, context) {
     list.innerHTML = '<div style="font-family:var(--mono);font-size:9px;color:#40405a;padding:4px 0">No history yet</div>';
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PROMPT PIPELINE — 3-panel composition engine
+// ═══════════════════════════════════════════════════════════════════════════
+
+const PT = {
+  mode: 'strip',
+  animation: null,
+  character: '99',
+  library: {},       // { type: [module, ...] }
+  pipeline: [],      // active sorted modules
+  compiledPrompt: '',
+  dragSrcId: null,
+};
+
+const TYPE_COLORS = {
+  identity: 'pt-type-identity', base: 'pt-type-base', variant: 'pt-type-variant',
+  angle: 'pt-type-angle', outfit: 'pt-type-outfit', style: 'pt-type-style', post: 'pt-type-post',
+};
+
+// ── Init & Load ──────────────────────────────────────────────────────────
+
+async function ptInitSelects() {
+  // Populate character
+  const csel = document.getElementById('ptCharSelect');
+  if (STATE.roster.length > 0) {
+    csel.innerHTML = STATE.roster.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  } else {
+    csel.innerHTML = '<option value="99">99</option>';
+  }
+  PT.character = csel.value;
+
+  // Populate animation from ANIM_CATEGORIES
+  const asel = document.getElementById('ptAnimSelect');
+  const anims = Object.entries(ANIM_CATEGORIES).flatMap(([cat, list]) =>
+    list.map(a => `<option value="${a}" data-cat="${cat}">${a}</option>`)
+  );
+  // Also add known animations not in ANIM_CATEGORIES
+  const extra = ['static-dribble','jumpshot','stepback','crossover','defense-backpedal','defense-shuffle','steal','idle-dribble'];
+  const inCats = new Set(Object.values(ANIM_CATEGORIES).flat());
+  for (const a of extra) {
+    if (!inCats.has(a)) anims.unshift(`<option value="${a}">${a}</option>`);
+  }
+  asel.innerHTML = anims.join('');
+  if (PT.animation) asel.value = PT.animation;
+  PT.animation = asel.value;
+}
+
+async function ptLoadLibrary() {
+  try {
+    const r = await fetch(`${API}/api/prompt-pipeline/library`);
+    const d = await r.json();
+    PT.library = d.library || {};
+    renderPTLibrary();
+  } catch (e) {
+    console.warn('Pipeline library load failed:', e.message);
+  }
+}
+
+async function ptLoad() {
+  PT.character = document.getElementById('ptCharSelect').value || '99';
+  PT.animation = document.getElementById('ptAnimSelect').value;
+  if (!PT.animation) return;
+
+  try {
+    const r = await fetch(`${API}/api/prompt-pipeline/active?animation=${PT.animation}&character=${PT.character}`);
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+
+    PT.pipeline = d.modules || [];
+    PT.compiledPrompt = d.compiledPrompt || '';
+
+    renderPTLibrary();
+    renderPTPipeline();
+    renderPTCompiled();
+    renderPTValidation(d.valid, d.warnings);
+  } catch (e) {
+    toast('Pipeline load failed: ' + e.message, true);
+  }
+}
+
+function ptSetMode(mode) {
+  PT.mode = mode;
+  document.getElementById('ptModeStrip').classList.toggle('active', mode === 'strip');
+  document.getElementById('ptModeFbf').classList.toggle('active', mode === 'fbf');
+  ptRebuild();
+}
+
+// ── Render Library ────────────────────────────────────────────────────────
+
+function renderPTLibrary() {
+  const el = document.getElementById('ptLibrary');
+  if (!el) return;
+
+  const inPipelineIds = new Set(PT.pipeline.map(m => m.id));
+  const types = ['identity', 'base', 'variant', 'angle', 'outfit', 'style', 'post'];
+
+  el.innerHTML = types.map(type => {
+    const mods = PT.library[type] || [];
+    if (!mods.length) return '';
+    const items = mods.map(m => {
+      const active = inPipelineIds.has(m.id);
+      return `<div class="pt-lib-item ${active ? 'in-pipeline' : ''}" title="${escPM(m.title)}">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.title}</span>
+        <button class="pt-lib-add-btn" onclick="ptAddModuleFromLibrary('${m.id}')">${active ? '✓' : '+'}</button>
+      </div>`;
+    }).join('');
+    return `<div class="pt-lib-group open">
+      <div class="pt-lib-group-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>${type}</span><span>▶</span>
+      </div>
+      <div class="pt-lib-group-items">${items}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Render Pipeline ───────────────────────────────────────────────────────
+
+function renderPTPipeline() {
+  const el = document.getElementById('ptPipeline');
+  if (!el) return;
+
+  const sorted = [...PT.pipeline].sort((a, b) => a.order - b.order);
+  const count = document.getElementById('ptPipelineCount');
+  if (count) count.textContent = `${sorted.filter(m => m.enabled).length} active`;
+
+  el.innerHTML = sorted.map((mod, idx) => renderPTModuleCard(mod, idx)).join('');
+
+  // Drag-and-drop
+  el.querySelectorAll('.pt-module-card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      PT.dragSrcId = card.dataset.id;
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+    card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('drag-over'); });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      ptSwapModules(PT.dragSrcId, card.dataset.id);
+    });
+  });
+}
+
+function renderPTModuleCard(mod, idx) {
+  const typeClass = TYPE_COLORS[mod.type] || '';
+  const isCustom = mod.isCustom ? 'custom-mod' : '';
+  const disabled = !mod.enabled ? 'disabled' : '';
+
+  return `<div class="pt-module-card ${disabled} ${isCustom}" draggable="true" data-id="${mod.id}">
+    <div class="pt-module-header" onclick="ptToggleExpand('${mod.id}')">
+      <span class="pt-drag-handle" onclick="event.stopPropagation()">⠿</span>
+      <span class="pt-order-badge">${mod.order}</span>
+      <span class="pt-module-type-badge ${typeClass}">${mod.type}</span>
+      <span class="pt-module-title">${mod.title}</span>
+      ${mod.isCustom ? '<span class="pm-badge-custom" style="font-size:7px">CUSTOM</span>' : ''}
+      <div class="pt-module-toggle ${mod.enabled ? 'on' : ''}" onclick="event.stopPropagation();ptToggleModule('${mod.id}')"></div>
+    </div>
+    <div class="pt-module-body">
+      <textarea class="pt-module-textarea" id="pt-ta-${mod.id}" oninput="ptOnContentChange('${mod.id}',this.value)">${escPM(mod.content)}</textarea>
+      <div class="pt-module-actions">
+        <button class="btn btn-secondary" onclick="ptResetModule('${mod.id}')">Reset</button>
+        <button class="btn btn-primary" style="background:var(--accent2);color:#000" onclick="ptSaveModule('${mod.id}')">Save</button>
+        ${mod.isCustom ? `<button class="btn" style="background:rgba(255,0,0,0.15);color:#ff6666;font-size:9px" onclick="ptDeleteCustom('${mod.id}')">Delete</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Render Compiled ────────────────────────────────────────────────────────
+
+function renderPTCompiled() {
+  const ta = document.getElementById('ptCompiled');
+  if (ta) ta.value = PT.compiledPrompt;
+}
+
+function renderPTValidation(valid, warnings) {
+  const badge = document.getElementById('ptValidBadge');
+  if (!badge) return;
+  if (valid) {
+    badge.textContent = '✓ valid';
+    badge.className = 'pt-valid-badge valid';
+  } else {
+    badge.textContent = `⚠ ${(warnings || []).length} warning${warnings?.length !== 1 ? 's' : ''}`;
+    badge.className = 'pt-valid-badge invalid';
+    badge.title = (warnings || []).join('\n');
+  }
+}
+
+// ── Interactions ──────────────────────────────────────────────────────────
+
+function ptToggleExpand(moduleId) {
+  const card = document.querySelector(`.pt-module-card[data-id="${moduleId}"]`);
+  if (card) card.classList.toggle('expanded');
+}
+
+function ptToggleModule(moduleId) {
+  const mod = PT.pipeline.find(m => m.id === moduleId);
+  if (!mod) return;
+  mod.enabled = !mod.enabled;
+  renderPTPipeline();
+  ptRebuild();
+}
+
+function ptOnContentChange(moduleId, text) {
+  const mod = PT.pipeline.find(m => m.id === moduleId);
+  if (mod) mod.content = text;
+  ptRebuild();
+}
+
+function ptSwapModules(srcId, dstId) {
+  if (srcId === dstId) return;
+  const src = PT.pipeline.find(m => m.id === srcId);
+  const dst = PT.pipeline.find(m => m.id === dstId);
+  if (!src || !dst) return;
+  const tmp = src.order;
+  src.order = dst.order;
+  dst.order = tmp;
+  renderPTPipeline();
+  ptRebuild();
+}
+
+async function ptRebuild() {
+  if (!PT.animation) return;
+  try {
+    const r = await fetch(`${API}/api/prompt-pipeline/build`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ animation: PT.animation, character: PT.character, modules: PT.pipeline, mode: PT.mode }),
+    });
+    const d = await r.json();
+    PT.compiledPrompt = d.compiledPrompt || '';
+    renderPTCompiled();
+    renderPTValidation(d.valid, d.warnings);
+  } catch {}
+}
+
+async function ptSaveModule(moduleId) {
+  if (!PT.animation) return;
+  const mod = PT.pipeline.find(m => m.id === moduleId);
+  if (!mod) return;
+  const ta = document.getElementById(`pt-ta-${moduleId}`);
+  const content = ta ? ta.value : mod.content;
+  try {
+    const r = await fetch(`${API}/api/prompt-pipeline/module/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ animationId: PT.animation, moduleId, patch: { content, enabled: mod.enabled, order: mod.order } }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    toast('Module saved');
+    PT.pipeline = d.modules || PT.pipeline;
+    renderPTPipeline();
+    ptRebuild();
+  } catch (e) { toast('Save failed: ' + e.message, true); }
+}
+
+async function ptResetModule(moduleId) {
+  if (!PT.animation) return;
+  try {
+    const r = await fetch(`${API}/api/prompt-pipeline/module/override`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ animationId: PT.animation, moduleId }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    toast('Reset to default');
+    PT.pipeline = d.modules || PT.pipeline;
+    renderPTPipeline();
+    ptRebuild();
+  } catch (e) { toast('Reset failed: ' + e.message, true); }
+}
+
+function ptAddModuleFromLibrary(moduleId) {
+  // Find in library, add to pipeline if not present
+  const allMods = Object.values(PT.library).flat();
+  const libMod = allMods.find(m => m.id === moduleId);
+  if (!libMod) return;
+
+  const exists = PT.pipeline.find(m => m.id === moduleId);
+  if (exists) {
+    exists.enabled = true;
+    renderPTPipeline();
+    renderPTLibrary();
+    ptRebuild();
+    return;
+  }
+  PT.pipeline.push({ ...libMod, enabled: true });
+  renderPTPipeline();
+  renderPTLibrary();
+  ptRebuild();
+}
+
+function ptAddCustom() {
+  const title = prompt('Module title:');
+  if (!title) return;
+  const types = ['identity','base','variant','angle','outfit','style','post'];
+  const typeInput = prompt(`Module type (${types.join('/')}):`);
+  if (!types.includes(typeInput)) { toast('Invalid type', true); return; }
+
+  const newMod = {
+    id: `custom-${Date.now()}`,
+    type: typeInput,
+    title,
+    content: '',
+    enabled: true,
+    order: 80,
+    isCustom: true,
+    animationId: PT.animation || null,
+  };
+  PT.pipeline.push(newMod);
+  renderPTPipeline();
+  renderPTLibrary();
+  ptRebuild();
+
+  // Auto-expand new card
+  setTimeout(() => ptToggleExpand(newMod.id), 100);
+}
+
+async function ptDeleteCustom(moduleId) {
+  PT.pipeline = PT.pipeline.filter(m => m.id !== moduleId);
+  try {
+    await fetch(`${API}/api/prompt-pipeline/module/custom`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ moduleId }),
+    });
+  } catch {}
+  renderPTPipeline();
+  renderPTLibrary();
+  ptRebuild();
+}
+
+async function ptTest() {
+  const btn = document.getElementById('ptTestBtn');
+  const result = document.getElementById('ptTestResult');
+  if (!PT.animation) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+  if (result) result.innerHTML = '<span class="spinner active" style="display:block;margin:12px 0"></span>';
+  const model = document.getElementById('globalModel')?.value;
+  try {
+    const r = await fetch(`${API}/api/prompt-pipeline/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ animation: PT.animation, character: PT.character, modules: PT.pipeline, model }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    const costEl = document.getElementById('ptTestCost');
+    if (costEl) costEl.textContent = `$${(d.cost || 0).toFixed(4)}`;
+    if (result) result.innerHTML = `<img class="pt-test-img" src="${d.processedUrl || d.imageUrl}?t=${Date.now()}" />`;
+  } catch (e) {
+    if (result) result.innerHTML = `<span style="color:var(--danger);font-size:11px">${e.message}</span>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Test Generation'; }
+  }
+}
+
+function ptCopy() {
+  const ta = document.getElementById('ptCompiled');
+  if (!ta) return;
+  navigator.clipboard.writeText(ta.value).then(() => toast('Copied to clipboard'));
+}
+
+// ptInitSelects + ptLoad called from showPage('prompts')
 </script>
 </body>
 </html>
