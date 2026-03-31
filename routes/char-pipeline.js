@@ -214,9 +214,39 @@ async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
   return result;
 }
 
+// ── Async Job Store ───────────────────────────────────────────────────────────
+// Each long-running AI call returns a jobId immediately; client polls for result.
+// This avoids Railway's HTTP proxy timeout on slow generation requests.
+
+const jobs = new Map();
+
+function startJob() {
+  const jobId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  jobs.set(jobId, { status: 'pending', result: null, error: null });
+  setTimeout(() => jobs.delete(jobId), 15 * 60 * 1000); // clean up after 15 min
+  return jobId;
+}
+
+function finishJob(jobId, result) {
+  const job = jobs.get(jobId);
+  if (job) jobs.set(jobId, { ...job, status: 'done', result });
+}
+
+function failJob(jobId, errMsg) {
+  const job = jobs.get(jobId);
+  if (job) jobs.set(jobId, { ...job, status: 'error', error: errMsg });
+}
+
 // ── Route Registration ───────────────────────────────────────────────────────
 
 function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) {
+
+  // GET /api/char-pipeline/job/:jobId — Poll for async job result
+  router.get('/api/char-pipeline/job/:jobId', (req, res, params) => {
+    const job = jobs.get(params.jobId);
+    if (!job) return json(res, { error: 'Job not found' }, 404);
+    return json(res, { jobId: params.jobId, ...job });
+  });
 
   // GET /api/char-pipeline/status/:name — Get pipeline state
   router.get('/api/char-pipeline/status/:name', (req, res, params) => {
@@ -256,50 +286,49 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     });
   });
 
-  // POST /api/char-pipeline/pixel-char/step1 — Save photo + convert to pixel art
+  // POST /api/char-pipeline/pixel-char/step1 — Start async: save photo + convert to pixel art
   router.post('/api/char-pipeline/pixel-char/step1', async (req, res) => {
     const body = await parseBody(req);
     const { name, photoBase64 } = body;
     if (!name) return json(res, { error: 'name required' }, 400);
 
-    try {
-      const charDir = path.join(TMP_DIR, 'characters', name);
-      fs.mkdirSync(charDir, { recursive: true });
+    const charDir = path.join(TMP_DIR, 'characters', name);
+    fs.mkdirSync(charDir, { recursive: true });
+    const originalPath = path.join(charDir, 'original.png');
 
-      const originalPath = path.join(charDir, 'original.png');
-      if (photoBase64) {
-        const data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
-        fs.writeFileSync(originalPath, Buffer.from(data, 'base64'));
-      } else if (!fs.existsSync(originalPath)) {
-        return json(res, { error: 'Photo required' }, 400);
-      }
-
-      const modelId = 'gemini-3-pro-image-preview';
-      const client = new NanaBananaClient({ model: modelId });
-
-      const step1 = await client.generate(STEP1_PROMPT, {
-        referenceImages: [originalPath],
-        aspectRatio: '3:4',
-        resolution: '2K',
-        model: modelId,
-      });
-      const step1Path = path.join(charDir, 'step1-pixel.png');
-      fs.writeFileSync(step1Path, step1.imageBuffer);
-      recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step1' });
-
-      return json(res, {
-        success: true,
-        name,
-        step1Url: `/api/character/image/${name}/step1-pixel.png`,
-      });
-    } catch (err) {
-      return json(res, { error: err.message }, 500);
+    if (photoBase64) {
+      const data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
+      fs.writeFileSync(originalPath, Buffer.from(data, 'base64'));
+    } else if (!fs.existsSync(originalPath)) {
+      return json(res, { error: 'Photo required' }, 400);
     }
+
+    const jobId = startJob();
+
+    setImmediate(async () => {
+      try {
+        const modelId = 'gemini-3-pro-image-preview';
+        const client = new NanaBananaClient({ model: modelId });
+        const step1 = await client.generate(STEP1_PROMPT, {
+          referenceImages: [originalPath],
+          aspectRatio: '3:4',
+          resolution: '2K',
+          model: modelId,
+        });
+        const step1Path = path.join(charDir, 'step1-pixel.png');
+        fs.writeFileSync(step1Path, step1.imageBuffer);
+        recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step1' });
+        finishJob(jobId, { success: true, name });
+      } catch (err) {
+        failJob(jobId, err.message);
+      }
+    });
+
+    return json(res, { jobId, status: 'started' });
   });
 
-  // POST /api/char-pipeline/pixel-char/step2 — Convert pixel art to standing portrait
-  // Returns the image as base64 so the client can display it without a separate HTTP request.
-  // This avoids Railway multi-instance filesystem issues.
+  // POST /api/char-pipeline/pixel-char/step2 — Start async: pixel art → standing portrait
+  // Result contains imageBase64 so client can display inline without a separate HTTP request.
   router.post('/api/char-pipeline/pixel-char/step2', async (req, res) => {
     const body = await parseBody(req);
     const { name } = body;
@@ -308,29 +337,27 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     const step1Path = path.join(TMP_DIR, 'characters', name, 'step1-pixel.png');
     if (!fs.existsSync(step1Path)) return json(res, { error: 'Step 1 not found — run step1 first' }, 400);
 
-    try {
-      const modelId = 'gemini-3-pro-image-preview';
-      const client = new NanaBananaClient({ model: modelId });
+    const jobId = startJob();
 
-      const step2 = await client.generate(STEP2_PROMPT, {
-        referenceImages: [step1Path],
-        aspectRatio: '3:4',
-        resolution: '2K',
-        model: modelId,
-      });
-      recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step2' });
+    setImmediate(async () => {
+      try {
+        const modelId = 'gemini-3-pro-image-preview';
+        const client = new NanaBananaClient({ model: modelId });
+        const step2 = await client.generate(STEP2_PROMPT, {
+          referenceImages: [step1Path],
+          aspectRatio: '3:4',
+          resolution: '2K',
+          model: modelId,
+        });
+        recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step2' });
+        const imageBase64 = 'data:image/png;base64,' + step2.imageBuffer.toString('base64');
+        finishJob(jobId, { success: true, name, imageBase64 });
+      } catch (err) {
+        failJob(jobId, err.message);
+      }
+    });
 
-      // Return as base64 data URL — client stores it and sends it back on confirm
-      const imageBase64 = 'data:image/png;base64,' + step2.imageBuffer.toString('base64');
-
-      return json(res, {
-        success: true,
-        name,
-        imageBase64,
-      });
-    } catch (err) {
-      return json(res, { error: err.message }, 500);
-    }
+    return json(res, { jobId, status: 'started' });
   });
 
   // POST /api/char-pipeline/pixel-char/confirm — Save confirmed portrait
@@ -528,7 +555,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     }
   });
 
-  // POST /api/char-pipeline/generate-body-angles — Generate body sheet AND slice in one request
+  // POST /api/char-pipeline/generate-body-angles — Start async: generate body sheet + slice
   router.post('/api/char-pipeline/generate-body-angles', async (req, res) => {
     const body = await parseBody(req);
     const { name, promptOverride, clothingNote, clothingImages } = body;
@@ -537,64 +564,66 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
     if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found' }, 400);
 
-    try {
-      const charDir = path.join(TMP_DIR, 'characters', name);
-      fs.mkdirSync(charDir, { recursive: true });
+    const charDir = path.join(TMP_DIR, 'characters', name);
+    fs.mkdirSync(charDir, { recursive: true });
 
-      const clothingPaths = [];
-      if (Array.isArray(clothingImages) && clothingImages.length > 0) {
-        const clothingDir = path.join(charDir, 'clothing-refs');
-        fs.mkdirSync(clothingDir, { recursive: true });
-        for (let i = 0; i < clothingImages.length; i++) {
-          const data = clothingImages[i].replace(/^data:image\/\w+;base64,/, '');
-          const p = path.join(clothingDir, `ref-${i}.png`);
-          fs.writeFileSync(p, Buffer.from(data, 'base64'));
-          clothingPaths.push(p);
-        }
+    // Save clothing refs synchronously before returning
+    const clothingPaths = [];
+    if (Array.isArray(clothingImages) && clothingImages.length > 0) {
+      const clothingDir = path.join(charDir, 'clothing-refs');
+      fs.mkdirSync(clothingDir, { recursive: true });
+      for (let i = 0; i < clothingImages.length; i++) {
+        const data = clothingImages[i].replace(/^data:image\/\w+;base64,/, '');
+        const p = path.join(clothingDir, `ref-${i}.png`);
+        fs.writeFileSync(p, Buffer.from(data, 'base64'));
+        clothingPaths.push(p);
       }
-
-      let basePrompt = promptOverride?.trim() || buildBodySheetPrompt();
-      if (clothingNote) {
-        basePrompt += `\n\n${clothingNote.trim()}`;
-        basePrompt += '\nMatch the outfit from the additional clothing reference images exactly.';
-      }
-
-      const modelId = 'gemini-3-pro-image-preview';
-      const client = new NanaBananaClient({ model: modelId });
-      const referenceImages = [portraitPath, ...clothingPaths];
-
-      const result = await client.generate(basePrompt, {
-        referenceImages,
-        aspectRatio: '16:9',
-        resolution: '2K',
-        model: modelId,
-      });
-
-      const sheetPath = path.join(charDir, 'body-sheet.png');
-      fs.writeFileSync(sheetPath, result.imageBuffer);
-      recordCost(modelId, 'char_pipeline', '2K', referenceImages.length, { character: name, step: 'body-sheet' });
-
-      // Slice immediately while we still have the file in memory
-      const sliceDir = path.join(charDir, 'body-frames');
-      const destPattern = path.join(ASSETS_DIR, `${name}-angle-{i}.png`);
-      const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
-      const frames = sliced.map((f, i) => ({
-        ...f,
-        label: ANGLE_LABELS_8[i] || f.label,
-        url: `/assets/${name}-angle-${i}.png`,
-      }));
-
-      return json(res, {
-        success: true, name,
-        sheetUrl: `/api/character/image/${name}/body-sheet.png`,
-        frames,
-      });
-    } catch (err) {
-      return json(res, { error: err.message }, 500);
     }
+
+    let basePrompt = promptOverride?.trim() || buildBodySheetPrompt();
+    if (clothingNote) {
+      basePrompt += `\n\n${clothingNote.trim()}`;
+      basePrompt += '\nMatch the outfit from the additional clothing reference images exactly.';
+    }
+
+    const jobId = startJob();
+
+    setImmediate(async () => {
+      try {
+        const modelId = 'gemini-3-pro-image-preview';
+        const client = new NanaBananaClient({ model: modelId });
+        const referenceImages = [portraitPath, ...clothingPaths];
+
+        const result = await client.generate(basePrompt, {
+          referenceImages,
+          aspectRatio: '16:9',
+          resolution: '2K',
+          model: modelId,
+        });
+
+        const sheetPath = path.join(charDir, 'body-sheet.png');
+        fs.writeFileSync(sheetPath, result.imageBuffer);
+        recordCost(modelId, 'char_pipeline', '2K', referenceImages.length, { character: name, step: 'body-sheet' });
+
+        const sliceDir = path.join(charDir, 'body-frames');
+        const destPattern = path.join(ASSETS_DIR, `${name}-angle-{i}.png`);
+        const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
+        const frames = sliced.map((f, i) => ({
+          ...f,
+          label: ANGLE_LABELS_8[i] || f.label,
+          url: `/assets/${name}-angle-${i}.png`,
+        }));
+
+        finishJob(jobId, { success: true, name, sheetUrl: `/api/character/image/${name}/body-sheet.png`, frames });
+      } catch (err) {
+        failJob(jobId, err.message);
+      }
+    });
+
+    return json(res, { jobId, status: 'started' });
   });
 
-  // POST /api/char-pipeline/generate-head-angles — Generate head sheet AND slice in one request
+  // POST /api/char-pipeline/generate-head-angles — Start async: generate head sheet + slice
   router.post('/api/char-pipeline/generate-head-angles', async (req, res) => {
     const body = await parseBody(req);
     const { name, promptOverride } = body;
@@ -603,42 +632,43 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
     if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found — complete Step 2 first' }, 400);
 
-    try {
-      const prompt = promptOverride?.trim() || buildHeadSheetPrompt();
-      const modelId = 'gemini-3-pro-image-preview';
-      const client = new NanaBananaClient({ model: modelId });
+    const jobId = startJob();
 
-      const result = await client.generate(prompt, {
-        referenceImages: [portraitPath],
-        aspectRatio: '16:9',
-        resolution: '2K',
-        model: modelId,
-      });
+    setImmediate(async () => {
+      try {
+        const prompt = promptOverride?.trim() || buildHeadSheetPrompt();
+        const modelId = 'gemini-3-pro-image-preview';
+        const client = new NanaBananaClient({ model: modelId });
 
-      const charDir = path.join(TMP_DIR, 'characters', name);
-      fs.mkdirSync(charDir, { recursive: true });
-      const sheetPath = path.join(charDir, 'head-sheet.png');
-      fs.writeFileSync(sheetPath, result.imageBuffer);
-      recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'head-sheet' });
+        const result = await client.generate(prompt, {
+          referenceImages: [portraitPath],
+          aspectRatio: '16:9',
+          resolution: '2K',
+          model: modelId,
+        });
 
-      // Slice immediately
-      const sliceDir = path.join(charDir, 'head-frames');
-      const destPattern = path.join(ASSETS_DIR, `${name}-headshot-{i}.png`);
-      const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
-      const frames = sliced.map((f, i) => ({
-        ...f,
-        label: ANGLE_LABELS_8[i] || f.label,
-        url: `/assets/${name}-headshot-${i}.png`,
-      }));
+        const charDir = path.join(TMP_DIR, 'characters', name);
+        fs.mkdirSync(charDir, { recursive: true });
+        const sheetPath = path.join(charDir, 'head-sheet.png');
+        fs.writeFileSync(sheetPath, result.imageBuffer);
+        recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'head-sheet' });
 
-      return json(res, {
-        success: true, name,
-        sheetUrl: `/api/character/image/${name}/head-sheet.png`,
-        frames,
-      });
-    } catch (err) {
-      return json(res, { error: err.message }, 500);
-    }
+        const sliceDir = path.join(charDir, 'head-frames');
+        const destPattern = path.join(ASSETS_DIR, `${name}-headshot-{i}.png`);
+        const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
+        const frames = sliced.map((f, i) => ({
+          ...f,
+          label: ANGLE_LABELS_8[i] || f.label,
+          url: `/assets/${name}-headshot-${i}.png`,
+        }));
+
+        finishJob(jobId, { success: true, name, sheetUrl: `/api/character/image/${name}/head-sheet.png`, frames });
+      } catch (err) {
+        failJob(jobId, err.message);
+      }
+    });
+
+    return json(res, { jobId, status: 'started' });
   });
 
   // POST /api/char-pipeline/final-frames — Step 7: AI-generate one clean frame per angle

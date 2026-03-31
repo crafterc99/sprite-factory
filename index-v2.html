@@ -2052,6 +2052,23 @@ function cpLog(msg, type = 'info') {
   el.scrollTop = el.scrollHeight;
 }
 
+// Poll an async job until done or error. Returns the result object.
+async function waitForJob(jobId, logFn, dotMsg) {
+  const maxWait = 6 * 60 * 1000;
+  const start = Date.now();
+  let dots = 0;
+  while (Date.now() - start < maxWait) {
+    await new Promise(r => setTimeout(r, 4000));
+    const r = await fetch(`${API}/api/char-pipeline/job/${jobId}`);
+    const d = await r.json();
+    if (d.status === 'done') return d.result;
+    if (d.status === 'error') throw new Error(d.error);
+    dots++;
+    if (logFn && dotMsg && dots % 3 === 0) logFn(dotMsg);
+  }
+  throw new Error('Timed out waiting for generation (>6 min)');
+}
+
 // Phase 1: generate portrait only, pause for user confirmation
 async function cpGenerate() {
   const name = document.getElementById('cpName').value.trim().toLowerCase().replace(/\s+/g, '-');
@@ -2070,7 +2087,7 @@ async function cpGenerate() {
   document.getElementById('cpPortraitConfirm').style.display = 'none';
 
   try {
-    // Step 1: photo → pixel art (single AI call)
+    // Step 1: photo → pixel art (async job)
     cpLog('Step 1 — Converting to pixel art…');
     const r1 = await fetch(`${API}/api/char-pipeline/pixel-char/step1`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2078,23 +2095,25 @@ async function cpGenerate() {
     });
     const d1 = await r1.json();
     if (d1.error) throw new Error(d1.error);
-    cpLog('✓ Pixel art done — generating standing portrait…', 'ok');
+    await waitForJob(d1.jobId, cpLog, '⋯ Converting to pixel art…');
+    cpLog('✓ Pixel art done — generating portrait…', 'ok');
 
-    // Step 2: pixel art → standing portrait (single AI call)
+    // Step 2: pixel art → standing portrait (async job)
     const r2 = await fetch(`${API}/api/char-pipeline/pixel-char/step2`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
     const d2 = await r2.json();
     if (d2.error) throw new Error(d2.error);
+    const portraitResult = await waitForJob(d2.jobId, cpLog, '⋯ Generating portrait…');
     cpLog('✓ Portrait ready — confirm to continue', 'ok');
 
     // Store base64 inline — no separate HTTP request needed for preview
-    CP.portraitBase64 = d2.imageBase64;
+    CP.portraitBase64 = portraitResult.imageBase64;
 
     // Show portrait for confirmation — do NOT proceed automatically
     const confirmEl = document.getElementById('cpPortraitConfirm');
-    document.getElementById('cpPortraitPreview').src = d2.imageBase64;
+    document.getElementById('cpPortraitPreview').src = portraitResult.imageBase64;
     confirmEl.style.display = 'block';
 
   } catch (e) {
@@ -2139,9 +2158,9 @@ async function cpConfirmAndGenerateAngles() {
       ? `\nCharacter is wearing the outfit shown in the additional reference images (${CP.clothing.length} clothing photo${CP.clothing.length > 1 ? 's' : ''} provided).`
       : '';
 
-    // Generate + slice body and head angles in parallel (single request each = no race condition)
-    cpLog('Generating body turnaround + headshot angles…');
-    const [d4body, d4head] = await Promise.all([
+    // Start both angle generation jobs in parallel (async — each returns a jobId immediately)
+    cpLog('Starting body turnaround + headshot generation…');
+    const [jBody, jHead] = await Promise.all([
       fetch(`${API}/api/char-pipeline/generate-body-angles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, clothingNote, clothingImages: CP.clothing.map(c => c.data) }),
@@ -2151,8 +2170,15 @@ async function cpConfirmAndGenerateAngles() {
         body: JSON.stringify({ name }),
       }).then(r => r.json()),
     ]);
-    if (d4body.error) throw new Error('Body angles: ' + d4body.error);
-    if (d4head.error) throw new Error('Head angles: ' + d4head.error);
+    if (jBody.error) throw new Error('Body angles: ' + jBody.error);
+    if (jHead.error) throw new Error('Head angles: ' + jHead.error);
+
+    // Poll both jobs in parallel until done
+    cpLog('⋯ Generating angles (this takes 1-3 min)…');
+    const [d4body, d4head] = await Promise.all([
+      waitForJob(jBody.jobId, cpLog, '⋯ Body angles still generating…'),
+      waitForJob(jHead.jobId, cpLog, '⋯ Head angles still generating…'),
+    ]);
     cpLog(`✓ ${d4body.frames.length} body angles + ${d4head.frames.length} headshot angles ready`, 'ok');
 
     await fetch(`${API}/api/char-pipeline/complete`, {
