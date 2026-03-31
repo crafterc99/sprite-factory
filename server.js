@@ -152,9 +152,9 @@ require('./routes/production').register(router, ctx);
 require('./routes/anchor').register(router, ctx);
 require('./routes/animation-contract').register(router, ctx);
 
-// ─── Server ─────────────────────────────────────────────────────────────
+// ─── Request Handler ────────────────────────────────────────────────────
 
-const server = http.createServer(async (req, res) => {
+async function handler(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const pathname = url.pathname;
 
@@ -197,12 +197,19 @@ const server = http.createServer(async (req, res) => {
 
   res.writeHead(404);
   res.end('Not found');
-});
+}
 
-server.listen(PORT, () => {
-  const { CHARACTERS } = require('./lib/sprite-generator/prompts');
-  console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
-  console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
-  console.log(`  Animations: 8`);
-  console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}\n`);
-});
+// ─── Server ─────────────────────────────────────────────────────────────
+
+if (require.main === module) {
+  const server = http.createServer(handler);
+  server.listen(PORT, () => {
+    const { CHARACTERS } = require('./lib/sprite-generator/prompts');
+    console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
+    console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
+    console.log(`  Animations: 8`);
+    console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}\n`);
+  });
+}
+
+module.exports = handler;
