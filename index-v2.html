@@ -2070,20 +2070,30 @@ async function cpGenerate() {
   document.getElementById('cpPortraitConfirm').style.display = 'none';
 
   try {
-    cpLog('Generating pixel art portrait…');
-    const r1 = await fetch(`${API}/api/char-pipeline/pixel-char`, {
+    // Step 1: photo → pixel art (single AI call)
+    cpLog('Step 1 — Converting to pixel art…');
+    const r1 = await fetch(`${API}/api/char-pipeline/pixel-char/step1`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, photoBase64: CP.photo }),
     });
     const d1 = await r1.json();
     if (d1.error) throw new Error(d1.error);
+    cpLog('✓ Pixel art done — generating standing portrait…', 'ok');
+
+    // Step 2: pixel art → standing portrait (single AI call)
+    const r2 = await fetch(`${API}/api/char-pipeline/pixel-char/step2`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const d2 = await r2.json();
+    if (d2.error) throw new Error(d2.error);
     cpLog('✓ Portrait ready — confirm to continue', 'ok');
 
     // Show portrait for confirmation — do NOT proceed automatically
-    const portraitUrl = d1.options?.[0]?.url;
+    const portraitUrl = d2.options?.[0]?.url;
     const confirmEl = document.getElementById('cpPortraitConfirm');
     document.getElementById('cpPortraitPreview').src = portraitUrl + '?t=' + Date.now();
-    CP.portraitOptionIndex = d1.options?.[0]?.index ?? 0;
+    CP.portraitOptionIndex = d2.options?.[0]?.index ?? 0;
     confirmEl.style.display = 'block';
 
   } catch (e) {

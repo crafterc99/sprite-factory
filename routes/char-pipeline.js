@@ -256,10 +256,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     });
   });
 
-  // POST /api/char-pipeline/pixel-char — Generate portrait (2-step with Nano Banana Pro)
-  // Step 1: convert photo to pixel art exactly as-is
-  // Step 2: use step 1 output to get clean standing full-body portrait
-  router.post('/api/char-pipeline/pixel-char', async (req, res) => {
+  // POST /api/char-pipeline/pixel-char/step1 — Save photo + convert to pixel art
+  router.post('/api/char-pipeline/pixel-char/step1', async (req, res) => {
     const body = await parseBody(req);
     const { name, photoBase64 } = body;
     if (!name) return json(res, { error: 'name required' }, 400);
@@ -279,7 +277,6 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       const modelId = 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
-      // Step 1: convert to pixel art, keeping everything exactly as-is
       const step1 = await client.generate(STEP1_PROMPT, {
         referenceImages: [originalPath],
         aspectRatio: '3:4',
@@ -290,21 +287,42 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       fs.writeFileSync(step1Path, step1.imageBuffer);
       recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step1' });
 
-      // Step 2: use step 1 output only → clean standing portrait
+      return json(res, {
+        success: true,
+        name,
+        step1Url: `/api/character/image/${name}/step1-pixel.png`,
+      });
+    } catch (err) {
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
+  // POST /api/char-pipeline/pixel-char/step2 — Convert pixel art to standing portrait
+  router.post('/api/char-pipeline/pixel-char/step2', async (req, res) => {
+    const body = await parseBody(req);
+    const { name } = body;
+    if (!name) return json(res, { error: 'name required' }, 400);
+
+    const step1Path = path.join(TMP_DIR, 'characters', name, 'step1-pixel.png');
+    if (!fs.existsSync(step1Path)) return json(res, { error: 'Step 1 not found — run step1 first' }, 400);
+
+    try {
+      const modelId = 'gemini-3-pro-image-preview';
+      const client = new NanaBananaClient({ model: modelId });
+
       const step2 = await client.generate(STEP2_PROMPT, {
         referenceImages: [step1Path],
         aspectRatio: '3:4',
         resolution: '2K',
         model: modelId,
       });
-      const optPath = path.join(charDir, 'option-0.png');
+      const optPath = path.join(TMP_DIR, 'characters', name, 'option-0.png');
       fs.writeFileSync(optPath, step2.imageBuffer);
       recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step2' });
 
       return json(res, {
         success: true,
         name,
-        originalUrl: `/api/character/image/${name}/original.png`,
         options: [{ index: 0, url: `/api/character/image/${name}/option-0.png` }],
       });
     } catch (err) {
