@@ -726,82 +726,77 @@
             <div class="studio-roster-list" id="studioRosterList"></div>
           </div>
 
-          <!-- Right: Animation area -->
+          <!-- Right: Studio main -->
           <div class="studio-main">
             <div class="section-header">
               <div>
-                <div class="section-title" id="studioTitle">—</div>
-                <div class="section-sub" id="studioSub"></div>
+                <div class="section-title" id="studioTitle">Studio</div>
+                <div class="section-sub" id="studioSub">Select a character, then pick an animation to generate</div>
               </div>
-              <div style="display:flex;gap:8px" id="studioActions"></div>
+              <div style="display:flex;gap:8px" id="studioActions">
+                <button class="btn btn-secondary btn-sm" id="exportSJBtn" onclick="exportToSoulJam()" style="display:none">
+                  <span class="spinner" id="exportSJSpinner"></span>Export → Soul Jam
+                </button>
+              </div>
             </div>
 
             <div id="studioContent" style="padding:0 24px 24px">
-              <!-- Animation grid -->
-              <div class="anim-categories" id="animCategories"></div>
 
-              <!-- Generation panel -->
-              <div class="card" id="genPanel" style="display:none;margin-top:20px">
-                <div class="card-title" id="genPanelTitle">Generate</div>
-                <div class="gen-panel">
+              <!-- Animation library grid -->
+              <div id="studioAnimGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px"></div>
+
+              <!-- Generation detail panel -->
+              <div class="card" id="studioGenPanel" style="display:none;margin-top:20px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                  <div class="card-title" id="studioGenTitle" style="margin:0">Generate</div>
+                  <button class="btn btn-secondary btn-sm" onclick="studioClosePanel()">✕</button>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                  <!-- Left: animation pose frames -->
                   <div>
-                    <div class="anim-info-row" id="animInfoRow" style="margin-bottom:12px"></div>
-                    <div class="form-group">
-                      <label class="form-label">Mode</label>
-                      <div class="mode-toggle">
-                        <button class="mode-btn active" onclick="setMode('fbf')" id="modeFbf">Frame-by-Frame</button>
-                        <button class="mode-btn" onclick="setMode('strip')" id="modeStrip">Strip</button>
-                      </div>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
-                        Prompt
-                        <button class="btn btn-secondary btn-sm" style="font-size:9px;padding:2px 8px" onclick="resetStudioPrompt()">Reset</button>
-                      </label>
-                      <textarea class="prompt-box" id="studioPrompt"></textarea>
-                    </div>
-                    <div style="display:flex;gap:8px">
-                      <button class="btn btn-primary" id="genBtn" onclick="generateAnimation()" style="flex:1">
-                        <span class="spinner" id="genSpinner"></span>
-                        Generate
-                      </button>
-                      <button class="btn btn-secondary" onclick="closeGenPanel()">Cancel</button>
-                    </div>
-                    <div class="sse-log" id="genLog" style="margin-top:12px;display:none"></div>
+                    <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Pose Reference Frames</div>
+                    <div id="studioPoseFrames" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+                    <div style="margin-top:10px;font-family:var(--mono);font-size:10px;color:#50507a" id="studioAnimMeta"></div>
                   </div>
-                  <div class="gen-controls">
-                    <div class="gen-preview" id="genPreview">
-                      <div class="gen-preview-empty">No preview yet</div>
+                  <!-- Right: character angle + generate -->
+                  <div>
+                    <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Character Reference</div>
+                    <div id="studioCharAngle" style="width:80px;height:80px;border-radius:6px;overflow:hidden;background:#0a0a14;margin-bottom:12px">
+                      <img id="studioCharAngleImg" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" src="" />
                     </div>
-                    <div class="form-group">
-                      <label class="form-label">Frames</label>
-                      <input class="input" type="number" id="genFrames" min="2" max="32" value="8" />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">FPS</label>
-                      <input class="input" type="number" id="genFps" min="4" max="24" value="12" />
-                    </div>
+                    <button class="btn btn-primary" id="studioGenBtn" onclick="studioGenerateSprite()" style="width:100%">
+                      <span class="spinner" id="studioGenSpinner"></span>
+                      Generate Sprite
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <!-- SSE progress (full FBF) -->
-              <div class="card" id="fbfProgress" style="display:none;margin-top:20px">
-                <div class="card-title">Generating frames</div>
-                <div class="progress-ring" id="fbfRing" style="margin-bottom:12px">
+              <!-- Generation progress -->
+              <div class="card" id="studioProgress" style="display:none;margin-top:20px">
+                <div class="card-title">Generating</div>
+                <div class="progress-ring" style="margin-bottom:12px">
                   <svg class="ring-chart" viewBox="0 0 52 52">
                     <circle cx="26" cy="26" r="22" fill="none" stroke="#1e1e30" stroke-width="4"/>
-                    <circle id="fbfRingFill" cx="26" cy="26" r="22" fill="none" stroke="#00ff88" stroke-width="4"
+                    <circle id="studioRingFill" cx="26" cy="26" r="22" fill="none" stroke="#00ff88" stroke-width="4"
                       stroke-dasharray="138" stroke-dashoffset="138" stroke-linecap="round"
                       transform="rotate(-90 26 26)" style="transition:stroke-dashoffset 0.4s"/>
                   </svg>
                   <div class="ring-info">
-                    <div class="ring-label" id="fbfRingLabel">0/0</div>
+                    <div class="ring-label" id="studioRingLabel">0/0</div>
                     <div class="ring-sub">FRAMES DONE</div>
                   </div>
                 </div>
-                <div class="sse-log" id="fbfLog"></div>
+                <div class="sse-log" id="studioProgressLog"></div>
               </div>
+
+              <!-- Generation result -->
+              <div class="card" id="studioResultCard" style="display:none;margin-top:20px">
+                <div class="card-title">Result</div>
+                <img id="studioResultImg" style="max-width:100%;border-radius:6px;image-rendering:pixelated;display:block" />
+                <div id="studioResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:8px"></div>
+              </div>
+
             </div>
           </div>
 
@@ -865,35 +860,31 @@
           </div>
         </div>
 
-        <!-- Step 3→4: Config + Generate -->
+        <!-- Step 3: Save to Animation Library -->
         <div class="card" id="videoConfigCard" style="display:none;margin-top:16px">
-          <div class="card-title">3 — Configure &amp; Generate</div>
-          <div class="video-selected-strip" id="videoSelectedStrip" style="margin-bottom:14px"></div>
-          <!-- Animation presets -->
-          <div style="margin-bottom:14px">
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Animation Preset</div>
-            <div class="video-preset-grid" id="videoPresetGrid"></div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-            <div class="form-group">
-              <label class="form-label">Character</label>
-              <select class="input" id="videoCharSelect"></select>
-            </div>
+          <div class="card-title">3 — Save to Animation Library</div>
+          <div id="videoSelectedStrip" style="margin-bottom:14px"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             <div class="form-group">
               <label class="form-label">Animation Name</label>
               <input class="input" id="videoAnimName" placeholder="spin-move" />
             </div>
             <div class="form-group">
-              <label class="form-label">Action Description</label>
-              <input class="input" id="videoAnimAction" placeholder="spin dribble move" />
+              <label class="form-label">Camera Angle / POV</label>
+              <select class="input" id="videoAnimAngle">
+                <option value="front">Front</option>
+                <option value="front_right_45">Front-Right 45°</option>
+                <option value="right_90">Right 90°</option>
+                <option value="back_right_135">Back-Right 135°</option>
+                <option value="back_180">Back 180°</option>
+                <option value="back_left_225">Back-Left 225°</option>
+                <option value="left_270">Left 270°</option>
+                <option value="front_left_315">Front-Left 315°</option>
+              </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Target Frames</label>
-              <input class="input" type="number" id="videoTargetFrames" value="6" min="2" max="12" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Output FPS</label>
-              <input class="input" type="number" id="videoAnimFps" value="8" min="4" max="24" />
+              <label class="form-label">FPS</label>
+              <input class="input" type="number" id="videoAnimFps" value="8" min="1" max="30" />
             </div>
             <div class="form-group">
               <label class="form-label">Loop</label>
@@ -903,48 +894,21 @@
               </select>
             </div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <div class="mode-toggle" id="videoModeToggle">
-              <button class="mode-btn active" onclick="setVideoMode('strip')">Strip</button>
-              <button class="mode-btn" onclick="setVideoMode('fbf')">Frame-by-Frame</button>
-            </div>
-            <div style="flex:1"></div>
-            <button class="btn btn-primary" id="videoGenBtn" onclick="generateVideoSprite()">
-              <span class="spinner" id="videoGenSpinner"></span>
-              Generate
-            </button>
+          <button class="btn btn-primary" id="videoSaveLibBtn" onclick="saveAnimToLibrary()">
+            <span class="spinner" id="videoSaveSpinner"></span>
+            Save to Library
+          </button>
+        </div>
+
+        <!-- Save success -->
+        <div class="card" id="videoSaveResult" style="display:none;margin-top:16px">
+          <div class="card-title">Saved</div>
+          <div id="videoSaveResultMeta" style="font-family:var(--mono);font-size:11px;color:#50507a;margin-bottom:12px"></div>
+          <div id="videoSaveFrameStrip" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn btn-secondary btn-sm" onclick="showPage('studio')">Go to Studio →</button>
+            <button class="btn btn-secondary btn-sm" onclick="videoReset()">New Animation</button>
           </div>
-        </div>
-
-        <!-- FBF Progress -->
-        <div class="card" id="videoFbfProgress" style="display:none;margin-top:16px">
-          <div class="card-title">Generating frames</div>
-          <div class="progress-ring" style="margin-bottom:12px">
-            <svg class="ring-chart" viewBox="0 0 52 52">
-              <circle cx="26" cy="26" r="22" fill="none" stroke="#1e1e30" stroke-width="4"/>
-              <circle id="videoFbfRingFill" cx="26" cy="26" r="22" fill="none" stroke="#00ff88" stroke-width="4"
-                stroke-dasharray="138" stroke-dashoffset="138" stroke-linecap="round"
-                transform="rotate(-90 26 26)" style="transition:stroke-dashoffset 0.4s"/>
-            </svg>
-            <div class="ring-info">
-              <div class="ring-label" id="videoFbfRingLabel">0/0</div>
-              <div class="ring-sub">FRAMES DONE</div>
-            </div>
-          </div>
-          <div class="sse-log" id="videoFbfLog"></div>
-        </div>
-
-        <!-- Strip progress log -->
-        <div class="card" id="videoStripProgress" style="display:none;margin-top:16px">
-          <div class="sse-log" id="videoStripLog"></div>
-        </div>
-
-        <!-- Result -->
-        <div class="card" id="videoResultCard" style="display:none;margin-top:16px">
-          <div class="card-title">Result</div>
-          <img id="videoResultImg" style="max-width:100%;height:auto;min-height:200px;border-radius:8px;image-rendering:pixelated;display:block" />
-          <div id="videoResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:8px"></div>
-          <div id="videoFrameStrip" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:600px;overflow-y:auto;margin-top:14px"></div>
         </div>
       </div>
 
@@ -1855,13 +1819,12 @@ function showPage2(name) {
 
 async function selectChar(name) {
   STATE.selectedChar = STATE.roster.find(c => c.name === name) || { name };
-  STATE.selectedAnim = null;
   STATE.charPackage = null;
   renderRoster();
   renderDashboard();
   renderStudioRoster();
-  renderStudio();
-  await Promise.all([loadSprites(name), loadCharPackage(name)]);
+  await renderStudio();
+  loadCharPackage(name);
 }
 
 async function loadSprites(charName) {
@@ -1869,7 +1832,6 @@ async function loadSprites(charName) {
     const r = await fetch(`${API}/api/sprites/${charName}`);
     const data = await r.json();
     STATE.sprites = data.sprites || {};
-    renderAnimGrid();
   } catch(e) {}
 }
 
@@ -1883,6 +1845,8 @@ async function loadCharPackage(name) {
 
 
 // ─── STUDIO ───────────────────────────────────────────────────────────────
+const STUDIO = { selectedAnim: null, animLib: [] };
+
 function renderStudioRoster() {
   const list = document.getElementById('studioRosterList');
   if (!list) return;
@@ -1891,294 +1855,168 @@ function renderStudioRoster() {
     const thumb = char.portrait
       ? `<img class="studio-roster-thumb" src="${char.portrait}" onerror="this.style.display='none'" />`
       : `<div class="studio-roster-thumb-empty">🏀</div>`;
-    const count = char.completedAnims || 0;
     return `<div class="studio-roster-item ${activeName === char.name ? 'active' : ''}" onclick="selectChar('${char.name}')">
       ${thumb}
       <div class="studio-roster-info">
         <div class="studio-roster-name">${char.name}</div>
-        <div class="studio-roster-count">${count} / ${TOTAL_ANIMS}</div>
       </div>
     </div>`;
   }).join('');
 }
 
-function renderStudio() {
+async function renderStudio() {
   const char = STATE.selectedChar;
-  if (!char) return;
-  document.getElementById('studioTitle').textContent = char.name;
-  document.getElementById('studioSub').textContent = `${(char.completedAnims||0)} / ${TOTAL_ANIMS} animations complete`;
-
-  const actions = document.getElementById('studioActions');
-  actions.innerHTML = `
-    <button class="btn btn-secondary btn-sm" id="exportSJBtn" onclick="exportToSoulJam()">
-      <span class="spinner" id="exportSJSpinner"></span>Export → Soul Jam
-    </button>`;
-
-  renderAnimGrid();
-  document.getElementById('genPanel').style.display = 'none';
+  document.getElementById('studioTitle').textContent = char ? char.name : 'Studio';
+  document.getElementById('studioSub').textContent = char
+    ? 'Pick an animation from the library to generate'
+    : 'Select a character, then pick an animation to generate';
+  const exportBtn = document.getElementById('exportSJBtn');
+  if (exportBtn) exportBtn.style.display = char ? '' : 'none';
+  await studioLoadAnimLib();
 }
 
-function renderAnimGrid() {
-  const container = document.getElementById('animCategories');
-  container.innerHTML = Object.entries(ANIM_CATEGORIES).map(([cat, anims]) => {
-    const doneCount = anims.filter(a => STATE.sprites[a]?.exists).length;
-    const cells = anims.map(anim => {
-      const sprite = STATE.sprites[anim];
-      const done = sprite?.exists;
-      const frames = DEFAULT_FRAMES[anim] || 8;
-      const fps = DEFAULT_FPS_ANIM[anim] || DEFAULT_FPS[cat] || 8;
-      const loop = LOOP_ANIMS.has(anim);
-      const ball = BALL_ANIMS.has(anim);
-      const isActive = STATE.selectedAnim === anim;
-      const dataAttrs = done ? `data-frames="${frames}" data-fps="${fps}" data-sprite="${sprite.url}"` : '';
-      const previewDiv = done ? `<div class="anim-cell-preview" style="background-image:url('${sprite.url}')"></div>` : '';
-      const clickHandler = done
-        ? `openDetailPanel('${STATE.selectedChar.name}','${anim}','${sprite.url}',${fps},${frames},null,null)`
-        : `selectAnim('${anim}','${cat}')`;
-      return `<div class="anim-cell ${done ? 'done' : ''} ${isActive ? 'active' : ''}" onclick="${clickHandler}" ${dataAttrs}>
-        ${previewDiv}
-        <div class="anim-cell-status">${done ? '✓' : '○'}</div>
-        <div class="anim-cell-name">${anim}</div>
-        <div class="anim-cell-meta">${frames}f${loop ? ' · ∞' : ''}${ball ? ' · 🏀' : ''}</div>
-      </div>`;
-    }).join('');
-    return `<div class="anim-category">
-      <div class="anim-category-label">
-        ${cat}
-        <span class="anim-category-count">${doneCount}/${anims.length}</span>
-      </div>
-      <div class="anim-grid">${cells}</div>
+async function studioLoadAnimLib() {
+  try {
+    const res = await fetch(`${API}/api/anim-lib`);
+    const data = await res.json();
+    STUDIO.animLib = data.animations || [];
+  } catch (e) {
+    STUDIO.animLib = [];
+  }
+  studioRenderAnimGrid();
+}
+
+function studioRenderAnimGrid() {
+  const grid = document.getElementById('studioAnimGrid');
+  if (!grid) return;
+  const anims = STUDIO.animLib;
+  if (anims.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;font-family:var(--mono);font-size:11px;color:#50507a;padding:20px 0">
+      No animations in library yet — use the <b>Video</b> tab to capture and save pose references.
+    </div>`;
+    return;
+  }
+  grid.innerHTML = anims.map(a => {
+    const active = STUDIO.selectedAnim === a.name;
+    return `<div class="anim-cell ${active ? 'active' : ''}" onclick="studioSelectAnim('${a.name}')">
+      <img src="${a.thumbUrl}?t=1" style="width:100%;height:80px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14" onerror="this.style.opacity=0.2" />
+      <div class="anim-cell-name" style="margin-top:6px">${a.displayName || a.name}</div>
+      <div class="anim-cell-meta">${a.frameCount}f · ${a.fps}fps · ${a.angle || ''}</div>
     </div>`;
   }).join('');
-  setupAnimHovers();
 }
 
-function setupAnimHovers() {
-  document.querySelectorAll('.anim-cell.done[data-sprite]').forEach(cell => {
-    const frames = parseInt(cell.dataset.frames) || 1;
-    const fps = parseInt(cell.dataset.fps) || 8;
-    const preview = cell.querySelector('.anim-cell-preview');
-    if (!preview || frames <= 1) return;
-    let timer = null;
-    let frame = 0;
-    cell.addEventListener('mouseenter', () => {
-      frame = 0;
-      const h = preview.offsetHeight;
-      timer = setInterval(() => {
-        frame = (frame + 1) % frames;
-        preview.style.backgroundPositionX = `${-(frame * h)}px`;
-      }, Math.round(1000 / fps));
-    });
-    cell.addEventListener('mouseleave', () => {
-      clearInterval(timer);
-      timer = null;
-      frame = 0;
-      preview.style.backgroundPositionX = '0px';
-    });
-  });
-}
-
-function selectAnim(anim, cat) {
-  STATE.selectedAnim = anim;
-  renderAnimGrid();
-  openGenPanel(anim, cat);
-}
-
-function openGenPanel(anim, cat) {
-  const panel = document.getElementById('genPanel');
-  panel.style.display = 'block';
-  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  document.getElementById('genPanelTitle').textContent = `Generate · ${anim}`;
-
-  const frames = DEFAULT_FRAMES[anim] || 8;
-  const fps = DEFAULT_FPS_ANIM[anim] || DEFAULT_FPS[cat] || 10;
-  const loop = LOOP_ANIMS.has(anim);
-  const ball = BALL_ANIMS.has(anim);
-
-  document.getElementById('genFrames').value = frames;
-  document.getElementById('genFps').value = fps;
-
-  const infoRow = document.getElementById('animInfoRow');
-  infoRow.innerHTML = [
-    `<span class="tag">${frames} frames</span>`,
-    `<span class="tag">${fps} fps</span>`,
-    `<span class="tag">${cat}</span>`,
-    loop ? `<span class="tag loop">loop</span>` : '',
-    ball ? `<span class="tag ball">🏀 ball</span>` : '',
-  ].join('');
-
-  document.getElementById('studioPrompt').value = buildAnimPrompt(anim, cat, frames, fps);
-  document.getElementById('genLog').style.display = 'none';
-  document.getElementById('genLog').innerHTML = '';
-  document.getElementById('fbfProgress').style.display = 'none';
-
-  const preview = document.getElementById('genPreview');
-  const sprite = STATE.sprites[anim];
-  if (sprite?.exists) {
-    preview.innerHTML = `<img src="${sprite.url}?t=${Date.now()}" title="${anim}" />`;
-  } else {
-    preview.innerHTML = `<div class="gen-preview-empty">No sprite yet</div>`;
-  }
-}
-
-function closeGenPanel() {
-  STATE.selectedAnim = null;
-  document.getElementById('genPanel').style.display = 'none';
-  renderAnimGrid();
-}
-
-function buildAnimPrompt(anim, cat, frames, fps) {
-  const loop = LOOP_ANIMS.has(anim);
-  const ball = BALL_ANIMS.has(anim);
-  const char = STATE.selectedChar?.name || 'character';
-  return `REPLICATE Image 1 EXACTLY. Copy every body position, pose, and limb placement. Replace only the character identity with Image 2.
-
-Animation: ${anim} (${cat})
-Frames: ${frames} frames at ${fps}fps${loop ? ', looping' : ''}${ball ? ', includes basketball' : ''}
-
-OUTPUT:
-- Single horizontal strip, EXACTLY ${frames} equally-sized frames, no gaps, no borders
-- Each frame: 64×64 pixels
-- 16-bit pixel art, GBA style, bold BLACK outlines
-- Background: solid green (#00FF00), NO green on character
-- Character fills ~85% of frame height, feet on same baseline in every frame`;
-}
-
-function resetStudioPrompt() {
-  if (STATE.selectedAnim) {
-    const cat = Object.entries(ANIM_CATEGORIES).find(([,a]) => a.includes(STATE.selectedAnim))?.[0] || '';
-    document.getElementById('studioPrompt').value = buildAnimPrompt(STATE.selectedAnim, cat, parseInt(document.getElementById('genFrames').value), parseInt(document.getElementById('genFps').value));
-  }
-}
-
-function setMode(mode) {
-  STATE.genMode = mode;
-  document.getElementById('modeFbf').classList.toggle('active', mode === 'fbf');
-  document.getElementById('modeStrip').classList.toggle('active', mode === 'strip');
-}
-
-async function generateAnimation() {
+async function studioSelectAnim(animName) {
+  STUDIO.selectedAnim = animName;
+  studioRenderAnimGrid();
   const char = STATE.selectedChar;
-  const anim = STATE.selectedAnim;
-  if (!char || !anim) return toast('Select a character and animation', true);
+  const anim = STUDIO.animLib.find(a => a.name === animName);
+  if (!anim) return;
 
-  const frames = parseInt(document.getElementById('genFrames').value);
-  const fps = parseInt(document.getElementById('genFps').value);
-  const prompt = document.getElementById('studioPrompt').value;
-  const mode = STATE.genMode;
+  document.getElementById('studioGenPanel').style.display = 'block';
+  document.getElementById('studioGenPanel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('studioGenTitle').textContent = anim.displayName || anim.name;
+  document.getElementById('studioAnimMeta').textContent = `${anim.frameCount} frames · ${anim.fps} fps · ${anim.angle}`;
 
-  const btn = document.getElementById('genBtn');
-  const spinner = document.getElementById('genSpinner');
+  const poseDiv = document.getElementById('studioPoseFrames');
+  poseDiv.innerHTML = Array.from({ length: anim.frameCount }, (_, i) =>
+    `<img src="/api/anim-lib/frame/${anim.name}/${i}?t=1" style="width:52px;height:52px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14" />`
+  ).join('');
+
+  if (char) {
+    const angleImg = document.getElementById('studioCharAngleImg');
+    angleImg.src = `/assets/${char.name}-angle-${anim.angleIndex}.png`;
+    angleImg.onerror = () => { angleImg.src = `/assets/${char.name}-angle-0.png`; };
+  }
+
+  document.getElementById('studioProgress').style.display = 'none';
+  document.getElementById('studioResultCard').style.display = 'none';
+}
+
+function studioClosePanel() {
+  STUDIO.selectedAnim = null;
+  studioRenderAnimGrid();
+  document.getElementById('studioGenPanel').style.display = 'none';
+  document.getElementById('studioProgress').style.display = 'none';
+  document.getElementById('studioResultCard').style.display = 'none';
+}
+
+async function studioGenerateSprite() {
+  const char = STATE.selectedChar;
+  const animName = STUDIO.selectedAnim;
+  if (!char) return toast('Select a character first', true);
+  if (!animName) return toast('Select an animation first', true);
+
+  const btn = document.getElementById('studioGenBtn');
+  const spinner = document.getElementById('studioGenSpinner');
   btn.disabled = true;
   spinner.classList.add('active');
 
-  if (mode === 'fbf') {
-    await generateFBF(char.name, anim, frames, fps, prompt);
-  } else {
-    await generateStrip(char.name, anim, frames, fps, prompt);
-  }
-
-  btn.disabled = false;
-  spinner.classList.remove('active');
-}
-
-async function generateStrip(charName, anim, frames, fps, prompt) {
-  const log = document.getElementById('genLog');
-  log.style.display = 'block';
-  log.innerHTML = '<span class="info">Starting strip generation...</span>\n';
+  const prog = document.getElementById('studioProgress');
+  const log = document.getElementById('studioProgressLog');
+  prog.style.display = 'block';
+  prog.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  log.innerHTML = '<span class="info">Starting…</span>\n';
+  studioUpdateRing(0, 1);
+  document.getElementById('studioResultCard').style.display = 'none';
 
   try {
-    const resp = await fetch(`${API}/api/generate`, {
+    const res = await fetch(`${API}/api/studio/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ character: charName, animation: anim, frames, fps, promptOverride: prompt, model: document.getElementById('globalModel').value }),
+      body: JSON.stringify({ charName: char.name, animName }),
     });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    log.innerHTML += `<span class="ok">✓ Strip generated</span>\n`;
-    await loadSprites(charName);
-    renderAnimGrid();
-    const sprite = STATE.sprites[anim];
-    if (sprite?.exists) {
-      document.getElementById('genPreview').innerHTML = `<img src="${sprite.url}?t=${Date.now()}" />`;
-    }
-    toast('Animation generated');
-  } catch(e) {
-    log.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
-    toast('Generation failed: ' + e.message, true);
-  }
-}
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to start job');
 
-async function generateFBF(charName, anim, frames, fps, prompt) {
-  const fbfProgress = document.getElementById('fbfProgress');
-  const fbfLog = document.getElementById('fbfLog');
-  fbfProgress.style.display = 'block';
-  fbfLog.innerHTML = '';
-  updateRing(0, frames);
-
-  try {
-    const resp = await fetch(`${API}/api/generate-fbf`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ character: charName, animation: anim, frames, fps, promptOverride: prompt, model: document.getElementById('globalModel').value }),
-    });
-
-    const reader = resp.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    let done = 0;
-
+    const jobId = data.jobId;
+    let total = 1;
     while (true) {
-      const { value, done: streamDone } = await reader.read();
-      if (streamDone) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        try {
-          const ev = JSON.parse(line.slice(5));
-          if (ev.type === 'frame_done') {
-            done = ev.frame + 1;
-            updateRing(done, frames);
-            fbfLog.innerHTML += `<span class="ok">✓ Frame ${done}/${frames}</span>\n`;
-            fbfLog.scrollTop = fbfLog.scrollHeight;
-          } else if (ev.type === 'frame_error') {
-            done = ev.frame + 1;
-            updateRing(done, frames);
-            fbfLog.innerHTML += `<span class="err">✗ Frame ${done}/${frames}${ev.error ? ' · ' + ev.error : ''}</span>\n`;
-            fbfLog.scrollTop = fbfLog.scrollHeight;
-          } else if (ev.type === 'frame_retry') {
-            fbfLog.innerHTML += `<span class="info">↻ Frame ${ev.frame + 1} retry ${ev.attempt}/${ev.maxRetries}${ev.waitSec ? ' (wait ' + ev.waitSec + 's)' : ''}</span>\n`;
-            fbfLog.scrollTop = fbfLog.scrollHeight;
-          } else if (ev.type === 'complete') {
-            fbfLog.innerHTML += `<span class="ok">✓ Complete — ${ev.frames || frames} frames</span>\n`;
-            await loadSprites(charName);
-            renderAnimGrid();
-            const sprite = STATE.sprites[anim];
-            if (sprite?.exists) {
-              document.getElementById('genPreview').innerHTML = `<img src="${sprite.url}?t=${Date.now()}" />`;
-            }
-            toast('Animation complete');
-          } else if (ev.type === 'error') {
-            fbfLog.innerHTML += `<span class="err">✗ ${ev.message}</span>\n`;
-            toast('Error: ' + ev.message, true);
-          }
-        } catch {}
+      await new Promise(r => setTimeout(r, 3000));
+      const poll = await fetch(`${API}/api/studio/job/${jobId}`);
+      const job = await poll.json();
+      if (job.progress) {
+        const p = job.progress;
+        if (p.total) total = p.total;
+        studioUpdateRing(p.frame || 0, total);
+        log.innerHTML = `<span class="info">${p.msg || ''}</span>\n`;
+        log.scrollTop = log.scrollHeight;
+      }
+      if (job.status === 'done') {
+        studioUpdateRing(job.result.frameCount, job.result.frameCount);
+        log.innerHTML += `<span class="ok">✓ ${job.result.frameCount} frames complete</span>\n`;
+        showStudioResult(job.result);
+        toast('Sprite generated');
+        break;
+      } else if (job.status === 'error') {
+        log.innerHTML += `<span class="err">✗ ${job.error}</span>\n`;
+        toast('Generation failed: ' + job.error, true);
+        break;
       }
     }
-  } catch(e) {
-    fbfLog.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
+  } catch (e) {
+    log.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
     toast('Failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('active');
   }
 }
 
-function updateRing(done, total) {
-  const pct = total > 0 ? done / total : 0;
+function studioUpdateRing(done, total) {
   const circ = 138;
-  document.getElementById('fbfRingFill').style.strokeDashoffset = circ - (circ * pct);
-  document.getElementById('fbfRingLabel').textContent = `${done}/${total}`;
+  const pct = total > 0 ? done / total : 0;
+  document.getElementById('studioRingFill').style.strokeDashoffset = circ - (circ * pct);
+  document.getElementById('studioRingLabel').textContent = `${done}/${total}`;
+}
+
+function showStudioResult(result) {
+  const card = document.getElementById('studioResultCard');
+  document.getElementById('studioResultImg').src = result.spriteUrl + '?t=' + Date.now();
+  document.getElementById('studioResultMeta').textContent =
+    `${result.charName} · ${result.animName} · ${result.frameCount} frames · ${result.fps}fps`;
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────
@@ -3357,15 +3195,7 @@ const VIDEO_PRESETS = [
 const VID = { sessionId: null, frames: [], selected: new Set(), mode: 'strip', file: null, preset: null };
 
 function initVideoPage() {
-  const sel = document.getElementById('videoCharSelect');
-  sel.innerHTML = STATE.roster.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-  // Render preset buttons
-  const grid = document.getElementById('videoPresetGrid');
-  if (grid) {
-    grid.innerHTML = VIDEO_PRESETS.map((p, i) =>
-      `<button class="video-preset-btn" onclick="applyVideoPreset(${i})">${p.label}</button>`
-    ).join('');
-  }
+  // no-op: character select and preset grid removed from video flow
 }
 
 function applyVideoPreset(i) {
@@ -3463,7 +3293,7 @@ async function extractVideoFrames() {
   spinner.classList.add('active');
   document.getElementById('videoGalleryCard').style.display = 'none';
   document.getElementById('videoConfigCard').style.display = 'none';
-  document.getElementById('videoResultCard').style.display = 'none';
+  document.getElementById('videoSaveResult').style.display = 'none';
 
   try {
     // Upload video file if not already downloaded from URL
@@ -3621,11 +3451,10 @@ async function confirmVideoSelection() {
         `<div><div class="vst-section-label">Pose References</div><div class="video-selected-strip" id="vstSubjectGrid">${subjectsHtml}</div></div>` +
       `</div>`;
 
-    // Set default target frames to match selection count
-    document.getElementById('videoTargetFrames').value = ordered.length;
-
-    // Populate character dropdown
-    initVideoPage();
+    // Pre-fill animation name from session if available
+    if (!document.getElementById('videoAnimName').value) {
+      document.getElementById('videoAnimName').value = '';
+    }
 
     document.getElementById('videoConfigCard').style.display = 'block';
     document.getElementById('videoConfigCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -3725,178 +3554,60 @@ function openSubjectEditor(slotEl, frameIndex, frameFile) {
   };
 }
 
-function setVideoMode(mode) {
-  VID.mode = mode;
-  document.querySelectorAll('#videoModeToggle .mode-btn').forEach((b, i) => {
-    b.classList.toggle('active', (i === 0 && mode === 'strip') || (i === 1 && mode === 'fbf'));
-  });
-}
-
-async function generateVideoSprite() {
-  if (VID.mode === 'fbf') {
-    await generateVideoFBF();
-  } else {
-    await generateVideoStrip();
-  }
-}
-
-async function generateVideoStrip() {
-  const btn = document.getElementById('videoGenBtn');
-  const spinner = document.getElementById('videoGenSpinner');
-  btn.disabled = true;
-  spinner.classList.add('active');
-
-  const log = document.getElementById('videoStripLog');
-  const prog = document.getElementById('videoStripProgress');
-  prog.style.display = 'block';
-  log.innerHTML = '<span class="info">Building reference strip…</span>\n';
-
-  try {
-    // Build strip from selected frames
-    const stripRes = await fetch(`${API}/api/video/strip`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: VID.sessionId }),
-    });
-    const stripData = await stripRes.json();
-    if (!stripRes.ok) throw new Error(stripData.error || 'Strip build failed');
-    log.innerHTML += '<span class="ok">✓ Reference strip built</span>\n';
-
-    // Generate sprite
-    const character = document.getElementById('videoCharSelect').value;
-    const animName = document.getElementById('videoAnimName').value.trim() || 'custom';
-    const action = document.getElementById('videoAnimAction').value.trim() || animName;
-    const frameCount = parseInt(document.getElementById('videoTargetFrames').value) || 6;
-    const fps = parseInt(document.getElementById('videoAnimFps').value) || 8;
-    const loop = document.getElementById('videoAnimLoop').value === 'true';
-    const model = document.getElementById('globalModel').value;
-
-    log.innerHTML += '<span class="info">Generating sprite sheet…</span>\n';
-    log.scrollTop = log.scrollHeight;
-
-    const genRes = await fetch(`${API}/api/video/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: VID.sessionId, character, animName, frameCount, fps, loop, action, model }),
-    });
-    const genData = await genRes.json();
-    if (!genRes.ok) throw new Error(genData.error || 'Generation failed');
-
-    prog.style.display = 'none';
-    showVideoResult(genData.processed, genData.animName, genData.frames, fps, character);
-    toast('Sprite sheet complete');
-  } catch (e) {
-    log.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
-    toast('Generation failed: ' + e.message, true);
-  } finally {
-    btn.disabled = false;
-    spinner.classList.remove('active');
-    prog.style.display = 'none';
-  }
-}
-
-async function generateVideoFBF() {
-  const btn = document.getElementById('videoGenBtn');
-  const spinner = document.getElementById('videoGenSpinner');
-  btn.disabled = true;
-  spinner.classList.add('active');
-
-  const fbfProgress = document.getElementById('videoFbfProgress');
-  const fbfLog = document.getElementById('videoFbfLog');
-  fbfProgress.style.display = 'block';
-  fbfLog.innerHTML = '';
-  videoUpdateRing(0, 1);
-
-  const character = document.getElementById('videoCharSelect').value;
-  const animName = document.getElementById('videoAnimName').value.trim() || 'custom';
-  const action = document.getElementById('videoAnimAction').value.trim() || animName;
+async function saveAnimToLibrary() {
+  const animName = document.getElementById('videoAnimName').value.trim();
+  const angle = document.getElementById('videoAnimAngle').value;
   const fps = parseInt(document.getElementById('videoAnimFps').value) || 8;
   const loop = document.getElementById('videoAnimLoop').value === 'true';
-  const model = document.getElementById('globalModel').value;
+
+  if (!animName) return toast('Enter an animation name', true);
+  if (!VID.sessionId) return toast('No video session', true);
+
+  const orderedFrames = VID.frames.filter(f => VID.selected.has(f.file)).map(f => f.file);
+  if (orderedFrames.length === 0) return toast('No frames selected', true);
+
+  const btn = document.getElementById('videoSaveLibBtn');
+  const spinner = document.getElementById('videoSaveSpinner');
+  btn.disabled = true;
+  spinner.classList.add('active');
 
   try {
-    const resp = await fetch(`${API}/api/video/generate-fbf`, {
+    const res = await fetch(`${API}/api/anim-lib`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: VID.sessionId, character, animName, action, fps, loop, model }),
+      body: JSON.stringify({ name: animName, angle, fps, loop, sessionId: VID.sessionId, frameFiles: orderedFrames }),
     });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Save failed');
 
-    const reader = resp.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        try {
-          const ev = JSON.parse(line.slice(5));
-          if (ev.type === 'start') {
-            videoUpdateRing(0, ev.totalFrames);
-            fbfLog.innerHTML += `<span class="info">Starting ${ev.totalFrames} frames for ${ev.animName}…</span>\n`;
-          } else if (ev.type === 'frame_done') {
-            videoUpdateRing(ev.frameIndex + 1, ev.totalFrames);
-            fbfLog.innerHTML += `<span class="ok">✓ Frame ${ev.frameIndex + 1}/${ev.totalFrames}</span>\n`;
-          } else if (ev.type === 'frame_start') {
-            fbfLog.innerHTML += `<span class="info">→ Frame ${ev.frameIndex + 1}…</span>\n`;
-          } else if (ev.type === 'complete') {
-            fbfLog.innerHTML += `<span class="ok">✓ Complete — ${ev.totalFrames} frames assembled</span>\n`;
-            showVideoResult(ev.stripUrl, ev.animName, ev.totalFrames, fps, character);
-            toast('Animation complete');
-          } else if (ev.type === 'error') {
-            fbfLog.innerHTML += `<span class="err">✗ ${ev.message}</span>\n`;
-            toast('Error: ' + ev.message, true);
-          }
-          fbfLog.scrollTop = fbfLog.scrollHeight;
-        } catch {}
-      }
-    }
+    // Show success card
+    const anim = data.animation;
+    document.getElementById('videoSaveResultMeta').textContent =
+      `"${anim.displayName}" · ${anim.frameCount} frames · ${anim.fps}fps · ${anim.angle}`;
+    const frameStrip = document.getElementById('videoSaveFrameStrip');
+    frameStrip.innerHTML = Array.from({ length: anim.frameCount }, (_, i) =>
+      `<img src="/api/anim-lib/frame/${anim.name}/${i}?t=${Date.now()}" style="width:56px;height:56px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14" />`
+    ).join('');
+    document.getElementById('videoSaveResult').style.display = 'block';
+    document.getElementById('videoSaveResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    toast(`Saved "${anim.displayName}" to animation library`);
   } catch (e) {
-    fbfLog.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
-    toast('Failed: ' + e.message, true);
+    toast('Save failed: ' + e.message, true);
   } finally {
     btn.disabled = false;
     spinner.classList.remove('active');
   }
 }
 
-function videoUpdateRing(done, total) {
-  const circ = 138;
-  const pct = total > 0 ? done / total : 0;
-  document.getElementById('videoFbfRingFill').style.strokeDashoffset = circ - (circ * pct);
-  document.getElementById('videoFbfRingLabel').textContent = `${done}/${total}`;
-}
-
-function showVideoResult(url, animName, frames, fps, character) {
-  // Store for frame regeneration
-  VID.resultAnimName = animName;
-  VID.resultCharacter = character || document.getElementById('videoCharSelect')?.value;
-
-  const card = document.getElementById('videoResultCard');
-  document.getElementById('videoResultImg').src = url + '?t=' + Date.now();
-  document.getElementById('videoResultMeta').textContent = `${animName} · ${frames} frames · ${fps}fps · saved to ${url}`;
-
-  // Render individual frame thumbs
-  const strip = document.getElementById('videoFrameStrip');
-  strip.innerHTML = '';
-  for (let i = 0; i < frames; i++) {
-    const frameUrl = `/assets/${VID.resultCharacter}-${animName}-frames/frame-${i}.png`;
-    const thumb = document.createElement('div');
-    thumb.className = 'video-result-frame';
-    thumb.dataset.frameIndex = i;
-    thumb.innerHTML =
-      `<img src="${frameUrl}?t=${Date.now()}" onerror="this.style.opacity=0.3" />` +
-      `<div class="video-result-frame-num">${i + 1}</div>`;
-    thumb.addEventListener('dblclick', () => openVideoFrameEditor(thumb, i));
-    strip.appendChild(thumb);
-  }
-
-  card.style.display = 'block';
-  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+function videoReset() {
+  VID.sessionId = null;
+  VID.frames = [];
+  VID.selected = new Set();
+  VID.file = null;
+  document.getElementById('videoGalleryCard').style.display = 'none';
+  document.getElementById('videoConfigCard').style.display = 'none';
+  document.getElementById('videoSaveResult').style.display = 'none';
+  document.getElementById('videoUploadCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function openVideoFrameEditor(thumbEl, frameIndex) {

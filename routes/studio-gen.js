@@ -1,0 +1,208 @@
+/**
+ * Studio Generation Routes — Character + Pose → Sprite
+ *
+ * Takes a character's angle reference image and a sequence of pose frames
+ * from the animation library, generates each frame with:
+ *   Image 1: character body angle (identity lock)
+ *   Image 2: pose reference frame (motion copy)
+ *
+ * Output: sprite strip at data/assets/{charName}-{animName}.png
+ */
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const sharp = require('sharp');
+const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
+const { recordCost } = require('../middleware/cost-tracker');
+const { removeBackground, cropToContent } = require('../lib/sprite-processor/index');
+
+const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
+const ANIM_LIB_INDEX = path.join(ANIM_LIB_DIR, 'index.json');
+
+const STUDIO_PROMPT = [
+  'Keep the exact character from Image 1. Copy only the exact pose from Image 2.',
+  'Do not mix faces or identities. make sure the characters face does not change at all.',
+  'Do not change body shape, skin tone, hairstyle, or facial structure.',
+  'Match Image 2\'s full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.',
+  'natural anatomy, no distortions.',
+  '16-bit pixel art style. GBA resolution. Black outlines. No anti-aliasing.',
+  'Pure green (#00FF00) background. Full body visible. 1:1 square frame.',
+].join('\n');
+
+function loadAnimLib() {
+  try {
+    if (fs.existsSync(ANIM_LIB_INDEX)) return JSON.parse(fs.readFileSync(ANIM_LIB_INDEX, 'utf8'));
+  } catch {}
+  return {};
+}
+
+function json(res, data, status = 200) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
+async function parseBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; if (body.length > 5 * 1024 * 1024) req.destroy(); });
+    req.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve({}); } });
+    req.on('error', reject);
+  });
+}
+
+// ── Async Job Store ──────────────────────────────────────────────────────────
+
+const jobs = new Map();
+
+function startJob() {
+  const jobId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  jobs.set(jobId, { status: 'pending', result: null, error: null, progress: null });
+  setTimeout(() => jobs.delete(jobId), 20 * 60 * 1000);
+  return jobId;
+}
+
+function updateJob(jobId, progress) {
+  const job = jobs.get(jobId);
+  if (job) jobs.set(jobId, { ...job, progress });
+}
+
+function finishJob(jobId, result) {
+  const job = jobs.get(jobId);
+  if (job) jobs.set(jobId, { ...job, status: 'done', result });
+}
+
+function failJob(jobId, errMsg) {
+  const job = jobs.get(jobId);
+  if (job) jobs.set(jobId, { ...job, status: 'error', error: errMsg });
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Build a 1×N horizontal sprite strip from individual processed frames */
+async function buildStrip(framePaths, outputPath) {
+  const frames = await Promise.all(framePaths.map(p => sharp(p).metadata()));
+  const w = frames[0].width;
+  const h = frames[0].height;
+  const strip = sharp({
+    create: { width: w * framePaths.length, height: h, channels: 4, background: { r:0, g:0, b:0, alpha:0 } }
+  });
+  const composites = framePaths.map((p, i) => ({ input: p, left: i * w, top: 0 }));
+  await strip.composite(composites).png().toFile(outputPath);
+}
+
+/** Process a single AI-generated frame: remove bg, crop, scale to 180x180 */
+async function processFrame(srcPath, outPath) {
+  await removeBackground(srcPath, srcPath);
+  await cropToContent(srcPath, outPath, { width: 180, height: 180, padding: 10 });
+}
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+
+function register(router, ctx) {
+  const { ASSETS_DIR, TMP_DIR } = ctx;
+
+  // GET /api/studio/job/:jobId — poll generation job
+  router.get('/api/studio/job/:jobId', (req, res, params) => {
+    const job = jobs.get(params.jobId);
+    if (!job) return json(res, { error: 'job not found' }, 404);
+    json(res, { status: job.status, result: job.result, error: job.error, progress: job.progress });
+  });
+
+  // POST /api/studio/generate — generate sprite for character + animation
+  // Body: { charName, animName, model? }
+  router.post('/api/studio/generate', async (req, res) => {
+    const body = await parseBody(req);
+    const { charName, animName, model } = body;
+    if (!charName || !animName) return json(res, { error: 'charName and animName required' }, 400);
+
+    const lib = loadAnimLib();
+    const anim = lib[animName];
+    if (!anim) return json(res, { error: `Animation "${animName}" not found in library` }, 400);
+
+    const charAnglePath = path.join(ASSETS_DIR, `${charName}-angle-${anim.angleIndex}.png`);
+    if (!fs.existsSync(charAnglePath)) {
+      // Fallback: try angle-0 (front)
+      const fallback = path.join(ASSETS_DIR, `${charName}-angle-0.png`);
+      if (!fs.existsSync(fallback)) {
+        return json(res, { error: `No angle reference found for "${charName}" (looked for angle ${anim.angleIndex})` }, 400);
+      }
+    }
+
+    const jobId = startJob();
+
+    setImmediate(async () => {
+      try {
+        const modelId = model || 'gemini-3-pro-image-preview';
+        const client = new NanaBananaClient({ model: modelId });
+
+        // Resolve character angle — prefer exact match, fall back to angle-0
+        let resolvedAnglePath = charAnglePath;
+        if (!fs.existsSync(resolvedAnglePath)) {
+          resolvedAnglePath = path.join(ASSETS_DIR, `${charName}-angle-0.png`);
+        }
+
+        const genDir = path.join(TMP_DIR, 'studio-gen', `${charName}-${animName}`);
+        fs.mkdirSync(genDir, { recursive: true });
+
+        const frameCount = anim.frameCount;
+        const processedPaths = [];
+
+        for (let i = 0; i < frameCount; i++) {
+          updateJob(jobId, { frame: i, total: frameCount, msg: `Generating frame ${i + 1}/${frameCount}…` });
+
+          const posePath = path.join(ANIM_LIB_DIR, animName, `frame-${i}.png`);
+          if (!fs.existsSync(posePath)) {
+            throw new Error(`Pose frame ${i} not found at ${posePath}`);
+          }
+
+          const result = await client.generate(STUDIO_PROMPT, {
+            referenceImages: [resolvedAnglePath, posePath],
+            aspectRatio: '1:1',
+            resolution: '1K',
+            model: modelId,
+            maxRetries: 2,
+            timeoutMs: 90000,
+          });
+
+          const rawPath = path.join(genDir, `raw-${i}.png`);
+          fs.writeFileSync(rawPath, result.imageBuffer);
+          recordCost(modelId, 'studio_gen', '1K', 2, { charName, animName, frame: i });
+
+          // Process: remove bg, crop, scale
+          const processedPath = path.join(genDir, `frame-${i}.png`);
+          await processFrame(rawPath, processedPath);
+          processedPaths.push(processedPath);
+
+          updateJob(jobId, { frame: i + 1, total: frameCount, msg: `✓ Frame ${i + 1}/${frameCount} done` });
+        }
+
+        // Save individual frames to assets
+        const framesDir = path.join(ASSETS_DIR, `${charName}-${animName}-frames`);
+        fs.mkdirSync(framesDir, { recursive: true });
+        for (let i = 0; i < processedPaths.length; i++) {
+          fs.copyFileSync(processedPaths[i], path.join(framesDir, `frame-${i}.png`));
+        }
+
+        // Assemble sprite strip
+        const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);
+        await buildStrip(processedPaths, stripPath);
+
+        finishJob(jobId, {
+          success: true,
+          charName,
+          animName,
+          frameCount: processedPaths.length,
+          fps: anim.fps,
+          spriteUrl: `/assets/${charName}-${animName}.png`,
+        });
+      } catch (err) {
+        failJob(jobId, err.message);
+      }
+    });
+
+    return json(res, { jobId, status: 'started' });
+  });
+}
+
+module.exports = { register };
