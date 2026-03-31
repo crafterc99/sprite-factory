@@ -298,6 +298,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
   });
 
   // POST /api/char-pipeline/pixel-char/step2 — Convert pixel art to standing portrait
+  // Returns the image as base64 so the client can display it without a separate HTTP request.
+  // This avoids Railway multi-instance filesystem issues.
   router.post('/api/char-pipeline/pixel-char/step2', async (req, res) => {
     const body = await parseBody(req);
     const { name } = body;
@@ -316,34 +318,34 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         resolution: '2K',
         model: modelId,
       });
-      const optPath = path.join(TMP_DIR, 'characters', name, 'option-0.png');
-      fs.writeFileSync(optPath, step2.imageBuffer);
       recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step2' });
+
+      // Return as base64 data URL — client stores it and sends it back on confirm
+      const imageBase64 = 'data:image/png;base64,' + step2.imageBuffer.toString('base64');
 
       return json(res, {
         success: true,
         name,
-        options: [{ index: 0, url: `/api/character/image/${name}/option-0.png` }],
+        imageBase64,
       });
     } catch (err) {
       return json(res, { error: err.message }, 500);
     }
   });
 
-  // POST /api/char-pipeline/pixel-char/confirm — Pick option, save portrait
+  // POST /api/char-pipeline/pixel-char/confirm — Save confirmed portrait
+  // Accepts portraitBase64 (data URL) directly from client to avoid filesystem issues.
   router.post('/api/char-pipeline/pixel-char/confirm', async (req, res) => {
     const body = await parseBody(req);
-    const { name, optionIndex, heightInches, weightLbs, build, jerseyNumber, teamColors } = body;
+    const { name, portraitBase64, heightInches, weightLbs, build, jerseyNumber, teamColors } = body;
     if (!name) return json(res, { error: 'name required' }, 400);
+    if (!portraitBase64) return json(res, { error: 'portraitBase64 required' }, 400);
 
     try {
-      const charDir = path.join(TMP_DIR, 'characters', name);
-      const optPath = path.join(charDir, `option-${optionIndex}.png`);
-      if (!fs.existsSync(optPath)) return json(res, { error: 'Option not found' }, 404);
-
       const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
       fs.mkdirSync(ASSETS_DIR, { recursive: true });
-      fs.copyFileSync(optPath, portraitPath);
+      const data = portraitBase64.replace(/^data:image\/\w+;base64,/, '');
+      fs.writeFileSync(portraitPath, Buffer.from(data, 'base64'));
 
       CHARACTERS[name] = {
         description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',

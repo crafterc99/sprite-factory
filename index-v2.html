@@ -2089,11 +2089,12 @@ async function cpGenerate() {
     if (d2.error) throw new Error(d2.error);
     cpLog('✓ Portrait ready — confirm to continue', 'ok');
 
+    // Store base64 inline — no separate HTTP request needed for preview
+    CP.portraitBase64 = d2.imageBase64;
+
     // Show portrait for confirmation — do NOT proceed automatically
-    const portraitUrl = d2.options?.[0]?.url;
     const confirmEl = document.getElementById('cpPortraitConfirm');
-    document.getElementById('cpPortraitPreview').src = portraitUrl + '?t=' + Date.now();
-    CP.portraitOptionIndex = d2.options?.[0]?.index ?? 0;
+    document.getElementById('cpPortraitPreview').src = d2.imageBase64;
     confirmEl.style.display = 'block';
 
   } catch (e) {
@@ -2128,7 +2129,7 @@ async function cpConfirmAndGenerateAngles() {
     cpLog('Saving portrait…');
     const r2 = await fetch(`${API}/api/char-pipeline/pixel-char/confirm`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, optionIndex: CP.portraitOptionIndex, ...charMeta }),
+      body: JSON.stringify({ name, portraitBase64: CP.portraitBase64, ...charMeta }),
     });
     const d2 = await r2.json();
     if (d2.error) throw new Error(d2.error);
