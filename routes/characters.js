@@ -329,90 +329,9 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     });
   });
 
-  // ─── Character Creation (4-option picker) ──────────────────────────
-
-  const STEP1_PROMPT = [
-    'Transform the uploaded image into 16-bit arcade pixel art.',
-    'IMPORTANT RULES:',
-    'Do NOT change the pose.',
-    'Do NOT change facial features.',
-    'Do NOT add new objects.',
-    'Do NOT change clothing design.',
-    'Do NOT modify hairstyle.',
-    'Do NOT add accessories.',
-    'Do NOT change proportions.',
-    'Do NOT add background elements.',
-    'Only convert the image into clean 16-bit arcade pixel style with:',
-    'Sharp pixel edges',
-    'Limited color palette',
-    'black outlines',
-    'High contrast arcade shading',
-    'No anti-aliasing',
-    'No blur',
-    'Keep the character exactly as shown.',
-    'Output on a pure white background (#FFFFFF only).',
-    'No environment. No extra elements. Only the character.',
-  ].join('\n');
-
-  const STEP2_PROMPT = 'give the full image of this character standing naturally with a white background.';
-
-  // POST /api/character/create — 2-step portrait generation using Nano Banana Pro
-  // Step 1: Convert uploaded photo to pixel art (exact prompt, no pose changes)
-  // Step 2: Use step 1 output to get a clean standing full-body portrait
-  router.post('/api/character/create', async (req, res) => {
-    const body = await parseBody(req);
-    const { name, photoBase64, photoPath } = body;
-    if (!name) return json(res, { error: 'Character name required' }, 400);
-
-    try {
-      const charDir = path.join(TMP_DIR, 'characters', name);
-      fs.mkdirSync(charDir, { recursive: true });
-
-      let originalPath = path.join(charDir, 'original.png');
-      if (photoBase64) {
-        const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
-        fs.writeFileSync(originalPath, Buffer.from(base64Data, 'base64'));
-      } else if (photoPath && fs.existsSync(photoPath)) {
-        fs.copyFileSync(photoPath, originalPath);
-      } else if (!fs.existsSync(originalPath)) {
-        return json(res, { error: 'Photo required' }, 400);
-      }
-
-      const modelId = 'gemini-3-pro-image-preview';
-      const client = new NanaBananaClient({ model: modelId });
-
-      // Step 1: convert photo to pixel art, keeping everything as-is
-      const step1Result = await client.generate(STEP1_PROMPT, {
-        referenceImages: [originalPath],
-        aspectRatio: '3:4',
-        resolution: '2K',
-        model: modelId,
-      });
-      const step1Path = path.join(charDir, 'step1-pixel.png');
-      fs.writeFileSync(step1Path, step1Result.imageBuffer);
-      recordCost(modelId, 'character-step1', '2K', 1, { character: name });
-
-      // Step 2: use step 1 output as the only reference, get clean standing portrait
-      const step2Result = await client.generate(STEP2_PROMPT, {
-        referenceImages: [step1Path],
-        aspectRatio: '3:4',
-        resolution: '2K',
-        model: modelId,
-      });
-      const optPath = path.join(charDir, 'option-0.png');
-      fs.writeFileSync(optPath, step2Result.imageBuffer);
-      recordCost(modelId, 'character-step2', '2K', 1, { character: name });
-
-      return json(res, {
-        success: true,
-        name,
-        originalUrl: `/api/character/image/${name}/original.png`,
-        step1Url: `/api/character/image/${name}/step1-pixel.png`,
-        options: [{ index: 0, url: `/api/character/image/${name}/option-0.png` }],
-      });
-    } catch (err) {
-      return json(res, { error: err.message }, 500);
-    }
+  // POST /api/character/create — deprecated, use /api/char-pipeline/pixel-char/step1 + step2
+  router.post('/api/character/create', (req, res) => {
+    return json(res, { error: 'Use /api/char-pipeline/pixel-char/step1 and step2 instead' }, 410);
   });
 
   // POST /api/character/confirm — Pick the best option and save as final

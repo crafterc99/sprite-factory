@@ -2287,58 +2287,6 @@ async function cpRenameAngle(input) {
   } catch(e) { /* non-fatal */ }
 }
 
-async function generateOptions() {
-  const name = document.getElementById('newName').value.trim().toLowerCase().replace(/\s+/g,'-');
-  if (!name) return toast('Name required', true);
-  if (!STATE.charPhoto) return toast('Photo required', true);
-
-  const btn = document.getElementById('generateOptionsBtn');
-  const spinner = document.getElementById('optSpinner');
-  btn.disabled = true;
-  spinner.classList.add('active');
-  document.getElementById('pinnedCharName').textContent = name;
-
-  try {
-    const body = {
-      name,
-      photoBase64: STATE.charPhoto,
-      heightInches: parseInt(document.getElementById('newHeight').value) || 72,
-      weightLbs: parseInt(document.getElementById('newWeight').value) || 185,
-      build: document.getElementById('newBuild').value,
-      jerseyNumber: document.getElementById('newJersey').value,
-      teamColors: { primary: document.getElementById('newColor1').value, secondary: document.getElementById('newColor2').value, accent: '#000000' },
-    };
-
-    const resp = await fetch(`${API}/api/character/create`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-
-    const opt = data.options?.[0];
-    if (!opt) throw new Error('No result returned');
-
-    STATE.selectedOption = 0;
-    const grid = document.getElementById('optionsGrid');
-    grid.innerHTML = `
-      <div style="display:flex;flex-direction:column;align-items:center;gap:16px;width:100%">
-        <img src="${opt.url}?t=${Date.now()}" style="max-height:320px;object-fit:contain;image-rendering:pixelated;border-radius:8px;border:1px solid var(--border)" />
-        <div style="display:flex;gap:12px">
-          <button class="btn btn-primary" style="min-width:140px" onclick="confirmAndGenerateAngles()">Use This</button>
-          <button class="btn btn-secondary" style="min-width:140px" onclick="generateOptions()">Try Again</button>
-        </div>
-      </div>`;
-
-    const sec = document.getElementById('optionsSection');
-    sec.style.display = 'block';
-    requestAnimationFrame(() => { sec.style.opacity = '1'; });
-    toast('Portrait ready — confirm or try again');
-  } catch(e) {
-    toast('Error: ' + e.message, true);
-  } finally {
-    btn.disabled = false;
-    spinner.classList.remove('active');
-  }
-}
-
 async function confirmAndGenerateAngles() {
   const name = document.getElementById('newName').value.trim().toLowerCase().replace(/\s+/g,'-');
   if (STATE.selectedOption < 0) return;
@@ -2483,57 +2431,6 @@ async function confirmAndGenerateAngles() {
     autoRunPipelineForChar(name);
   } catch(e) {
     toast('Error: ' + e.message, true);
-  }
-}
-
-async function rerunAngle(angleIndex) {
-  const spinner = document.getElementById(`angleSpinner${angleIndex}`);
-  const img = document.getElementById(`angleImg${angleIndex}`);
-  const btn = document.getElementById(`angleRerun${angleIndex}`);
-  if (spinner) spinner.classList.add('active');
-  if (img) img.style.display = 'none';
-  if (btn) btn.style.display = 'none';
-  try {
-    const resp = await fetch(`${API}/api/angle/regenerate`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ character: STATE.confirmedName, angleIndex, model: document.getElementById('globalModel').value })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    if (img) { img.src = data.generated?.[0]?.url; img.style.display = 'block'; }
-    if (btn) btn.style.display = 'inline-block';
-  } catch(e) {
-    toast('Error: ' + e.message, true);
-    if (btn) btn.style.display = 'inline-block';
-  } finally {
-    if (spinner) spinner.classList.remove('active');
-  }
-}
-
-async function rerunHeadshot(angleIndex) {
-  const spinner = document.getElementById(`headSpinner${angleIndex}`);
-  const img = document.getElementById(`headImg${angleIndex}`);
-  const btn = document.getElementById(`headRerun${angleIndex}`);
-  if (spinner) spinner.classList.add('active');
-  if (img) img.style.display = 'none';
-  if (btn) btn.style.display = 'none';
-  try {
-    const resp = await fetch(`${API}/api/angle/regenerate`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ character: STATE.confirmedName, angleIndex, type: 'headshot' })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    const url = data.generated?.[0]?.url;
-    if (img && url) { img.src = url; img.style.display = 'block'; }
-    if (btn) btn.style.display = 'inline-block';
-  } catch(e) {
-    toast('Error: ' + e.message, true);
-    if (btn) btn.style.display = 'inline-block';
-  } finally {
-    if (spinner) spinner.classList.remove('active');
   }
 }
 
