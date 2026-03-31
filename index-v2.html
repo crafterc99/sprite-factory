@@ -586,6 +586,74 @@
   #ptTestResult { flex:1; overflow-y:auto; padding:14px; }
   .pt-test-img { max-width:180px; max-height:180px; border-radius:6px; border:1px solid var(--border); image-rendering:pixelated; margin-top:8px; }
   .pt-warning { font-family:var(--mono); font-size:9px; color:var(--warning); padding:6px 10px; background:rgba(255,180,0,0.07); border-radius:4px; margin-top:6px; }
+
+  /* ─── CHARACTER PIPELINE ─── */
+  #charPipelineModal .cp-layout { display:flex; width:96vw; max-width:1160px; height:92vh; background:var(--surface); border-radius:16px; overflow:hidden; border:1px solid var(--border); }
+  .cp-sidebar { width:220px; flex-shrink:0; background:var(--surface2); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+  .cp-sidebar-head { padding:20px 16px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .cp-sidebar-title { font-weight:700; font-size:13px; color:var(--text); margin-bottom:4px; }
+  .cp-sidebar-sub { font-family:var(--mono); font-size:9px; color:#50507a; letter-spacing:1px; }
+  .cp-pinned { display:flex; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid var(--border); background:rgba(0,0,0,0.2); flex-shrink:0; min-height:60px; }
+  .cp-pinned-photo { width:40px; height:40px; border-radius:6px; object-fit:cover; image-rendering:pixelated; border:1px solid var(--border); flex-shrink:0; background:var(--surface3); }
+  .cp-pinned-info { flex:1; min-width:0; }
+  .cp-pinned-name { font-size:12px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cp-pinned-status { font-family:var(--mono); font-size:8px; color:#50507a; margin-top:2px; }
+  .cp-step-list { flex:1; overflow-y:auto; padding:10px 8px; }
+  .cp-step { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; cursor:pointer; transition:background 0.15s; margin-bottom:2px; }
+  .cp-step:hover { background:var(--surface3); }
+  .cp-step.active { background:rgba(255,68,0,0.12); }
+  .cp-step.done { opacity:0.75; }
+  .cp-step-num { width:22px; height:22px; border-radius:50%; background:var(--surface3); border:1px solid var(--border); color:#50507a; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; flex-shrink:0; transition:all 0.15s; font-family:var(--mono); }
+  .cp-step.active .cp-step-num { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .cp-step.done .cp-step-num { background:#2a5c2a; border-color:#3a7a3a; color:#5af55a; }
+  .cp-step-text { flex:1; }
+  .cp-step-label { font-size:11px; color:#8888aa; line-height:1.2; }
+  .cp-step.active .cp-step-label { color:var(--text); font-weight:600; }
+  .cp-step.done .cp-step-label { color:#5a8a5a; }
+  .cp-content { flex:1; overflow-y:auto; display:flex; flex-direction:column; position:relative; }
+  .cp-close { position:absolute; top:16px; right:16px; background:none; border:none; color:#50507a; font-size:20px; cursor:pointer; z-index:10; padding:4px 8px; border-radius:6px; transition:color 0.15s; }
+  .cp-close:hover { color:var(--text); }
+  .cp-pane { display:none; flex:1; flex-direction:column; padding:32px 36px; }
+  .cp-pane.active { display:flex; }
+  .cp-step-title { font-size:20px; font-weight:700; color:var(--text); margin-bottom:4px; }
+  .cp-step-subtitle { font-size:12px; color:#50507a; margin-bottom:28px; line-height:1.5; }
+  .cp-body { flex:1; }
+  .cp-footer { display:flex; align-items:center; gap:12px; margin-top:24px; padding-top:20px; border-top:1px solid var(--border); flex-shrink:0; }
+  .cp-footer-spacer { flex:1; }
+  .cp-status { font-family:var(--mono); font-size:10px; color:#50507a; }
+  /* Step 2 — options */
+  .cp-options-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+  .cp-option { border:2px solid var(--border); border-radius:10px; overflow:hidden; cursor:pointer; transition:border-color 0.15s,transform 0.1s; position:relative; }
+  .cp-option:hover { border-color:var(--border-hi); transform:scale(1.02); }
+  .cp-option.selected { border-color:var(--accent); }
+  .cp-option img { width:100%; aspect-ratio:3/4; object-fit:contain; image-rendering:pixelated; background:var(--surface2); display:block; }
+  .cp-option-label { position:absolute; top:6px; left:6px; background:rgba(0,0,0,0.7); border-radius:4px; padding:2px 6px; font-family:var(--mono); font-size:9px; color:#fff; }
+  /* Sheet preview */
+  .cp-sheet-wrap { border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--surface2); margin-bottom:12px; }
+  .cp-sheet-wrap img { width:100%; display:block; image-rendering:pixelated; }
+  /* Frames row */
+  .cp-frames-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  .cp-frame-card { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .cp-frame-img { width:80px; height:80px; border:1px solid var(--border); border-radius:8px; object-fit:contain; image-rendering:pixelated; background:var(--surface2); }
+  .cp-frame-label { font-family:var(--mono); font-size:8px; color:#50507a; text-align:center; }
+  .cp-frame-label-input { font-family:var(--mono); font-size:8px; background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:2px 5px; color:var(--text); width:70px; text-align:center; }
+  /* Clothing */
+  .cp-clothing-upload { border:2px dashed var(--border); border-radius:10px; padding:24px; text-align:center; cursor:pointer; transition:border-color 0.15s; }
+  .cp-clothing-upload:hover { border-color:var(--border-hi); }
+  .cp-clothing-grid { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .cp-clothing-item { position:relative; }
+  .cp-clothing-item img { width:70px; height:70px; border:1px solid var(--border); border-radius:8px; object-fit:contain; image-rendering:pixelated; background:var(--surface2); }
+  .cp-clothing-apply { display:block; font-family:var(--mono); font-size:8px; text-align:center; color:#50507a; margin-top:3px; cursor:pointer; }
+  .cp-clothing-apply:hover { color:var(--accent); }
+  /* Prompt editor in pipeline */
+  .cp-prompt-wrap { margin-top:16px; border-top:1px solid var(--border); padding-top:14px; }
+  .cp-prompt-label { font-family:var(--mono); font-size:9px; color:#50507a; letter-spacing:1px; margin-bottom:6px; }
+  .cp-prompt-ta { width:100%; min-height:80px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:var(--mono); font-size:10px; resize:vertical; }
+  /* Progress log */
+  .cp-log { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-family:var(--mono); font-size:10px; color:#50507a; max-height:120px; overflow-y:auto; margin-top:10px; }
+  .cp-log .ok { color:#4caf50; }
+  .cp-log .err { color:var(--danger); }
+  .cp-log .info { color:var(--accent3); }
 </style>
 </head>
 <body>
@@ -955,102 +1023,271 @@
 
 </div>
 
-<!-- ─── MODAL: Add Character ─── -->
+<!-- ─── MODAL: Character Pipeline (8-Step) ─── -->
 <div class="modal-overlay" id="addCharModal">
-  <div class="modal">
-    <button class="modal-close" onclick="closeAddChar()">×</button>
-    <div class="modal-title">New Character</div>
+  <div class="cp-layout">
 
-    <!-- Pinned bar: revealed after photo upload, stays visible throughout -->
-    <div id="charPinnedBar" style="display:none;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:16px">
-      <img id="pinnedPhotoThumb" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);image-rendering:pixelated;flex-shrink:0" />
-      <span id="pinnedCharName" style="font-weight:700;font-size:13px;text-transform:capitalize;flex:1;text-align:center;color:var(--text)"></span>
-      <img id="pinnedOptionThumb" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);image-rendering:pixelated;flex-shrink:0;visibility:hidden" />
+    <!-- Left: Step Sidebar -->
+    <div class="cp-sidebar">
+      <div class="cp-sidebar-head">
+        <div class="cp-sidebar-title">New Character</div>
+        <div class="cp-sidebar-sub">8-STEP PIPELINE</div>
+      </div>
+      <!-- Pinned character info -->
+      <div class="cp-pinned" id="cpPinned" style="display:none">
+        <img class="cp-pinned-photo" id="cpPinnedPhoto" src="" alt="" />
+        <div class="cp-pinned-info">
+          <div class="cp-pinned-name" id="cpPinnedName">—</div>
+          <div class="cp-pinned-status" id="cpPinnedStatus">In progress</div>
+        </div>
+      </div>
+      <div class="cp-step-list" id="cpStepList"></div>
     </div>
 
-    <!-- Form section -->
-    <div id="charFormSection">
-      <div class="form-group">
-        <label class="form-label">Character Name</label>
-        <input class="input" id="newName" placeholder="e.g. kai" />
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Height (in)</label>
-          <input class="input" type="number" id="newHeight" value="72" min="60" max="90" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Weight (lbs)</label>
-          <input class="input" type="number" id="newWeight" value="185" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Build</label>
-          <select class="input" id="newBuild">
-            <option>athletic</option><option>lean</option><option>stocky</option><option>heavy</option><option>slim</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Jersey #</label>
-          <input class="input" id="newJersey" placeholder="e.g. 23" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Primary Color</label>
-          <input class="input" type="color" id="newColor1" value="#FF4400" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Secondary Color</label>
-          <input class="input" type="color" id="newColor2" value="#FFFFFF" />
-        </div>
-      </div>
-      <div class="form-group">
-        <div class="drop-zone" id="newDropZone">
-          <div class="drop-icon">📷</div>
-          <div>Drop photo here or click to browse</div>
-          <input type="file" id="newPhotoFile" accept="image/*" onchange="handlePhotoFile(this.files[0]); onPhotoSelected(this.files[0])" />
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-          <img id="newPhotoThumb" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:none;image-rendering:pixelated" />
-          <span id="newPhotoName" style="font-family:var(--mono);font-size:10px;color:#50507a"></span>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Prompt</label>
-        <textarea class="prompt-box" id="newCharPrompt" style="height:120px"></textarea>
-      </div>
-      <button class="btn btn-primary" id="generateOptionsBtn" onclick="generateOptions()" style="width:100%">
-        <span class="spinner" id="optSpinner"></span>
-        Generate Options
-      </button>
-    </div>
+    <!-- Right: Step Content -->
+    <div class="cp-content">
+      <button class="cp-close" onclick="closeAddChar()">×</button>
 
-    <!-- Options section: 2×2 grid, revealed after generate -->
-    <div id="optionsSection" style="display:none;opacity:0;transition:opacity 0.2s;margin-top:20px">
-      <div class="options-grid" id="optionsGrid"></div>
-    </div>
-
-    <!-- Angles section: 2×4 grid (2 cols, 4 rows), revealed after option pick -->
-    <div id="anglesSection" style="display:none;opacity:0;transition:opacity 0.2s;margin-top:20px">
-      <div style="margin-bottom:8px;font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--accent2)">HEADSHOTS</div>
-      <div id="headshotsGrid" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px"></div>
-      <div style="margin:16px 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--accent2)">BODY</div>
-      <div id="anglesGrid" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px"></div>
-      <div style="margin:16px 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:1px;color:var(--accent2)">CLOTHES</div>
-      <div id="clothesGrid" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px"></div>
-    </div>
-
-    <!-- Done section: revealed after angles complete -->
-    <div id="charDoneSection" style="display:none;opacity:0;transition:opacity 0.2s;margin-top:16px">
-      <div id="charPipelineStatus" style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-bottom:8px;display:none">
-        <span id="charPipelineLabel">⚡ Generating animations in background…</span>
-        <div class="sse-log" id="charPipelineLog" style="margin-top:6px;max-height:120px"></div>
+      <!-- Step 1: Upload Headshot -->
+      <div class="cp-pane" id="cpPane1">
+        <div class="cp-step-title">Upload Headshot</div>
+        <div class="cp-step-subtitle">Upload a clear photo of your character. Fill in their physical attributes — these affect proportions in the final sprite.</div>
+        <div class="cp-body">
+          <div class="form-row">
+            <div class="form-group" style="flex:2">
+              <label class="form-label">Character Name</label>
+              <input class="input" id="cpName" placeholder="e.g. kai" />
+            </div>
+            <div class="form-group" style="flex:1">
+              <label class="form-label">Jersey #</label>
+              <input class="input" id="cpJersey" placeholder="23" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Height (in)</label>
+              <input class="input" type="number" id="cpHeight" value="72" min="60" max="90" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Weight (lbs)</label>
+              <input class="input" type="number" id="cpWeight" value="185" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Build</label>
+              <select class="input" id="cpBuild">
+                <option>athletic</option><option>lean</option><option>stocky</option><option>heavy</option><option>slim</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Primary Color</label>
+              <input class="input" type="color" id="cpColor1" value="#FF4400" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Secondary Color</label>
+              <input class="input" type="color" id="cpColor2" value="#FFFFFF" />
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="drop-zone" id="cpDropZone" onclick="document.getElementById('cpPhotoFile').click()" style="cursor:pointer">
+              <div class="drop-icon">📷</div>
+              <div id="cpDropLabel">Drop photo here or click to browse</div>
+              <input type="file" id="cpPhotoFile" accept="image/*" style="display:none" onchange="cpHandlePhoto(this.files[0])" />
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+              <img id="cpPhotoThumb" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:none;image-rendering:pixelated" />
+              <span id="cpPhotoName" style="font-family:var(--mono);font-size:10px;color:#50507a"></span>
+            </div>
+          </div>
+        </div>
+        <div class="cp-footer">
+          <div class="cp-footer-spacer"></div>
+          <button class="btn btn-primary" onclick="cpStep1Next()">Next: Generate Pixel Art →</button>
+        </div>
       </div>
-      <button class="btn btn-success" onclick="finishSetup()" style="width:100%;margin-top:8px">Open in Studio →</button>
-    </div>
-  </div>
+
+      <!-- Step 2: Generate Pixel Character -->
+      <div class="cp-pane" id="cpPane2">
+        <div class="cp-step-title">Generate Pixel Character</div>
+        <div class="cp-step-subtitle">AI converts your photo into 4 pixel art options. Pick the one that looks most like your character.</div>
+        <div class="cp-body">
+          <div class="cp-prompt-wrap" style="margin-top:0;border-top:none;padding-top:0;margin-bottom:16px">
+            <div class="cp-prompt-label">PROMPT OVERRIDE (optional)</div>
+            <textarea class="cp-prompt-ta" id="cpPixelPrompt" placeholder="Leave blank to use default prompt…"></textarea>
+          </div>
+          <div id="cpOptionsArea">
+            <button class="btn btn-primary" id="cpGenOptionsBtn" onclick="cpStep2Generate()" style="margin-bottom:16px">
+              <span class="spinner" id="cpGenSpinner"></span>
+              Generate 4 Options
+            </button>
+          </div>
+          <div class="cp-options-grid" id="cpOptionsGrid" style="display:none"></div>
+          <div id="cpStep2Status" class="cp-status" style="margin-top:8px"></div>
+        </div>
+        <div class="cp-footer">
+          <button class="btn btn-secondary" onclick="cpGoToStep(1)">← Back</button>
+          <div class="cp-footer-spacer"></div>
+          <button class="btn btn-primary" id="cpStep2NextBtn" onclick="cpStep2Confirm()" disabled>Confirm Selection →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Generate Head Angle Sheet -->
+      <div class="cp-pane" id="cpPane3">
+        <div class="cp-step-title">Generate Head Angle Sheet</div>
+        <div class="cp-step-subtitle">AI generates a 6-frame horizontal strip of the character's head at different angles (front, front-right, right, back, back-left, left).</div>
+        <div class="cp-body">
+          <div style="display:flex;gap:16px;margin-bottom:16px;align-items:center">
+            <img id="cpPortraitThumb3" style="width:80px;height:100px;object-fit:contain;border:1px solid var(--border);border-radius:8px;image-rendering:pixelated;background:var(--surface2)" />
+            <div style="flex:1">
+              <div style="font-size:12px;color:#50507a;margin-bottom:6px">Portrait reference</div>
+              <button class="btn btn-primary" id="cpGenHeadBtn" onclick="cpStep3Generate()">
+                <span class="spinner" id="cpHeadSpinner"></span>
+                Generate Head Angles
+              </button>
+              <div id="cpStep3Status" class="cp-status" style="margin-top:8px"></div>
+            </div>
+          </div>
+          <div id="cpHeadSheetWrap" class="cp-sheet-wrap" style="display:none">
+            <img id="cpHeadSheetImg" src="" alt="Head angle sheet" />
+          </div>
+          <div class="cp-prompt-wrap">
+            <div class="cp-prompt-label">PROMPT OVERRIDE (optional)</div>
+            <textarea class="cp-prompt-ta" id="cpHeadPrompt" placeholder="Leave blank to use default head angle prompt…"></textarea>
+          </div>
+        </div>
+        <div class="cp-footer">
+          <button class="btn btn-secondary" onclick="cpGoToStep(2)">← Back</button>
+          <div class="cp-footer-spacer"></div>
+          <button class="btn btn-primary" id="cpStep3NextBtn" onclick="cpGoToStep(4)" disabled>Next: Slice Angles →</button>
+        </div>
+      </div>
+
+      <!-- Step 4: Slice Head Angles -->
+      <div class="cp-pane" id="cpPane4">
+        <div class="cp-step-title">Slice Head Angles</div>
+        <div class="cp-step-subtitle">Cut the head strip into 6 individual angle frames. You can rename labels before saving.</div>
+        <div class="cp-body">
+          <div style="margin-bottom:12px">
+            <button class="btn btn-primary" id="cpSliceHeadBtn" onclick="cpStep4Slice()">
+              <span class="spinner" id="cpSliceHeadSpinner"></span>
+              Slice Now
+            </button>
+            <div id="cpStep4Status" class="cp-status" style="display:inline-block;margin-left:12px"></div>
+          </div>
+          <div class="cp-frames-row" id="cpHeadFramesRow"></div>
+        </div>
+        <div class="cp-footer">
+          <button class="btn btn-secondary" onclick="cpGoToStep(3)">← Back</button>
+          <div class="cp-footer-spacer"></div>
+          <button class="btn btn-primary" id="cpStep4NextBtn" onclick="cpGoToStep(5)" disabled>Next: Body Angles →</button>
+        </div>
+      </div>
+
+      <!-- Step 5: Generate Body Angle Sheet -->
+      <div class="cp-pane" id="cpPane5">
+        <div class="cp-step-title">Generate Body Angle Sheet</div>
+        <div class="cp-step-subtitle">AI generates a 6-frame horizontal strip of the full body at 6 angles. Green background for chroma keying.</div>
+        <div class="cp-body">
+          <div style="display:flex;gap:16px;margin-bottom:16px;align-items:center">
+            <img id="cpPortraitThumb5" style="width:80px;height:100px;object-fit:contain;border:1px solid var(--border);border-radius:8px;image-rendering:pixelated;background:var(--surface2)" />
+            <div style="flex:1">
+              <div style="font-size:12px;color:#50507a;margin-bottom:6px">Portrait reference</div>
+              <button class="btn btn-primary" id="cpGenBodyBtn" onclick="cpStep5Generate()">
+                <span class="spinner" id="cpBodySpinner"></span>
+                Generate Body Angles
+              </button>
+              <div id="cpStep5Status" class="cp-status" style="margin-top:8px"></div>
+            </div>
+          </div>
+          <div id="cpBodySheetWrap" class="cp-sheet-wrap" style="display:none">
+            <img id="cpBodySheetImg" src="" alt="Body angle sheet" />
+          </div>
+          <div class="cp-prompt-wrap">
+            <div class="cp-prompt-label">PROMPT OVERRIDE (optional)</div>
+            <textarea class="cp-prompt-ta" id="cpBodyPrompt" placeholder="Leave blank to use default body angle prompt…"></textarea>
+          </div>
+        </div>
+        <div class="cp-footer">
+          <button class="btn btn-secondary" onclick="cpGoToStep(4)">← Back</button>
+          <div class="cp-footer-spacer"></div>
+          <button class="btn btn-primary" id="cpStep5NextBtn" onclick="cpGoToStep(6)" disabled>Next: Slice Frames →</button>
+        </div>
+      </div>
+
+      <!-- Step 6: Slice Body Frames -->
+      <div class="cp-pane" id="cpPane6">
+        <div class="cp-step-title">Slice Body Frames</div>
+        <div class="cp-step-subtitle">Cut the body strip into 6 individual angle frames.</div>
+        <div class="cp-body">
+          <div style="margin-bottom:12px">
+            <button class="btn btn-primary" id="cpSliceBodyBtn" onclick="cpStep6Slice()">
+              <span class="spinner" id="cpSliceBodySpinner"></span>
+              Slice Now
+            </button>
+            <div id="cpStep6Status" class="cp-status" style="display:inline-block;margin-left:12px"></div>
+          </div>
+          <div class="cp-frames-row" id="cpBodyFramesRow"></div>
+        </div>
+        <div class="cp-footer">
+          <button class="btn btn-secondary" onclick="cpGoToStep(5)">← Back</button>
+          <div class="cp-footer-spacer"></div>
+          <button class="btn btn-primary" id="cpStep6NextBtn" onclick="cpGoToStep(7)" disabled>Next: Final Frames →</button>
+        </div>
+      </div>
+
+      <!-- Step 7: Final Character Frames -->
+      <div class="cp-pane" id="cpPane7">
+        <div class="cp-step-title">Final Character Frames</div>
+        <div class="cp-step-subtitle">Polish each angle frame with AI for maximum quality, or skip to use the body frames as-is.</div>
+        <div class="cp-body">
+          <div style="display:flex;gap:12px;margin-bottom:20px">
+            <div style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px">
+              <div style="font-weight:700;font-size:13px;margin-bottom:6px">AI Polish</div>
+              <div style="font-size:11px;color:#50507a;margin-bottom:12px;line-height:1.5">Regenerate each frame with both body reference + portrait for maximum quality. Uses 6 API calls.</div>
+              <button class="btn btn-primary" id="cpGenFinalBtn" onclick="cpStep7Generate()">
+                <span class="spinner" id="cpFinalSpinner"></span>
+                Generate Final Frames
+              </button>
+            </div>
+            <div style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px">
+              <div style="font-weight:700;font-size:13px;margin-bottom:6px">Use Body Frames</div>
+              <div style="font-size:11px;color:#50507a;margin-bottom:12px;line-height:1.5">Use the sliced body frames directly as final frames. Free and instant.</div>
+              <button class="btn btn-secondary" onclick="cpStep7UseBodyFrames()">Use As-Is →</button>
+            </div>
+          </div>
+          <div id="cpStep7Status" class="cp-status" style="margin-bottom:8px"></div>
+          <div class="cp-frames-row" id="cpFinalFramesRow"></div>
+          <div id="cpStep7Log" class="cp-log" style="display:none"></div>
+        </div>
+        <div class="cp-footer">
+          <button class="btn btn-secondary" onclick="cpGoToStep(6)">← Back</button>
+          <div class="cp-footer-spacer"></div>
+          <button class="btn btn-primary" id="cpStep7NextBtn" onclick="cpGoToStep(8)" disabled>Next: Clothing →</button>
+        </div>
+      </div>
+
+      <!-- Step 8: Clothing System -->
+      <div class="cp-pane" id="cpPane8">
+        <div class="cp-step-title">Clothing System</div>
+        <div class="cp-step-subtitle">Upload clothing reference photos. AI applies them to all body angles. You can skip this step.</div>
+        <div class="cp-body">
+          <div class="cp-clothing-upload" id="cpClothingZone" onclick="document.getElementById('cpClothingFile').click()">
+            <div style="font-size:24px;margin-bottom:6px">👕</div>
+            <div style="font-size:12px;color:#50507a">Click to upload clothing photo (shirt, shorts, shoes…)</div>
+            <input type="file" id="cpClothingFile" accept="image/*" style="display:none" onchange="cpUploadClothing(this.files[0])" />
+          </div>
+          <div class="cp-clothing-grid" id="cpClothingGrid"></div>
+        </div>
+        <div class="cp-footer">
+          <button class="btn btn-secondary" onclick="cpGoToStep(7)">← Back</button>
+          <div class="cp-footer-spacer"></div>
+          <button class="btn btn-success" onclick="cpComplete()">Complete →  Open in Studio</button>
+        </div>
+      </div>
+
+    </div><!-- /cp-content -->
+  </div><!-- /cp-layout -->
 </div>
 
 <!-- ─── MODAL: Adjust Source ─── -->
@@ -1257,15 +1494,16 @@ const STATE = {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('newCharPrompt').value = DEFAULT_CHAR_PROMPT;
   loadRoster();
   loadCosts();
   initAdjustInteraction();
 
-  const dz = document.getElementById('newDropZone');
-  dz.ondragover = e => { e.preventDefault(); dz.classList.add('dragover'); };
-  dz.ondragleave = () => dz.classList.remove('dragover');
-  dz.ondrop = e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files[0]) handlePhotoFile(e.dataTransfer.files[0]); };
+  const dz = document.getElementById('cpDropZone');
+  if (dz) {
+    dz.ondragover = e => { e.preventDefault(); dz.classList.add('dragover'); };
+    dz.ondragleave = () => dz.classList.remove('dragover');
+    dz.ondrop = e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files[0]) cpHandlePhoto(e.dataTransfer.files[0]); };
+  }
 });
 
 // ─── NAVIGATION ───────────────────────────────────────────────────────────
@@ -1941,455 +2179,477 @@ async function exportToSoulJam() {
   }
 }
 
-// ─── ADD CHARACTER ────────────────────────────────────────────────────────
+// ─── CHARACTER PIPELINE ───────────────────────────────────────────────────
+const CP = {
+  step: 1,
+  name: '',
+  photo: null,
+  heightInches: 72,
+  weightLbs: 185,
+  build: 'athletic',
+  jerseyNumber: '',
+  teamColors: { primary: '#FF4400', secondary: '#FFFFFF' },
+  selectedOption: -1,
+  headSheetUrl: '',
+  headFrames: [],
+  bodySheetUrl: '',
+  bodyFrames: [],
+  finalFrames: [],
+  clothing: [],
+  stepsCompleted: new Set(),
+};
+
+const CP_STEPS = [
+  { n: 1, label: 'Upload Headshot' },
+  { n: 2, label: 'Pixel Character' },
+  { n: 3, label: 'Head Angle Sheet' },
+  { n: 4, label: 'Slice Head Angles' },
+  { n: 5, label: 'Body Angle Sheet' },
+  { n: 6, label: 'Slice Body Frames' },
+  { n: 7, label: 'Final Frames' },
+  { n: 8, label: 'Clothing System' },
+];
+
 function openAddChar() {
+  // Reset
+  CP.step = 1; CP.name = ''; CP.photo = null;
+  CP.selectedOption = -1; CP.headFrames = []; CP.bodyFrames = [];
+  CP.finalFrames = []; CP.clothing = []; CP.stepsCompleted = new Set();
   document.getElementById('addCharModal').classList.add('open');
+  cpGoToStep(1);
+  cpRenderSidebar();
 }
 
 function closeAddChar() {
   document.getElementById('addCharModal').classList.remove('open');
-  document.getElementById('charFormSection').style.display = 'block';
-  document.getElementById('anglesSection').style.display = 'none';
-  document.getElementById('anglesSection').style.opacity = '0';
+  if (CP.name) loadRoster();
 }
 
-function openCharAngles(name) {
-  STATE.selectedChar = name;
-  STATE.confirmedName = name;
-
-  const angleNames = ['front','front_right','right','back_right','back','back_left','left','front_left'];
-  const slotStyle = 'width:120px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px';
-  const imgWrapStyle = 'width:120px;height:120px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden';
-
-  // Headshots
-  document.getElementById('headshotsGrid').innerHTML = angleNames.map((label, i) =>
-    `<div id="headSlot${i}" style="${slotStyle}">
-      <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'headshot')">
-        <img id="headImg${i}" src="/assets/${name}-headshot-${i}.png" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" onerror="this.style.display='none'" />
-      </div>
-      <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
-      <button class="btn btn-secondary" style="font-size:10px;padding:3px 8px" onclick="rerunHeadshot(${i})">Rerun</button>
-    </div>`
-  ).join('');
-
-  // Body
-  document.getElementById('anglesGrid').innerHTML = angleNames.map((label, i) =>
-    `<div id="angleSlot${i}" style="${slotStyle}">
-      <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'body')">
-        <img id="angleImg${i}" src="/assets/${name}-angle-${i}.png" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" onerror="this.style.display='none'" />
-      </div>
-      <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
-      <button class="btn btn-secondary" style="font-size:10px;padding:3px 8px" onclick="rerunAngle(${i})">Rerun</button>
-    </div>`
-  ).join('');
-
-  // Clothes
-  document.getElementById('clothesGrid').innerHTML = angleNames.map((label, i) =>
-    `<div id="clothesSlot${i}" style="${slotStyle}">
-      <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'clothes')">
-        <img id="clothesImg${i}" src="/assets/${name}-clothes-${i}.png" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" onerror="this.style.display='none'" />
-      </div>
-      <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
-      <button class="btn btn-secondary" style="font-size:10px;padding:3px 8px" onclick="rerunClothes(${i})">Rerun</button>
-    </div>`
-  ).join('');
-
-  document.getElementById('charFormSection').style.display = 'none';
-  document.getElementById('charPinnedBar').style.display = 'none';
-  document.getElementById('optionsSection').style.display = 'none';
-  document.getElementById('anglesSection').style.display = 'block';
-  document.getElementById('anglesSection').style.opacity = '1';
-  document.getElementById('charDoneSection').style.display = 'none';
-
-  document.getElementById('addCharModal').classList.add('open');
-}
-
-function goToStep(n) {
-  [1,2,3].forEach(i => {
-    document.getElementById(`setupStep${i}`).style.display = i === n ? 'block' : 'none';
-    const lbl = document.getElementById(`step${i}Label`);
-    lbl.classList.remove('active','done');
-    if (i === n) lbl.classList.add('active');
-    else if (i < n) lbl.classList.add('done');
+function cpGoToStep(n) {
+  CP.step = n;
+  document.querySelectorAll('.cp-pane').forEach((p, i) => {
+    p.classList.toggle('active', i + 1 === n);
   });
+  cpRenderSidebar();
+  // Sync portrait thumbnails
+  if (CP.name) {
+    const url = `/assets/${CP.name}full.png?t=${Date.now()}`;
+    const t3 = document.getElementById('cpPortraitThumb3');
+    const t5 = document.getElementById('cpPortraitThumb5');
+    if (t3 && n >= 3) t3.src = url;
+    if (t5 && n >= 5) t5.src = url;
+  }
 }
 
-function handlePhotoFile(file) {
+function cpRenderSidebar() {
+  document.getElementById('cpStepList').innerHTML = CP_STEPS.map(s => `
+    <div class="cp-step ${CP.step === s.n ? 'active' : ''} ${CP.stepsCompleted.has(s.n) ? 'done' : ''}"
+         onclick="cpGoToStep(${s.n})">
+      <div class="cp-step-num">${CP.stepsCompleted.has(s.n) ? '✓' : s.n}</div>
+      <div class="cp-step-text"><div class="cp-step-label">${s.label}</div></div>
+    </div>`).join('');
+
+  const pinned = document.getElementById('cpPinned');
+  if (CP.name || CP.photo) {
+    pinned.style.display = 'flex';
+    document.getElementById('cpPinnedName').textContent = CP.name || '—';
+    document.getElementById('cpPinnedStatus').textContent = `Step ${CP.step} of 8`;
+    if (CP.photo) document.getElementById('cpPinnedPhoto').src = CP.photo;
+  } else {
+    pinned.style.display = 'none';
+  }
+}
+
+function cpHandlePhoto(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    STATE.charPhoto = e.target.result;
-    const thumb = document.getElementById('newPhotoThumb');
-    thumb.src = e.target.result;
-    thumb.style.display = 'block';
-    document.getElementById('newPhotoName').textContent = file.name;
+    CP.photo = e.target.result;
+    document.getElementById('cpPhotoThumb').src = e.target.result;
+    document.getElementById('cpPhotoThumb').style.display = 'block';
+    document.getElementById('cpPhotoName').textContent = file.name;
+    document.getElementById('cpDropLabel').textContent = file.name;
+    cpRenderSidebar();
   };
   reader.readAsDataURL(file);
 }
 
-function onPhotoSelected(file) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const bar = document.getElementById('charPinnedBar');
-    document.getElementById('pinnedPhotoThumb').src = e.target.result;
-    const name = document.getElementById('newName').value.trim();
-    document.getElementById('pinnedCharName').textContent = name || '';
-    bar.style.display = 'flex';
+function cpStep1Next() {
+  const name = document.getElementById('cpName').value.trim().toLowerCase().replace(/\s+/g, '-');
+  if (!name) return toast('Character name required', true);
+  if (!CP.photo) return toast('Photo required — upload a headshot', true);
+  CP.name = name;
+  CP.heightInches = parseInt(document.getElementById('cpHeight').value) || 72;
+  CP.weightLbs = parseInt(document.getElementById('cpWeight').value) || 185;
+  CP.build = document.getElementById('cpBuild').value;
+  CP.jerseyNumber = document.getElementById('cpJersey').value;
+  CP.teamColors = {
+    primary: document.getElementById('cpColor1').value,
+    secondary: document.getElementById('cpColor2').value,
+    accent: '#000000',
   };
-  reader.readAsDataURL(file);
+  CP.stepsCompleted.add(1);
+  cpGoToStep(2);
 }
 
-async function generateOptions() {
-  const name = document.getElementById('newName').value.trim().toLowerCase().replace(/\s+/g,'-');
-  if (!name) return toast('Name required', true);
-  if (!STATE.charPhoto) return toast('Photo required', true);
-
-  const btn = document.getElementById('generateOptionsBtn');
-  const spinner = document.getElementById('optSpinner');
-  btn.disabled = true;
-  spinner.classList.add('active');
-
-  // Update pinned bar name in case user typed it after photo upload
-  document.getElementById('pinnedCharName').textContent = name;
+async function cpStep2Generate() {
+  const btn = document.getElementById('cpGenOptionsBtn');
+  const spinner = document.getElementById('cpGenSpinner');
+  btn.disabled = true; spinner.classList.add('active');
+  document.getElementById('cpStep2Status').textContent = 'Generating 4 options…';
 
   try {
-    const body = {
-      name,
-      photoBase64: STATE.charPhoto,
-      count: 4,
-      heightInches: parseInt(document.getElementById('newHeight').value) || 72,
-      weightLbs: parseInt(document.getElementById('newWeight').value) || 185,
-      build: document.getElementById('newBuild').value,
-      jerseyNumber: document.getElementById('newJersey').value,
-      teamColors: { primary: document.getElementById('newColor1').value, secondary: document.getElementById('newColor2').value, accent: '#000000' },
-      promptOverride: document.getElementById('newCharPrompt').value,
-      model: document.getElementById('globalModel').value,
-    };
-
-    const resp = await fetch(`${API}/api/character/create`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-
-    const grid = document.getElementById('optionsGrid');
-    grid.innerHTML = (data.options || []).map((opt) =>
-      `<div class="char-option" id="opt${opt.index}" onclick="pickOption(${opt.index}, '${opt.url}')">
-        <div class="opt-label">#${opt.index + 1}</div>
-        <img src="${opt.url}" />
-      </div>`
-    ).join('');
-
-    STATE.selectedOption = -1;
-    const sec = document.getElementById('optionsSection');
-    sec.style.display = 'block';
-    requestAnimationFrame(() => { sec.style.opacity = '1'; });
-    toast('Options ready — pick the best one');
-  } catch(e) {
-    toast('Error: ' + e.message, true);
-  } finally {
-    btn.disabled = false;
-    spinner.classList.remove('active');
-  }
-}
-
-function pickOption(idx, url) {
-  STATE.selectedOption = idx;
-  document.querySelectorAll('.char-option').forEach(el => el.classList.remove('selected'));
-  document.getElementById('opt' + idx)?.classList.add('selected');
-  const pinnedOpt = document.getElementById('pinnedOptionThumb');
-  pinnedOpt.src = url;
-  pinnedOpt.style.visibility = 'visible';
-  confirmAndGenerateAngles();
-}
-
-async function confirmAndGenerateAngles() {
-  const name = document.getElementById('newName').value.trim().toLowerCase().replace(/\s+/g,'-');
-  if (STATE.selectedOption < 0) return;
-
-  try {
-    const body = {
-      name,
-      optionIndex: STATE.selectedOption,
-      heightInches: parseInt(document.getElementById('newHeight').value) || 72,
-      weightLbs: parseInt(document.getElementById('newWeight').value) || 185,
-      build: document.getElementById('newBuild').value,
-      jerseyNumber: document.getElementById('newJersey').value,
-      teamColors: { primary: document.getElementById('newColor1').value, secondary: document.getElementById('newColor2').value, accent: '#000000' },
-    };
-    const resp = await fetch(`${API}/api/character/confirm`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-
-    STATE.confirmedName = name;
-    document.getElementById('pinnedCharName').textContent = name;
-
-    // Build body angle slots
-    const angleNames = ['front','front_right','right','back_right','back','back_left','left','front_left'];
-    const slotStyle = 'width:120px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px';
-    const imgWrapStyle = 'width:120px;height:120px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden';
-    const grid = document.getElementById('anglesGrid');
-    grid.innerHTML = angleNames.map((label, i) =>
-      `<div id="angleSlot${i}" style="${slotStyle}">
-        <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'body')">
-          <span class="spinner active" id="angleSpinner${i}"></span>
-          <img id="angleImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
-        </div>
-        <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
-        <button class="btn btn-secondary" id="angleRerun${i}" style="display:none;font-size:10px;padding:3px 8px" onclick="rerunAngle(${i})">Rerun</button>
-      </div>`
-    ).join('');
-
-    // Build headshot slots
-    const headshotsGrid = document.getElementById('headshotsGrid');
-    headshotsGrid.innerHTML = angleNames.map((label, i) =>
-      `<div id="headSlot${i}" style="${slotStyle}">
-        <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'headshot')">
-          <span class="spinner active" id="headSpinner${i}"></span>
-          <img id="headImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
-        </div>
-        <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
-        <button class="btn btn-secondary" id="headRerun${i}" style="display:none;font-size:10px;padding:3px 8px" onclick="rerunHeadshot(${i})">Rerun</button>
-      </div>`
-    ).join('');
-
-    // Build clothes slots
-    const clothesGrid = document.getElementById('clothesGrid');
-    clothesGrid.innerHTML = angleNames.map((label, i) =>
-      `<div id="clothesSlot${i}" style="${slotStyle}">
-        <div style="${imgWrapStyle}" ondblclick="openAnglePromptEditor(this,STATE.confirmedName,${i},'clothes')">
-          <span class="spinner active" id="clothesSpinner${i}"></span>
-          <img id="clothesImg${i}" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
-        </div>
-        <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:0.5px">${label.replace('_',' ')}</div>
-        <button class="btn btn-secondary" id="clothesRerun${i}" style="display:none;font-size:10px;padding:3px 8px" onclick="rerunClothes(${i})">Rerun</button>
-      </div>`
-    ).join('');
-
-    const angSec = document.getElementById('anglesSection');
-    angSec.style.display = 'block';
-    requestAnimationFrame(() => { angSec.style.opacity = '1'; });
-
-    toast('Generating angles...');
-    await Promise.all([
-      // Body angles
-      Promise.all([0,1,2,3,4,5,6,7].map(async (i) => {
-        try {
-          const r = await fetch(`${API}/api/angle/regenerate`, {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ character: name, angleIndex: i })
-          });
-          const d = await r.json();
-          if (d.error) throw new Error(d.error);
-          const url = d.generated?.[0]?.url;
-          document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
-          const img = document.getElementById(`angleImg${i}`);
-          if (img && url) { img.src = url; img.style.display = 'block'; }
-          const btn = document.getElementById(`angleRerun${i}`);
-          if (btn) btn.style.display = 'inline-block';
-        } catch(e) {
-          document.getElementById(`angleSpinner${i}`)?.classList.remove('active');
-          const btn = document.getElementById(`angleRerun${i}`);
-          if (btn) btn.style.display = 'inline-block';
-        }
-      })),
-      // Headshot angles
-      Promise.all([0,1,2,3,4,5,6,7].map(async (i) => {
-        try {
-          const r = await fetch(`${API}/api/angle/regenerate`, {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ character: name, angleIndex: i, type: 'headshot' })
-          });
-          const d = await r.json();
-          const url = d.generated?.[0]?.url;
-          document.getElementById(`headSpinner${i}`)?.classList.remove('active');
-          const img = document.getElementById(`headImg${i}`);
-          if (img && url) { img.src = url; img.style.display = 'block'; }
-          const btn = document.getElementById(`headRerun${i}`);
-          if (btn) btn.style.display = 'inline-block';
-        } catch(e) {
-          document.getElementById(`headSpinner${i}`)?.classList.remove('active');
-          const btn = document.getElementById(`headRerun${i}`);
-          if (btn) btn.style.display = 'inline-block';
-        }
-      })),
-      // Clothes angles
-      Promise.all([0,1,2,3,4,5,6,7].map(async (i) => {
-        try {
-          const r = await fetch(`${API}/api/angle/regenerate`, {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ character: name, angleIndex: i, type: 'clothes' })
-          });
-          const d = await r.json();
-          const url = d.generated?.[0]?.url;
-          document.getElementById(`clothesSpinner${i}`)?.classList.remove('active');
-          const img = document.getElementById(`clothesImg${i}`);
-          if (img && url) { img.src = url; img.style.display = 'block'; }
-          const btn = document.getElementById(`clothesRerun${i}`);
-          if (btn) btn.style.display = 'inline-block';
-        } catch(e) {
-          document.getElementById(`clothesSpinner${i}`)?.classList.remove('active');
-          const btn = document.getElementById(`clothesRerun${i}`);
-          if (btn) btn.style.display = 'inline-block';
-        }
-      }))
-    ]);
-
-    const doneSec = document.getElementById('charDoneSection');
-    doneSec.style.display = 'block';
-    requestAnimationFrame(() => { doneSec.style.opacity = '1'; });
-    toast('Angles done — generating animations…');
-
-    // Auto-trigger fill-gaps pipeline (SSE) so all animations are ready when Studio opens
-    autoRunPipelineForChar(name);
-  } catch(e) {
-    toast('Error: ' + e.message, true);
-  }
-}
-
-async function rerunAngle(angleIndex) {
-  const spinner = document.getElementById(`angleSpinner${angleIndex}`);
-  const img = document.getElementById(`angleImg${angleIndex}`);
-  const btn = document.getElementById(`angleRerun${angleIndex}`);
-  if (spinner) spinner.classList.add('active');
-  if (img) img.style.display = 'none';
-  if (btn) btn.style.display = 'none';
-  try {
-    const resp = await fetch(`${API}/api/angle/regenerate`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ character: STATE.confirmedName, angleIndex, model: document.getElementById('globalModel').value })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    if (img) { img.src = data.generated?.[0]?.url; img.style.display = 'block'; }
-    if (btn) btn.style.display = 'inline-block';
-  } catch(e) {
-    toast('Error: ' + e.message, true);
-    if (btn) btn.style.display = 'inline-block';
-  } finally {
-    if (spinner) spinner.classList.remove('active');
-  }
-}
-
-async function rerunHeadshot(angleIndex) {
-  const spinner = document.getElementById(`headSpinner${angleIndex}`);
-  const img = document.getElementById(`headImg${angleIndex}`);
-  const btn = document.getElementById(`headRerun${angleIndex}`);
-  if (spinner) spinner.classList.add('active');
-  if (img) img.style.display = 'none';
-  if (btn) btn.style.display = 'none';
-  try {
-    const resp = await fetch(`${API}/api/angle/regenerate`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ character: STATE.confirmedName, angleIndex, type: 'headshot' })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    const url = data.generated?.[0]?.url;
-    if (img && url) { img.src = url; img.style.display = 'block'; }
-    if (btn) btn.style.display = 'inline-block';
-  } catch(e) {
-    toast('Error: ' + e.message, true);
-    if (btn) btn.style.display = 'inline-block';
-  } finally {
-    if (spinner) spinner.classList.remove('active');
-  }
-}
-
-async function rerunClothes(angleIndex) {
-  const spinner = document.getElementById(`clothesSpinner${angleIndex}`);
-  const img = document.getElementById(`clothesImg${angleIndex}`);
-  const btn = document.getElementById(`clothesRerun${angleIndex}`);
-  if (spinner) spinner.classList.add('active');
-  if (img) img.style.display = 'none';
-  if (btn) btn.style.display = 'none';
-  try {
-    const resp = await fetch(`${API}/api/angle/regenerate`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ character: STATE.confirmedName, angleIndex, type: 'clothes' })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    const url = data.generated?.[0]?.url;
-    if (img && url) { img.src = url; img.style.display = 'block'; }
-    if (btn) btn.style.display = 'inline-block';
-  } catch(e) {
-    toast('Error: ' + e.message, true);
-    if (btn) btn.style.display = 'inline-block';
-  } finally {
-    if (spinner) spinner.classList.remove('active');
-  }
-}
-
-async function autoRunPipelineForChar(name) {
-  const statusEl = document.getElementById('charPipelineStatus');
-  const logEl = document.getElementById('charPipelineLog');
-  const labelEl = document.getElementById('charPipelineLabel');
-  statusEl.style.display = 'block';
-  logEl.innerHTML = '';
-
-  try {
-    const resp = await fetch(`${API}/api/pipeline/fill-gaps`, {
+    const resp = await fetch(`${API}/api/char-pipeline/pixel-char`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ character: name }),
+      body: JSON.stringify({
+        name: CP.name,
+        photoBase64: CP.photo,
+        count: 4,
+        heightInches: CP.heightInches,
+        weightLbs: CP.weightLbs,
+        build: CP.build,
+        jerseyNumber: CP.jerseyNumber,
+        teamColors: CP.teamColors,
+        promptOverride: document.getElementById('cpPixelPrompt').value,
+        model: document.getElementById('globalModel').value,
+      }),
     });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
 
-    const reader = resp.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    let doneCount = 0, skipCount = 0;
+    const grid = document.getElementById('cpOptionsGrid');
+    grid.style.display = 'grid';
+    grid.innerHTML = (data.options || []).map(opt => `
+      <div class="cp-option" id="cpOpt${opt.index}" onclick="cpPickOption(${opt.index},'${opt.url}')">
+        <div class="cp-option-label">#${opt.index + 1}</div>
+        <img src="${opt.url}?t=${Date.now()}" />
+      </div>`).join('');
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        try {
-          const ev = JSON.parse(line.slice(5));
-          if (ev.type === 'start') {
-            labelEl.textContent = `⚡ Generating ${ev.total} animations…`;
-          } else if (ev.type === 'anim_start') {
-            logEl.innerHTML += `<span class="info">→ ${ev.animKey}…</span>\n`;
-          } else if (ev.type === 'anim_done') {
-            doneCount++;
-            logEl.innerHTML += `<span class="ok">✓ ${ev.animKey}</span>\n`;
-            labelEl.textContent = `⚡ ${doneCount} done, ${skipCount} skipped…`;
-          } else if (ev.type === 'skip') {
-            skipCount++;
-          } else if (ev.type === 'anim_error') {
-            logEl.innerHTML += `<span class="err">✗ ${ev.animKey}: ${ev.error}</span>\n`;
-          } else if (ev.type === 'complete') {
-            labelEl.textContent = `✓ All animations ready — ${doneCount} generated, ${skipCount} already existed`;
-            logEl.innerHTML += `<span class="ok">✓ Studio-ready</span>\n`;
-            // Refresh roster so completedAnims count updates
-            loadRoster();
-          }
-          logEl.scrollTop = logEl.scrollHeight;
-        } catch {}
-      }
-    }
+    CP.selectedOption = -1;
+    document.getElementById('cpStep2NextBtn').disabled = true;
+    document.getElementById('cpStep2Status').textContent = 'Pick the best option';
+    toast('Options ready — pick the best one');
   } catch (e) {
-    logEl.innerHTML += `<span class="err">Pipeline error: ${e.message}</span>\n`;
+    toast('Error: ' + e.message, true);
+    document.getElementById('cpStep2Status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; spinner.classList.remove('active');
   }
 }
 
-function finishSetup() {
+function cpPickOption(idx, url) {
+  CP.selectedOption = idx;
+  document.querySelectorAll('.cp-option').forEach(el => el.classList.remove('selected'));
+  document.getElementById('cpOpt' + idx)?.classList.add('selected');
+  document.getElementById('cpStep2NextBtn').disabled = false;
+  document.getElementById('cpStep2Status').textContent = `Option #${idx + 1} selected`;
+}
+
+async function cpStep2Confirm() {
+  if (CP.selectedOption < 0) return toast('Select an option first', true);
+  const btn = document.getElementById('cpStep2NextBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const resp = await fetch(`${API}/api/char-pipeline/pixel-char/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: CP.name,
+        optionIndex: CP.selectedOption,
+        heightInches: CP.heightInches,
+        weightLbs: CP.weightLbs,
+        build: CP.build,
+        jerseyNumber: CP.jerseyNumber,
+        teamColors: CP.teamColors,
+      }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    CP.stepsCompleted.add(2);
+    toast('Portrait saved');
+    cpGoToStep(3);
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm Selection →';
+  }
+}
+
+async function cpStep3Generate() {
+  const btn = document.getElementById('cpGenHeadBtn');
+  const spinner = document.getElementById('cpHeadSpinner');
+  btn.disabled = true; spinner.classList.add('active');
+  document.getElementById('cpStep3Status').textContent = 'Generating head angles…';
+
+  try {
+    const resp = await fetch(`${API}/api/char-pipeline/head-sheet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: CP.name,
+        promptOverride: document.getElementById('cpHeadPrompt').value,
+        model: document.getElementById('globalModel').value,
+      }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    CP.headSheetUrl = data.sheetUrl;
+    const wrap = document.getElementById('cpHeadSheetWrap');
+    wrap.style.display = 'block';
+    document.getElementById('cpHeadSheetImg').src = data.sheetUrl + '?t=' + Date.now();
+    document.getElementById('cpStep3Status').textContent = 'Head sheet ready';
+    document.getElementById('cpStep3NextBtn').disabled = false;
+    CP.stepsCompleted.add(3);
+    toast('Head angles generated');
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+    document.getElementById('cpStep3Status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; spinner.classList.remove('active');
+  }
+}
+
+async function cpStep4Slice() {
+  const btn = document.getElementById('cpSliceHeadBtn');
+  const spinner = document.getElementById('cpSliceHeadSpinner');
+  btn.disabled = true; spinner.classList.add('active');
+  document.getElementById('cpStep4Status').textContent = 'Slicing…';
+
+  try {
+    const resp = await fetch(`${API}/api/char-pipeline/head-slice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: CP.name }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    CP.headFrames = data.frames;
+    document.getElementById('cpHeadFramesRow').innerHTML = data.frames.map(f => `
+      <div class="cp-frame-card">
+        <img class="cp-frame-img" src="${f.url}?t=${Date.now()}" />
+        <input class="cp-frame-label-input" value="${f.label}" title="Rename angle" />
+      </div>`).join('');
+    document.getElementById('cpStep4Status').textContent = `${data.frames.length} frames sliced`;
+    document.getElementById('cpStep4NextBtn').disabled = false;
+    CP.stepsCompleted.add(4);
+    toast('Head angles sliced');
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+    document.getElementById('cpStep4Status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; spinner.classList.remove('active');
+  }
+}
+
+async function cpStep5Generate() {
+  const btn = document.getElementById('cpGenBodyBtn');
+  const spinner = document.getElementById('cpBodySpinner');
+  btn.disabled = true; spinner.classList.add('active');
+  document.getElementById('cpStep5Status').textContent = 'Generating body angles…';
+
+  try {
+    const resp = await fetch(`${API}/api/char-pipeline/body-sheet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: CP.name,
+        promptOverride: document.getElementById('cpBodyPrompt').value,
+        model: document.getElementById('globalModel').value,
+      }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    CP.bodySheetUrl = data.sheetUrl;
+    const wrap = document.getElementById('cpBodySheetWrap');
+    wrap.style.display = 'block';
+    document.getElementById('cpBodySheetImg').src = data.sheetUrl + '?t=' + Date.now();
+    document.getElementById('cpStep5Status').textContent = 'Body sheet ready';
+    document.getElementById('cpStep5NextBtn').disabled = false;
+    CP.stepsCompleted.add(5);
+    toast('Body angles generated');
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+    document.getElementById('cpStep5Status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; spinner.classList.remove('active');
+  }
+}
+
+async function cpStep6Slice() {
+  const btn = document.getElementById('cpSliceBodyBtn');
+  const spinner = document.getElementById('cpSliceBodySpinner');
+  btn.disabled = true; spinner.classList.add('active');
+  document.getElementById('cpStep6Status').textContent = 'Slicing…';
+
+  try {
+    const resp = await fetch(`${API}/api/char-pipeline/body-slice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: CP.name }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    CP.bodyFrames = data.frames;
+    document.getElementById('cpBodyFramesRow').innerHTML = data.frames.map(f => `
+      <div class="cp-frame-card">
+        <img class="cp-frame-img" src="${f.url}?t=${Date.now()}" />
+        <input class="cp-frame-label-input" value="${f.label}" title="Rename angle" />
+      </div>`).join('');
+    document.getElementById('cpStep6Status').textContent = `${data.frames.length} frames sliced`;
+    document.getElementById('cpStep6NextBtn').disabled = false;
+    CP.stepsCompleted.add(6);
+    toast('Body frames sliced');
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+    document.getElementById('cpStep6Status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; spinner.classList.remove('active');
+  }
+}
+
+async function cpStep7Generate() {
+  const btn = document.getElementById('cpGenFinalBtn');
+  const spinner = document.getElementById('cpFinalSpinner');
+  btn.disabled = true; spinner.classList.add('active');
+  const log = document.getElementById('cpStep7Log');
+  log.style.display = 'block';
+  log.innerHTML = '<span class="info">Starting final frame generation…</span>\n';
+  document.getElementById('cpStep7Status').textContent = 'Generating… (this may take a few minutes)';
+
+  try {
+    const resp = await fetch(`${API}/api/char-pipeline/final-frames`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: CP.name,
+        model: document.getElementById('globalModel').value,
+      }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    CP.finalFrames = data.finalFrames;
+    cpRenderFinalFrames(data.finalFrames);
+    log.innerHTML += `<span class="ok">✓ ${data.finalFrames.length} frames generated</span>\n`;
+    document.getElementById('cpStep7Status').textContent = `${data.finalFrames.length} final frames ready`;
+    document.getElementById('cpStep7NextBtn').disabled = false;
+    CP.stepsCompleted.add(7);
+    toast('Final frames done');
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+    log.innerHTML += `<span class="err">Error: ${e.message}</span>\n`;
+    document.getElementById('cpStep7Status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; spinner.classList.remove('active');
+  }
+}
+
+async function cpStep7UseBodyFrames() {
+  try {
+    const resp = await fetch(`${API}/api/char-pipeline/finalize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: CP.name }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    CP.finalFrames = data.finalFrames;
+    cpRenderFinalFrames(data.finalFrames);
+    document.getElementById('cpStep7Status').textContent = `Using ${data.finalFrames.length} body frames as final`;
+    document.getElementById('cpStep7NextBtn').disabled = false;
+    CP.stepsCompleted.add(7);
+    toast('Body frames set as final');
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+  }
+}
+
+function cpRenderFinalFrames(frames) {
+  document.getElementById('cpFinalFramesRow').innerHTML = frames.map(f => `
+    <div class="cp-frame-card">
+      <img class="cp-frame-img" src="${f.url}?t=${Date.now()}" />
+      <div class="cp-frame-label">${f.label}</div>
+    </div>`).join('');
+}
+
+async function cpUploadClothing(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const resp = await fetch(`${API}/api/char-pipeline/clothing/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: CP.name, imageBase64: e.target.result, label: file.name }),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      CP.clothing.push(data.item);
+      cpRenderClothing();
+      toast('Clothing uploaded');
+    } catch (err) {
+      toast('Error: ' + err.message, true);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function cpRenderClothing() {
+  document.getElementById('cpClothingGrid').innerHTML = CP.clothing.map(item => `
+    <div class="cp-clothing-item">
+      <img src="${item.url}?t=${Date.now()}" title="${item.label}" />
+      <span class="cp-clothing-apply" onclick="cpApplyClothing('${item.id}')">Apply to all angles</span>
+    </div>`).join('');
+}
+
+async function cpApplyClothing(itemId) {
+  toast('Applying clothing to all angles… (this takes a minute)');
+  try {
+    const resp = await fetch(`${API}/api/char-pipeline/clothing/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: CP.name, itemId, model: document.getElementById('globalModel').value }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    toast(`Clothing applied to ${data.results.length} angles`);
+  } catch (e) {
+    toast('Error: ' + e.message, true);
+  }
+}
+
+async function cpComplete() {
+  try {
+    await fetch(`${API}/api/char-pipeline/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: CP.name }),
+    });
+  } catch {}
+  CP.stepsCompleted.add(8);
   closeAddChar();
-  STATE.charPhoto = null;
-  STATE.selectedOption = -1;
-  if (STATE.confirmedName) {
-    selectChar(STATE.confirmedName);
+  if (CP.name) {
+    STATE.selectedChar = CP.name;
+    STATE.confirmedName = CP.name;
+    selectChar(CP.name);
     showPage2('studio');
   }
+}
+
+// openCharAngles — open pipeline modal for an existing character at step 4
+function openCharAngles(name) {
+  CP.name = name;
+  CP.stepsCompleted = new Set([1, 2, 3]);
+  document.getElementById('addCharModal').classList.add('open');
+  cpGoToStep(4);
+  cpRenderSidebar();
 }
 
 // ─── COSTS ────────────────────────────────────────────────────────────────
