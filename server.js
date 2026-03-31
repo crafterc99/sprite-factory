@@ -148,9 +148,26 @@ require('./routes/video').register(router, ctx);
 require('./routes/export').register(router, ctx);
 require('./routes/pipeline').register(router, ctx);
 require('./routes/prompts').register(router, ctx);
+require('./routes/prompt-pipeline').register(router, ctx);
 require('./routes/production').register(router, ctx);
 require('./routes/anchor').register(router, ctx);
 require('./routes/animation-contract').register(router, ctx);
+require('./routes/char-pipeline').register(router, ctx);
+
+// ─── Deploy Endpoint ─────────────────────────────────────────────────────
+const { execSync } = require('child_process');
+router.post('/api/deploy', async (req, res) => {
+  try {
+    const output = execSync(
+      'git add -A && git diff --cached --quiet || git commit -m "feat: prompt updates from studio" && git push origin main',
+      { cwd: __dirname, timeout: 30000 }
+    ).toString();
+    return json(res, { success: true, output });
+  } catch (err) {
+    const output = err.stdout?.toString() || err.message;
+    return json(res, { success: false, output, error: err.message });
+  }
+});
 
 // ─── Request Handler ────────────────────────────────────────────────────
 
