@@ -603,6 +603,8 @@
   .cp-angle-thumb { display:flex; flex-direction:column; align-items:center; gap:4px; }
   .cp-angle-thumb img { width:72px; height:90px; border:1px solid var(--border); border-radius:8px; object-fit:contain; image-rendering:pixelated; background:var(--surface2); }
   .cp-angle-thumb span { font-family:var(--mono); font-size:8px; color:#50507a; }
+  .cp-label-input { font-family:var(--mono); font-size:8px; color:#aaa; background:transparent; border:none; border-bottom:1px solid #333; text-align:center; width:72px; outline:none; padding:1px 2px; }
+  .cp-label-input:focus { border-bottom-color:#7c6aff; color:#fff; }
 </style>
 </head>
 <body>
@@ -1052,10 +1054,23 @@
       <!-- Progress + results (hidden until generating) -->
       <div id="cpProgress" style="display:none;margin-top:16px">
         <div class="cp-log" id="cpLog"></div>
+
+        <!-- Portrait confirmation — shown after portrait generates, before angles -->
+        <div id="cpPortraitConfirm" style="display:none;margin-top:16px;text-align:center">
+          <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:10px">PORTRAIT — CONFIRM TO CONTINUE</div>
+          <img id="cpPortraitPreview" style="max-height:280px;object-fit:contain;image-rendering:pixelated;border:1px solid var(--border);border-radius:8px;margin-bottom:14px" />
+          <div style="display:flex;gap:10px;justify-content:center">
+            <button class="btn btn-primary" style="min-width:130px" onclick="cpConfirmAndGenerateAngles()">Use This →</button>
+            <button class="btn btn-secondary" style="min-width:130px" onclick="cpGenerate()">Try Again</button>
+          </div>
+        </div>
+
         <div id="cpAngleResults" style="display:none;margin-top:14px">
-          <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:8px">ANGLE REFERENCES GENERATED</div>
-          <div id="cpAngleFrames" style="display:flex;gap:8px;flex-wrap:wrap"></div>
-          <button class="btn btn-success" onclick="cpComplete()" style="width:100%;margin-top:16px">Open in Studio →</button>
+          <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:8px">BODY ANGLES</div>
+          <div id="cpAngleFrames" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+          <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:8px">HEADSHOTS</div>
+          <div id="cpHeadFrames" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+          <button class="btn btn-success" onclick="cpComplete()" style="width:100%;margin-top:8px">Open in Studio →</button>
         </div>
       </div>
 
@@ -1978,6 +1993,7 @@ function openAddChar() {
   document.getElementById('cpGenBtn').disabled = false;
   document.getElementById('cpProgress').style.display = 'none';
   document.getElementById('cpAngleResults').style.display = 'none';
+  document.getElementById('cpPortraitConfirm').style.display = 'none';
   document.getElementById('cpLog').innerHTML = '';
   document.getElementById('addCharModal').classList.add('open');
 }
@@ -2036,6 +2052,7 @@ function cpLog(msg, type = 'info') {
   el.scrollTop = el.scrollHeight;
 }
 
+// Phase 1: generate portrait only, pause for user confirmation
 async function cpGenerate() {
   const name = document.getElementById('cpName').value.trim().toLowerCase().replace(/\s+/g, '-');
   if (!name) return toast('Character name required', true);
@@ -2050,89 +2067,143 @@ async function cpGenerate() {
   progress.style.display = 'block';
   document.getElementById('cpLog').innerHTML = '';
   document.getElementById('cpAngleResults').style.display = 'none';
+  document.getElementById('cpPortraitConfirm').style.display = 'none';
 
-  const model = document.getElementById('globalModel').value;
+  try {
+    cpLog('Generating pixel art portrait…');
+    const r1 = await fetch(`${API}/api/char-pipeline/pixel-char`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, photoBase64: CP.photo }),
+    });
+    const d1 = await r1.json();
+    if (d1.error) throw new Error(d1.error);
+    cpLog('✓ Portrait ready — confirm to continue', 'ok');
+
+    // Show portrait for confirmation — do NOT proceed automatically
+    const portraitUrl = d1.options?.[0]?.url;
+    const confirmEl = document.getElementById('cpPortraitConfirm');
+    document.getElementById('cpPortraitPreview').src = portraitUrl + '?t=' + Date.now();
+    CP.portraitOptionIndex = d1.options?.[0]?.index ?? 0;
+    confirmEl.style.display = 'block';
+
+  } catch (e) {
+    cpLog(`Error: ${e.message}`, 'err');
+    toast('Portrait generation failed: ' + e.message, true);
+    btn.disabled = false;
+  } finally {
+    spinner.classList.remove('active');
+  }
+}
+
+// Phase 2: called after user confirms portrait — generate both angle sheets
+async function cpConfirmAndGenerateAngles() {
+  const name = CP.name;
+  if (!name) return;
+
+  document.getElementById('cpPortraitConfirm').style.display = 'none';
+  const btn = document.getElementById('cpGenBtn');
+  const spinner = document.getElementById('cpGenSpinner');
+  btn.disabled = true; spinner.classList.add('active');
+
   const charMeta = {
-    name,
-    photoBase64: CP.photo,
     heightInches: parseInt(document.getElementById('cpHeight').value) || 72,
     weightLbs: parseInt(document.getElementById('cpWeight').value) || 185,
     build: document.getElementById('cpBuild').value,
     jerseyNumber: document.getElementById('cpJersey').value,
     teamColors: { primary: document.getElementById('cpColor1').value, secondary: document.getElementById('cpColor2').value, accent: '#000000' },
-    model,
-    // Clothing images as base64 context
-    clothingImages: CP.clothing.map(c => c.data),
   };
 
   try {
-    // Step 1: Generate pixel portrait
-    cpLog('Generating pixel art portrait…');
-    const r1 = await fetch(`${API}/api/char-pipeline/pixel-char`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...charMeta, count: 1 }),
-    });
-    const d1 = await r1.json();
-    if (d1.error) throw new Error(d1.error);
-    const optIndex = d1.options?.[0]?.index ?? 0;
-    cpLog(`✓ Portrait generated`, 'ok');
-
-    // Step 2: Auto-confirm first option
+    // Save portrait
     cpLog('Saving portrait…');
     const r2 = await fetch(`${API}/api/char-pipeline/pixel-char/confirm`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, optionIndex: optIndex, ...charMeta }),
+      body: JSON.stringify({ name, optionIndex: CP.portraitOptionIndex, ...charMeta }),
     });
     const d2 = await r2.json();
     if (d2.error) throw new Error(d2.error);
-    cpLog(`✓ Portrait saved`, 'ok');
+    cpLog('✓ Portrait saved', 'ok');
 
-    // Step 3: Generate body angle sheet (with clothing context in prompt if provided)
     const clothingNote = CP.clothing.length
       ? `\nCharacter is wearing the outfit shown in the additional reference images (${CP.clothing.length} clothing photo${CP.clothing.length > 1 ? 's' : ''} provided).`
       : '';
-    cpLog('Generating body angle sheet…');
-    const r3 = await fetch(`${API}/api/char-pipeline/body-sheet`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, model, clothingNote, clothingImages: CP.clothing.map(c => c.data) }),
-    });
-    const d3 = await r3.json();
-    if (d3.error) throw new Error(d3.error);
-    cpLog('✓ Body angle sheet generated', 'ok');
 
-    // Step 4: Slice body sheet
-    cpLog('Slicing angle frames…');
-    const r4 = await fetch(`${API}/api/char-pipeline/body-slice`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    const d4 = await r4.json();
-    if (d4.error) throw new Error(d4.error);
-    cpLog(`✓ ${d4.frames.length} angle frames ready`, 'ok');
+    // Generate body sheet and headshot sheet in parallel
+    cpLog('Generating body turnaround sheet + headshot sheet…');
+    const [d3body, d3head] = await Promise.all([
+      fetch(`${API}/api/char-pipeline/body-sheet`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, clothingNote, clothingImages: CP.clothing.map(c => c.data) }),
+      }).then(r => r.json()),
+      fetch(`${API}/api/char-pipeline/head-sheet`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }).then(r => r.json()),
+    ]);
+    if (d3body.error) throw new Error('Body sheet: ' + d3body.error);
+    if (d3head.error) throw new Error('Head sheet: ' + d3head.error);
+    cpLog('✓ Both sheets generated', 'ok');
 
-    // Complete
+    // Slice both sheets in parallel
+    cpLog('Slicing frames…');
+    const [d4body, d4head] = await Promise.all([
+      fetch(`${API}/api/char-pipeline/body-slice`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }).then(r => r.json()),
+      fetch(`${API}/api/char-pipeline/head-slice`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }).then(r => r.json()),
+    ]);
+    if (d4body.error) throw new Error('Body slice: ' + d4body.error);
+    if (d4head.error) throw new Error('Head slice: ' + d4head.error);
+    cpLog(`✓ ${d4body.frames.length} body angles + ${d4head.frames.length} headshot angles ready`, 'ok');
+
     await fetch(`${API}/api/char-pipeline/complete`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     });
 
-    // Show results
-    const labels = ['front', 'front-right', 'right', 'back', 'back-left', 'left'];
-    document.getElementById('cpAngleFrames').innerHTML = d4.frames.map((f, i) => `
-      <div class="cp-angle-thumb">
+    // Render body frames with editable labels
+    document.getElementById('cpAngleFrames').innerHTML = d4body.frames.map((f, i) =>
+      `<div class="cp-angle-thumb">
         <img src="${f.url}?t=${Date.now()}" />
-        <span>${labels[i] || f.label}</span>
-      </div>`).join('');
+        <input class="cp-label-input" value="${f.label}" data-type="body" data-index="${i}" data-name="${name}" onblur="cpRenameAngle(this)" />
+      </div>`
+    ).join('');
+
+    // Render headshot frames with editable labels
+    document.getElementById('cpHeadFrames').innerHTML = d4head.frames.map((f, i) =>
+      `<div class="cp-angle-thumb">
+        <img src="${f.url}?t=${Date.now()}" />
+        <input class="cp-label-input" value="${f.label}" data-type="head" data-index="${i}" data-name="${name}" onblur="cpRenameAngle(this)" />
+      </div>`
+    ).join('');
+
     document.getElementById('cpAngleResults').style.display = 'block';
-    toast(`${name} ready — ${d4.frames.length} angles generated`);
+    toast(`${name} ready — 8 body angles + 8 headshots`);
 
   } catch (e) {
     cpLog(`Error: ${e.message}`, 'err');
     toast('Generation failed: ' + e.message, true);
-    btn.disabled = false;
   } finally {
+    btn.disabled = false;
     spinner.classList.remove('active');
   }
+}
+
+// Rename an angle label (calls API to update the stored label)
+async function cpRenameAngle(input) {
+  const { type, index, name } = input.dataset;
+  const label = input.value.trim();
+  if (!label) return;
+  try {
+    await fetch(`${API}/api/char-pipeline/rename-angle`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, type, index: parseInt(index), label }),
+    });
+  } catch(e) { /* non-fatal */ }
 }
 
 async function generateOptions() {

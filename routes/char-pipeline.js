@@ -48,79 +48,110 @@ function computeScale(heightInches) {
   return { scaleMultiplier, pixelHeight };
 }
 
-const ANGLE_LABELS_6 = ['front', 'front_right', 'right', 'back', 'back_left', 'left'];
+const ANGLE_LABELS_8 = ['front', 'front_right_45', 'right_90', 'back_right_135', 'back_180', 'back_left_225', 'left_270', 'front_left_315'];
 
 // ── Prompt builders ─────────────────────────────────────────────────────────
 
-function buildPixelCharPrompt(hasStyleRef) {
-  const lines = [
-    hasStyleRef
-      ? 'Image 1 is the style reference — match this exact pixel art style. Image 2 is the person to convert.'
-      : 'Convert the uploaded photo into 16-bit arcade pixel art.',
+const STEP1_PROMPT = [
+  'Transform the uploaded image into 16-bit arcade pixel art.',
+  'IMPORTANT RULES:',
+  'Do NOT change the pose.',
+  'Do NOT change facial features.',
+  'Do NOT add new objects.',
+  'Do NOT change clothing design.',
+  'Do NOT modify hairstyle.',
+  'Do NOT add accessories.',
+  'Do NOT change proportions.',
+  'Do NOT add background elements.',
+  'Only convert the image into clean 16-bit arcade pixel style with:',
+  'Sharp pixel edges',
+  'Limited color palette',
+  'black outlines',
+  'High contrast arcade shading',
+  'No anti-aliasing',
+  'No blur',
+  'Keep the character exactly as shown.',
+  'Output on a pure white background (#FFFFFF only).',
+  'No environment. No extra elements. Only the character.',
+].join('\n');
+
+const STEP2_PROMPT = 'give the full image of this character standing naturally with a white background.';
+
+function buildBodySheetPrompt() {
+  return [
+    'Use the uploaded character as the EXACT base reference.',
     '',
-    'Create a FULL BODY standing character portrait showing the complete person from head to shoes.',
-    'The character must be standing upright, facing forward, arms relaxed at sides, in a neutral standing pose.',
-    'Show the ENTIRE body — head, torso, arms, hands, legs, feet/shoes. Do NOT crop or zoom in.',
+    'Generate a pixel-perfect character turnaround sheet with no stylistic changes.',
     '',
-    'ACCURACY IS CRITICAL:',
-    '- Match the person\'s EXACT skin tone — do not lighten or darken it',
-    '- Match their EXACT facial features, face shape, eyes, nose, mouth',
-    '- Match their EXACT hairstyle, hair color, hair texture',
-    '- Match their EXACT outfit, clothing colors, and shoes from the photo',
-    '- Match their body type and proportions',
     '',
-    'STYLE:',
-    '- 16-bit arcade pixel art, GBA game style — chunky pixels, NOT high-resolution',
-    '- Bold thick black pixel outlines around the entire character body',
-    '- Limited color palette with high contrast arcade shading',
-    '- Sharp pixel edges — NO anti-aliasing, NO blur, NO smooth gradients',
-    '- The character should look like they belong in a retro basketball arcade game',
+    'STYLE',
     '',
-    'Output on a pure white background (#FFFFFF only).',
-    'FULL BODY only. No environment. No extra elements. No cropping.',
-  ];
-  return lines.join('\n');
+    'Match the exact pixel art style of the reference',
+    'No lighting changes',
+    'No shading changes',
+    'No reinterpretation or added detail',
+    '',
+    '',
+    'CHARACTER LOCK (STRICT)',
+    '',
+    'Keep the exact same face, proportions, and body shape',
+    'Keep identical outfit: same clothing as shown in the reference',
+    'Maintain consistent pixel scale',
+    'Do not modify height, structure, or features in any way',
+    '',
+    '',
+    'VIEWS (ONLY THESE 8)',
+    '',
+    'Front (0°)',
+    '3/4 Front Right (45°)',
+    'Right Side (90°)',
+    '3/4 Back Right (135°)',
+    'Back (180°)',
+    '3/4 Back Left (225°)',
+    'Left Side (270°)',
+    '3/4 Front Left (315°)',
+    '',
+    '',
+    'LAYOUT',
+    '',
+    'Arrange in 2 rows of 4',
+    'Equal spacing between each character',
+    'All characters at identical scale',
+    'Feet aligned on the same baseline',
+    '',
+    '',
+    'RESTRICTIONS',
+    '',
+    'No action poses',
+    'No ball',
+    'No text or labels',
+    'No extra elements',
+    'No duplicates',
+    'Full body visible in every view',
+    '',
+    '',
+    'OUTPUT GOAL',
+    '',
+    'A clean, consistent 8-angle turnaround sheet for animation reference.',
+  ].join('\n');
 }
 
 function buildHeadSheetPrompt() {
   return [
-    'Image 1 is the character portrait in 16-bit pixel art style.',
+    'Create ONLY the following headshot angles of this pixelated character, only the head and neck not their shirt, maintaining pixel style and character detail:',
     '',
-    'Generate a HORIZONTAL SPRITE SHEET showing the character\'s HEAD from 6 different angles.',
-    'Arrange exactly 6 frames horizontally, left to right:',
-    '  Frame 1: Front-facing (0°)',
-    '  Frame 2: Front-right (45°)',
-    '  Frame 3: Right profile (90°)',
-    '  Frame 4: Back (180°)',
-    '  Frame 5: Back-left (225°)',
-    '  Frame 6: Left profile (270°)',
+    '1. Front view',
+    '2. 3/4 front right (45°)',
+    '3. Right side (90°)',
+    '4. 3/4 back right (135°)',
+    '5. Back view (180°)',
+    '6. 3/4 back left (225°)',
+    '7. Left side (270°)',
+    '8. 3/4 front left (315°)',
     '',
-    'Each frame shows ONLY the head and neck. No body below the neck.',
-    'Match the EXACT face, hair, skin tone, and style from Image 1.',
-    '16-bit pixel art, GBA style. Bold black pixel outlines.',
-    'Separate each frame with a 1-pixel black border. White background.',
-    'Output a single wide horizontal strip — 6 frames wide × 1 frame tall.',
-  ].join('\n');
-}
-
-function buildBodySheetPrompt() {
-  return [
-    'Image 1 is the character portrait in 16-bit pixel art style.',
-    '',
-    'Generate a HORIZONTAL SPRITE SHEET showing the FULL BODY character from 6 different angles.',
-    'Arrange exactly 6 frames horizontally, left to right:',
-    '  Frame 1: Front (0°) — facing viewer',
-    '  Frame 2: Front-right (45°)',
-    '  Frame 3: Right profile (90°)',
-    '  Frame 4: Back (180°)',
-    '  Frame 5: Back-left (225°)',
-    '  Frame 6: Left profile (270°)',
-    '',
-    'Each frame shows the COMPLETE body from head to toe. Neutral standing pose, arms at sides.',
-    'Match the EXACT outfit, skin tone, proportions, hairstyle from Image 1.',
-    '16-bit pixel art, GBA style. Bold black pixel outlines.',
-    'Separate each frame with a 1-pixel black border. Pure green (#00FF00) background.',
-    'Output a single wide horizontal strip — 6 frames wide × 1 frame tall.',
+    'Arrange in 2 rows of 4.',
+    'Equal spacing. All heads at identical scale. White background.',
+    'Head and neck only — no shoulders, no shirt visible.',
   ].join('\n');
 }
 
@@ -140,18 +171,45 @@ function buildFinalFramePrompt(angleLabel) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Slice a sheet that may be a horizontal strip (1 row) or a grid (2 rows of 4).
+// Always returns exactly frameCount frames in reading order (left-to-right, top-to-bottom).
 async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
   const meta = await sharp(sheetPath).metadata();
-  const frameWidth = Math.floor(meta.width / frameCount);
   fs.mkdirSync(outputDir, { recursive: true });
-  const { frames } = await cutFrames(sheetPath, outputDir, { frameWidth, frameHeight: meta.height });
+
+  const cols = frameCount / 2; // 4 for 8-frame sheets
+  const isGrid = meta.width / meta.height < cols * 1.5; // roughly square-ish → grid layout
 
   const result = [];
-  for (let i = 0; i < Math.min(frames.length, frameCount); i++) {
-    const dest = destPattern.replace('{i}', i);
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.copyFileSync(frames[i], dest);
-    result.push({ index: i, label: ANGLE_LABELS_6[i] || `angle_${i}`, path: dest });
+
+  if (isGrid && frameCount === 8) {
+    // 2-row × 4-column grid
+    const fw = Math.floor(meta.width / 4);
+    const fh = Math.floor(meta.height / 2);
+    let idx = 0;
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 4; col++) {
+        const outPath = path.join(outputDir, `frame-${idx}.png`);
+        await sharp(sheetPath)
+          .extract({ left: col * fw, top: row * fh, width: fw, height: fh })
+          .toFile(outPath);
+        const dest = destPattern.replace('{i}', idx);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(outPath, dest);
+        result.push({ index: idx, label: ANGLE_LABELS_8[idx] || `angle_${idx}`, path: dest });
+        idx++;
+      }
+    }
+  } else {
+    // Horizontal strip
+    const frameWidth = Math.floor(meta.width / frameCount);
+    const { frames } = await cutFrames(sheetPath, outputDir, { frameWidth, frameHeight: meta.height });
+    for (let i = 0; i < Math.min(frames.length, frameCount); i++) {
+      const dest = destPattern.replace('{i}', i);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(frames[i], dest);
+      result.push({ index: i, label: ANGLE_LABELS_8[i] || `angle_${i}`, path: dest });
+    }
   }
   return result;
 }
@@ -198,10 +256,12 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     });
   });
 
-  // POST /api/char-pipeline/pixel-char — Step 2: Generate 4 pixel art options
+  // POST /api/char-pipeline/pixel-char — Generate portrait (2-step with Nano Banana Pro)
+  // Step 1: convert photo to pixel art exactly as-is
+  // Step 2: use step 1 output to get clean standing full-body portrait
   router.post('/api/char-pipeline/pixel-char', async (req, res) => {
     const body = await parseBody(req);
-    const { name, photoBase64, model, promptOverride, count = 4 } = body;
+    const { name, photoBase64 } = body;
     if (!name) return json(res, { error: 'name required' }, 400);
 
     try {
@@ -216,39 +276,36 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         return json(res, { error: 'Photo required' }, 400);
       }
 
-      const styleRef = path.join(ASSETS_DIR, '99full.png');
-      const hasStyleRef = fs.existsSync(styleRef);
-      const prompt = promptOverride?.trim() || buildPixelCharPrompt(hasStyleRef);
-
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
-      const referenceImages = hasStyleRef ? [styleRef, originalPath] : [originalPath];
 
-      const options = [];
-      for (let i = 0; i < count; i++) {
-        try {
-          const result = await client.generate(prompt, {
-            referenceImages,
-            aspectRatio: '3:4',
-            resolution: '2K',
-            model: modelId,
-          });
-          const optPath = path.join(charDir, `option-${i}.png`);
-          fs.writeFileSync(optPath, result.imageBuffer);
-          recordCost(modelId, 'char_pipeline', '2K', referenceImages.length, { character: name, step: 'pixel-char', option: i });
-          options.push({ index: i, url: `/api/character/image/${name}/option-${i}.png` });
-        } catch (err) {
-          options.push({ index: i, error: err.message });
-        }
-        if (i < count - 1) await new Promise(r => setTimeout(r, 1500));
-      }
+      // Step 1: convert to pixel art, keeping everything exactly as-is
+      const step1 = await client.generate(STEP1_PROMPT, {
+        referenceImages: [originalPath],
+        aspectRatio: '3:4',
+        resolution: '2K',
+        model: modelId,
+      });
+      const step1Path = path.join(charDir, 'step1-pixel.png');
+      fs.writeFileSync(step1Path, step1.imageBuffer);
+      recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step1' });
+
+      // Step 2: use step 1 output only → clean standing portrait
+      const step2 = await client.generate(STEP2_PROMPT, {
+        referenceImages: [step1Path],
+        aspectRatio: '3:4',
+        resolution: '2K',
+        model: modelId,
+      });
+      const optPath = path.join(charDir, 'option-0.png');
+      fs.writeFileSync(optPath, step2.imageBuffer);
+      recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step2' });
 
       return json(res, {
         success: true,
         name,
         originalUrl: `/api/character/image/${name}/original.png`,
-        options: options.filter(o => !o.error),
-        errors: options.filter(o => o.error),
+        options: [{ index: 0, url: `/api/character/image/${name}/option-0.png` }],
       });
     } catch (err) {
       return json(res, { error: err.message }, 500);
@@ -315,7 +372,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     try {
       const prompt = promptOverride?.trim() || buildHeadSheetPrompt();
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const result = await client.generate(prompt, {
@@ -354,10 +411,10 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       const destPattern = path.join(ASSETS_DIR, `${name}-headshot-{i}.png`);
       const angleLabels = labels || ANGLE_LABELS_6;
 
-      const sliced = await sliceSheet(sheetPath, sliceDir, 6, destPattern);
+      const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
       const frames = sliced.map((f, i) => ({
         ...f,
-        label: angleLabels[i] || f.label,
+        label: (angleLabels && angleLabels[i]) || f.label,
         url: `/assets/${name}-headshot-${i}.png`,
       }));
 
@@ -400,7 +457,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         basePrompt += '\nMatch the outfit from the additional clothing reference images exactly.';
       }
 
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
       const referenceImages = [portraitPath, ...clothingPaths];
 
@@ -438,10 +495,10 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       const destPattern = path.join(ASSETS_DIR, `${name}-angle-{i}.png`);
       const angleLabels = labels || ANGLE_LABELS_6;
 
-      const sliced = await sliceSheet(sheetPath, sliceDir, 6, destPattern);
+      const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
       const frames = sliced.map((f, i) => ({
         ...f,
-        label: angleLabels[i] || f.label,
+        label: (angleLabels && angleLabels[i]) || f.label,
         url: `/assets/${name}-angle-${i}.png`,
       }));
 
@@ -520,6 +577,28 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     }
 
     return json(res, { success: true, name, finalFrames });
+  });
+
+  // POST /api/char-pipeline/rename-angle — Update the stored label for a sliced angle
+  router.post('/api/char-pipeline/rename-angle', async (req, res) => {
+    const body = await parseBody(req);
+    const { name, type, index, label } = body;
+    if (!name || !label || index === undefined) return json(res, { error: 'name, type, index, label required' }, 400);
+
+    // Rename the file to reflect the new label
+    const prefix = type === 'head' ? `${name}-headshot-` : `${name}-angle-`;
+    const src = path.join(ASSETS_DIR, `${prefix}${index}.png`);
+    if (!fs.existsSync(src)) return json(res, { error: 'Frame not found' }, 404);
+
+    // Store label in character registry
+    const registry = loadCharacters();
+    if (!registry[name]) registry[name] = { name, id: name };
+    if (!registry[name].angleLabels) registry[name].angleLabels = {};
+    if (!registry[name].angleLabels[type]) registry[name].angleLabels[type] = {};
+    registry[name].angleLabels[type][index] = label;
+    saveCharacters(registry);
+
+    return json(res, { success: true, name, type, index, label });
   });
 
   // POST /api/char-pipeline/complete — Finish pipeline, register character
