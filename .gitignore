@@ -4,3 +4,4 @@ node_modules/
 .npm-cache/
 data/.video-tmp/
 .vercel
+.railway/
