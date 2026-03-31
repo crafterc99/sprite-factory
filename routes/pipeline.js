@@ -11,7 +11,7 @@ const { cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSize
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
 const jobStore = require('../job-store');
 
-const PIPELINE_DIR = path.resolve(__dirname, '../../../.pipeline-data');
+const PIPELINE_DIR = path.resolve(__dirname, '../.pipeline-data');
 const CHARACTERS_FILE = process.env.CHARACTERS_FILE || path.resolve(__dirname, '../data/.characters.json');
 
 const DEFAULT_ANIM_ORDER = [
