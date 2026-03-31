@@ -227,13 +227,13 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     const bodyFrames = [];
     const finalFrames = [];
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const hp = path.join(ASSETS_DIR, `${name}-headshot-${i}.png`);
-      if (fs.existsSync(hp)) headFrames.push({ index: i, label: ANGLE_LABELS_6[i], url: `/assets/${name}-headshot-${i}.png` });
+      if (fs.existsSync(hp)) headFrames.push({ index: i, label: ANGLE_LABELS_8[i], url: `/assets/${name}-headshot-${i}.png` });
       const bp = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
-      if (fs.existsSync(bp)) bodyFrames.push({ index: i, label: ANGLE_LABELS_6[i], url: `/assets/${name}-angle-${i}.png` });
+      if (fs.existsSync(bp)) bodyFrames.push({ index: i, label: ANGLE_LABELS_8[i], url: `/assets/${name}-angle-${i}.png` });
       const fp = path.join(ASSETS_DIR, `${name}-final-${i}.png`);
-      if (fs.existsSync(fp)) finalFrames.push({ index: i, label: ANGLE_LABELS_6[i], url: `/assets/${name}-final-${i}.png` });
+      if (fs.existsSync(fp)) finalFrames.push({ index: i, label: ANGLE_LABELS_8[i], url: `/assets/${name}-final-${i}.png` });
     }
 
     const hasHeadSheet = fs.existsSync(path.join(charDir, 'head-sheet.png'));
@@ -409,7 +409,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     try {
       const sliceDir = path.join(TMP_DIR, 'characters', name, 'head-frames');
       const destPattern = path.join(ASSETS_DIR, `${name}-headshot-{i}.png`);
-      const angleLabels = labels || ANGLE_LABELS_6;
+      const angleLabels = labels || ANGLE_LABELS_8;
 
       const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
       const frames = sliced.map((f, i) => ({
@@ -493,7 +493,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     try {
       const sliceDir = path.join(TMP_DIR, 'characters', name, 'body-frames');
       const destPattern = path.join(ASSETS_DIR, `${name}-angle-{i}.png`);
-      const angleLabels = labels || ANGLE_LABELS_6;
+      const angleLabels = labels || ANGLE_LABELS_8;
 
       const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
       const frames = sliced.map((f, i) => ({
@@ -519,7 +519,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     // Collect available body frames
     const bodyFrames = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const bp = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
       if (fs.existsSync(bp)) bodyFrames.push({ index: i, path: bp });
     }
@@ -533,7 +533,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
       const finalFrames = [];
       for (const frame of bodyFrames) {
-        const angleLabel = ANGLE_LABELS_6[frame.index] || `angle_${frame.index}`;
+        const angleLabel = ANGLE_LABELS_8[frame.index] || `angle_${frame.index}`;
         const prompt = promptOverride || buildFinalFramePrompt(angleLabel);
 
         const result = await client.generate(prompt, {
@@ -567,12 +567,12 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (!name) return json(res, { error: 'name required' }, 400);
 
     const finalFrames = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const src = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
       if (fs.existsSync(src)) {
         const dest = path.join(ASSETS_DIR, `${name}-final-${i}.png`);
         fs.copyFileSync(src, dest);
-        finalFrames.push({ index: i, label: ANGLE_LABELS_6[i], url: `/assets/${name}-final-${i}.png` });
+        finalFrames.push({ index: i, label: ANGLE_LABELS_8[i], url: `/assets/${name}-final-${i}.png` });
       }
     }
 
@@ -670,11 +670,11 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       const client = new NanaBananaClient({ model: modelId });
 
       const results = [];
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 8; i++) {
         const bodyFramePath = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
         if (!fs.existsSync(bodyFramePath)) continue;
 
-        const angleLabel = ANGLE_LABELS_6[i];
+        const angleLabel = ANGLE_LABELS_8[i];
         const prompt = [
           `Image 1 is the character body at the ${angleLabel} angle.`,
           `Image 2 is the character portrait.`,
