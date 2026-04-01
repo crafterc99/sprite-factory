@@ -225,18 +225,21 @@ async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
     let idx = 0;
     for (let row = 0; row < 2; row++) {
       for (let col = 0; col < 4; col++) {
-        const outPath = path.join(outputDir, `frame-${idx}.png`);
-        await sharp(sheetPath)
+        // Use toBuffer() to avoid sharp's "same file" error and any path collision
+        const buf = await sharp(sheetPath)
           .extract({
             left: col * fw + inset,
             top: row * fh + inset,
             width: fw - inset * 2,
             height: fh - inset * 2,
           })
-          .toFile(outPath);
+          .png()
+          .toBuffer();
+        const outPath = path.join(outputDir, `frame-${idx}.png`);
+        fs.writeFileSync(outPath, buf);
         const dest = destPattern.replace('{i}', idx);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
-        fs.copyFileSync(outPath, dest);
+        fs.writeFileSync(dest, buf);
         result.push({ index: idx, label: ANGLE_LABELS_8[idx] || `angle_${idx}`, path: dest });
         idx++;
       }
@@ -244,12 +247,20 @@ async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
   } else {
     // Horizontal strip
     const frameWidth = Math.floor(meta.width / frameCount);
-    const { frames } = await cutFrames(sheetPath, outputDir, { frameWidth, frameHeight: meta.height });
-    for (let i = 0; i < Math.min(frames.length, frameCount); i++) {
-      const dest = destPattern.replace('{i}', i);
+    const frameHeight = meta.height;
+    let idx = 0;
+    for (let col = 0; col < frameCount; col++) {
+      const buf = await sharp(sheetPath)
+        .extract({ left: col * frameWidth, top: 0, width: frameWidth, height: frameHeight })
+        .png()
+        .toBuffer();
+      const outPath = path.join(outputDir, `frame-${idx}.png`);
+      fs.writeFileSync(outPath, buf);
+      const dest = destPattern.replace('{i}', idx);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.copyFileSync(frames[i], dest);
-      result.push({ index: i, label: ANGLE_LABELS_8[i] || `angle_${i}`, path: dest });
+      fs.writeFileSync(dest, buf);
+      result.push({ index: idx, label: ANGLE_LABELS_8[idx] || `angle_${idx}`, path: dest });
+      idx++;
     }
   }
   return result;
@@ -402,7 +413,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-2.5-flash-image';
         const client = new NanaBananaClient({ model: modelId });
         const step2 = await client.generate(loadCharPrompts().step2, {
           referenceImages: [step1Path],
@@ -655,7 +666,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-2.5-flash-image';
         const client = new NanaBananaClient({ model: modelId });
         const referenceImages = [portraitPath, ...clothingPaths];
 
@@ -664,6 +675,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           aspectRatio: '16:9',
           resolution: '2K',
           model: modelId,
+          maxRetries: 1,
+          timeoutMs: 80000,
         });
 
         const sheetPath = path.join(charDir, 'body-sheet.png');
@@ -712,7 +725,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     setImmediate(async () => {
       try {
         const prompt = promptOverride?.trim() || loadCharPrompts().headSheet;
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-2.5-flash-image';
         const client = new NanaBananaClient({ model: modelId });
 
         const result = await client.generate(prompt, {
