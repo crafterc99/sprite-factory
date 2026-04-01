@@ -371,6 +371,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const poseRefPath = path.join(ASSETS_DIR, anim.breezyFile);
       if (!fs.existsSync(poseRefPath)) throw new Error(`Breezy ref not found: ${anim.breezyFile}`);
 
+      // Resolve the body angle frame that best matches this animation's viewing direction
+      const angleIndex = anim.angleIndex ?? 0;
+      const angleFramePath = path.join(ASSETS_DIR, `${character}-angle-${angleIndex}.png`);
+      const charRef = fs.existsSync(angleFramePath) ? angleFramePath : portraitPath;
+
       const totalFrames = anim.frames;
       fs.mkdirSync(RAW_DIR, { recursive: true });
 
@@ -439,7 +444,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
         let lastErr;
         for (let attempt = 0; attempt < maxRetries; attempt++) {
           try {
-            await client.generateSingleFrame(prompt, upPath, portraitPath, {
+            await client.generateSingleFrame(prompt, upPath, charRef, {
               model: modelId,
               outputPath: outPath,
             });
@@ -541,6 +546,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const poseRefPath = path.join(ASSETS_DIR, anim.breezyFile);
       if (!fs.existsSync(poseRefPath)) throw new Error(`Breezy ref not found`);
 
+      // Resolve angle frame for identity anchor (Image 1)
+      const angleIndex = anim.angleIndex ?? 0;
+      const angleFramePath = path.join(ASSETS_DIR, `${character}-angle-${angleIndex}.png`);
+      const charRef = fs.existsSync(angleFramePath) ? angleFramePath : portraitPath;
+
       const totalFrames = anim.frames;
 
       // Cut and upscale the specific reference frame
@@ -586,7 +596,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const attemptNum = Date.now();
       const outPath = path.join(fbfDir, `raw-frame-${String(frameIndex).padStart(3, '0')}-attempt-${attemptNum}.png`);
 
-      await client.generateSingleFrame(prompt, upPath, portraitPath, {
+      await client.generateSingleFrame(prompt, upPath, charRef, {
         model: modelId,
         outputPath: outPath,
       });
@@ -891,16 +901,20 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
         }
       }
 
-      // 2. Load character portrait
+      // 2. Load character portrait + angle ref
       const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
       if (!fs.existsSync(portraitPath)) {
         return json(res, { error: `Portrait not found: ${portraitPath}` }, 404);
       }
+      const rerunAnim = ANIMATIONS[animName];
+      const rerunAngleIndex = rerunAnim?.angleIndex ?? 0;
+      const rerunAnglePath = path.join(ASSETS_DIR, `${character}-angle-${rerunAngleIndex}.png`);
+      const rerunCharRef = fs.existsSync(rerunAnglePath) ? rerunAnglePath : portraitPath;
 
       // 3. Generate the new frame to a temp path
       const tmpPath = `/tmp/${character}-${animName}-frame${fi}-override.png`;
       const client = new NanaBananaClient({ model: modelId });
-      await client.generateSingleFrame(prompt, null, portraitPath, {
+      await client.generateSingleFrame(prompt, null, rerunCharRef, {
         outputPath: tmpPath,
         aspectRatio: '1:1',
         resolution: '1K',
