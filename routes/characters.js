@@ -487,38 +487,46 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
 
   // GET /api/roster
   router.get('/api/roster', (req, res) => {
-    const registry = getCharacterRegistry(ASSETS_DIR);
+    // .characters.json is the source of truth — chars exist even if portrait file is missing
+    const registry = loadCharacters();
     const customAnims = loadCustomAnimations();
     const allAnims = { ...ANIMATIONS, ...customAnims };
+    const fileSet = new Set(fs.existsSync(ASSETS_DIR) ? fs.readdirSync(ASSETS_DIR) : []);
     const roster = [];
-    const files = fs.existsSync(ASSETS_DIR) ? fs.readdirSync(ASSETS_DIR) : [];
-    const fullFiles = files.filter(f => f.endsWith('full.png'));
 
-    for (const f of fullFiles) {
-      const name = f.replace('full.png', '');
+    // Also include any portrait-file-only chars not yet in registry (safety net)
+    for (const f of fileSet) {
+      if (!f.endsWith('full.png')) continue;
+      const n = f.replace('full.png', '');
+      if (!registry[n]) {
+        registry[n] = { name: n, id: n, status: 'portrait_done', portraitPath: f };
+      }
+    }
+
+    for (const [name, charData] of Object.entries(registry)) {
+      // Portrait: full.png on disk > angle-0 fallback
+      let portrait = null;
+      if (fileSet.has(`${name}full.png`)) portrait = `/assets/${name}full.png`;
+      else if (fileSet.has(`${name}-angle-0.png`)) portrait = `/assets/${name}-angle-0.png`;
+
       const anims = Object.keys(allAnims);
       const sprites = {};
       let completedCount = 0;
       for (const anim of anims) {
         const spriteFile = `${name}-${anim}.png`;
-        const exists = fs.existsSync(path.join(ASSETS_DIR, spriteFile));
+        const exists = fileSet.has(spriteFile);
         sprites[anim] = { exists, file: spriteFile, url: `/assets/${spriteFile}`, custom: !!customAnims[anim] };
         if (exists) completedCount++;
       }
       const gridFile = `${name}-spritesheet.png`;
-      const hasGrid = fs.existsSync(path.join(ASSETS_DIR, gridFile));
-
-      const bodyAnglesCount = [0,1,2,3,4,5,6,7].filter(i =>
-        fs.existsSync(path.join(ASSETS_DIR, `${name}-angle-${i}.png`))
-      ).length;
-      const headAnglesCount = [0,1,2,3,4,5,6,7].filter(i =>
-        fs.existsSync(path.join(ASSETS_DIR, `${name}-headshot-${i}.png`))
-      ).length;
+      const hasGrid = fileSet.has(gridFile);
+      const bodyAnglesCount = [0,1,2,3,4,5,6,7].filter(i => fileSet.has(`${name}-angle-${i}.png`)).length;
+      const headAnglesCount = [0,1,2,3,4,5,6,7].filter(i => fileSet.has(`${name}-headshot-${i}.png`)).length;
 
       roster.push({
         name,
-        portrait: `/assets/${f}`,
-        portraitFile: f,
+        portrait,
+        portraitFile: `${name}full.png`,
         sprites,
         completedAnims: completedCount,
         totalAnims: anims.length,
@@ -528,7 +536,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         headAnglesCount,
         hasBodyAngles: bodyAnglesCount === 8,
         hasHeadAngles: headAnglesCount === 8,
-        ...(registry[name] || {}),
+        ...charData,
       });
     }
 

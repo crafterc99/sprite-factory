@@ -558,6 +558,10 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       const data = portraitBase64.replace(/^data:image\/\w+;base64,/, '');
       fs.writeFileSync(portraitPath, Buffer.from(data, 'base64'));
 
+      // Store a small thumbnail (240×320) so portrait survives Railway redeploys
+      const thumbBuf = await sharp(portraitPath).resize(240, 320, { fit: 'inside' }).png().toBuffer();
+      const portraitThumb = thumbBuf.toString('base64');
+
       CHARACTERS[name] = {
         description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
         style: '16-bit pixel art, GBA style',
@@ -577,6 +581,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         jerseyNumber: jerseyNumber || '',
         teamColors: teamColors || { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
         portraitPath: `${name}full.png`,
+        portraitBase64: portraitThumb,
         scaleMultiplier, pixelHeight,
         status: 'portrait_done',
       };
