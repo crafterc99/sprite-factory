@@ -1091,10 +1091,20 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const portraitData = portraitBase64.replace(/^data:image\/\w+;base64,/, '');
         fs.writeFileSync(currentPortraitPath, Buffer.from(portraitData, 'base64'));
 
+        // Helper: resolve wardrobe item to a temp file path (images are stored as base64 in JSON)
+        function wardrobeItemPath(id) {
+          const item = wardrobe.find(i => i.id === id);
+          if (!item) throw new Error(`Wardrobe item not found (id: ${id})`);
+          const imgData = item.imageData;
+          if (!imgData) throw new Error(`Wardrobe image data missing (id: ${id})`);
+          const p = path.join(tmpDir, `wardrobe-${id}-${tmpId}.png`);
+          fs.writeFileSync(p, Buffer.from(imgData, 'base64'));
+          return p;
+        }
+
         // Step 1: Apply top garment
         if (topId) {
-          const topPath = path.join(WARDROBE_DIR, `${topId}.png`);
-          if (!fs.existsSync(topPath)) throw new Error(`Top wardrobe image not found (id: ${topId})`);
+          const topPath = wardrobeItemPath(topId);
 
           const topPrompt = 'Keep everything about this pixelated character the exact same just substitute their top garments for the second uploaded image.';
           const topResult = await client.generate(topPrompt, {
@@ -1114,8 +1124,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
         // Step 2: Apply bottom garment (to the top-applied result, or original if no top)
         if (bottomId) {
-          const bottomPath = path.join(WARDROBE_DIR, `${bottomId}.png`);
-          if (!fs.existsSync(bottomPath)) throw new Error(`Bottom wardrobe image not found (id: ${bottomId})`);
+          const bottomPath = wardrobeItemPath(bottomId);
 
           const bottomPrompt = 'Keep everything about this pixelated character the exact same just substitute their bottom garments for the second uploaded image.';
           const bottomResult = await client.generate(bottomPrompt, {
