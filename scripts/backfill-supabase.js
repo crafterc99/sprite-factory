@@ -13,7 +13,7 @@
 
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+try { require('dotenv').config({ path: path.join(__dirname, '../.env') }); } catch {}
 
 const { isAvailable, uploadFile } = require('../lib/supabase-storage');
 
