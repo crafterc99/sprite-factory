@@ -617,8 +617,10 @@
   .cp-log .err { color:var(--danger); }
   .cp-log .info { color:var(--accent3); }
   @keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
-  .dash-card.generating { border-color:rgba(255,140,0,0.5); background:linear-gradient(135deg,var(--surface2),rgba(255,100,0,0.06)); cursor:pointer; }
+  .dash-card.generating { border-color:rgba(255,140,0,0.5); background:linear-gradient(135deg,var(--surface2),rgba(255,100,0,0.06)); cursor:pointer; position:relative; }
   .dash-card.generating:hover { border-color:rgba(255,140,0,0.9); }
+  .dash-cancel-btn { position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%; background:rgba(255,60,60,0.85); border:none; color:#fff; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10; line-height:1; }
+  .dash-cancel-btn:hover { background:rgba(255,60,60,1); }
   .cp-angle-thumb { display:flex; flex-direction:column; align-items:center; gap:4px; }
   .cp-angle-thumb img { width:80px; height:80px; border:1px solid var(--border); border-radius:8px; object-fit:contain; image-rendering:pixelated; background:var(--surface2); cursor:pointer; transition:border-color 0.15s; }
   .cp-angle-thumb img:hover { border-color:var(--accent); }
@@ -1552,6 +1554,7 @@ function renderDashboard() {
   const inProgressCard = activeJobs.map(j =>
     `<div class="dash-card-wrap">
       <div class="dash-card generating" onclick="cpResumeModal('${j.name}')" title="Click to open generation">
+        <button class="dash-cancel-btn" onclick="event.stopPropagation();cpCancelJob('${j.name}')" title="Cancel & delete">✕</button>
         <div class="dash-portrait-empty" style="font-size:28px;animation:spin 1.4s linear infinite">⟳</div>
         <div class="dash-card-info">
           <div class="dash-name">${j.name}</div>
@@ -2165,6 +2168,11 @@ function cpLoadJobs() {
 function cpClearJob(name) {
   delete CPJobs[name];
   cpSaveState();
+}
+function cpCancelJob(name) {
+  cpClearJob(name);
+  renderDashboard();
+  toast(`${name} cancelled`);
 }
 
 function openAddChar() {
