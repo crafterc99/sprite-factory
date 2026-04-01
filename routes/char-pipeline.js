@@ -316,6 +316,11 @@ function startJob() {
   return jobId;
 }
 
+function updateJob(jobId, progress) {
+  const job = jobs.get(jobId);
+  if (job) jobs.set(jobId, { ...job, progress });
+}
+
 function finishJob(jobId, result) {
   const job = jobs.get(jobId);
   if (job) jobs.set(jobId, { ...job, status: 'done', result });
@@ -426,6 +431,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const client = new NanaBananaClient({ model: modelId });
 
         // Step 1: photo → pixel art
+        updateJob(jobId, { step: 1, total: 2, msg: 'Step 1/2 — Converting photo to pixel art…' });
         const step1Prompt = loadCharPrompts().step1;
         const step1 = await client.generate(step1Prompt, {
           referenceImages: [originalPath],
@@ -433,13 +439,14 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           resolution: '1K',
           model: modelId,
           maxRetries: 2,
-          timeoutMs: 60000,
+          timeoutMs: 90000,
         });
         const step1Path = path.join(charDir, 'step1-pixel.png');
         fs.writeFileSync(step1Path, step1.imageBuffer);
         recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step1' });
 
         // Step 2: pixel art → clean standing portrait
+        updateJob(jobId, { step: 2, total: 2, msg: 'Step 2/2 — Building standing portrait…' });
         const step2Prompt = loadCharPrompts().step2;
         const step2 = await client.generate(step2Prompt, {
           referenceImages: [step1Path],
@@ -447,7 +454,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           resolution: '1K',
           model: modelId,
           maxRetries: 2,
-          timeoutMs: 60000,
+          timeoutMs: 90000,
         });
         recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step2' });
 

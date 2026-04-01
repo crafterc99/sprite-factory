@@ -2474,21 +2474,23 @@ function cpLog(msg, type = 'info') {
 async function waitForJob(jobId, logFn, statusMsg) {
   const maxWait = 10 * 60 * 1000;
   const start = Date.now();
-  let lastLog = 0;
+  let lastMsg = '';
   while (Date.now() - start < maxWait) {
-    await new Promise(r => setTimeout(r, 4000));
+    await new Promise(r => setTimeout(r, 3000));
     let d;
     try {
       const r = await fetch(`${API}/api/char-pipeline/job/${jobId}`);
       d = await r.json();
-    } catch { continue; } // ignore transient network blip
+    } catch { continue; }
     if (d.status === 'done') return d.result;
     if (d.status === 'error') throw new Error(d.error);
-    // Log progress at most every 30s to avoid spamming
-    if (logFn && statusMsg && Date.now() - lastLog > 30000) {
+    // Show server-side progress message if available, otherwise show elapsed time
+    if (logFn) {
       const elapsed = Math.round((Date.now() - start) / 1000);
-      logFn(`⋯ ${statusMsg} (${elapsed}s)`);
-      lastLog = Date.now();
+      const msg = d.progress?.msg
+        ? `⋯ ${d.progress.msg} (${elapsed}s)`
+        : `⋯ ${statusMsg || 'Working'} (${elapsed}s)…`;
+      if (msg !== lastMsg) { logFn(msg); lastMsg = msg; }
     }
   }
   throw new Error('Generation timed out (>10 min) — please try again');
