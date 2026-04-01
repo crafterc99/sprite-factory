@@ -986,13 +986,13 @@
       <div style="display:flex;gap:12px;margin-bottom:16px">
         <!-- Photo drop zone -->
         <input type="file" id="cpPhotoFile" accept="image/*" style="display:none" onchange="cpHandlePhoto(this.files[0])" />
-        <div id="cpDropZone" class="cp-photo-drop" onclick="document.getElementById('cpPhotoFile').click()">
+        <label for="cpPhotoFile" id="cpDropZone" class="cp-photo-drop" style="cursor:pointer">
           <img id="cpPhotoThumb" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:8px;image-rendering:pixelated" />
           <div id="cpPhotoPlaceholder" style="text-align:center;color:#50507a">
             <div style="font-size:28px;margin-bottom:4px">📷</div>
             <div style="font-size:10px;font-family:var(--mono)">Drop photo</div>
           </div>
-        </div>
+        </label>
         <!-- Name / attributes -->
         <div style="flex:1;display:flex;flex-direction:column;gap:10px">
           <div class="form-row" style="margin:0">
@@ -1038,11 +1038,11 @@
       <div style="margin-bottom:16px">
         <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:8px">OUTFIT REFERENCES (optional — drag in jersey, shorts, shoes photos)</div>
         <input type="file" id="cpClothingFile" accept="image/*" multiple style="display:none" onchange="cpAddClothing(this.files)" />
-        <div id="cpClothingZone" class="cp-clothing-zone" onclick="document.getElementById('cpClothingFile').click()">
+        <label for="cpClothingFile" id="cpClothingZone" class="cp-clothing-zone" style="cursor:pointer;display:block">
           <div id="cpClothingList" style="display:flex;gap:8px;flex-wrap:wrap;min-height:60px;align-items:center">
             <div id="cpClothingEmpty" style="color:#30304a;font-size:11px;font-family:var(--mono);width:100%;text-align:center;padding:8px 0">Drop outfit photos here or click to browse</div>
           </div>
-        </div>
+        </label>
       </div>
 
       <!-- Generate button -->
