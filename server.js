@@ -263,13 +263,23 @@ if (require.main === module) {
     console.warn('  [startup] asset restore failed (non-fatal):', e.message);
   }
 
+  // On startup, push any data that's on disk but wasn't committed before last restart
+  if (process.env.GITHUB_TOKEN) {
+    const { scheduleSync } = require('./lib/auto-git-sync');
+    setTimeout(() => {
+      console.log('  [startup] scheduling data sync to GitHub…');
+      scheduleSync();
+    }, 5000); // wait 5s for server to be fully ready
+  }
+
   const server = http.createServer(handler);
   server.listen(PORT, () => {
     const { CHARACTERS } = require('./lib/sprite-generator/prompts');
     console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
     console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
     console.log(`  Animations: 8`);
-    console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}\n`);
+    console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}`);
+    console.log(`  GitHub Sync: ${process.env.GITHUB_TOKEN ? 'enabled' : 'DISABLED — set GITHUB_TOKEN for persistence'}\n`);
   });
 }
 
