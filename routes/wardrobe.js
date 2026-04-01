@@ -1,16 +1,18 @@
 /**
  * Wardrobe Routes — Clothing library for character outfit application
  *
- * Items: { id, name, type: 'top'|'bottom', createdAt }
- * Images stored in: data/wardrobe/{id}.png
- * Index stored in:  data/wardrobe.json
+ * Items: { id, name, type: 'top'|'bottom', imageData: 'base64...', createdAt }
+ * Index (with embedded image data) stored in: data/wardrobe.json
+ *
+ * Images are embedded as base64 in the JSON so they survive Railway redeploys.
+ * No separate image files are needed — everything lives in one committed file.
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 
-const WARDROBE_DIR = path.resolve(__dirname, '../data/wardrobe');
 const WARDROBE_INDEX = path.resolve(__dirname, '../data/wardrobe.json');
 
 function loadIndex() {
@@ -41,9 +43,9 @@ async function parseBody(req) {
 
 function register(router) {
 
-  // GET /api/wardrobe — list all wardrobe items
+  // GET /api/wardrobe — list all wardrobe items (without imageData to keep response small)
   router.get('/api/wardrobe', (req, res) => {
-    const items = loadIndex();
+    const items = loadIndex().map(({ imageData, ...rest }) => rest);
     json(res, { items });
   });
 
@@ -55,18 +57,21 @@ function register(router) {
     if (!['top', 'bottom'].includes(type)) return json(res, { error: 'type must be "top" or "bottom"' }, 400);
 
     try {
-      fs.mkdirSync(WARDROBE_DIR, { recursive: true });
-      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      const imgData = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-      const imgPath = path.join(WARDROBE_DIR, `${id}.png`);
-      fs.writeFileSync(imgPath, Buffer.from(imgData, 'base64'));
+      // Resize to max 512px on longest side to keep JSON file size manageable
+      const rawData = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const resized = await sharp(Buffer.from(rawData, 'base64'))
+        .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+        .png({ compressionLevel: 8 })
+        .toBuffer();
+      const imageData = resized.toString('base64');
 
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       const items = loadIndex();
-      const item = { id, name, type, createdAt: new Date().toISOString() };
+      const item = { id, name, type, imageData, createdAt: new Date().toISOString() };
       items.push(item);
       saveIndex(items);
 
-      json(res, { success: true, item });
+      json(res, { success: true, item: { id, name, type, createdAt: item.createdAt } });
     } catch (err) {
       json(res, { error: err.message }, 500);
     }
@@ -78,23 +83,19 @@ function register(router) {
     const items = loadIndex();
     const idx = items.findIndex(i => i.id === id);
     if (idx === -1) return json(res, { error: 'not found' }, 404);
-
-    try {
-      const imgPath = path.join(WARDROBE_DIR, `${id}.png`);
-      if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
-    } catch {}
-
     items.splice(idx, 1);
     saveIndex(items);
     json(res, { success: true });
   });
 
-  // GET /api/wardrobe/image/:id — serve wardrobe item image
+  // GET /api/wardrobe/image/:id — serve wardrobe item image from embedded base64
   router.get('/api/wardrobe/image/:id', (req, res, params) => {
-    const imgPath = path.join(WARDROBE_DIR, `${params.id}.png`);
-    if (!fs.existsSync(imgPath)) { res.writeHead(404); res.end(); return; }
+    const items = loadIndex();
+    const item = items.find(i => i.id === params.id);
+    if (!item || !item.imageData) { res.writeHead(404); res.end(); return; }
+    const buf = Buffer.from(item.imageData, 'base64');
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
-    fs.createReadStream(imgPath).pipe(res);
+    res.end(buf);
   });
 
 }
