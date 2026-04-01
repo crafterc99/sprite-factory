@@ -423,9 +423,6 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const tasks = upscaledPaths.map((upPath, i) => async () => {
         sse({ type: 'frame_start', frame: i, total: totalFrames });
 
-        // Frame 0 is the style anchor — pass it to frames 1+ for rendering consistency
-        const styleAnchorPath = i > 0 ? rawOutputPaths[0] : null;
-
         let prompt;
         if (customSections) {
           prompt = buildSectionedPrompt(character, animation, {
@@ -442,7 +439,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
             for (const [k, v] of Object.entries(active)) merged[k] = { enabled: true, text: v.text };
             prompt = buildSectionedPrompt(character, animation, { frameIndex: i, totalFrames, customSections: merged });
           } else {
-            const promptData = buildSingleFramePrompt(character, animation, i, totalFrames, { hasStyleAnchor: !!styleAnchorPath });
+            const promptData = buildSingleFramePrompt(character, animation, i, totalFrames);
             prompt = promptData.prompt;
           }
         }
@@ -455,7 +452,6 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
             await client.generateSingleFrame(prompt, upPath, charRef, {
               model: modelId,
               outputPath: outPath,
-              styleAnchorPath,
             });
             rawOutputPaths[i] = outPath;
             const frameCost = recordCost(modelId, 'fbf_frame', '1K', 2, { character, animation, frame: i });
