@@ -202,10 +202,22 @@ async function handler(req, res) {
     return router.handle(req, res, pathname);
   }
 
-  // Serve sprite assets
+  // Serve sprite assets — disk first, Supabase fallback
   if (pathname.startsWith('/assets/')) {
-    const file = pathname.replace('/assets/', '');
-    return serveImage(res, path.join(ASSETS_DIR, file));
+    const file = decodeURIComponent(pathname.replace('/assets/', ''));
+    const localPath = path.join(ASSETS_DIR, file);
+    if (fs.existsSync(localPath)) return serveImage(res, localPath);
+    // Not on disk — try Supabase Storage and cache locally
+    const { downloadFile, isAvailable } = require('./lib/supabase-storage');
+    if (isAvailable()) {
+      const buf = await downloadFile(file);
+      if (buf) {
+        try { fs.mkdirSync(path.dirname(localPath), { recursive: true }); fs.writeFileSync(localPath, buf); } catch {}
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300', 'Content-Length': buf.length });
+        return res.end(buf);
+      }
+    }
+    res.writeHead(404); return res.end('Not found');
   }
 
   // Serve raw sprites
@@ -272,6 +284,14 @@ if (require.main === module) {
     }
   } catch (e) {
     console.warn('  [startup] asset restore failed (non-fatal):', e.message);
+  }
+
+  // Restore any assets missing from disk that are in Supabase Storage
+  try {
+    const { restoreAssetsToDir } = require('./lib/supabase-storage');
+    await restoreAssetsToDir(path.join(__dirname, 'data/assets'));
+  } catch (e) {
+    console.warn('  [startup] Supabase restore failed (non-fatal):', e.message);
   }
 
   // On startup, push any data that's on disk but wasn't committed before last restart

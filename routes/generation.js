@@ -10,6 +10,7 @@ const { processSprite, cutFrames, upscaleNN, buildStrip, processSingleFrame, nor
 const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
 const jobStore = require('../job-store');
+const { uploadFile: sbUpload } = require('../lib/supabase-storage');
 
 const FRAME_PROMPTS_PATH = path.join(__dirname, '../data/frame-prompts.json');
 
@@ -499,6 +500,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       // Assemble horizontal strip
       const stripPath = path.join(ASSETS_DIR, `${character}-${animation}.png`);
       await buildStrip(processedPaths, stripPath, { frameWidth: 180, frameHeight: 180 });
+      sbUpload(`${character}-${animation}.png`, stripPath);
 
       // Save individual frames
       const framesOutDir = path.join(ASSETS_DIR, `${character}-${animation}-frames`);
@@ -658,6 +660,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
 
       const stripPath = path.join(ASSETS_DIR, `${character}-${animation}.png`);
       await buildStrip(allFrames, stripPath, { frameWidth: 180, frameHeight: 180 });
+      sbUpload(`${character}-${animation}.png`, stripPath);
 
       return json(res, {
         success: true,
@@ -955,6 +958,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
         .toFile(stripPath + '.tmp.png');
 
       fs.renameSync(stripPath + '.tmp.png', stripPath);
+      sbUpload(path.basename(stripPath), stripPath);
 
       // Clean up temp files
       try { fs.unlinkSync(tmpPath); } catch (_) {}

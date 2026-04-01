@@ -26,6 +26,7 @@ const { recordCost } = require('../middleware/cost-tracker');
 const { cutFrames, removeBackground, cropToContent } = require('../lib/sprite-processor/index');
 const { CHARACTERS } = require('../lib/sprite-generator/prompts');
 const { scheduleSync } = require('../lib/auto-git-sync');
+const { uploadFile: sbUpload } = require('../lib/supabase-storage');
 
 const CHARACTERS_FILE = path.resolve(__dirname, '../data/.characters.json');
 const CHAR_PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
@@ -576,6 +577,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       fs.mkdirSync(ASSETS_DIR, { recursive: true });
       const data = portraitBase64.replace(/^data:image\/\w+;base64,/, '');
       fs.writeFileSync(portraitPath, Buffer.from(data, 'base64'));
+      sbUpload(`${name}full.png`, portraitPath);
 
       // Store a small thumbnail (240×320) so portrait survives Railway redeploys
       const thumbBuf = await sharp(portraitPath).resize(240, 320, { fit: 'inside' }).png().toBuffer();
@@ -832,6 +834,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
           const framePath = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
           fs.writeFileSync(framePath, result.imageBuffer);
+          sbUpload(`${name}-angle-${i}.png`, framePath);
           recordCost(modelId, 'char_pipeline', '1K', referenceImages.length, { character: name, step: `body-angle-${i}` });
 
           await removeBackground(framePath, framePath);
@@ -918,6 +921,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
           const framePath = path.join(ASSETS_DIR, `${name}-headshot-${i}.png`);
           fs.writeFileSync(framePath, result.imageBuffer);
+          sbUpload(`${name}-headshot-${i}.png`, framePath);
           recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: `head-angle-${i}` });
 
           return { index: i, label: angleLabel, url: `/assets/${name}-headshot-${i}.png` };
@@ -993,6 +997,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
         const destPath = path.join(ASSETS_DIR, `${name}-final-${frame.index}.png`);
         fs.copyFileSync(outPath, destPath);
+        sbUpload(`${name}-final-${frame.index}.png`, destPath);
         finalFrames.push({ index: frame.index, label: angleLabel, url: `/assets/${name}-final-${frame.index}.png` });
         recordCost(modelId, 'char_pipeline', '1K', 2, { character: name, step: 'final-frames', angleIndex: frame.index });
 
@@ -1192,6 +1197,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
         const outPath = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
         fs.writeFileSync(outPath, result.imageBuffer);
+        sbUpload(`${name}-angle-${i}.png`, outPath);
         results.push({ index: i, label: angleLabel, url: `/assets/${name}-angle-${i}.png` });
         recordCost(modelId, 'char_pipeline', '2K', 3, { character: name, step: 'clothing-apply', angleIndex: i });
 
