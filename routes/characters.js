@@ -447,12 +447,14 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   // DELETE /api/character/:name — Remove a character
   router.delete('/api/character/:name', (req, res, params) => {
     const name = params.name;
-    const protectedChars = ['breezy', '99'];
-    if (protectedChars.includes(name)) {
-      return json(res, { error: 'Cannot delete core character' }, 400);
+
+    // Delete portrait and all angle/headshot assets
+    const assetsToDelete = fs.existsSync(ASSETS_DIR)
+      ? fs.readdirSync(ASSETS_DIR).filter(f => f.startsWith(`${name}-`) || f === `${name}full.png`)
+      : [];
+    for (const f of assetsToDelete) {
+      try { fs.unlinkSync(path.join(ASSETS_DIR, f)); } catch {}
     }
-    const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
-    if (fs.existsSync(portraitPath)) fs.unlinkSync(portraitPath);
     delete CHARACTERS[name];
 
     // Remove from persistent registry
