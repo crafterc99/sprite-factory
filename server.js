@@ -247,71 +247,73 @@ async function handler(req, res) {
 // ─── Server ─────────────────────────────────────────────────────────────
 
 if (require.main === module) {
-  // Pull latest committed data on startup (e.g. from another machine or manual git push)
-  try {
-    execSync('git pull origin main --no-rebase --ff-only', { cwd: __dirname, timeout: 15000, stdio: 'ignore' });
-    console.log('  [startup] git pull ok');
-  } catch {
-    // Not fatal — offline or no remote, just start with local data
-  }
-
-  // Restore character body angle images from .characters.json base64 on startup
-  try {
-    const CHARACTERS_FILE = path.join(__dirname, 'data/.characters.json');
-    const ASSETS_DIR_RESTORE = path.join(__dirname, 'data/assets');
-    if (fs.existsSync(CHARACTERS_FILE)) {
-      const chars = JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
-      fs.mkdirSync(ASSETS_DIR_RESTORE, { recursive: true });
-      for (const [name, char] of Object.entries(chars)) {
-        if (char.bodyAngles) {
-          for (const [idx, b64] of Object.entries(char.bodyAngles)) {
-            const p = path.join(ASSETS_DIR_RESTORE, `${name}-angle-${idx}.png`);
-            if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(b64, 'base64'));
-          }
-        }
-        if (char.headshots) {
-          for (const [idx, b64] of Object.entries(char.headshots)) {
-            const p = path.join(ASSETS_DIR_RESTORE, `${name}-headshot-${idx}.png`);
-            if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(b64, 'base64'));
-          }
-        }
-        if (char.portraitBase64) {
-          const p = path.join(ASSETS_DIR_RESTORE, `${name}full.png`);
-          if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(char.portraitBase64.replace(/^data:image\/\w+;base64,/,''), 'base64'));
-        }
-      }
-      console.log('  [startup] character assets restored from .characters.json');
+  (async () => {
+    // Pull latest committed data on startup (e.g. from another machine or manual git push)
+    try {
+      execSync('git pull origin main --no-rebase --ff-only', { cwd: __dirname, timeout: 15000, stdio: 'ignore' });
+      console.log('  [startup] git pull ok');
+    } catch {
+      // Not fatal — offline or no remote, just start with local data
     }
-  } catch (e) {
-    console.warn('  [startup] asset restore failed (non-fatal):', e.message);
-  }
 
-  // Restore any assets missing from disk that are in Supabase Storage
-  try {
-    const { restoreAssetsToDir } = require('./lib/supabase-storage');
-    await restoreAssetsToDir(path.join(__dirname, 'data/assets'));
-  } catch (e) {
-    console.warn('  [startup] Supabase restore failed (non-fatal):', e.message);
-  }
+    // Restore character body angle images from .characters.json base64 on startup
+    try {
+      const CHARACTERS_FILE = path.join(__dirname, 'data/.characters.json');
+      const ASSETS_DIR_RESTORE = path.join(__dirname, 'data/assets');
+      if (fs.existsSync(CHARACTERS_FILE)) {
+        const chars = JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
+        fs.mkdirSync(ASSETS_DIR_RESTORE, { recursive: true });
+        for (const [name, char] of Object.entries(chars)) {
+          if (char.bodyAngles) {
+            for (const [idx, b64] of Object.entries(char.bodyAngles)) {
+              const p = path.join(ASSETS_DIR_RESTORE, `${name}-angle-${idx}.png`);
+              if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(b64, 'base64'));
+            }
+          }
+          if (char.headshots) {
+            for (const [idx, b64] of Object.entries(char.headshots)) {
+              const p = path.join(ASSETS_DIR_RESTORE, `${name}-headshot-${idx}.png`);
+              if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(b64, 'base64'));
+            }
+          }
+          if (char.portraitBase64) {
+            const p = path.join(ASSETS_DIR_RESTORE, `${name}full.png`);
+            if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(char.portraitBase64.replace(/^data:image\/\w+;base64,/,''), 'base64'));
+          }
+        }
+        console.log('  [startup] character assets restored from .characters.json');
+      }
+    } catch (e) {
+      console.warn('  [startup] asset restore failed (non-fatal):', e.message);
+    }
 
-  // On startup, push any data that's on disk but wasn't committed before last restart
-  if (process.env.GITHUB_TOKEN) {
-    const { scheduleSync } = require('./lib/auto-git-sync');
-    setTimeout(() => {
-      console.log('  [startup] scheduling data sync to GitHub…');
-      scheduleSync();
-    }, 5000); // wait 5s for server to be fully ready
-  }
+    // Restore any assets missing from disk that are in Supabase Storage
+    try {
+      const { restoreAssetsToDir } = require('./lib/supabase-storage');
+      await restoreAssetsToDir(path.join(__dirname, 'data/assets'));
+    } catch (e) {
+      console.warn('  [startup] Supabase restore failed (non-fatal):', e.message);
+    }
 
-  const server = http.createServer(handler);
-  server.listen(PORT, () => {
-    const { CHARACTERS } = require('./lib/sprite-generator/prompts');
-    console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
-    console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
-    console.log(`  Animations: 8`);
-    console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}`);
-    console.log(`  GitHub Sync: ${process.env.GITHUB_TOKEN ? 'enabled' : 'DISABLED — set GITHUB_TOKEN for persistence'}\n`);
-  });
+    // On startup, push any data that's on disk but wasn't committed before last restart
+    if (process.env.GITHUB_TOKEN) {
+      const { scheduleSync } = require('./lib/auto-git-sync');
+      setTimeout(() => {
+        console.log('  [startup] scheduling data sync to GitHub…');
+        scheduleSync();
+      }, 5000); // wait 5s for server to be fully ready
+    }
+
+    const server = http.createServer(handler);
+    server.listen(PORT, () => {
+      const { CHARACTERS } = require('./lib/sprite-generator/prompts');
+      console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
+      console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
+      console.log(`  Animations: 8`);
+      console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}`);
+      console.log(`  GitHub Sync: ${process.env.GITHUB_TOKEN ? 'enabled' : 'DISABLED — set GITHUB_TOKEN for persistence'}\n`);
+    });
+  })();
 }
 
 module.exports = handler;
