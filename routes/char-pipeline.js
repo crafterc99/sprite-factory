@@ -205,6 +205,40 @@ function buildFinalFramePrompt(angleLabel) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Center a frame buffer: trim background, place character centered (feet at bottom).
+async function centerFrame(buf) {
+  try {
+    // Sample corner pixel as background color
+    const { data } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const r = data[0], g = data[1], b = data[2];
+
+    // Trim background from all edges
+    let trimmed;
+    try {
+      trimmed = await sharp(buf)
+        .trim({ background: { r, g, b, alpha: 255 }, threshold: 30 })
+        .png()
+        .toBuffer();
+    } catch {
+      trimmed = buf;
+    }
+    const tm = await sharp(trimmed).metadata();
+
+    // Build a square canvas with 8% padding; gravity=south keeps feet at bottom
+    const inner = Math.max(tm.width, tm.height);
+    const pad = Math.max(8, Math.round(inner * 0.08));
+    const size = inner + pad * 2;
+    return await sharp({
+      create: { width: size, height: size, channels: 3, background: { r, g, b } },
+    })
+      .composite([{ input: trimmed, gravity: 'south', top: undefined, left: undefined }])
+      .png()
+      .toBuffer();
+  } catch {
+    return buf; // fallback: return as-is
+  }
+}
+
 // Slice a sheet that may be a horizontal strip (1 row) or a grid (2 rows of 4).
 // Always returns exactly frameCount frames in reading order (left-to-right, top-to-bottom).
 async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
@@ -226,7 +260,7 @@ async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
     for (let row = 0; row < 2; row++) {
       for (let col = 0; col < 4; col++) {
         // Use toBuffer() to avoid sharp's "same file" error and any path collision
-        const buf = await sharp(sheetPath)
+        const raw = await sharp(sheetPath)
           .extract({
             left: col * fw + inset,
             top: row * fh + inset,
@@ -235,6 +269,7 @@ async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
           })
           .png()
           .toBuffer();
+        const buf = await centerFrame(raw);
         const outPath = path.join(outputDir, `frame-${idx}.png`);
         fs.writeFileSync(outPath, buf);
         const dest = destPattern.replace('{i}', idx);
@@ -250,10 +285,11 @@ async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
     const frameHeight = meta.height;
     let idx = 0;
     for (let col = 0; col < frameCount; col++) {
-      const buf = await sharp(sheetPath)
+      const raw = await sharp(sheetPath)
         .extract({ left: col * frameWidth, top: 0, width: frameWidth, height: frameHeight })
         .png()
         .toBuffer();
+      const buf = await centerFrame(raw);
       const outPath = path.join(outputDir, `frame-${idx}.png`);
       fs.writeFileSync(outPath, buf);
       const dest = destPattern.replace('{i}', idx);
@@ -852,6 +888,56 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     saveCharacters(registry);
 
     return json(res, { success: true, name, type, index, label });
+  });
+
+  // POST /api/char-pipeline/regen-angle — Async: regenerate a single angle frame with a modifier
+  router.post('/api/char-pipeline/regen-angle', async (req, res) => {
+    const body = await parseBody(req);
+    const { name, type, index, modifier } = body;
+    if (!name || !modifier || index === undefined) return json(res, { error: 'name, type, index, modifier required' }, 400);
+
+    const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
+    if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found' }, 400);
+
+    const prefix = type === 'head' ? `${name}-headshot-` : `${name}-angle-`;
+    const framePath = path.join(ASSETS_DIR, `${prefix}${index}.png`);
+    if (!fs.existsSync(framePath)) return json(res, { error: 'Frame not found' }, 404);
+
+    const jobId = startJob();
+
+    setImmediate(async () => {
+      try {
+        const angleLabel = ANGLE_LABELS_8[index] || `angle_${index}`;
+        const isHead = type === 'head';
+        const basePrompt = isHead
+          ? loadCharPrompts().headSheet
+          : loadCharPrompts().bodySheet;
+        const prompt = basePrompt + `\n\nKeep everything the exact same but: ${modifier.trim()}\nGenerate only the ${angleLabel} angle view.`;
+
+        const modelId = 'gemini-3-pro-image-preview';
+        const client = new NanaBananaClient({ model: modelId });
+        const result = await client.generate(prompt, {
+          referenceImages: [portraitPath, framePath],
+          aspectRatio: isHead ? '1:1' : '1:1',
+          resolution: '1K',
+          model: modelId,
+          maxRetries: 1,
+          timeoutMs: 80000,
+        });
+
+        // Center and save
+        const centered = await centerFrame(result.imageBuffer);
+        fs.writeFileSync(framePath, centered);
+
+        const imageBase64 = 'data:image/png;base64,' + centered.toString('base64');
+        recordCost(modelId, 'char_pipeline', '1K', 2, { character: name, step: 'regen-angle', index });
+        finishJob(jobId, { success: true, name, type, index, imageBase64, url: `/assets/${prefix}${index}.png` });
+      } catch (err) {
+        failJob(jobId, err.message);
+      }
+    });
+
+    return json(res, { jobId, status: 'started' });
   });
 
   // POST /api/char-pipeline/complete — Finish pipeline, register character

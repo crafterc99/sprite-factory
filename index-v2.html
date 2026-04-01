@@ -601,10 +601,18 @@
   .cp-log .err { color:var(--danger); }
   .cp-log .info { color:var(--accent3); }
   .cp-angle-thumb { display:flex; flex-direction:column; align-items:center; gap:4px; }
-  .cp-angle-thumb img { width:72px; height:90px; border:1px solid var(--border); border-radius:8px; object-fit:contain; image-rendering:pixelated; background:var(--surface2); }
+  .cp-angle-thumb img { width:80px; height:80px; border:1px solid var(--border); border-radius:8px; object-fit:contain; image-rendering:pixelated; background:var(--surface2); cursor:pointer; transition:border-color 0.15s; }
+  .cp-angle-thumb img:hover { border-color:var(--accent); }
   .cp-angle-thumb span { font-family:var(--mono); font-size:8px; color:#50507a; }
-  .cp-label-input { font-family:var(--mono); font-size:8px; color:#aaa; background:transparent; border:none; border-bottom:1px solid #333; text-align:center; width:72px; outline:none; padding:1px 2px; }
+  .cp-label-input { font-family:var(--mono); font-size:8px; color:#aaa; background:transparent; border:none; border-bottom:1px solid #333; text-align:center; width:80px; outline:none; padding:1px 2px; }
   .cp-label-input:focus { border-bottom-color:#7c6aff; color:#fff; }
+  /* Regen angle modal */
+  #cpRegenModal { display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; }
+  #cpRegenModal.open { display:flex; }
+  #cpRegenBox { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px; width:340px; max-width:95vw; display:flex; flex-direction:column; gap:12px; }
+  #cpRegenPreview { width:100%; height:160px; object-fit:contain; image-rendering:pixelated; border-radius:8px; background:var(--surface2); border:1px solid var(--border); }
+  #cpRegenModifier { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:9px 11px; font-family:var(--mono); font-size:11px; color:#ccc; width:100%; box-sizing:border-box; resize:none; height:72px; outline:none; }
+  #cpRegenModifier:focus { border-color:#7c6aff; }
 
   /* ─── OUTFIT PICKER (in new char modal) ─── */
   .cp-outfit-panel { border:1px solid var(--border); border-radius:8px; padding:8px; min-height:80px; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; max-height:160px; overflow-y:auto; background:var(--surface2); }
@@ -1256,6 +1264,21 @@
 
     </div><!-- /cpForm -->
   </div><!-- /modal -->
+</div>
+
+<!-- ─── MODAL: Regen Angle ─── -->
+<div id="cpRegenModal">
+  <div id="cpRegenBox">
+    <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px">REGENERATE ANGLE</div>
+    <img id="cpRegenPreview" src="" alt="" />
+    <div style="font-family:var(--mono);font-size:10px;color:#8888aa">Keep everything the exact same but:</div>
+    <textarea id="cpRegenModifier" placeholder="e.g. make the jersey blue, add a hat, etc."></textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="cpDoRegenAngle()">Regenerate →</button>
+      <button class="btn btn-secondary" onclick="cpCloseRegen()">Cancel</button>
+    </div>
+    <div id="cpRegenStatus" style="font-family:var(--mono);font-size:9px;color:#50507a;display:none"></div>
+  </div>
 </div>
 
 <!-- ─── MODAL: Adjust Source ─── -->
@@ -2509,18 +2532,19 @@ async function cpConfirmAndGenerateAngles() {
       body: JSON.stringify({ name }),
     });
 
-    // Render body frames with editable labels
+    // Render body frames with editable labels + click-to-regen
+    const ts = Date.now();
     document.getElementById('cpAngleFrames').innerHTML = d4body.frames.map((f, i) =>
       `<div class="cp-angle-thumb">
-        <img src="${f.url}?t=${Date.now()}" />
+        <img id="cpBodyFrame${i}" src="${f.url}?t=${ts}" onclick="cpOpenRegen('${name}','body',${i},this.src,'${f.label}')" title="Click to regenerate with changes" />
         <input class="cp-label-input" value="${f.label}" data-type="body" data-index="${i}" data-name="${name}" onblur="cpRenameAngle(this)" />
       </div>`
     ).join('');
 
-    // Render headshot frames with editable labels
+    // Render headshot frames with editable labels + click-to-regen
     document.getElementById('cpHeadFrames').innerHTML = d4head.frames.map((f, i) =>
       `<div class="cp-angle-thumb">
-        <img src="${f.url}?t=${Date.now()}" />
+        <img id="cpHeadFrame${i}" src="${f.url}?t=${ts}" onclick="cpOpenRegen('${name}','head',${i},this.src,'${f.label}')" title="Click to regenerate with changes" />
         <input class="cp-label-input" value="${f.label}" data-type="head" data-index="${i}" data-name="${name}" onblur="cpRenameAngle(this)" />
       </div>`
     ).join('');
@@ -2534,6 +2558,54 @@ async function cpConfirmAndGenerateAngles() {
   } finally {
     btn.disabled = false;
     spinner.classList.remove('active');
+  }
+}
+
+// ── Regen angle modal ──────────────────────────────────────────────────────
+let _cpRegen = {};
+
+function cpOpenRegen(name, type, index, imgSrc, label) {
+  _cpRegen = { name, type, index };
+  document.getElementById('cpRegenPreview').src = imgSrc;
+  document.getElementById('cpRegenModifier').value = '';
+  document.getElementById('cpRegenStatus').style.display = 'none';
+  document.getElementById('cpRegenModal').classList.add('open');
+  setTimeout(() => document.getElementById('cpRegenModifier').focus(), 80);
+}
+
+function cpCloseRegen() {
+  document.getElementById('cpRegenModal').classList.remove('open');
+}
+
+async function cpDoRegenAngle() {
+  const { name, type, index } = _cpRegen;
+  const modifier = document.getElementById('cpRegenModifier').value.trim();
+  if (!modifier) return toast('Enter what to change', true);
+
+  const status = document.getElementById('cpRegenStatus');
+  status.textContent = '⋯ Starting regeneration…';
+  status.style.display = 'block';
+
+  try {
+    const r = await fetch(`${API}/api/char-pipeline/regen-angle`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, type, index, modifier }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+
+    status.textContent = '⋯ Generating (this takes ~1 min)…';
+    const result = await waitForJob(d.jobId, null, null);
+
+    // Update the frame image in-place
+    const imgId = type === 'head' ? `cpHeadFrame${index}` : `cpBodyFrame${index}`;
+    const img = document.getElementById(imgId);
+    if (img && result.imageBase64) img.src = result.imageBase64;
+
+    cpCloseRegen();
+    toast('Frame regenerated');
+  } catch(e) {
+    status.textContent = '✗ ' + e.message;
   }
 }
 
