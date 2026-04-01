@@ -118,10 +118,19 @@ function register(router, ctx) {
     const anim = lib[animName];
     if (!anim) return json(res, { error: `Animation "${animName}" not found in library` }, 400);
 
-    const charAnglePath = path.join(ASSETS_DIR, `${charName}-angle-${anim.angleIndex}.png`);
-    const fallbackAnglePath = path.join(ASSETS_DIR, `${charName}-angle-0.png`);
-    if (!fs.existsSync(charAnglePath) && !fs.existsSync(fallbackAnglePath)) {
-      return json(res, { error: `No angle reference found for "${charName}" (looked for angle ${anim.angleIndex})` }, 400);
+    // Find the best available angle: exact match → front → any available
+    const ANGLE_NAMES = ['Front','Front Right','Right','Back Right','Back','Back Left','Left','Front Left'];
+    let resolvedAnglePath = null;
+    const tryIndices = [anim.angleIndex, 0, 1, 2, 3, 4, 5, 6, 7];
+    for (const idx of tryIndices) {
+      const p = path.join(ASSETS_DIR, `${charName}-angle-${idx}.png`);
+      if (fs.existsSync(p)) { resolvedAnglePath = p; break; }
+    }
+    // Also try portrait as last resort
+    const portraitPath = path.join(ASSETS_DIR, `${charName}full.png`);
+    if (!resolvedAnglePath && fs.existsSync(portraitPath)) resolvedAnglePath = portraitPath;
+    if (!resolvedAnglePath) {
+      return json(res, { error: `No body angle or portrait found for "${charName}" — generate body angles first` }, 400);
     }
 
     const jobId = startJob();
@@ -130,8 +139,6 @@ function register(router, ctx) {
       try {
         const modelId = model || 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
-
-        const resolvedAnglePath = fs.existsSync(charAnglePath) ? charAnglePath : fallbackAnglePath;
 
         const genDir = path.join(TMP_DIR, 'studio-gen', `${charName}-${animName}`);
         fs.mkdirSync(genDir, { recursive: true });

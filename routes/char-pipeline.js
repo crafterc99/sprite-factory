@@ -818,6 +818,16 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           return { index: i, label: angleLabel, url: `/assets/${name}-angle-${i}.png` };
         }));
 
+        // Persist angle base64 in .characters.json so they survive Railway redeploys
+        const registry = loadCharacters();
+        if (!registry[name]) registry[name] = { name, id: name };
+        registry[name].bodyAngles = {};
+        for (const f of frames) {
+          const p = path.join(ASSETS_DIR, `${name}-angle-${f.index}.png`);
+          if (fs.existsSync(p)) registry[name].bodyAngles[f.index] = fs.readFileSync(p).toString('base64');
+        }
+        saveCharacters(registry);
+        scheduleSync();
         finishJob(jobId, { success: true, name, frames });
       } catch (err) {
         failJob(jobId, err.message);
@@ -876,6 +886,16 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           return { index: i, label: angleLabel, url: `/assets/${name}-headshot-${i}.png` };
         }));
 
+        // Persist headshot base64 in .characters.json
+        const registry = loadCharacters();
+        if (!registry[name]) registry[name] = { name, id: name };
+        registry[name].headshots = {};
+        for (const f of frames) {
+          const p = path.join(ASSETS_DIR, `${name}-headshot-${f.index}.png`);
+          if (fs.existsSync(p)) registry[name].headshots[f.index] = fs.readFileSync(p).toString('base64');
+        }
+        saveCharacters(registry);
+        scheduleSync();
         finishJob(jobId, { success: true, name, frames });
       } catch (err) {
         failJob(jobId, err.message);
