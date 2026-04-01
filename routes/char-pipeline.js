@@ -25,6 +25,7 @@ const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
 const { cutFrames, removeBackground, cropToContent } = require('../lib/sprite-processor/index');
 const { CHARACTERS } = require('../lib/sprite-generator/prompts');
+const { scheduleSync } = require('../lib/auto-git-sync');
 
 const CHARACTERS_FILE = path.resolve(__dirname, '../data/.characters.json');
 const CHAR_PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
@@ -518,6 +519,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         status: 'portrait_done',
       };
       saveCharacters(registry);
+      scheduleSync();
 
       return json(res, {
         success: true, name,
@@ -900,6 +902,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (!registry[name].angleLabels[type]) registry[name].angleLabels[type] = {};
     registry[name].angleLabels[type][index] = label;
     saveCharacters(registry);
+    scheduleSync();
 
     return json(res, { success: true, name, type, index, label });
   });
@@ -972,6 +975,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       registry[name].status = 'pipeline_complete';
       registry[name].pipelineCompletedAt = new Date().toISOString();
       saveCharacters(registry);
+      scheduleSync();
     }
 
     return json(res, { success: true, name, character: registry[name] || null });

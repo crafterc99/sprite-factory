@@ -12,6 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { scheduleSync } = require('../lib/auto-git-sync');
 
 const WARDROBE_INDEX = path.resolve(__dirname, '../data/wardrobe.json');
 
@@ -70,6 +71,7 @@ function register(router) {
       const item = { id, name, type, imageData, createdAt: new Date().toISOString() };
       items.push(item);
       saveIndex(items);
+      scheduleSync();
 
       json(res, { success: true, item: { id, name, type, createdAt: item.createdAt } });
     } catch (err) {
@@ -85,6 +87,7 @@ function register(router) {
     if (idx === -1) return json(res, { error: 'not found' }, 404);
     items.splice(idx, 1);
     saveIndex(items);
+    scheduleSync();
     json(res, { success: true });
   });
 

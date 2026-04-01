@@ -11,6 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { scheduleSync } = require('../lib/auto-git-sync');
 
 const LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
 const INDEX_FILE = path.join(LIB_DIR, 'index.json');
@@ -134,6 +135,7 @@ function register(router, ctx) {
       const index = loadIndex();
       index[animId] = entry;
       saveIndex(index);
+      scheduleSync();
 
       json(res, { success: true, animation: { ...entry, thumbUrl: `/api/anim-lib/frame/${animId}/0` } });
     } catch (err) {
@@ -158,6 +160,7 @@ function register(router, ctx) {
 
     delete index[name];
     saveIndex(index);
+    scheduleSync();
     json(res, { success: true });
   });
 

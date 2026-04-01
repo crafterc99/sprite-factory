@@ -161,8 +161,10 @@ require('./routes/studio-gen').register(router, ctx);
 const { execSync } = require('child_process');
 router.post('/api/deploy', async (req, res) => {
   try {
+    const body = await parseBody(req).catch(() => ({}));
+    const msg = body.message || 'chore: save data and deploy from studio';
     const output = execSync(
-      'git add -A && git diff --cached --quiet || git commit -m "feat: prompt updates from studio" && git push origin main',
+      `git add -A && git diff --cached --quiet || git commit -m "${msg.replace(/"/g, "\\\"")}" && git push origin main`,
       { cwd: __dirname, timeout: 30000 }
     ).toString();
     return json(res, { success: true, output });
@@ -222,6 +224,14 @@ async function handler(req, res) {
 // ─── Server ─────────────────────────────────────────────────────────────
 
 if (require.main === module) {
+  // Pull latest committed data on startup (e.g. from another machine or manual git push)
+  try {
+    execSync('git pull origin main --no-rebase --ff-only', { cwd: __dirname, timeout: 15000, stdio: 'ignore' });
+    console.log('  [startup] git pull ok');
+  } catch {
+    // Not fatal — offline or no remote, just start with local data
+  }
+
   const server = http.createServer(handler);
   server.listen(PORT, () => {
     const { CHARACTERS } = require('./lib/sprite-generator/prompts');

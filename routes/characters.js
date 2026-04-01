@@ -8,6 +8,7 @@ const { CHARACTERS, ANIMATIONS } = require('../lib/sprite-generator/prompts');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
 const { processSource, reprocessSource, adjustSource, loadSourceMeta } = require('../lib/upload-processor');
+const { scheduleSync } = require('../lib/auto-git-sync');
 
 const CHARACTERS_FILE = process.env.CHARACTERS_FILE || path.resolve(__dirname, '../data/.characters.json');
 const CUSTOM_ANIMS_FILE = process.env.CUSTOM_ANIMS_FILE || path.resolve(__dirname, '../data/.custom-animations.json');
@@ -282,6 +283,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     };
 
     saveCharacters(registry);
+    scheduleSync();
     return json(res, { success: true, character: registry[name] });
   });
 
@@ -376,6 +378,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         status: 'portrait_done',
       };
       saveCharacters(registry);
+      scheduleSync();
 
       // Fire-and-forget: kick off animation gap-fill for this character in the background.
       // Does not block the confirm response.
@@ -456,6 +459,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     const registry = loadCharacters();
     delete registry[name];
     saveCharacters(registry);
+    scheduleSync();
 
     return json(res, { success: true, deleted: name });
   });
