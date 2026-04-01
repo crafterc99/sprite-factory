@@ -79,7 +79,6 @@ function failJob(jobId, errMsg) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Build a 1×N horizontal sprite strip from individual processed frames */
 async function buildStrip(framePaths, outputPath) {
   const frames = await Promise.all(framePaths.map(p => sharp(p).metadata()));
   const w = frames[0].width;
@@ -91,7 +90,6 @@ async function buildStrip(framePaths, outputPath) {
   await strip.composite(composites).png().toFile(outputPath);
 }
 
-/** Process a single AI-generated frame: remove bg, crop, scale to 180x180 */
 async function processFrame(srcPath, outPath) {
   await removeBackground(srcPath, srcPath);
   await cropToContent(srcPath, outPath, { width: 180, height: 180, padding: 10 });
@@ -121,12 +119,9 @@ function register(router, ctx) {
     if (!anim) return json(res, { error: `Animation "${animName}" not found in library` }, 400);
 
     const charAnglePath = path.join(ASSETS_DIR, `${charName}-angle-${anim.angleIndex}.png`);
-    if (!fs.existsSync(charAnglePath)) {
-      // Fallback: try angle-0 (front)
-      const fallback = path.join(ASSETS_DIR, `${charName}-angle-0.png`);
-      if (!fs.existsSync(fallback)) {
-        return json(res, { error: `No angle reference found for "${charName}" (looked for angle ${anim.angleIndex})` }, 400);
-      }
+    const fallbackAnglePath = path.join(ASSETS_DIR, `${charName}-angle-0.png`);
+    if (!fs.existsSync(charAnglePath) && !fs.existsSync(fallbackAnglePath)) {
+      return json(res, { error: `No angle reference found for "${charName}" (looked for angle ${anim.angleIndex})` }, 400);
     }
 
     const jobId = startJob();
@@ -136,14 +131,23 @@ function register(router, ctx) {
         const modelId = model || 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
-        // Resolve character angle — prefer exact match, fall back to angle-0
-        let resolvedAnglePath = charAnglePath;
-        if (!fs.existsSync(resolvedAnglePath)) {
-          resolvedAnglePath = path.join(ASSETS_DIR, `${charName}-angle-0.png`);
-        }
+        const resolvedAnglePath = fs.existsSync(charAnglePath) ? charAnglePath : fallbackAnglePath;
 
         const genDir = path.join(TMP_DIR, 'studio-gen', `${charName}-${animName}`);
         fs.mkdirSync(genDir, { recursive: true });
+
+        // Write pose frames from base64 stored in index.json to tmp files
+        const poseFrameDir = path.join(genDir, 'pose-frames');
+        fs.mkdirSync(poseFrameDir, { recursive: true });
+        const posePaths = [];
+
+        if (anim.framesBase64 && anim.framesBase64.length > 0) {
+          for (let i = 0; i < anim.framesBase64.length; i++) {
+            const posePath = path.join(poseFrameDir, `frame-${i}.png`);
+            fs.writeFileSync(posePath, Buffer.from(anim.framesBase64[i], 'base64'));
+            posePaths.push(posePath);
+          }
+        }
 
         const frameCount = anim.frameCount;
         const processedPaths = [];
@@ -151,9 +155,9 @@ function register(router, ctx) {
         for (let i = 0; i < frameCount; i++) {
           updateJob(jobId, { frame: i, total: frameCount, msg: `Generating frame ${i + 1}/${frameCount}…` });
 
-          const posePath = path.join(ANIM_LIB_DIR, animName, `frame-${i}.png`);
-          if (!fs.existsSync(posePath)) {
-            throw new Error(`Pose frame ${i} not found at ${posePath}`);
+          const posePath = posePaths[i];
+          if (!posePath || !fs.existsSync(posePath)) {
+            throw new Error(`Pose frame ${i} not found for animation "${animName}"`);
           }
 
           const result = await client.generate(STUDIO_PROMPT, {
@@ -169,19 +173,11 @@ function register(router, ctx) {
           fs.writeFileSync(rawPath, result.imageBuffer);
           recordCost(modelId, 'studio_gen', '1K', 2, { charName, animName, frame: i });
 
-          // Process: remove bg, crop, scale
           const processedPath = path.join(genDir, `frame-${i}.png`);
           await processFrame(rawPath, processedPath);
           processedPaths.push(processedPath);
 
           updateJob(jobId, { frame: i + 1, total: frameCount, msg: `✓ Frame ${i + 1}/${frameCount} done` });
-        }
-
-        // Save individual frames to assets
-        const framesDir = path.join(ASSETS_DIR, `${charName}-${animName}-frames`);
-        fs.mkdirSync(framesDir, { recursive: true });
-        for (let i = 0; i < processedPaths.length; i++) {
-          fs.copyFileSync(processedPaths[i], path.join(framesDir, `frame-${i}.png`));
         }
 
         // Assemble sprite strip

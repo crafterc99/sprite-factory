@@ -4,8 +4,11 @@
  * Animations saved here are the source material for Studio generation.
  * Each animation stores: name, angle/POV, fps, loop, N pose-frame PNGs.
  *
- * Index: data/anim-lib/index.json
- * Frames: data/anim-lib/{name}/frame-{i}.png
+ * All frame data is stored as base64 inside index.json so it persists
+ * across Railway redeploys (no ephemeral filesystem dependency).
+ *
+ * Index: data/anim-lib/index.json  ← committed to git, survives deploys
+ *   entry.framesBase64: string[]   ← base64-encoded PNG for each frame
  */
 'use strict';
 
@@ -51,16 +54,21 @@ function register(router, ctx) {
   router.get('/api/anim-lib', (req, res) => {
     const index = loadIndex();
     const animations = Object.values(index).map(a => ({
-      ...a,
-      // Add URL for first frame as thumbnail
+      name: a.name,
+      displayName: a.displayName,
+      angle: a.angle,
+      angleIndex: a.angleIndex,
+      fps: a.fps,
+      loop: a.loop,
+      frameCount: a.frameCount,
+      createdAt: a.createdAt,
       thumbUrl: `/api/anim-lib/frame/${a.name}/0`,
     }));
     json(res, { animations });
   });
 
-  // POST /api/anim-lib — save animation from video session subjects
-  // Body: { name, angle, fps, loop, sessionId, frameFiles }
-  // Copies subject-extracted frames from the video session
+  // POST /api/anim-lib — save animation
+  // Body: { name, angle, fps, loop, frameBase64Array } or { name, angle, fps, loop, sessionId, frameFiles }
   router.post('/api/anim-lib', async (req, res) => {
     const body = await parseBody(req);
     const { name, angle, fps, loop, sessionId, frameFiles, frameBase64Array } = body;
@@ -68,57 +76,45 @@ function register(router, ctx) {
     if (!angle) return json(res, { error: 'angle required' }, 400);
 
     const animId = name.trim().toLowerCase().replace(/\s+/g, '-');
-    const animDir = path.join(LIB_DIR, animId);
-    fs.mkdirSync(animDir, { recursive: true });
 
     try {
-      let frames = [];
+      let framesBase64 = [];
 
       if (frameBase64Array && Array.isArray(frameBase64Array) && frameBase64Array.length > 0) {
-        // Save from base64 array (direct upload path)
-        for (let i = 0; i < frameBase64Array.length; i++) {
-          const data = frameBase64Array[i].replace(/^data:image\/\w+;base64,/, '');
-          const outPath = path.join(animDir, `frame-${i}.png`);
-          fs.writeFileSync(outPath, Buffer.from(data, 'base64'));
-          frames.push(outPath);
-        }
+        // Strip data URI prefix and store
+        framesBase64 = frameBase64Array.map(d => d.replace(/^data:image\/\w+;base64,/, ''));
       } else if (sessionId && frameFiles && Array.isArray(frameFiles)) {
-        // Copy subject-extracted frames from video session
+        // Read subject-extracted frames from video session
         const sessionDir = path.join(TMP_DIR || path.resolve(__dirname, '../data/.video-tmp'), sessionId);
         const subjectDir = path.join(sessionDir, 'subjects');
 
         for (let i = 0; i < frameFiles.length; i++) {
           const file = frameFiles[i];
-          // Subject file is created by /api/video/extract-subjects as subject-0.png, subject-1.png, etc.
           const subjectFile = path.join(subjectDir, `subject-${i}.png`);
-          // Fallback: use original frame if subject not extracted
           const originalFile = path.join(sessionDir, 'frames', path.basename(file));
           const srcFile = fs.existsSync(subjectFile) ? subjectFile : originalFile;
 
-          const outPath = path.join(animDir, `frame-${i}.png`);
           if (fs.existsSync(srcFile)) {
-            fs.copyFileSync(srcFile, outPath);
+            framesBase64.push(fs.readFileSync(srcFile).toString('base64'));
           } else {
-            // Try finding in any subfolder of sessionDir
             const allFiles = fs.readdirSync(sessionDir, { recursive: false });
             let found = false;
             for (const d of allFiles) {
               const candidate = path.join(sessionDir, d, path.basename(file));
               if (fs.existsSync(candidate)) {
-                fs.copyFileSync(candidate, outPath);
+                framesBase64.push(fs.readFileSync(candidate).toString('base64'));
                 found = true;
                 break;
               }
             }
-            if (!found) continue; // skip missing frame
+            if (!found) continue;
           }
-          frames.push(outPath);
         }
       } else {
         return json(res, { error: 'frameBase64Array or (sessionId + frameFiles) required' }, 400);
       }
 
-      if (frames.length === 0) return json(res, { error: 'No frames could be saved' }, 400);
+      if (framesBase64.length === 0) return json(res, { error: 'No frames could be saved' }, 400);
 
       const angleIndex = ANGLE_LABELS.indexOf(angle);
       const entry = {
@@ -128,8 +124,9 @@ function register(router, ctx) {
         angleIndex: angleIndex >= 0 ? angleIndex : 0,
         fps: parseInt(fps) || 8,
         loop: loop === true || loop === 'true',
-        frameCount: frames.length,
+        frameCount: framesBase64.length,
         createdAt: new Date().toISOString(),
+        framesBase64,
       };
 
       const index = loadIndex();
@@ -137,7 +134,7 @@ function register(router, ctx) {
       saveIndex(index);
       scheduleSync();
 
-      json(res, { success: true, animation: { ...entry, thumbUrl: `/api/anim-lib/frame/${animId}/0` } });
+      json(res, { success: true, animation: { name: entry.name, displayName: entry.displayName, angle: entry.angle, angleIndex: entry.angleIndex, fps: entry.fps, loop: entry.loop, frameCount: entry.frameCount, createdAt: entry.createdAt, thumbUrl: `/api/anim-lib/frame/${animId}/0` } });
     } catch (err) {
       json(res, { error: err.message }, 500);
     }
@@ -148,16 +145,6 @@ function register(router, ctx) {
     const { name } = params;
     const index = loadIndex();
     if (!index[name]) return json(res, { error: 'not found' }, 404);
-
-    try {
-      const animDir = path.join(LIB_DIR, name);
-      if (fs.existsSync(animDir)) {
-        const files = fs.readdirSync(animDir);
-        files.forEach(f => fs.unlinkSync(path.join(animDir, f)));
-        fs.rmdirSync(animDir);
-      }
-    } catch {}
-
     delete index[name];
     saveIndex(index);
     scheduleSync();
@@ -166,10 +153,19 @@ function register(router, ctx) {
 
   // GET /api/anim-lib/frame/:name/:index — serve a single pose frame
   router.get('/api/anim-lib/frame/:name/:index', (req, res, params) => {
-    const framePath = path.join(LIB_DIR, params.name, `frame-${params.index}.png`);
-    if (!fs.existsSync(framePath)) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=60' });
-    fs.createReadStream(framePath).pipe(res);
+    const index = loadIndex();
+    const anim = index[params.name];
+    const frameIdx = parseInt(params.index, 10);
+
+    if (!anim || !anim.framesBase64 || !anim.framesBase64[frameIdx]) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+
+    const buf = Buffer.from(anim.framesBase64[frameIdx], 'base64');
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=60', 'Content-Length': buf.length });
+    res.end(buf);
   });
 }
 
