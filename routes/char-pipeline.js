@@ -65,7 +65,7 @@ function computeScale(heightInches) {
   return { scaleMultiplier, pixelHeight };
 }
 
-const ANGLE_LABELS_8 = ['front', 'front_right_45', 'right_90', 'back_right_135', 'back_180', 'back_left_225', 'left_270', 'front_left_315'];
+const ANGLE_LABELS_8 = ['Front', 'Front Right', 'Right', 'Back Right', 'Back', 'Back Left', 'Left', 'Front Left'];
 
 // ── Prompt builders ─────────────────────────────────────────────────────────
 
@@ -786,13 +786,15 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           const anglePrompt = [
             'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
             '',
-            `Generate a single full-body pixel art sprite of this character at the ${angleLabel} angle (${i * 45}°).`,
+            `Generate ONE single full-body pixel art sprite of this character viewed from the ${angleLabel} angle (${i * 45}°).`,
             '',
+            'CRITICAL: ONE character only. Do NOT show multiple copies or duplicates of the character.',
+            'CRITICAL: Do NOT tile, repeat, or show the character more than once.',
             'STYLE: Match the exact pixel art style of the reference. 16-bit GBA style. Bold black outlines. No anti-aliasing.',
             'BODY: Full body visible from head to toe. Neutral standing pose. Arms relaxed at sides.',
-            'FRAMING: Character centered. Feet at bottom. Head near top. No cropping.',
-            'BACKGROUND: Solid bright green (#00FF00). Nothing else in the background.',
-            'OUTPUT: Single character only. Square 1:1 frame. No text, no labels, no extra elements.',
+            'FRAMING: Single character centered in frame. Feet at bottom. Head near top. No cropping.',
+            'BACKGROUND: Solid bright green (#00FF00). Nothing else.',
+            'OUTPUT: Exactly one character. Square 1:1 frame. No text, no labels, no borders.',
           ].join('\n');
 
           const result = await client.generate(anglePrompt, {

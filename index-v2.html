@@ -1610,7 +1610,7 @@ function selectDashChar(name) {
     : `<div class="hero-portrait-empty">🏀</div>`;
   document.getElementById('heroName').textContent = name;
 
-  const ANGLE_NAMES = ['front','front-3/4-R','side-R','back-3/4-R','back','back-3/4-L','side-L','front-3/4-L'];
+  const ANGLE_NAMES = ['Front','Front Right','Right','Back Right','Back','Back Left','Left','Front Left'];
   const bCount = char.bodyAnglesCount ?? 0;
   const hCount = char.headAnglesCount ?? 0;
 
@@ -2685,7 +2685,7 @@ async function confirmAndGenerateAngles() {
     document.getElementById('pinnedCharName').textContent = name;
 
     // Build body angle slots
-    const angleNames = ['front','front_right','right','back_right','back','back_left','left','front_left'];
+    const angleNames = ['Front','Front Right','Right','Back Right','Back','Back Left','Left','Front Left'];
     const slotStyle = 'width:120px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px';
     const imgWrapStyle = 'width:120px;height:120px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden';
     const grid = document.getElementById('anglesGrid');
