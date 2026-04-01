@@ -662,6 +662,38 @@
   .wardrobe-grid { display:flex; flex-wrap:wrap; gap:10px; }
   .wardrobe-section-heading { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#50507a; margin-bottom:10px; margin-top:20px; }
   .wardrobe-empty { font-family:var(--mono); font-size:10px; color:#30304a; padding:16px 0; }
+
+  /* ─── TESTING PAGE ─── */
+  .testing-layout { display:flex; height:calc(100vh - 52px); overflow:hidden; }
+  .testing-sidebar { width:260px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; background:var(--surface); }
+  .testing-sidebar-header { padding:14px 16px 10px; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--accent); font-weight:700; }
+  .testing-char-section { padding:12px 14px; border-bottom:1px solid var(--border); }
+  .testing-char-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(52px, 1fr)); gap:6px; }
+  .testing-char-card { border-radius:6px; border:2px solid var(--border); cursor:pointer; transition:all 0.15s; background:var(--surface2); padding:4px; text-align:center; }
+  .testing-char-card:hover { border-color:var(--border-hi); }
+  .testing-char-card.active { border-color:var(--accent); background:rgba(255,68,0,0.1); }
+  .testing-char-card img { width:44px; height:44px; image-rendering:pixelated; object-fit:contain; display:block; margin:0 auto; }
+  .testing-char-card .testing-char-name { font-family:var(--mono); font-size:7px; letter-spacing:0.5px; color:#60608a; margin-top:2px; text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .testing-char-card.active .testing-char-name { color:var(--accent); }
+  .testing-anim-section { padding:12px 14px; border-bottom:1px solid var(--border); flex:1; overflow-y:auto; }
+  .testing-anim-list { display:flex; flex-direction:column; gap:2px; max-height:300px; overflow-y:auto; }
+  .testing-anim-item { display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:6px; cursor:pointer; transition:all 0.12s; font-size:11px; border:1px solid transparent; }
+  .testing-anim-item:hover { background:var(--surface2); border-color:var(--border); }
+  .testing-anim-item.active { background:rgba(0,255,136,0.08); border-color:var(--accent2); color:var(--accent2); }
+  .testing-anim-item.disabled { opacity:0.3; cursor:not-allowed; }
+  .testing-anim-item .anim-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .testing-anim-item .anim-dot.exists { background:var(--accent2); }
+  .testing-anim-item .anim-dot.missing { background:#30304a; }
+  .testing-anim-item .anim-label { flex:1; font-family:var(--mono); font-size:10px; letter-spacing:0.5px; }
+  .testing-anim-item .anim-cat { font-family:var(--mono); font-size:8px; color:#40405a; }
+  .testing-controls { padding:12px 14px; border-bottom:1px solid var(--border); }
+  .testing-control-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .testing-control-row input[type=range] { -webkit-appearance:none; height:3px; background:var(--border); border-radius:2px; outline:none; }
+  .testing-control-row input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--accent); cursor:pointer; }
+  .testing-info { padding:12px 14px; }
+  .testing-court-wrap { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#0a0a14; position:relative; overflow:hidden; }
+  .testing-court-wrap canvas { image-rendering:pixelated; cursor:crosshair; max-width:100%; max-height:100%; }
+  .testing-court-hint { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:10px; color:#40405a; letter-spacing:1px; pointer-events:none; background:rgba(0,0,0,0.6); padding:6px 14px; border-radius:6px; }
 </style>
 </head>
 <body>
@@ -678,6 +710,7 @@
       <button class="nav-btn" onclick="showPage('video')">Video</button>
       <button class="nav-btn" onclick="showPage('wardrobe')">Wardrobe</button>
       <button class="nav-btn" onclick="showPage('prompts')">Prompts</button>
+      <button class="nav-btn" onclick="showPage('testing')">Testing</button>
     </nav>
     <div class="header-right">
       <div class="cost-pill" id="costPill">spend: <span>$0.00</span></div>
@@ -1096,6 +1129,56 @@
 
       </div><!-- /page-wardrobe -->
 
+      <!-- PAGE: Testing -->
+      <div class="page" id="page-testing">
+        <div class="testing-layout">
+          <!-- Left panel: character & animation selector -->
+          <div class="testing-sidebar">
+            <div class="testing-sidebar-header">TESTING COURT</div>
+            <div class="testing-char-section">
+              <label class="form-label" style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;margin-bottom:6px;display:block">CHARACTER</label>
+              <div id="testingCharGrid" class="testing-char-grid"></div>
+            </div>
+            <div class="testing-anim-section">
+              <label class="form-label" style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;margin-bottom:6px;display:block">ANIMATIONS</label>
+              <div id="testingAnimList" class="testing-anim-list">
+                <div style="color:#50507a;font-size:11px;padding:8px">Select a character first</div>
+              </div>
+            </div>
+            <div class="testing-controls">
+              <label class="form-label" style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;margin-bottom:6px;display:block">CONTROLS</label>
+              <div class="testing-control-row">
+                <span style="font-size:10px;color:#60608a">Scale</span>
+                <input type="range" id="testingScale" min="1" max="6" value="3" step="0.5" style="flex:1" />
+                <span id="testingScaleLabel" style="font-family:var(--mono);font-size:10px;color:var(--text);min-width:28px;text-align:right">3x</span>
+              </div>
+              <div class="testing-control-row">
+                <span style="font-size:10px;color:#60608a">Speed</span>
+                <input type="range" id="testingSpeed" min="0.25" max="3" value="1" step="0.25" style="flex:1" />
+                <span id="testingSpeedLabel" style="font-family:var(--mono);font-size:10px;color:var(--text);min-width:28px;text-align:right">1x</span>
+              </div>
+              <div class="testing-control-row" style="gap:6px;margin-top:4px">
+                <button class="btn btn-secondary btn-sm" id="testingPlayBtn" onclick="testingTogglePlay()" style="font-family:var(--mono);font-size:9px;flex:1">Pause</button>
+                <button class="btn btn-secondary btn-sm" onclick="testingResetPosition()" style="font-family:var(--mono);font-size:9px;flex:1">Reset Pos</button>
+              </div>
+              <div class="testing-control-row" style="margin-top:8px">
+                <label style="font-size:10px;color:#60608a;display:flex;align-items:center;gap:6px;cursor:pointer">
+                  <input type="checkbox" id="testingShowHitbox" /> Show hitbox
+                </label>
+              </div>
+            </div>
+            <div class="testing-info">
+              <div id="testingInfoText" style="font-family:var(--mono);font-size:9px;color:#50507a;line-height:1.6"></div>
+            </div>
+          </div>
+          <!-- Right: court canvas -->
+          <div class="testing-court-wrap">
+            <canvas id="testingCourt" width="960" height="640"></canvas>
+            <div class="testing-court-hint" id="testingCourtHint">Click the court to place character. Arrow keys or WASD to move.</div>
+          </div>
+        </div>
+      </div><!-- /page-testing -->
+
     </div>
   </main>
 
@@ -1513,6 +1596,7 @@ function showPage(name) {
   if (name === 'video') initVideoPage();
   if (name === 'prompts') { ptInitSelects().then(() => { ptLoadLibrary(); ptLoad(); }); }
   if (name === 'wardrobe') loadWardrobePage();
+  if (name === 'testing') initTestingPage();
   if (name === 'studio') {
     if (STATE.selectedChar) {
       selectChar(STATE.selectedChar.name);
@@ -4651,6 +4735,377 @@ function ptCopy() {
 }
 
 // ptInitSelects + ptLoad called from showPage('prompts')
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TESTING PAGE — Soul Jam court preview with sprite animation playback
+// ═══════════════════════════════════════════════════════════════════════════
+
+const TESTING = {
+  initialized: false,
+  roster: [],
+  animations: {},
+  selectedChar: null,
+  selectedAnim: null,
+  // Court canvas state
+  ctx: null,
+  courtImg: null,
+  courtLoaded: false,
+  // Character on court
+  charX: 480,
+  charY: 380,
+  // Animation playback
+  stripImg: null,
+  stripLoaded: false,
+  currentFrame: 0,
+  frameCount: 0,
+  fps: 8,
+  loop: true,
+  playing: true,
+  lastFrameTime: 0,
+  animId: null,
+  // Sprite calibration (from Soul Jam)
+  scale: 3,
+  speed: 1,
+  frameSize: 180,
+  pixelHeight: 112,
+  scaleMultiplier: 1,
+  showHitbox: false,
+  // Movement
+  keysDown: new Set(),
+  moveSpeed: 2,
+};
+
+function initTestingPage() {
+  const canvas = document.getElementById('testingCourt');
+  if (!canvas) return;
+  TESTING.ctx = canvas.getContext('2d');
+  TESTING.ctx.imageSmoothingEnabled = false;
+
+  // Load court background
+  if (!TESTING.courtLoaded) {
+    TESTING.courtImg = new Image();
+    TESTING.courtImg.onload = () => { TESTING.courtLoaded = true; };
+    TESTING.courtImg.src = '/assets/court.webp';
+  }
+
+  // Load roster data
+  loadTestingRoster();
+
+  // Set up controls
+  document.getElementById('testingScale').oninput = (e) => {
+    TESTING.scale = parseFloat(e.target.value);
+    document.getElementById('testingScaleLabel').textContent = TESTING.scale + 'x';
+  };
+  document.getElementById('testingSpeed').oninput = (e) => {
+    TESTING.speed = parseFloat(e.target.value);
+    document.getElementById('testingSpeedLabel').textContent = TESTING.speed + 'x';
+  };
+  document.getElementById('testingShowHitbox').onchange = (e) => {
+    TESTING.showHitbox = e.target.checked;
+  };
+
+  // Click on court to place character
+  canvas.onclick = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    TESTING.charX = (e.clientX - rect.left) * scaleX;
+    TESTING.charY = (e.clientY - rect.top) * scaleY;
+  };
+
+  // Keyboard movement
+  if (!TESTING.initialized) {
+    window.addEventListener('keydown', (e) => {
+      if (document.getElementById('page-testing')?.classList.contains('active')) {
+        TESTING.keysDown.add(e.key.toLowerCase());
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      TESTING.keysDown.delete(e.key.toLowerCase());
+    });
+  }
+
+  TESTING.initialized = true;
+
+  // Start render loop
+  if (TESTING.animId) cancelAnimationFrame(TESTING.animId);
+  testingRenderLoop();
+}
+
+async function loadTestingRoster() {
+  try {
+    const r = await fetch(`${API}/api/roster`);
+    const data = await r.json();
+    TESTING.roster = data.roster || [];
+
+    // Also load animation definitions
+    const ar = await fetch(`${API}/api/animations`);
+    const adata = await ar.json();
+    TESTING.animations = adata.animations || {};
+
+    renderTestingCharGrid();
+
+    // Auto-select first character that has animations
+    if (!TESTING.selectedChar && TESTING.roster.length > 0) {
+      const charWithAnims = TESTING.roster.find(c => c.completedAnims > 0) || TESTING.roster[0];
+      testingSelectChar(charWithAnims.name);
+    }
+  } catch (e) {
+    console.error('Testing: failed to load roster', e);
+  }
+}
+
+function renderTestingCharGrid() {
+  const grid = document.getElementById('testingCharGrid');
+  if (!grid) return;
+  grid.innerHTML = TESTING.roster.map(c => `
+    <div class="testing-char-card ${TESTING.selectedChar === c.name ? 'active' : ''}" onclick="testingSelectChar('${c.name}')">
+      <img src="${c.portrait}" alt="${c.name}" onerror="this.style.display='none'" />
+      <div class="testing-char-name">${c.name}</div>
+    </div>
+  `).join('');
+}
+
+function testingSelectChar(charName) {
+  TESTING.selectedChar = charName;
+  TESTING.selectedAnim = null;
+  TESTING.stripLoaded = false;
+  renderTestingCharGrid();
+
+  // Get character data for Soul Jam calibration
+  const char = TESTING.roster.find(c => c.name === charName);
+  if (char) {
+    TESTING.pixelHeight = char.pixelHeight || 112;
+    TESTING.scaleMultiplier = char.scaleMultiplier || 1;
+  }
+
+  renderTestingAnimList(charName);
+}
+
+function renderTestingAnimList(charName) {
+  const list = document.getElementById('testingAnimList');
+  if (!list) return;
+
+  const char = TESTING.roster.find(c => c.name === charName);
+  if (!char) { list.innerHTML = '<div style="color:#50507a;font-size:11px;padding:8px">Character not found</div>'; return; }
+
+  // Group animations by category
+  const categories = {};
+  for (const [animName, animDef] of Object.entries(TESTING.animations)) {
+    const cat = animDef.category || 'other';
+    if (!categories[cat]) categories[cat] = [];
+    const exists = char.sprites?.[animName]?.exists || false;
+    categories[cat].push({ name: animName, exists, ...animDef });
+  }
+
+  let html = '';
+  for (const [cat, anims] of Object.entries(categories)) {
+    html += `<div style="font-family:var(--mono);font-size:8px;letter-spacing:1px;color:#30304a;text-transform:uppercase;margin:8px 0 4px;padding:0 10px">${cat}</div>`;
+    for (const anim of anims) {
+      const activeClass = TESTING.selectedAnim === anim.name ? 'active' : '';
+      const disabledClass = !anim.exists ? 'disabled' : '';
+      html += `
+        <div class="testing-anim-item ${activeClass} ${disabledClass}" onclick="${anim.exists ? `testingSelectAnim('${anim.name}')` : ''}">
+          <div class="anim-dot ${anim.exists ? 'exists' : 'missing'}"></div>
+          <span class="anim-label">${anim.name}</span>
+        </div>`;
+    }
+  }
+  list.innerHTML = html;
+}
+
+function testingSelectAnim(animName) {
+  TESTING.selectedAnim = animName;
+  TESTING.currentFrame = 0;
+  TESTING.stripLoaded = false;
+
+  const animDef = TESTING.animations[animName];
+  TESTING.frameCount = animDef?.frames || 4;
+  TESTING.fps = animDef?.fps || DEFAULT_FPS_ANIM[animName] || 8;
+  TESTING.loop = animDef?.loop !== false;
+
+  // Load the animation strip
+  const stripUrl = `/assets/${TESTING.selectedChar}-${animName}.png`;
+  TESTING.stripImg = new Image();
+  TESTING.stripImg.onload = () => {
+    TESTING.stripLoaded = true;
+    // Infer frame count from actual image width
+    const inferredFrames = Math.round(TESTING.stripImg.width / TESTING.frameSize);
+    if (inferredFrames > 0) TESTING.frameCount = inferredFrames;
+  };
+  TESTING.stripImg.src = stripUrl;
+
+  // Update animation list highlight
+  renderTestingAnimList(TESTING.selectedChar);
+
+  // Update info
+  updateTestingInfo();
+
+  // Hide hint
+  const hint = document.getElementById('testingCourtHint');
+  if (hint) hint.style.display = 'none';
+}
+
+function updateTestingInfo() {
+  const el = document.getElementById('testingInfoText');
+  if (!el) return;
+  const char = TESTING.roster.find(c => c.name === TESTING.selectedChar);
+  const animDef = TESTING.animations[TESTING.selectedAnim];
+  const lines = [];
+  if (char) {
+    lines.push(`Character: ${char.name}`);
+    lines.push(`Pixel Height: ${char.pixelHeight || 112}px`);
+    lines.push(`Scale: ${char.scaleMultiplier || 1}x`);
+    lines.push(`Anims: ${char.completedAnims}/${char.totalAnims}`);
+  }
+  if (animDef) {
+    lines.push(`---`);
+    lines.push(`Animation: ${TESTING.selectedAnim}`);
+    lines.push(`Frames: ${TESTING.frameCount} @ ${TESTING.fps}fps`);
+    lines.push(`Loop: ${TESTING.loop ? 'yes' : 'no'}`);
+    lines.push(`Category: ${animDef.category || 'n/a'}`);
+    if (animDef.qcScore) lines.push(`QC: ${animDef.qcScore}`);
+  }
+  el.innerHTML = lines.map(l => l === '---' ? '<hr style="border:none;border-top:1px solid #25253a;margin:4px 0">' : l).join('<br>');
+}
+
+function testingTogglePlay() {
+  TESTING.playing = !TESTING.playing;
+  document.getElementById('testingPlayBtn').textContent = TESTING.playing ? 'Pause' : 'Play';
+}
+
+function testingResetPosition() {
+  TESTING.charX = 480;
+  TESTING.charY = 380;
+}
+
+function testingRenderLoop(timestamp) {
+  const canvas = document.getElementById('testingCourt');
+  if (!canvas || !document.getElementById('page-testing')?.classList.contains('active')) {
+    TESTING.animId = requestAnimationFrame(testingRenderLoop);
+    return;
+  }
+
+  const ctx = TESTING.ctx;
+  const W = canvas.width, H = canvas.height;
+
+  // Handle movement
+  const ms = TESTING.moveSpeed;
+  if (TESTING.keysDown.has('arrowleft') || TESTING.keysDown.has('a')) TESTING.charX -= ms;
+  if (TESTING.keysDown.has('arrowright') || TESTING.keysDown.has('d')) TESTING.charX += ms;
+  if (TESTING.keysDown.has('arrowup') || TESTING.keysDown.has('w')) TESTING.charY -= ms;
+  if (TESTING.keysDown.has('arrowdown') || TESTING.keysDown.has('s')) TESTING.charY += ms;
+  // Clamp
+  TESTING.charX = Math.max(0, Math.min(W, TESTING.charX));
+  TESTING.charY = Math.max(0, Math.min(H, TESTING.charY));
+
+  // Clear
+  ctx.clearRect(0, 0, W, H);
+
+  // Draw court background
+  if (TESTING.courtLoaded && TESTING.courtImg) {
+    ctx.drawImage(TESTING.courtImg, 0, 0, W, H);
+  } else {
+    // Fallback: dark court floor
+    ctx.fillStyle = '#1a1208';
+    ctx.fillRect(0, 0, W, H);
+    // Court lines
+    ctx.strokeStyle = '#3a2a10';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(60, 40, W - 120, H - 80);
+    ctx.beginPath();
+    ctx.arc(W / 2, H / 2, 80, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Draw character sprite
+  if (TESTING.stripLoaded && TESTING.stripImg && TESTING.selectedAnim) {
+    // Advance frame based on time
+    if (TESTING.playing && timestamp) {
+      const frameDuration = 1000 / (TESTING.fps * TESTING.speed);
+      if (!TESTING.lastFrameTime) TESTING.lastFrameTime = timestamp;
+      if (timestamp - TESTING.lastFrameTime >= frameDuration) {
+        if (TESTING.loop || TESTING.currentFrame < TESTING.frameCount - 1) {
+          TESTING.currentFrame = (TESTING.currentFrame + 1) % TESTING.frameCount;
+        }
+        TESTING.lastFrameTime = timestamp;
+      }
+    }
+
+    // Soul Jam sprite calibration:
+    // frameSize is 180px source, pixelHeight is the character's actual pixel height within that frame
+    // scaleMultiplier adjusts for character height differences
+    const drawScale = TESTING.scale * TESTING.scaleMultiplier;
+    const drawW = TESTING.frameSize * drawScale;
+    const drawH = TESTING.frameSize * drawScale;
+    const drawX = TESTING.charX - drawW / 2;
+    // Anchor at feet: character's feet should be at charY
+    const drawY = TESTING.charY - drawH + (TESTING.frameSize - TESTING.pixelHeight) * drawScale / 2;
+
+    // Draw the current frame from the strip
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      TESTING.stripImg,
+      TESTING.currentFrame * TESTING.frameSize, 0,   // source x, y
+      TESTING.frameSize, TESTING.frameSize,           // source w, h
+      drawX, drawY, drawW, drawH                      // dest
+    );
+
+    // Draw shadow ellipse under character
+    ctx.save();
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(TESTING.charX, TESTING.charY, drawW * 0.25, drawW * 0.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Hitbox overlay
+    if (TESTING.showHitbox) {
+      ctx.strokeStyle = '#ff440088';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(drawX, drawY, drawW, drawH);
+      // Pixel height box
+      const phH = TESTING.pixelHeight * drawScale;
+      ctx.strokeStyle = '#00ff8888';
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(TESTING.charX - drawW * 0.3, TESTING.charY - phH, drawW * 0.6, phH);
+      ctx.setLineDash([]);
+      // Foot marker
+      ctx.fillStyle = '#ff4400';
+      ctx.beginPath();
+      ctx.arc(TESTING.charX, TESTING.charY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Frame counter overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(8, H - 28, 120, 20);
+    ctx.fillStyle = '#aaa';
+    ctx.font = '10px "Space Mono", monospace';
+    ctx.fillText(`Frame ${TESTING.currentFrame + 1}/${TESTING.frameCount}  ${TESTING.fps}fps`, 14, H - 14);
+  } else if (TESTING.selectedChar && !TESTING.selectedAnim) {
+    // Draw static portrait at position
+    const char = TESTING.roster.find(c => c.name === TESTING.selectedChar);
+    if (char) {
+      const portraitImg = new Image();
+      portraitImg.src = char.portrait;
+      // Just show a placeholder indicator
+      ctx.fillStyle = 'rgba(255,68,0,0.3)';
+      ctx.beginPath();
+      ctx.arc(TESTING.charX, TESTING.charY, 20, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff4400';
+      ctx.font = 'bold 10px "Space Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(TESTING.selectedChar.toUpperCase(), TESTING.charX, TESTING.charY - 26);
+      ctx.textAlign = 'start';
+    }
+  }
+
+  TESTING.animId = requestAnimationFrame(testingRenderLoop);
+}
+
 </script>
 </body>
 </html>
