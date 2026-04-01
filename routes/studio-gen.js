@@ -16,6 +16,7 @@ const sharp = require('sharp');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
 const { removeBackground, cropToContent } = require('../lib/sprite-processor/index');
+const { uploadFile: sbUpload } = require('../lib/supabase-storage');
 
 const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
 const ANIM_LIB_INDEX = path.join(ANIM_LIB_DIR, 'index.json');
@@ -201,6 +202,16 @@ function register(router, ctx) {
         // Assemble sprite strip
         const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);
         await buildStrip(processedPaths, stripPath);
+        sbUpload(`${charName}-${animName}.png`, stripPath);
+
+        // Copy individual frames to assets dir so the result grid can load them
+        const framesOutDir = path.join(ASSETS_DIR, `${charName}-${animName}-frames`);
+        fs.mkdirSync(framesOutDir, { recursive: true });
+        processedPaths.forEach((p, i) => {
+          const dest = path.join(framesOutDir, `frame-${i}.png`);
+          fs.copyFileSync(p, dest);
+          sbUpload(`${charName}-${animName}-frames/frame-${i}.png`, dest);
+        });
 
         finishJob(jobId, {
           success: true,
