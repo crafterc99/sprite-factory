@@ -478,7 +478,14 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     const registry = loadCharacters();
     delete registry[name];
     saveCharacters(registry);
-    scheduleSync();
+
+    // git rm the deleted asset files so they don't come back on next redeploy
+    const { scheduleSync: _sync, _gitRmAndSync } = require('../lib/auto-git-sync');
+    if (assetsToDelete.length > 0) {
+      _gitRmAndSync(assetsToDelete.map(f => `data/assets/${f}`));
+    } else {
+      _sync();
+    }
 
     return json(res, { success: true, deleted: name });
   });
