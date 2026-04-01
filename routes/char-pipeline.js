@@ -401,6 +401,68 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     return json(res, { success: true, prompts: updated });
   });
 
+  // POST /api/char-pipeline/pixel-char/portrait — FAST: photo → pixel art → standing portrait in one job
+  router.post('/api/char-pipeline/pixel-char/portrait', async (req, res) => {
+    const body = await parseBody(req);
+    const { name, photoBase64 } = body;
+    if (!name) return json(res, { error: 'name required' }, 400);
+
+    const charDir = path.join(TMP_DIR, 'characters', name);
+    fs.mkdirSync(charDir, { recursive: true });
+    const originalPath = path.join(charDir, 'original.png');
+
+    if (photoBase64) {
+      const data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
+      fs.writeFileSync(originalPath, Buffer.from(data, 'base64'));
+    } else if (!fs.existsSync(originalPath)) {
+      return json(res, { error: 'Photo required' }, 400);
+    }
+
+    const jobId = startJob();
+
+    setImmediate(async () => {
+      try {
+        const modelId = 'gemini-3-pro-image-preview';
+        const client = new NanaBananaClient({ model: modelId });
+
+        // Step 1: photo → pixel art
+        const step1Prompt = loadCharPrompts().step1;
+        const step1 = await client.generate(step1Prompt, {
+          referenceImages: [originalPath],
+          aspectRatio: '3:4',
+          resolution: '1K',
+          model: modelId,
+          maxRetries: 2,
+          timeoutMs: 60000,
+        });
+        const step1Path = path.join(charDir, 'step1-pixel.png');
+        fs.writeFileSync(step1Path, step1.imageBuffer);
+        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step1' });
+
+        // Step 2: pixel art → clean standing portrait
+        const step2Prompt = loadCharPrompts().step2;
+        const step2 = await client.generate(step2Prompt, {
+          referenceImages: [step1Path],
+          aspectRatio: '3:4',
+          resolution: '1K',
+          model: modelId,
+          maxRetries: 2,
+          timeoutMs: 60000,
+        });
+        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step2' });
+
+        const previewPath = path.join(charDir, 'step2-preview.png');
+        fs.writeFileSync(previewPath, step2.imageBuffer);
+        const imageBase64 = 'data:image/png;base64,' + step2.imageBuffer.toString('base64');
+        finishJob(jobId, { success: true, name, imageBase64 });
+      } catch (err) {
+        failJob(jobId, err.message);
+      }
+    });
+
+    return json(res, { jobId, status: 'started' });
+  });
+
   // POST /api/char-pipeline/pixel-char/step1 — Start async: save photo + convert to pixel art
   router.post('/api/char-pipeline/pixel-char/step1', async (req, res) => {
     const body = await parseBody(req);
@@ -719,11 +781,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const client = new NanaBananaClient({ model: modelId });
         const referenceImages = [portraitPath, ...clothingPaths];
 
-        // Generate each body angle individually — one API call per angle.
-        // This eliminates sheet-slicing misalignment: each result is already a single clean frame.
-        const frames = [];
-        for (let i = 0; i < 8; i++) {
-          const angleLabel = ANGLE_LABELS_8[i];
+        // Generate all 8 body angles in parallel — fastest possible
+        const frames = await Promise.all(ANGLE_LABELS_8.map(async (angleLabel, i) => {
           const anglePrompt = [
             'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
             '',
@@ -749,14 +808,13 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           fs.writeFileSync(framePath, result.imageBuffer);
           recordCost(modelId, 'char_pipeline', '1K', referenceImages.length, { character: name, step: `body-angle-${i}` });
 
-          // Remove green background and crop to clean transparent PNG
           await removeBackground(framePath, framePath);
           const tmpPath = framePath + '.crop.tmp.png';
           await cropToContent(framePath, tmpPath, { width: 180, height: 180, padding: 10 });
           fs.renameSync(tmpPath, framePath);
 
-          frames.push({ index: i, label: angleLabel, url: `/assets/${name}-angle-${i}.png` });
-        }
+          return { index: i, label: angleLabel, url: `/assets/${name}-angle-${i}.png` };
+        }));
 
         finishJob(jobId, { success: true, name, frames });
       } catch (err) {
@@ -784,10 +842,11 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
-        // Generate each headshot angle individually — eliminates sheet-slicing issues.
-        const frames = [];
-        for (let i = 0; i < 8; i++) {
-          const angleLabel = ANGLE_LABELS_8[i];
+        // Generate all 8 headshot angles in parallel
+        const charDir = path.join(TMP_DIR, 'characters', name);
+        fs.mkdirSync(charDir, { recursive: true });
+
+        const frames = await Promise.all(ANGLE_LABELS_8.map(async (angleLabel, i) => {
           const anglePrompt = [
             'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
             '',
@@ -808,14 +867,12 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
             timeoutMs: 90000,
           });
 
-          const charDir = path.join(TMP_DIR, 'characters', name);
-          fs.mkdirSync(charDir, { recursive: true });
           const framePath = path.join(ASSETS_DIR, `${name}-headshot-${i}.png`);
           fs.writeFileSync(framePath, result.imageBuffer);
           recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: `head-angle-${i}` });
 
-          frames.push({ index: i, label: angleLabel, url: `/assets/${name}-headshot-${i}.png` });
-        }
+          return { index: i, label: angleLabel, url: `/assets/${name}-headshot-${i}.png` };
+        }));
 
         finishJob(jobId, { success: true, name, frames });
       } catch (err) {

@@ -2329,26 +2329,15 @@ async function cpGenerate() {
   document.getElementById('cpPortraitConfirm').style.display = 'none';
 
   try {
-    // Step 1: photo → pixel art (async job)
-    cpLog('Step 1 — Converting to pixel art…');
-    const r1 = await fetch(`${API}/api/char-pipeline/pixel-char/step1`, {
+    // Combined step: photo → pixel art → portrait in one job
+    cpLog('Generating pixel art portrait…');
+    const r1 = await fetch(`${API}/api/char-pipeline/pixel-char/portrait`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, photoBase64 }),
     });
     const d1 = await r1.json();
     if (d1.error) throw new Error(d1.error);
-    await waitForJob(d1.jobId, cpLog, 'Converting to pixel art');
-    cpLog('✓ Pixel art done — generating portrait…', 'ok');
-
-    // Step 2: pixel art → standing portrait (async job)
-    job.stage = 'step2'; cpSaveState(); renderDashboard();
-    const r2 = await fetch(`${API}/api/char-pipeline/pixel-char/step2`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    const d2 = await r2.json();
-    if (d2.error) throw new Error(d2.error);
-    const portraitResult = await waitForJob(d2.jobId, cpLog, 'Generating portrait');
+    const portraitResult = await waitForJob(d1.jobId, cpLog, 'Generating portrait');
     cpLog('✓ Portrait ready — confirm to continue', 'ok');
 
     // Store portrait in job (survives modal switch)
