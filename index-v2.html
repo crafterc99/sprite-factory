@@ -1006,39 +1006,33 @@
           <!-- Images row -->
           <div id="ptCharGenImages" style="display:flex;gap:12px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--border)"></div>
 
-          <!-- 4 prompt editors -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <!-- 3 prompt editors: Character Gen + Studio -->
+          <div style="display:flex;flex-direction:column;gap:16px">
 
-            <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
-              <div class="pt-panel-header" style="justify-content:space-between">
-                Step 1 — Photo → Pixel Art
-                <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('step1')">Save</button>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+              <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+                <div class="pt-panel-header" style="justify-content:space-between">
+                  Step 1 — Photo → Pixel Art
+                  <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('step1')">Save</button>
+                </div>
+                <textarea id="ptPromptStep1" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
               </div>
-              <textarea id="ptPromptStep1" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
+
+              <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+                <div class="pt-panel-header" style="justify-content:space-between">
+                  Step 2 — Pixel Art → Standing Portrait
+                  <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('step2')">Save</button>
+                </div>
+                <textarea id="ptPromptStep2" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
+              </div>
             </div>
 
             <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
               <div class="pt-panel-header" style="justify-content:space-between">
-                Step 2 — Pixel Art → Standing Portrait
-                <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('step2')">Save</button>
+                Studio — Sprite Generation (Character Angle + Pose → Frame)
+                <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('studio')">Save</button>
               </div>
-              <textarea id="ptPromptStep2" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
-            </div>
-
-            <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
-              <div class="pt-panel-header" style="justify-content:space-between">
-                Body Angles Sheet (8 views, 2×4)
-                <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('bodySheet')">Save</button>
-              </div>
-              <textarea id="ptPromptBodySheet" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
-            </div>
-
-            <div class="pt-panel" style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
-              <div class="pt-panel-header" style="justify-content:space-between">
-                Head Angles Sheet (8 headshots, 2×4)
-                <button class="btn btn-secondary" style="font-size:9px;padding:3px 10px" onclick="ptSavePrompt('headSheet')">Save</button>
-              </div>
-              <textarea id="ptPromptHeadSheet" class="pt-compiled" style="height:200px;font-size:11px" placeholder="Loading…"></textarea>
+              <textarea id="ptPromptStudio" class="pt-compiled" style="height:160px;font-size:11px" placeholder="Loading…"></textarea>
             </div>
 
           </div>
@@ -4534,8 +4528,7 @@ async function ptCharGenLoad() {
     const d = await r.json();
     document.getElementById('ptPromptStep1').value = d.step1 || '';
     document.getElementById('ptPromptStep2').value = d.step2 || '';
-    document.getElementById('ptPromptBodySheet').value = d.bodySheet || '';
-    document.getElementById('ptPromptHeadSheet').value = d.headSheet || '';
+    document.getElementById('ptPromptStudio').value = d.studio || '';
   } catch(e) { console.error('Failed to load char prompts', e); }
 
   // Populate character selector from STATE.roster
@@ -4550,7 +4543,7 @@ async function ptCharGenLoad() {
 }
 
 async function ptSavePrompt(key) {
-  const idMap = { step1: 'ptPromptStep1', step2: 'ptPromptStep2', bodySheet: 'ptPromptBodySheet', headSheet: 'ptPromptHeadSheet' };
+  const idMap = { step1: 'ptPromptStep1', step2: 'ptPromptStep2', studio: 'ptPromptStudio' };
   const text = document.getElementById(idMap[key])?.value;
   if (text === undefined) return;
   try {

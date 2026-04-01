@@ -388,9 +388,22 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     });
   });
 
-  // GET /api/char-pipeline/prompts — Return current character generation prompts
+  // GET /api/char-pipeline/prompts — Return current prompts
   router.get('/api/char-pipeline/prompts', (req, res) => {
-    return json(res, loadCharPrompts());
+    const p = loadCharPrompts();
+    // Include studio default if not saved yet
+    if (!p.studio) {
+      const DEFAULT_STUDIO = [
+        'Keep the exact pixelated character from Image 1. Copy only the exact pose and limb/body position from Image 2.',
+        'Do not mix faces or identities. make sure the characters face does not change at all.',
+        'Do not change body shape, skin tone, hairstyle, or facial structure.',
+        'Match Image 2\'s full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.',
+        'natural anatomy, no distortions.',
+        'Pure green (#00FF00) background.',
+      ].join('\n');
+      p.studio = DEFAULT_STUDIO;
+    }
+    return json(res, p);
   });
 
   // POST /api/char-pipeline/prompts — Save updated prompts
@@ -400,8 +413,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     const updated = { ...current };
     if (body.step1 !== undefined) updated.step1 = body.step1;
     if (body.step2 !== undefined) updated.step2 = body.step2;
-    if (body.bodySheet !== undefined) updated.bodySheet = body.bodySheet;
-    if (body.headSheet !== undefined) updated.headSheet = body.headSheet;
+    if (body.studio !== undefined) updated.studio = body.studio;
     saveCharPrompts(updated);
     return json(res, { success: true, prompts: updated });
   });

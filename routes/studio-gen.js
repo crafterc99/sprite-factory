@@ -20,14 +20,26 @@ const { removeBackground, cropToContent } = require('../lib/sprite-processor/ind
 const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
 const ANIM_LIB_INDEX = path.join(ANIM_LIB_DIR, 'index.json');
 
-const STUDIO_PROMPT = [
-  'Keep the exact character from Image 1. Copy only the exact pose from Image 2.',
+const DEFAULT_STUDIO_PROMPT = [
+  'Keep the exact pixelated character from Image 1. Copy only the exact pose and limb/body position from Image 2.',
   'Do not mix faces or identities. make sure the characters face does not change at all.',
   'Do not change body shape, skin tone, hairstyle, or facial structure.',
   'Match Image 2\'s full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.',
   'natural anatomy, no distortions.',
   'Pure green (#00FF00) background.',
 ].join('\n');
+
+const PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
+
+function loadStudioPrompt() {
+  try {
+    if (fs.existsSync(PROMPTS_FILE)) {
+      const d = JSON.parse(fs.readFileSync(PROMPTS_FILE, 'utf8'));
+      if (d.studio) return d.studio;
+    }
+  } catch {}
+  return DEFAULT_STUDIO_PROMPT;
+}
 
 function loadAnimLib() {
   try {
@@ -166,7 +178,7 @@ function register(router, ctx) {
               throw new Error(`Pose frame ${i} not found for animation "${animName}"`);
             }
 
-            const result = await client.generate(STUDIO_PROMPT, {
+            const result = await client.generate(loadStudioPrompt(), {
               referenceImages: [resolvedAnglePath, posePath],
               aspectRatio: '1:1',
               resolution: '1K',
