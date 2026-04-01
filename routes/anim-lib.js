@@ -89,8 +89,8 @@ function register(router, ctx) {
 
         for (let i = 0; i < frameFiles.length; i++) {
           const file = frameFiles[i];
-          // Subject file is named after the original frame file
-          const subjectFile = path.join(subjectDir, path.basename(file).replace(/\.\w+$/, '-subject.png'));
+          // Subject file is created by /api/video/extract-subjects as subject-0.png, subject-1.png, etc.
+          const subjectFile = path.join(subjectDir, `subject-${i}.png`);
           // Fallback: use original frame if subject not extracted
           const originalFile = path.join(sessionDir, 'frames', path.basename(file));
           const srcFile = fs.existsSync(subjectFile) ? subjectFile : originalFile;

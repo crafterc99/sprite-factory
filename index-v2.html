@@ -1491,6 +1491,8 @@ function showPage(name) {
       selectChar(STATE.selectedChar.name);
     } else if (STATE.roster.length > 0) {
       selectChar(STATE.roster[0].name);
+    } else {
+      studioLoadAnimLib(); // load library even without characters
     }
   }
 }
@@ -3555,6 +3557,12 @@ function openSubjectEditor(slotEl, frameIndex, frameFile) {
 }
 
 async function saveAnimToLibrary() {
+  // Block save while background-removal is still running
+  const pendingSlots = document.querySelectorAll('#vstSubjectGrid .vst-subject.vst-pending');
+  if (pendingSlots.length > 0) {
+    return toast('Pose references are still loading — wait a moment then try again', true);
+  }
+
   const animName = document.getElementById('videoAnimName').value.trim();
   const angle = document.getElementById('videoAnimAngle').value;
   const fps = parseInt(document.getElementById('videoAnimFps').value) || 8;
