@@ -5015,7 +5015,24 @@ function renderTestingAnimList(charName) {
   const char = TESTING.roster.find(c => c.name === charName);
   if (!char) { list.innerHTML = '<div style="color:#50507a;font-size:11px;padding:8px">Character not found</div>'; return; }
 
-  // Group animations by category
+  let html = '';
+
+  // ── Saved (studio-generated) animations first ──
+  const saved = char.savedAnimations ? Object.values(char.savedAnimations) : [];
+  if (saved.length > 0) {
+    html += `<div style="font-family:var(--mono);font-size:8px;letter-spacing:1px;color:#30304a;text-transform:uppercase;margin:8px 0 4px;padding:0 10px">Saved</div>`;
+    for (const anim of saved) {
+      const activeClass = TESTING.selectedAnim === `__saved__${anim.animId}` ? 'active' : '';
+      html += `
+        <div class="testing-anim-item ${activeClass}" onclick="testingSelectSavedAnim('${anim.animId}','${anim.spriteUrl}',${anim.frameCount},${anim.fps})">
+          <div class="anim-dot exists"></div>
+          <span class="anim-label">${anim.animName || anim.animId}</span>
+          <span class="anim-cat">${anim.frameCount}f</span>
+        </div>`;
+    }
+  }
+
+  // ── Predefined / custom animations ──
   const categories = {};
   for (const [animName, animDef] of Object.entries(TESTING.animations)) {
     const cat = animDef.category || 'other';
@@ -5023,8 +5040,6 @@ function renderTestingAnimList(charName) {
     const exists = char.sprites?.[animName]?.exists || false;
     categories[cat].push({ name: animName, exists, ...animDef });
   }
-
-  let html = '';
   for (const [cat, anims] of Object.entries(categories)) {
     html += `<div style="font-family:var(--mono);font-size:8px;letter-spacing:1px;color:#30304a;text-transform:uppercase;margin:8px 0 4px;padding:0 10px">${cat}</div>`;
     for (const anim of anims) {
@@ -5068,6 +5083,28 @@ function testingSelectAnim(animName) {
   updateTestingInfo();
 
   // Hide hint
+  const hint = document.getElementById('testingCourtHint');
+  if (hint) hint.style.display = 'none';
+}
+
+function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps) {
+  TESTING.selectedAnim = `__saved__${animId}`;
+  TESTING.currentFrame = 0;
+  TESTING.stripLoaded = false;
+  TESTING.frameCount = frameCount || 4;
+  TESTING.fps = fps || 8;
+  TESTING.loop = true;
+
+  TESTING.stripImg = new Image();
+  TESTING.stripImg.onload = () => {
+    TESTING.stripLoaded = true;
+    const inferred = Math.round(TESTING.stripImg.width / TESTING.frameSize);
+    if (inferred > 0) TESTING.frameCount = inferred;
+  };
+  TESTING.stripImg.src = spriteUrl;
+
+  renderTestingAnimList(TESTING.selectedChar);
+  updateTestingInfo();
   const hint = document.getElementById('testingCourtHint');
   if (hint) hint.style.display = 'none';
 }
