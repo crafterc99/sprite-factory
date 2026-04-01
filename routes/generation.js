@@ -164,8 +164,13 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     }
   });
 
-  // POST /api/generate — Generate a single sprite (with batch support for 5+ frames)
+  // POST /api/generate — REMOVED: strip mode eliminated. Use /api/studio/generate (FBF).
   router.post('/api/generate', async (req, res) => {
+    return json(res, { error: 'Strip mode removed. Use POST /api/studio/generate for frame-by-frame generation.' }, 410);
+  });
+
+  // POST /api/generate-LEGACY — kept for reference only, not registered
+  async function _legacyStripGenerate(req, res) {
     const body = await parseBody(req);
     const { character, animation, model, customPrompt } = body;
 
@@ -339,7 +344,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     } catch (err) {
       return json(res, { error: err.message }, 500);
     }
-  });
+  }
 
   // POST /api/generate-fbf — Frame-by-frame generation with SSE progress
   router.post('/api/generate-fbf', async (req, res) => {
@@ -1003,130 +1008,18 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     // Respond immediately before kicking off generation
     json(res, { bulkJobId, jobs });
 
-    // Run generation in parallel with concurrency limit (non-blocking — caller already has a response)
+    // FBF: generate each character frame-by-frame with concurrency limit
+    const { generateAnimFBF } = require('../lib/auto-pipeline');
+
     setImmediate(() => {
       const tasks = jobs.map(job => async () => {
         job.status = 'running';
         try {
-          const { character: char, animation: anim } = job;
-          const clientModelId = modelId;
-          const client = new NanaBananaClient({ model: clientModelId });
-
-          const portraitPath = path.join(ASSETS_DIR, `${char}full.png`);
-          if (!CHARACTERS[char] && fs.existsSync(portraitPath)) {
-            CHARACTERS[char] = {
-              description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
-              style: '16-bit pixel art, GBA style',
-            };
-          }
-
-          const animData = ANIMATIONS[anim];
-          const totalFrames = animData ? animData.frames : 6;
-          const charRef = fs.existsSync(portraitPath) ? portraitPath : null;
-          const poseRef = (animData && animData.breezyFile)
-            ? path.join(ASSETS_DIR, animData.breezyFile)
-            : null;
-
-          fs.mkdirSync(RAW_DIR, { recursive: true });
-
-          const MAX_FRAMES_PER_BATCH = 4;
-
-          if (totalFrames <= MAX_FRAMES_PER_BATCH || !poseRef) {
-            let prompt;
-            if (poseRef) {
-              const data = buildPoseTransferPrompt(char, anim);
-              prompt = data.prompt;
-            } else {
-              const data = buildTextOnlyAnimPrompt(char, anim);
-              prompt = data.prompt;
-            }
-
-            const outputPath = path.join(RAW_DIR, `${char}-${anim}-raw.png`);
-            await client.generateSprite(prompt, poseRef, charRef, {
-              aspectRatio: '16:9',
-              resolution: '2K',
-              model: clientModelId,
-              outputPath,
-            });
-
-            recordCost(clientModelId, 'strip', '2K', (poseRef ? 1 : 0) + (charRef ? 1 : 0), { character: char, animation: anim });
-
-            await processSprite(outputPath, `${char}-${anim}`, {
-              frameCount: totalFrames,
-              targetSize: 180,
-              outputDir: ASSETS_DIR,
-            });
-          } else {
-            // Batch mode for 5+ frames with pose reference
-            const refFramesDir = path.join(RAW_DIR, `${char}-${anim}-ref-frames`);
-            fs.mkdirSync(refFramesDir, { recursive: true });
-            const cutResult = await cutFrames(poseRef, refFramesDir, { frameCount: totalFrames });
-            const refFramePaths = cutResult.frames;
-
-            const batches = [];
-            for (let i = 0; i < totalFrames; i += MAX_FRAMES_PER_BATCH) {
-              const end = Math.min(i + MAX_FRAMES_PER_BATCH, totalFrames);
-              batches.push({ start: i, end, count: end - i, frames: refFramePaths.slice(i, end) });
-            }
-
-            const batchOutputs = [];
-            for (let b = 0; b < batches.length; b++) {
-              const batch = batches[b];
-              const miniStripPath = path.join(RAW_DIR, `${char}-${anim}-batch${b}-ref.png`);
-              await buildRefStrip(batch.frames, miniStripPath, { targetHeight: 180 });
-
-              const batchPrompt = [
-                `REPLICATE Image 1 EXACTLY. Keep every body position, pose, limb placement, and composition identical. ONLY replace the character's identity with Image 2.`,
-                ``,
-                `Image 1 shows ${batch.count} frames of a ${animData.action} animation (frames ${batch.start + 1}-${batch.end} of ${totalFrames}).`,
-                `Copy these ${batch.count} frames frame-for-frame — same poses, same spacing — but with Image 2's character.`,
-                ``,
-                `CRITICAL — BODY POSITION:`,
-                `- Body position, pose, and composition in EVERY frame must match Image 1 EXACTLY`,
-                `- Same arm positions, leg positions, body angle, ball placement`,
-                `- Treat Image 1 as motion capture — do NOT reinterpret`,
-                ``,
-                `OUTPUT:`,
-                `- Single horizontal strip, EXACTLY ${batch.count} frames, equally-sized, no gaps, no borders`,
-                `- LARGE detailed characters filling most of each frame's height — NOT tiny`,
-                `- Style: 16-bit pixel art, GBA style, bold BLACK pixel outlines around character`,
-                `- Background: solid bright green (#00FF00) — NO black, NO dark backgrounds`,
-                `- NO green on the character itself`,
-                `- Same character size in every frame, feet on same baseline`,
-              ].join('\n');
-
-              const batchOutputPath = path.join(RAW_DIR, `${char}-${anim}-batch${b}-raw.png`);
-              await client.generateSprite(batchPrompt, miniStripPath, charRef, {
-                aspectRatio: '16:9',
-                resolution: '2K',
-                model: clientModelId,
-                outputPath: batchOutputPath,
-              });
-
-              recordCost(clientModelId, 'strip_batch', '2K', (charRef ? 2 : 1), { character: char, animation: anim, batch: b });
-
-              const batchProcessed = await processSprite(batchOutputPath, `${char}-${anim}-batch${b}`, {
-                frameCount: batch.count,
-                targetSize: 180,
-                outputDir: RAW_DIR,
-              });
-
-              batchOutputs.push(batchProcessed);
-            }
-
-            const allFramePaths = [];
-            for (let b = 0; b < batchOutputs.length; b++) {
-              const framesDir = batchOutputs[b].framesDir;
-              if (fs.existsSync(framesDir)) {
-                const frameFiles = fs.readdirSync(framesDir).filter(f => f.endsWith('.png')).sort();
-                frameFiles.forEach(f => allFramePaths.push(path.join(framesDir, f)));
-              }
-            }
-
-            const finalStripPath = path.join(ASSETS_DIR, `${char}-${anim}.png`);
-            await buildRefStrip(allFramePaths, finalStripPath, { height: 180 });
-          }
-
+          await generateAnimFBF(
+            new NanaBananaClient({ model: modelId }),
+            job.character,
+            job.animation,
+          );
           job.status = 'done';
         } catch (err) {
           job.status = 'failed';
