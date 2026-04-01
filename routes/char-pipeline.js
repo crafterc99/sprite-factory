@@ -820,7 +820,20 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
         // Persist angle base64 in .characters.json so they survive Railway redeploys
         const registry = loadCharacters();
-        if (!registry[name]) registry[name] = { name, id: name };
+        if (!registry[name]) {
+          // Safeguard: character was never confirmed (confirm step was skipped/interrupted).
+          // Create a minimal but valid registry entry so the character is visible on the dashboard.
+          registry[name] = {
+            name, id: name,
+            description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
+            style: '16-bit pixel art, GBA style',
+            heightInches: 72, weightLbs: 185, build: 'athletic',
+            jerseyNumber: '', teamColors: { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
+            portraitPath: `${name}full.png`,
+            scaleMultiplier: 1, pixelHeight: 32,
+            status: 'portrait_done',
+          };
+        }
         registry[name].bodyAngles = {};
         for (const f of frames) {
           const p = path.join(ASSETS_DIR, `${name}-angle-${f.index}.png`);
@@ -888,7 +901,18 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
         // Persist headshot base64 in .characters.json
         const registry = loadCharacters();
-        if (!registry[name]) registry[name] = { name, id: name };
+        if (!registry[name]) {
+          registry[name] = {
+            name, id: name,
+            description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
+            style: '16-bit pixel art, GBA style',
+            heightInches: 72, weightLbs: 185, build: 'athletic',
+            jerseyNumber: '', teamColors: { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
+            portraitPath: `${name}full.png`,
+            scaleMultiplier: 1, pixelHeight: 32,
+            status: 'portrait_done',
+          };
+        }
         registry[name].headshots = {};
         for (const f of frames) {
           const p = path.join(ASSETS_DIR, `${name}-headshot-${f.index}.png`);
