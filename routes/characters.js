@@ -489,6 +489,13 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       const gridFile = `${name}-spritesheet.png`;
       const hasGrid = fs.existsSync(path.join(ASSETS_DIR, gridFile));
 
+      const bodyAnglesCount = [0,1,2,3,4,5,6,7].filter(i =>
+        fs.existsSync(path.join(ASSETS_DIR, `${name}-angle-${i}.png`))
+      ).length;
+      const headAnglesCount = [0,1,2,3,4,5,6,7].filter(i =>
+        fs.existsSync(path.join(ASSETS_DIR, `${name}-headshot-${i}.png`))
+      ).length;
+
       roster.push({
         name,
         portrait: `/assets/${f}`,
@@ -498,6 +505,10 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         totalAnims: anims.length,
         hasGrid,
         gridUrl: hasGrid ? `/assets/${gridFile}` : null,
+        bodyAnglesCount,
+        headAnglesCount,
+        hasBodyAngles: bodyAnglesCount === 8,
+        hasHeadAngles: headAnglesCount === 8,
         ...(registry[name] || {}),
       });
     }

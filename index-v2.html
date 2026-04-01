@@ -221,13 +221,23 @@
 
   .hero-right { width:60%; display:flex; flex-direction:column; gap:8px; overflow-y:auto; height:100%; }
   .hero-strip { display:flex; flex-direction:column; gap:4px; }
-  .hero-strip-label { font-family:var(--mono); font-size:8px; letter-spacing:2px; text-transform:uppercase; color:#50507a; flex-shrink:0; margin-bottom:2px; }
+  .hero-strip-label-row { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .hero-strip-label { font-family:var(--mono); font-size:8px; letter-spacing:2px; text-transform:uppercase; color:#50507a; flex-shrink:0; }
+  .hero-strip-status { font-family:var(--mono); font-size:8px; padding:1px 6px; border-radius:3px; }
+  .hero-strip-status.ok { background:rgba(0,200,80,0.15); color:#00c850; }
+  .hero-strip-status.partial { background:rgba(255,160,0,0.15); color:#ffa000; }
+  .hero-strip-status.missing { background:rgba(255,40,40,0.15); color:#ff4444; }
   .hero-strip-row { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
   .hero-thumb { background:var(--surface3); border-radius:6px; overflow:hidden; display:flex; align-items:center; justify-content:center; width:250px; height:250px; }
   .hero-thumb img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; display:block; }
   .hero-thumb { position:relative; }
   .hero-thumb.dragging { opacity:0.45; }
   .hero-thumb.drop-target { border:2px solid var(--accent); background:rgba(255,68,0,0.12); }
+  .hero-thumb.thumb-missing img { display:none; }
+  .hero-thumb.thumb-missing { border:1px dashed #30305a; background:rgba(255,40,40,0.05); cursor:pointer; }
+  .hero-thumb.thumb-missing:hover { border-color:#ff4444; background:rgba(255,40,40,0.12); }
+  .thumb-missing-label { display:none; position:absolute; inset:0; align-items:center; justify-content:center; flex-direction:column; font-family:var(--mono); font-size:16px; color:#50507a; text-align:center; }
+  .hero-thumb.thumb-missing .thumb-missing-label { display:flex; }
   .override-badge { position:absolute; bottom:4px; left:4px; font-family:var(--mono); font-size:8px; background:#ff6600; color:#fff; border-radius:3px; padding:2px 5px; display:flex; align-items:center; gap:3px; line-height:1; z-index:2; }
   .override-badge-x { background:none; border:none; color:#fff; font-size:10px; line-height:1; cursor:pointer; padding:0; margin:0; }
   .hero-thumb.has-override { border:2px solid var(--accent); }
@@ -249,8 +259,14 @@
   .dash-card.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
   .dash-portrait { width:100%; height:85%; object-fit:contain; display:block; image-rendering:pixelated; background:var(--surface3); flex-shrink:0; }
   .dash-portrait-empty { width:100%; height:85%; display:flex; align-items:center; justify-content:center; font-size:48px; background:var(--surface3); flex-shrink:0; }
-  .dash-card-info { height:15%; display:flex; align-items:center; padding:0 10px; background:rgba(4,4,12,0.85); }
+  .dash-card-info { min-height:15%; height:auto; display:flex; align-items:center; padding:4px 10px; background:rgba(4,4,12,0.85); }
   .dash-name { font-weight:700; font-size:11px; text-transform:capitalize; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dash-card-info { flex-direction:column; align-items:flex-start; gap:3px; }
+  .dash-angle-status { display:flex; gap:5px; }
+  .dash-dot { font-family:var(--mono); font-size:7px; letter-spacing:0.5px; padding:1px 4px; border-radius:3px; }
+  .status-ok { background:rgba(0,200,80,0.18); color:#00c850; }
+  .status-partial { background:rgba(255,160,0,0.18); color:#ffa000; }
+  .status-missing { background:rgba(255,40,40,0.18); color:#ff4444; }
   .dash-add { border:2px dashed var(--border); background:transparent; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#40405a; border-radius:12px; aspect-ratio:2/3; }
   .dash-add:hover { border-color:var(--accent); color:var(--accent); }
   .dash-add-icon { font-size:32px; }
@@ -699,11 +715,19 @@
             </div>
             <div class="hero-right">
               <div class="hero-strip">
-                <div class="hero-strip-label">Headshots</div>
+                <div class="hero-strip-label-row">
+                  <span class="hero-strip-label">Headshots</span>
+                  <span id="headStatusBadge"></span>
+                  <button id="headRegenBtn" class="btn btn-sm" style="display:none" onclick="dashRegenAngles(STATE.dashSelected,'head')">Generate All</button>
+                </div>
                 <div class="hero-strip-row" id="detailHeadshots"></div>
               </div>
               <div class="hero-strip">
-                <div class="hero-strip-label">Body</div>
+                <div class="hero-strip-label-row">
+                  <span class="hero-strip-label">Body</span>
+                  <span id="bodyStatusBadge"></span>
+                  <button id="bodyRegenBtn" class="btn btn-sm" style="display:none" onclick="dashRegenAngles(STATE.dashSelected,'body')">Generate All</button>
+                </div>
                 <div class="hero-strip-row" id="detailBody"></div>
               </div>
             </div>
@@ -1520,6 +1544,8 @@ function renderDashboard() {
     step2: 'Generating portrait…',
     awaiting_confirm: 'Portrait ready — tap to confirm',
     angles: 'Generating angles…',
+    'regen-body': 'Generating body angles…',
+    'regen-head': 'Generating headshots…',
   };
   const activeJobs = Object.values(CPJobs).filter(j => j.stage && j.stage !== 'idle' && j.stage !== 'done');
   const inProgressNames = new Set(activeJobs.map(j => j.name));
@@ -1542,10 +1568,20 @@ function renderDashboard() {
     const portrait = char.portrait
       ? `<img class="dash-portrait" src="${char.portrait}" onerror="this.style.display='none'" />`
       : `<div class="dash-portrait-empty">🏀</div>`;
+    const bCount = char.bodyAnglesCount ?? 0;
+    const hCount = char.headAnglesCount ?? 0;
+    const bDot = bCount === 8 ? 'status-ok' : bCount > 0 ? 'status-partial' : 'status-missing';
+    const hDot = hCount === 8 ? 'status-ok' : hCount > 0 ? 'status-partial' : 'status-missing';
     return `<div class="dash-card-wrap">
       <div class="dash-card ${isSelected ? 'active' : ''}" onclick="selectDashChar('${char.name}')">
         ${portrait}
-        <div class="dash-card-info"><div class="dash-name">${char.name}</div></div>
+        <div class="dash-card-info">
+          <div class="dash-name">${char.name}</div>
+          <div class="dash-angle-status">
+            <span class="dash-dot ${bDot}" title="Body angles: ${bCount}/8">B ${bCount}/8</span>
+            <span class="dash-dot ${hDot}" title="Headshots: ${hCount}/8">H ${hCount}/8</span>
+          </div>
+        </div>
       </div>
       <button class="dash-delete-btn" onclick="event.stopPropagation();dashDeletePrompt(this,'${char.name}')" title="Delete character">✕</button>
     </div>`;
@@ -1556,7 +1592,7 @@ function renderDashboard() {
     <div class="dash-add-label">Add Character</div>
   </div>`;
 
-  document.getElementById('dashSub').textContent = `${STATE.roster.length + (inProgressName ? 1 : 0)} characters`;
+  document.getElementById('dashSub').textContent = `${STATE.roster.length + activeJobs.length} characters`;
 }
 
 function selectDashChar(name) {
@@ -1572,19 +1608,35 @@ function selectDashChar(name) {
   document.getElementById('heroName').textContent = name;
 
   const ANGLE_NAMES = ['front','front-3/4-R','side-R','back-3/4-R','back','back-3/4-L','side-L','front-3/4-L'];
+  const bCount = char.bodyAnglesCount ?? 0;
+  const hCount = char.headAnglesCount ?? 0;
 
-  const makeAngleThumb = (imgSrc, type, i) => {
+  // Status badges + generate buttons
+  const makeBadge = (count, type) => {
+    const cls = count === 8 ? 'ok' : count > 0 ? 'partial' : 'missing';
+    const text = count === 8 ? `✓ ${count}/8` : `⚠ ${count}/8`;
+    document.getElementById(`${type}StatusBadge`).innerHTML =
+      `<span class="hero-strip-status ${cls}">${text}</span>`;
+    document.getElementById(`${type}RegenBtn`).style.display = count < 8 ? 'inline-flex' : 'none';
+  };
+  makeBadge(hCount, 'head');
+  makeBadge(bCount, 'body');
+
+  const makeAngleThumb = (imgSrc, angleType, i) => {
     const label = ANGLE_NAMES[i] || `angle-${i}`;
-    const imgId = `dashThumb-${type}-${i}`;
+    const imgId = `dashThumb-${angleType}-${i}`;
+    const cpType = angleType === 'headshot' ? 'head' : 'body';
     return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
-      <div class="hero-thumb" data-angle="${label}" data-layer="${type}" data-index="${i}">
-        <img id="${imgId}" src="${imgSrc}" onerror="this.style.display='none'"
-          onclick="cpOpenRegen('${name}','${type === 'headshot' ? 'head' : 'body'}',${i},this.src,'${label}')"
+      <div class="hero-thumb thumb-checkable" id="${imgId}-wrap" data-angle="${label}" data-layer="${angleType}" data-index="${i}"
+           onclick="dashThumbClick('${name}','${cpType}',${i},'${imgId}','${label}')">
+        <img id="${imgId}" src="${imgSrc}"
+          onerror="document.getElementById('${imgId}-wrap').classList.add('thumb-missing')"
           title="Click to regenerate with changes"
-          style="cursor:pointer" />
+          style="cursor:pointer;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
+        <div class="thumb-missing-label">+<br><span style="font-size:6px">${label}</span></div>
       </div>
       <input class="cp-label-input" value="${label}" style="width:100%;max-width:56px"
-        data-type="${type === 'headshot' ? 'head' : 'body'}" data-index="${i}" data-name="${name}"
+        data-type="${cpType}" data-index="${i}" data-name="${name}"
         onblur="cpRenameAngle(this)" />
     </div>`;
   };
@@ -1605,6 +1657,49 @@ function deselectDashChar() {
   document.getElementById('dashContainer').classList.remove('dashboard--selected');
   document.querySelector('.workspace-inner').classList.remove('dash-expanded');
   renderDashboard();
+}
+
+// Click a frame thumb — regen if it exists, open regen modal; if missing, prompt to generate all
+function dashThumbClick(name, type, index, imgId, label) {
+  const wrap = document.getElementById(`${imgId}-wrap`);
+  if (wrap && wrap.classList.contains('thumb-missing')) {
+    // Frame is missing — offer to generate all angles of this type
+    const typeLabel = type === 'head' ? 'headshots' : 'body angles';
+    if (confirm(`This angle hasn't been generated yet.\nGenerate all ${typeLabel} for ${name}?`)) {
+      dashRegenAngles(name, type);
+    }
+    return;
+  }
+  const img = document.getElementById(imgId);
+  if (img) cpOpenRegen(name, type, index, img.src, label);
+}
+
+// Generate/regenerate all body or head angles for an existing character in background
+async function dashRegenAngles(name, type) {
+  if (CPJobs[name]) { toast(`${name} already has a job running`, true); return; }
+
+  const endpoint = type === 'body' ? 'generate-body-angles' : 'generate-head-angles';
+  const stage = `regen-${type}`;
+  CPJobs[name] = { name, stage, portraitBase64: null };
+  cpSaveState(); renderDashboard();
+
+  try {
+    const r = await fetch(`${API}/api/char-pipeline/${endpoint}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    await waitForJob(d.jobId, null, null);
+    cpClearJob(name);
+    await loadRoster();
+    // Re-open hero view so status badges refresh
+    if (STATE.dashSelected === name) selectDashChar(name);
+    toast(`${name} ${type === 'body' ? 'body angles' : 'headshots'} ready`);
+  } catch (e) {
+    cpClearJob(name); renderDashboard();
+    toast(`Failed to generate: ${e.message}`, true);
+  }
 }
 
 // ─── DASHBOARD HEAD OVERRIDE ──────────────────────────────────────────────
