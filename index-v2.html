@@ -1109,7 +1109,7 @@
       <!-- Name + Photo row -->
       <div style="display:flex;gap:12px;margin-bottom:16px">
         <!-- Photo drop zone -->
-        <input type="file" id="cpPhotoFile" accept="image/*" style="display:none" onchange="cpHandlePhoto(this.files[0])" />
+        <input type="file" id="cpPhotoFile" accept="image/*" style="opacity:0;position:absolute;width:0;height:0;pointer-events:none" onchange="cpHandlePhoto(this.files[0])" />
         <label for="cpPhotoFile" id="cpDropZone" class="cp-photo-drop" style="cursor:pointer">
           <img id="cpPhotoThumb" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:8px;image-rendering:pixelated" />
           <div id="cpPhotoPlaceholder" style="text-align:center;color:#50507a">
@@ -1161,7 +1161,7 @@
       <!-- Clothing drop zone -->
       <div style="margin-bottom:16px">
         <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:8px">OUTFIT REFERENCES (optional — drag in jersey, shorts, shoes photos)</div>
-        <input type="file" id="cpClothingFile" accept="image/*" multiple style="display:none" onchange="cpAddClothing(this.files)" />
+        <input type="file" id="cpClothingFile" accept="image/*" multiple style="opacity:0;position:absolute;width:0;height:0;pointer-events:none" onchange="cpAddClothing(this.files)" />
         <label for="cpClothingFile" id="cpClothingZone" class="cp-clothing-zone" style="cursor:pointer;display:block">
           <div id="cpClothingList" style="display:flex;gap:8px;flex-wrap:wrap;min-height:60px;align-items:center">
             <div id="cpClothingEmpty" style="color:#30304a;font-size:11px;font-family:var(--mono);width:100%;text-align:center;padding:8px 0">Drop outfit photos here or click to browse</div>
