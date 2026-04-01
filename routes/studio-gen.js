@@ -26,8 +26,7 @@ const STUDIO_PROMPT = [
   'Do not change body shape, skin tone, hairstyle, or facial structure.',
   'Match Image 2\'s full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.',
   'natural anatomy, no distortions.',
-  '16-bit pixel art style. GBA resolution. Black outlines. No anti-aliasing.',
-  'Pure green (#00FF00) background. Full body visible. 1:1 square frame.',
+  'Pure green (#00FF00) background.',
 ].join('\n');
 
 function loadAnimLib() {
@@ -157,35 +156,35 @@ function register(router, ctx) {
         }
 
         const frameCount = anim.frameCount;
-        const processedPaths = [];
+        updateJob(jobId, { frame: 0, total: frameCount, msg: `Generating all ${frameCount} frames in parallel…` });
 
-        for (let i = 0; i < frameCount; i++) {
-          updateJob(jobId, { frame: i, total: frameCount, msg: `Generating frame ${i + 1}/${frameCount}…` });
+        // Generate all frames in parallel for maximum speed
+        const processedPaths = await Promise.all(
+          Array.from({ length: frameCount }, async (_, i) => {
+            const posePath = posePaths[i];
+            if (!posePath || !fs.existsSync(posePath)) {
+              throw new Error(`Pose frame ${i} not found for animation "${animName}"`);
+            }
 
-          const posePath = posePaths[i];
-          if (!posePath || !fs.existsSync(posePath)) {
-            throw new Error(`Pose frame ${i} not found for animation "${animName}"`);
-          }
+            const result = await client.generate(STUDIO_PROMPT, {
+              referenceImages: [resolvedAnglePath, posePath],
+              aspectRatio: '1:1',
+              resolution: '1K',
+              model: modelId,
+              maxRetries: 2,
+              timeoutMs: 90000,
+            });
 
-          const result = await client.generate(STUDIO_PROMPT, {
-            referenceImages: [resolvedAnglePath, posePath],
-            aspectRatio: '1:1',
-            resolution: '1K',
-            model: modelId,
-            maxRetries: 2,
-            timeoutMs: 90000,
-          });
+            const rawPath = path.join(genDir, `raw-${i}.png`);
+            fs.writeFileSync(rawPath, result.imageBuffer);
+            recordCost(modelId, 'studio_gen', '1K', 2, { charName, animName, frame: i });
 
-          const rawPath = path.join(genDir, `raw-${i}.png`);
-          fs.writeFileSync(rawPath, result.imageBuffer);
-          recordCost(modelId, 'studio_gen', '1K', 2, { charName, animName, frame: i });
-
-          const processedPath = path.join(genDir, `frame-${i}.png`);
-          await processFrame(rawPath, processedPath);
-          processedPaths.push(processedPath);
-
-          updateJob(jobId, { frame: i + 1, total: frameCount, msg: `✓ Frame ${i + 1}/${frameCount} done` });
-        }
+            const processedPath = path.join(genDir, `frame-${i}.png`);
+            await processFrame(rawPath, processedPath);
+            updateJob(jobId, { frame: i + 1, total: frameCount, msg: `✓ Frame ${i + 1} done` });
+            return processedPath;
+          })
+        );
 
         // Assemble sprite strip
         const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);
