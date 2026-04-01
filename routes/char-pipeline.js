@@ -739,7 +739,10 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           const framePath = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
           if (fs.existsSync(framePath)) {
             await removeBackground(framePath, framePath);
-            await cropToContent(framePath, framePath, { width: 180, height: 180, padding: 10 });
+            // cropToContent must not use same path for input and output
+            const tmpPath = framePath + '.crop.tmp.png';
+            await cropToContent(framePath, tmpPath, { width: 180, height: 180, padding: 10 });
+            fs.renameSync(tmpPath, framePath);
           }
         }
 
