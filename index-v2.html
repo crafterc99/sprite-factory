@@ -621,6 +621,7 @@
   .dash-card.generating:hover { border-color:rgba(255,140,0,0.9); }
   .dash-cancel-btn { position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%; background:rgba(255,60,60,0.85); border:none; color:#fff; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10; line-height:1; }
   .dash-cancel-btn:hover { background:rgba(255,60,60,1); }
+  .regen-spinner { position:absolute; inset:0; background:rgba(8,8,20,0.6); display:flex; align-items:center; justify-content:center; font-size:22px; color:#fff; border-radius:6px; animation:spin 1.2s linear infinite; pointer-events:none; z-index:5; }
   .cp-angle-thumb { display:flex; flex-direction:column; align-items:center; gap:4px; }
   .cp-angle-thumb img { width:80px; height:80px; border:1px solid var(--border); border-radius:8px; object-fit:contain; image-rendering:pixelated; background:var(--surface2); cursor:pointer; transition:border-color 0.15s; }
   .cp-angle-thumb img:hover { border-color:var(--accent); }
@@ -1674,7 +1675,7 @@ function dashThumbClick(name, type, index, imgId, label) {
     return;
   }
   const img = document.getElementById(imgId);
-  if (img) cpOpenRegen(name, type, index, img.src, label);
+  if (img) cpOpenRegen(name, type, index, img.src, label, imgId);
 }
 
 // Generate/regenerate all body or head angles for an existing character in background
@@ -2605,8 +2606,8 @@ async function cpConfirmAndGenerateAngles() {
 // ── Regen angle modal ──────────────────────────────────────────────────────
 let _cpRegen = {};
 
-function cpOpenRegen(name, type, index, imgSrc, label) {
-  _cpRegen = { name, type, index };
+function cpOpenRegen(name, type, index, imgSrc, label, imgId) {
+  _cpRegen = { name, type, index, imgId: imgId || (type === 'head' ? `cpHeadFrame${index}` : `cpBodyFrame${index}`) };
   document.getElementById('cpRegenPreview').src = imgSrc;
   document.getElementById('cpRegenModifier').value = '';
   document.getElementById('cpRegenStatus').style.display = 'none';
@@ -2619,14 +2620,11 @@ function cpCloseRegen() {
 }
 
 async function cpDoRegenAngle() {
-  const { name, type, index } = _cpRegen;
+  const { name, type, index, imgId } = _cpRegen;
   const modifier = document.getElementById('cpRegenModifier').value.trim();
   if (!modifier) return toast('Enter what to change', true);
 
-  const status = document.getElementById('cpRegenStatus');
-  status.textContent = '⋯ Starting regeneration…';
-  status.style.display = 'block';
-
+  // Start job then close immediately — generation continues in background
   try {
     const r = await fetch(`${API}/api/char-pipeline/regen-angle`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2635,18 +2633,39 @@ async function cpDoRegenAngle() {
     const d = await r.json();
     if (d.error) throw new Error(d.error);
 
-    status.textContent = '⋯ Generating (this takes ~1 min)…';
-    const result = await waitForJob(d.jobId, null, null);
-
-    // Update the frame image in-place
-    const imgId = type === 'head' ? `cpHeadFrame${index}` : `cpBodyFrame${index}`;
-    const img = document.getElementById(imgId);
-    if (img && result.imageBase64) img.src = result.imageBase64;
-
     cpCloseRegen();
-    toast('Frame regenerated');
+    toast(`Regenerating ${name} ${type} angle — updating when ready`);
+
+    // Show spinner overlay on the thumbnail while it generates
+    const wrap = document.getElementById(`${imgId}-wrap`);
+    if (wrap) {
+      let spinner = wrap.querySelector('.regen-spinner');
+      if (!spinner) {
+        spinner = document.createElement('div');
+        spinner.className = 'regen-spinner';
+        spinner.innerHTML = '⟳';
+        wrap.appendChild(spinner);
+      }
+    }
+
+    // Poll in background — update image when done
+    waitForJob(d.jobId, null, null).then(result => {
+      const img = document.getElementById(imgId);
+      if (img && result.imageBase64) {
+        img.src = result.imageBase64;
+        // Also update hero view thumbnail if present
+        const heroImg = document.getElementById(`dashThumb-${type === 'head' ? 'headshot' : 'body'}-${index}`);
+        if (heroImg) heroImg.src = result.imageBase64;
+      }
+      if (wrap) { const s = wrap.querySelector('.regen-spinner'); if (s) s.remove(); }
+      toast(`${name} ${type} angle updated`);
+    }).catch(e => {
+      if (wrap) { const s = wrap.querySelector('.regen-spinner'); if (s) s.remove(); }
+      toast(`Regen failed: ${e.message}`, true);
+    });
+
   } catch(e) {
-    status.textContent = '✗ ' + e.message;
+    toast(`Failed to start: ${e.message}`, true);
   }
 }
 

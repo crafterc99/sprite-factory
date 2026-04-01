@@ -1014,9 +1014,10 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           timeoutMs: 80000,
         });
 
-        // Center and save
+        // Center, save, and sync to git so it survives redeployment
         const centered = await centerFrame(result.imageBuffer);
         fs.writeFileSync(framePath, centered);
+        scheduleSync();
 
         const imageBase64 = 'data:image/png;base64,' + centered.toString('base64');
         recordCost(modelId, 'char_pipeline', '1K', 2, { character: name, step: 'regen-angle', index });
