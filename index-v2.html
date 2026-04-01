@@ -3776,30 +3776,22 @@ async function saveAnimToLibrary() {
   const orderedFrames = VID.frames.filter(f => VID.selected.has(f.file)).map(f => f.file);
   if (orderedFrames.length === 0) return toast('No frames selected', true);
 
-  const selectedFiles = VID.frames.filter(f => VID.selected.has(f.file));
+  // Collect any subject-extracted frames already in the DOM (non-blocking — skip pending ones)
   const slots = document.querySelectorAll('#vstSubjectGrid .vst-subject');
   const frameBase64Array = [];
-
+  const selectedFiles = VID.frames.filter(f => VID.selected.has(f.file));
   for (let i = 0; i < selectedFiles.length; i++) {
     const slot = slots[i];
-    // Prefer subject-extracted image; fall back to original frame
-    const img = (slot ? slot.querySelector('img') : null) || null;
-    const srcUrl = (img && img.complete && img.naturalWidth > 0)
-      ? img.src
-      : `${API}/api/video/frame/${VID.sessionId}/${selectedFiles[i].file}`;
-    try {
-      const resp = await fetch(srcUrl);
-      if (!resp.ok) throw new Error('fetch failed');
-      const buf = await resp.arrayBuffer();
-      frameBase64Array.push('data:image/png;base64,' + _bufToBase64(buf));
-    } catch { /* skip unreadable frame */ }
-  }
-
-  // If client-side fetch failed for all frames, let the server read from disk
-  const useServerFallback = frameBase64Array.length === 0;
-
-  if (useServerFallback && !VID.sessionId) {
-    return toast('No frames could be collected — try again after extraction finishes', true);
+    const img = slot ? slot.querySelector('img') : null;
+    if (img && img.complete && img.naturalWidth > 0) {
+      try {
+        const resp = await fetch(img.src);
+        if (resp.ok) {
+          const buf = await resp.arrayBuffer();
+          frameBase64Array.push('data:image/png;base64,' + _bufToBase64(buf));
+        }
+      } catch {}
+    }
   }
 
   const btn = document.getElementById('videoSaveLibBtn');
@@ -3807,12 +3799,15 @@ async function saveAnimToLibrary() {
   btn.disabled = true;
   spinner.classList.add('active');
 
-  const frameCount = useServerFallback ? orderedFrames.length : frameBase64Array.length;
-  toast(`Saving "${animName}" (${frameCount} frames)…`);
+  // Always include sessionId+frameFiles so server can read from disk if base64 incomplete
+  const payload = {
+    name: animName, angle, fps, loop,
+    sessionId: VID.sessionId,
+    frameFiles: orderedFrames,
+    ...(frameBase64Array.length > 0 ? { frameBase64Array } : {}),
+  };
 
-  const payload = useServerFallback
-    ? { name: animName, angle, fps, loop, sessionId: VID.sessionId, frameFiles: orderedFrames }
-    : { name: animName, angle, fps, loop, frameBase64Array };
+  toast(`Saving "${animName}" (${orderedFrames.length} frames)…`);
 
   fetch(`${API}/api/anim-lib`, {
     method: 'POST',
@@ -3832,7 +3827,6 @@ async function saveAnimToLibrary() {
     document.getElementById('videoSaveResult').style.display = 'block';
     document.getElementById('videoSaveResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     toast(`Saved "${anim.displayName}" to animation library`);
-    // Refresh studio library so new animation is immediately available
     studioLoadAnimLib();
   })
   .catch(e => toast('Save failed: ' + e.message, true))

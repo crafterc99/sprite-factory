@@ -69,27 +69,34 @@ function register(router, ctx) {
   });
 
   // POST /api/anim-lib — save animation
-  // Body: { name, angle, fps, loop, frameBase64Array } or { name, angle, fps, loop, sessionId, frameFiles }
+  // Body: { name, angle, fps, loop, frameBase64Array?, sessionId?, frameFiles? }
+  // frameBase64Array takes priority per-slot; missing slots filled from session disk files.
   router.post('/api/anim-lib', async (req, res) => {
     const body = await parseBody(req);
     const { name, angle, fps, loop, sessionId, frameFiles, frameBase64Array } = body;
     if (!name) return json(res, { error: 'name required' }, 400);
     if (!angle) return json(res, { error: 'angle required' }, 400);
+    if (!frameBase64Array?.length && !sessionId) {
+      return json(res, { error: 'frameBase64Array or sessionId required' }, 400);
+    }
 
     const animId = name.trim().toLowerCase().replace(/\s+/g, '-');
 
     try {
       let framesBase64 = [];
 
-      if (frameBase64Array && Array.isArray(frameBase64Array) && frameBase64Array.length > 0) {
-        // Strip data URI prefix and store
-        framesBase64 = frameBase64Array.map(d => d.replace(/^data:image\/\w+;base64,/, ''));
-      } else if (sessionId && frameFiles && Array.isArray(frameFiles)) {
-        // Read subject-extracted frames from video session
+      if (sessionId && frameFiles && Array.isArray(frameFiles)) {
+        // Build from session disk files; overlay any client-provided base64 where available
         const sessionDir = path.join(TMP_DIR || path.resolve(__dirname, '../data/.video-tmp'), sessionId);
         const subjectDir = path.join(sessionDir, 'subjects');
 
         for (let i = 0; i < frameFiles.length; i++) {
+          // Client already extracted this frame — use it directly
+          if (frameBase64Array && frameBase64Array[i]) {
+            framesBase64.push(frameBase64Array[i].replace(/^data:image\/\w+;base64,/, ''));
+            continue;
+          }
+          // Fall back to server-side subject or original frame file
           const file = frameFiles[i];
           const subjectFile = path.join(subjectDir, `subject-${i}.png`);
           const originalFile = path.join(sessionDir, 'frames', path.basename(file));
@@ -98,21 +105,18 @@ function register(router, ctx) {
           if (fs.existsSync(srcFile)) {
             framesBase64.push(fs.readFileSync(srcFile).toString('base64'));
           } else {
-            const allFiles = fs.readdirSync(sessionDir, { recursive: false });
-            let found = false;
-            for (const d of allFiles) {
-              const candidate = path.join(sessionDir, d, path.basename(file));
-              if (fs.existsSync(candidate)) {
-                framesBase64.push(fs.readFileSync(candidate).toString('base64'));
-                found = true;
-                break;
+            // Last resort: scan session dir for the file
+            try {
+              const dirs = fs.readdirSync(sessionDir);
+              for (const d of dirs) {
+                const candidate = path.join(sessionDir, d, path.basename(file));
+                if (fs.existsSync(candidate)) { framesBase64.push(fs.readFileSync(candidate).toString('base64')); break; }
               }
-            }
-            if (!found) continue;
+            } catch {}
           }
         }
-      } else {
-        return json(res, { error: 'frameBase64Array or (sessionId + frameFiles) required' }, 400);
+      } else if (frameBase64Array && Array.isArray(frameBase64Array)) {
+        framesBase64 = frameBase64Array.map(d => d.replace(/^data:image\/\w+;base64,/, ''));
       }
 
       if (framesBase64.length === 0) return json(res, { error: 'No frames could be saved' }, 400);
