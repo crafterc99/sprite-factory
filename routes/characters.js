@@ -444,6 +444,23 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     return serveImage(res, path.join(TMP_DIR, 'characters', params.name, params.file));
   });
 
+  // POST /api/character/:name/save-animation — attach a generated sprite to the character
+  router.post('/api/character/:name/save-animation', async (req, res, params) => {
+    const body = await parseBody(req);
+    const { animId, animName, spriteUrl, fps, frameCount } = body;
+    if (!animId) return json(res, { error: 'animId required' }, 400);
+    const registry = loadCharacters();
+    if (!registry[params.name]) return json(res, { error: 'Character not found' }, 404);
+    if (!registry[params.name].savedAnimations) registry[params.name].savedAnimations = {};
+    registry[params.name].savedAnimations[animId] = {
+      animId, animName: animName || animId, spriteUrl, fps: fps || 8, frameCount: frameCount || 1,
+      savedAt: new Date().toISOString(),
+    };
+    saveCharacters(registry);
+    scheduleSync();
+    return json(res, { success: true, animation: registry[params.name].savedAnimations[animId] });
+  });
+
   // DELETE /api/character/:name — Remove a character
   router.delete('/api/character/:name', (req, res, params) => {
     const name = params.name;

@@ -855,6 +855,7 @@
                 <div class="card-title">Result</div>
                 <img id="studioResultImg" style="max-width:100%;border-radius:6px;image-rendering:pixelated;display:block" />
                 <div id="studioResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:8px"></div>
+                <button class="btn btn-primary btn-sm" id="studioSaveBtn" onclick="studioSaveToChar()" style="margin-top:12px">Save to Character</button>
               </div>
 
             </div>
@@ -1736,6 +1737,37 @@ function selectDashChar(name) {
   document.getElementById('detailBody').innerHTML = [0,1,2,3,4,5,6,7].map(i =>
     makeAngleThumb(`/assets/${name}-angle-${i}.png`, 'body', i)).join('');
 
+  // Saved Animations section
+  const savedAnims = char.savedAnimations ? Object.values(char.savedAnimations) : [];
+  let savedAnimsHtml = '';
+  if (savedAnims.length > 0) {
+    savedAnimsHtml = `<div class="hero-strip" style="margin-top:16px">
+      <div class="hero-strip-label-row">
+        <span class="hero-strip-label">Saved Animations</span>
+        <span class="hero-strip-status ok">✓ ${savedAnims.length}</span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+        ${savedAnims.map(a => `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer" title="${a.animName}">
+            <div style="background:#0a0a14;border-radius:6px;padding:4px;overflow:hidden;max-width:200px">
+              <img src="${a.spriteUrl}?t=1" style="height:60px;image-rendering:pixelated;display:block" onerror="this.style.opacity=0.2" />
+            </div>
+            <div style="font-family:var(--mono);font-size:9px;color:#8080a0;text-align:center">${a.animName}</div>
+            <div style="font-family:var(--mono);font-size:8px;color:#50507a">${a.frameCount}f · ${a.fps}fps</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+  // Inject after hero-right or append to dashHero
+  let savedDiv = document.getElementById('dashSavedAnims');
+  if (!savedDiv) {
+    savedDiv = document.createElement('div');
+    savedDiv.id = 'dashSavedAnims';
+    savedDiv.style.cssText = 'padding:0 20px 16px';
+    document.getElementById('dashHero').appendChild(savedDiv);
+  }
+  savedDiv.innerHTML = savedAnimsHtml;
+
   attachDashDragDrop(name);
 
   document.getElementById('dashContainer').classList.add('dashboard--selected');
@@ -2128,11 +2160,17 @@ function studioClosePanel() {
   document.getElementById('studioResultCard').style.display = 'none';
 }
 
+// Track background studio gen jobs: { [charName-animName]: { jobId, charName, animName, total } }
+const STUDIO_JOBS = {};
+
 async function studioGenerateSprite() {
   const char = STATE.selectedChar;
   const animName = STUDIO.selectedAnim;
   if (!char) return toast('Select a character first', true);
   if (!animName) return toast('Select an animation first', true);
+
+  const jobKey = `${char.name}-${animName}`;
+  if (STUDIO_JOBS[jobKey]) return toast('Already generating this animation', true);
 
   const btn = document.getElementById('studioGenBtn');
   const spinner = document.getElementById('studioGenSpinner');
@@ -2156,38 +2194,71 @@ async function studioGenerateSprite() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to start job');
 
-    const jobId = data.jobId;
-    let total = 1;
-    while (true) {
-      await new Promise(r => setTimeout(r, 3000));
-      const poll = await fetch(`${API}/api/studio/job/${jobId}`);
-      const job = await poll.json();
-      if (job.progress) {
-        const p = job.progress;
-        if (p.total) total = p.total;
-        studioUpdateRing(p.frame || 0, total);
-        log.innerHTML = `<span class="info">${p.msg || ''}</span>\n`;
-        log.scrollTop = log.scrollHeight;
-      }
-      if (job.status === 'done') {
-        studioUpdateRing(job.result.frameCount, job.result.frameCount);
-        log.innerHTML += `<span class="ok">✓ ${job.result.frameCount} frames complete</span>\n`;
-        showStudioResult(job.result);
-        toast('Sprite generated');
-        break;
-      } else if (job.status === 'error') {
-        log.innerHTML += `<span class="err">✗ ${job.error}</span>\n`;
-        toast('Generation failed: ' + job.error, true);
-        break;
-      }
-    }
+    STUDIO_JOBS[jobKey] = { jobId: data.jobId, charName: char.name, animName, total: 1 };
+    btn.disabled = false;
+    spinner.classList.remove('active');
+    toast(`Generating "${animName}" for ${char.name} in background…`);
+
+    // Poll in background — updates panel if still visible, auto-saves when done
+    studioPollJob(jobKey);
   } catch (e) {
     log.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
     toast('Failed: ' + e.message, true);
-  } finally {
     btn.disabled = false;
     spinner.classList.remove('active');
   }
+}
+
+async function studioPollJob(jobKey) {
+  const job = STUDIO_JOBS[jobKey];
+  if (!job) return;
+  const { jobId, charName, animName } = job;
+  const prog = document.getElementById('studioProgress');
+  const log = document.getElementById('studioProgressLog');
+
+  const interval = setInterval(async () => {
+    try {
+      const poll = await fetch(`${API}/api/studio/job/${jobId}`);
+      const data = await poll.json();
+      if (data.progress) {
+        job.total = data.progress.total || job.total;
+        // Only update ring/log if this panel is still showing this job
+        if (STUDIO.selectedAnim === animName && STATE.selectedChar?.name === charName) {
+          studioUpdateRing(data.progress.frame || 0, job.total);
+          if (log) log.innerHTML = `<span class="info">${data.progress.msg || ''}</span>\n`;
+        }
+      }
+      if (data.status === 'done') {
+        clearInterval(interval);
+        delete STUDIO_JOBS[jobKey];
+        const result = data.result;
+        if (STUDIO.selectedAnim === animName && STATE.selectedChar?.name === charName) {
+          studioUpdateRing(result.frameCount, result.frameCount);
+          if (log) log.innerHTML += `<span class="ok">✓ ${result.frameCount} frames complete</span>\n`;
+          showStudioResult(result);
+        }
+        // Auto-save to character
+        try {
+          await fetch(`${API}/api/character/${encodeURIComponent(charName)}/save-animation`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ animId: animName, animName, spriteUrl: result.spriteUrl, fps: result.fps, frameCount: result.frameCount }),
+          });
+          // Mark save button as saved if result is visible
+          const saveBtn = document.getElementById('studioSaveBtn');
+          if (saveBtn && STUDIO.lastResult?.animName === animName) saveBtn.textContent = '✓ Saved';
+          toast(`"${animName}" saved to ${charName}`);
+          await loadRoster();
+          if (STATE.dashSelected === charName) selectDashChar(charName);
+        } catch {}
+      } else if (data.status === 'error') {
+        clearInterval(interval);
+        delete STUDIO_JOBS[jobKey];
+        if (log) log.innerHTML += `<span class="err">✗ ${data.error}</span>\n`;
+        toast(`Generation failed: ${data.error}`, true);
+      }
+    } catch {}
+  }, 3000);
 }
 
 function studioUpdateRing(done, total) {
@@ -2198,12 +2269,38 @@ function studioUpdateRing(done, total) {
 }
 
 function showStudioResult(result) {
+  STUDIO.lastResult = result;
   const card = document.getElementById('studioResultCard');
   document.getElementById('studioResultImg').src = result.spriteUrl + '?t=' + Date.now();
   document.getElementById('studioResultMeta').textContent =
     `${result.charName} · ${result.animName} · ${result.frameCount} frames · ${result.fps}fps`;
+  const saveBtn = document.getElementById('studioSaveBtn');
+  if (saveBtn) { saveBtn.textContent = `Save to ${result.charName}`; saveBtn.disabled = false; }
   card.style.display = 'block';
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function studioSaveToChar() {
+  const r = STUDIO.lastResult;
+  if (!r) return;
+  const btn = document.getElementById('studioSaveBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/api/character/${encodeURIComponent(r.charName)}/save-animation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ animId: r.animName, animName: r.animName, spriteUrl: r.spriteUrl, fps: r.fps, frameCount: r.frameCount }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    btn.textContent = '✓ Saved';
+    toast(`Saved "${r.animName}" to ${r.charName}`);
+    await loadRoster();
+    if (STATE.dashSelected === r.charName) selectDashChar(r.charName);
+  } catch (e) {
+    toast('Save failed: ' + e.message, true);
+    btn.disabled = false;
+  }
 }
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────
