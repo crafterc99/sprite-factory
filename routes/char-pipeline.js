@@ -719,42 +719,46 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const client = new NanaBananaClient({ model: modelId });
         const referenceImages = [portraitPath, ...clothingPaths];
 
-        const result = await client.generate(basePrompt, {
-          referenceImages,
-          aspectRatio: '16:9',
-          resolution: '2K',
-          model: modelId,
-          maxRetries: 1,
-          timeoutMs: 80000,
-        });
+        // Generate each body angle individually — one API call per angle.
+        // This eliminates sheet-slicing misalignment: each result is already a single clean frame.
+        const frames = [];
+        for (let i = 0; i < 8; i++) {
+          const angleLabel = ANGLE_LABELS_8[i];
+          const anglePrompt = [
+            'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
+            '',
+            `Generate a single full-body pixel art sprite of this character at the ${angleLabel} angle (${i * 45}°).`,
+            '',
+            'STYLE: Match the exact pixel art style of the reference. 16-bit GBA style. Bold black outlines. No anti-aliasing.',
+            'BODY: Full body visible from head to toe. Neutral standing pose. Arms relaxed at sides.',
+            'FRAMING: Character centered. Feet at bottom. Head near top. No cropping.',
+            'BACKGROUND: Solid bright green (#00FF00). Nothing else in the background.',
+            'OUTPUT: Single character only. Square 1:1 frame. No text, no labels, no extra elements.',
+          ].join('\n');
 
-        const sheetPath = path.join(charDir, 'body-sheet.png');
-        fs.writeFileSync(sheetPath, result.imageBuffer);
-        recordCost(modelId, 'char_pipeline', '2K', referenceImages.length, { character: name, step: 'body-sheet' });
+          const result = await client.generate(anglePrompt, {
+            referenceImages,
+            aspectRatio: '1:1',
+            resolution: '1K',
+            model: modelId,
+            maxRetries: 2,
+            timeoutMs: 90000,
+          });
 
-        const sliceDir = path.join(charDir, 'body-frames');
-        const destPattern = path.join(ASSETS_DIR, `${name}-angle-{i}.png`);
-        const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
-
-        // Remove green background and crop each angle to a clean transparent PNG
-        for (let i = 0; i < sliced.length; i++) {
           const framePath = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
-          if (fs.existsSync(framePath)) {
-            await removeBackground(framePath, framePath);
-            // cropToContent must not use same path for input and output
-            const tmpPath = framePath + '.crop.tmp.png';
-            await cropToContent(framePath, tmpPath, { width: 180, height: 180, padding: 10 });
-            fs.renameSync(tmpPath, framePath);
-          }
+          fs.writeFileSync(framePath, result.imageBuffer);
+          recordCost(modelId, 'char_pipeline', '1K', referenceImages.length, { character: name, step: `body-angle-${i}` });
+
+          // Remove green background and crop to clean transparent PNG
+          await removeBackground(framePath, framePath);
+          const tmpPath = framePath + '.crop.tmp.png';
+          await cropToContent(framePath, tmpPath, { width: 180, height: 180, padding: 10 });
+          fs.renameSync(tmpPath, framePath);
+
+          frames.push({ index: i, label: angleLabel, url: `/assets/${name}-angle-${i}.png` });
         }
 
-        const frames = sliced.map((f, i) => ({
-          ...f,
-          label: ANGLE_LABELS_8[i] || f.label,
-          url: `/assets/${name}-angle-${i}.png`,
-        }));
-
-        finishJob(jobId, { success: true, name, sheetUrl: `/api/character/image/${name}/body-sheet.png`, frames });
+        finishJob(jobId, { success: true, name, frames });
       } catch (err) {
         failJob(jobId, err.message);
       }
@@ -780,31 +784,40 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
-        const result = await client.generate(prompt, {
-          referenceImages: [portraitPath],
-          aspectRatio: '16:9',
-          resolution: '2K',
-          model: modelId,
-          maxRetries: 1,
-          timeoutMs: 80000,
-        });
+        // Generate each headshot angle individually — eliminates sheet-slicing issues.
+        const frames = [];
+        for (let i = 0; i < 8; i++) {
+          const angleLabel = ANGLE_LABELS_8[i];
+          const anglePrompt = [
+            'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+            '',
+            `Generate a single headshot of this character at the ${angleLabel} angle (${i * 45}°).`,
+            '',
+            'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
+            'STYLE: Match the exact pixel art style of the reference. 16-bit GBA style. Bold black outlines.',
+            'FRAMING: Head centered. Clean white background.',
+            'OUTPUT: Single headshot only. Square 1:1 frame. No text, no labels.',
+          ].join('\n');
 
-        const charDir = path.join(TMP_DIR, 'characters', name);
-        fs.mkdirSync(charDir, { recursive: true });
-        const sheetPath = path.join(charDir, 'head-sheet.png');
-        fs.writeFileSync(sheetPath, result.imageBuffer);
-        recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'head-sheet' });
+          const result = await client.generate(anglePrompt, {
+            referenceImages: [portraitPath],
+            aspectRatio: '1:1',
+            resolution: '1K',
+            model: modelId,
+            maxRetries: 2,
+            timeoutMs: 90000,
+          });
 
-        const sliceDir = path.join(charDir, 'head-frames');
-        const destPattern = path.join(ASSETS_DIR, `${name}-headshot-{i}.png`);
-        const sliced = await sliceSheet(sheetPath, sliceDir, 8, destPattern);
-        const frames = sliced.map((f, i) => ({
-          ...f,
-          label: ANGLE_LABELS_8[i] || f.label,
-          url: `/assets/${name}-headshot-${i}.png`,
-        }));
+          const charDir = path.join(TMP_DIR, 'characters', name);
+          fs.mkdirSync(charDir, { recursive: true });
+          const framePath = path.join(ASSETS_DIR, `${name}-headshot-${i}.png`);
+          fs.writeFileSync(framePath, result.imageBuffer);
+          recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: `head-angle-${i}` });
 
-        finishJob(jobId, { success: true, name, sheetUrl: `/api/character/image/${name}/head-sheet.png`, frames });
+          frames.push({ index: i, label: angleLabel, url: `/assets/${name}-headshot-${i}.png` });
+        }
+
+        finishJob(jobId, { success: true, name, frames });
       } catch (err) {
         failJob(jobId, err.message);
       }
