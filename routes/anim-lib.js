@@ -19,7 +19,8 @@ const { scheduleSync } = require('../lib/auto-git-sync');
 const LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
 const INDEX_FILE = path.join(LIB_DIR, 'index.json');
 
-const ANGLE_LABELS = ['front','front_right_45','right_90','back_right_135','back_180','back_left_225','left_270','front_left_315'];
+// These labels match ANGLE_LABELS_8 in char-pipeline.js exactly — index = body angle file index
+const ANGLE_LABELS = ['Front', 'Front Right', 'Right', 'Back Right', 'Back', 'Back Left', 'Left', 'Front Left'];
 
 function loadIndex() {
   try {
@@ -116,7 +117,10 @@ function register(router, ctx) {
 
       if (framesBase64.length === 0) return json(res, { error: 'No frames could be saved' }, 400);
 
-      const angleIndex = ANGLE_LABELS.indexOf(angle);
+      // angle can be a label string or a numeric index string ("0"–"7")
+      const angleIndex = /^\d+$/.test(String(angle))
+        ? Math.min(7, Math.max(0, parseInt(angle)))
+        : Math.max(0, ANGLE_LABELS.indexOf(angle));
       const entry = {
         name: animId,
         displayName: name.trim(),

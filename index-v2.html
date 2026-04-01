@@ -932,14 +932,14 @@
             <div class="form-group">
               <label class="form-label">Camera Angle / POV</label>
               <select class="input" id="videoAnimAngle">
-                <option value="front">Front</option>
-                <option value="front_right_45">Front-Right 45°</option>
-                <option value="right_90">Right 90°</option>
-                <option value="back_right_135">Back-Right 135°</option>
-                <option value="back_180">Back 180°</option>
-                <option value="back_left_225">Back-Left 225°</option>
-                <option value="left_270">Left 270°</option>
-                <option value="front_left_315">Front-Left 315°</option>
+                <option value="0">Front</option>
+                <option value="1">Front Right</option>
+                <option value="2">Right</option>
+                <option value="3">Back Right</option>
+                <option value="4">Back</option>
+                <option value="5">Back Left</option>
+                <option value="6">Left</option>
+                <option value="7">Front Left</option>
               </select>
             </div>
             <div class="form-group">
@@ -3752,12 +3752,6 @@ function openSubjectEditor(slotEl, frameIndex, frameFile) {
 }
 
 async function saveAnimToLibrary() {
-  // Block save while background-removal is still running
-  const pendingSlots = document.querySelectorAll('#vstSubjectGrid .vst-subject.vst-pending');
-  if (pendingSlots.length > 0) {
-    return toast('Pose references are still loading — wait a moment then try again', true);
-  }
-
   const animName = document.getElementById('videoAnimName').value.trim();
   const angle = document.getElementById('videoAnimAngle').value;
   const fps = parseInt(document.getElementById('videoAnimFps').value) || 8;
@@ -3769,21 +3763,47 @@ async function saveAnimToLibrary() {
   const orderedFrames = VID.frames.filter(f => VID.selected.has(f.file)).map(f => f.file);
   if (orderedFrames.length === 0) return toast('No frames selected', true);
 
+  // Collect base64 from already-rendered subject images — skip still-pending ones
+  const slots = document.querySelectorAll('#vstSubjectGrid .vst-subject');
+  const frameBase64Array = [];
+  const selectedFiles = VID.frames.filter(f => VID.selected.has(f.file));
+
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const slot = slots[i];
+    const img = slot ? slot.querySelector('img') : null;
+    if (img && img.complete && img.naturalWidth > 0) {
+      // Frame is loaded — fetch it as base64
+      try {
+        const resp = await fetch(img.src);
+        const buf = await resp.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        frameBase64Array.push('data:image/png;base64,' + b64);
+      } catch { /* skip unreadable frame */ }
+    }
+    // Pending frames are skipped — server will also skip missing ones
+  }
+
+  // Need at least one frame to save
+  if (frameBase64Array.length === 0) {
+    return toast('No frames ready yet — wait a moment for extraction to complete', true);
+  }
+
   const btn = document.getElementById('videoSaveLibBtn');
   const spinner = document.getElementById('videoSaveSpinner');
   btn.disabled = true;
   spinner.classList.add('active');
 
-  try {
-    const res = await fetch(`${API}/api/anim-lib`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: animName, angle, fps, loop, sessionId: VID.sessionId, frameFiles: orderedFrames }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Save failed');
+  // Fire save and immediately re-enable button — finishes in background
+  toast(`Saving "${animName}" (${frameBase64Array.length} frames)…`);
 
-    // Show success card
+  fetch(`${API}/api/anim-lib`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: animName, angle, fps, loop, frameBase64Array }),
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) throw new Error(data.error);
     const anim = data.animation;
     document.getElementById('videoSaveResultMeta').textContent =
       `"${anim.displayName}" · ${anim.frameCount} frames · ${anim.fps}fps · ${anim.angle}`;
@@ -3794,12 +3814,12 @@ async function saveAnimToLibrary() {
     document.getElementById('videoSaveResult').style.display = 'block';
     document.getElementById('videoSaveResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     toast(`Saved "${anim.displayName}" to animation library`);
-  } catch (e) {
-    toast('Save failed: ' + e.message, true);
-  } finally {
+  })
+  .catch(e => toast('Save failed: ' + e.message, true))
+  .finally(() => {
     btn.disabled = false;
     spinner.classList.remove('active');
-  }
+  });
 }
 
 function videoReset() {
