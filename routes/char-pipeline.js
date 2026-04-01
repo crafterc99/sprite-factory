@@ -336,6 +336,14 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     return json(res, { jobId: params.jobId, ...job });
   });
 
+  // GET /api/char-pipeline/preview/:name — Serve the step2 portrait preview (for resume after page refresh)
+  router.get('/api/char-pipeline/preview/:name', (req, res, params) => {
+    const previewPath = path.join(TMP_DIR, 'characters', params.name, 'step2-preview.png');
+    if (!fs.existsSync(previewPath)) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-cache' });
+    fs.createReadStream(previewPath).pipe(res);
+  });
+
   // GET /api/char-pipeline/status/:name — Get pipeline state
   router.get('/api/char-pipeline/status/:name', (req, res, params) => {
     const { name } = params;
@@ -460,6 +468,9 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           timeoutMs: 80000,
         });
         recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step2' });
+        // Also persist portrait to disk so client can resume after page refresh
+        const previewPath = path.join(TMP_DIR, 'characters', name, 'step2-preview.png');
+        fs.writeFileSync(previewPath, step2.imageBuffer);
         const imageBase64 = 'data:image/png;base64,' + step2.imageBuffer.toString('base64');
         finishJob(jobId, { success: true, name, imageBase64 });
       } catch (err) {
