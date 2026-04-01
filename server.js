@@ -157,6 +157,16 @@ require('./routes/wardrobe').register(router);
 require('./routes/anim-lib').register(router, ctx);
 require('./routes/studio-gen').register(router, ctx);
 
+// ─── Sync Status Endpoint ────────────────────────────────────────────────
+router.get('/api/sync-status', (req, res) => {
+  try {
+    const { getSyncStatus } = require('./lib/auto-git-sync');
+    json(res, getSyncStatus());
+  } catch (e) {
+    json(res, { status: 'error', error: e.message });
+  }
+});
+
 // ─── Deploy Endpoint ─────────────────────────────────────────────────────
 const { execSync } = require('child_process');
 router.post('/api/deploy', async (req, res) => {
