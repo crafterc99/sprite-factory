@@ -413,7 +413,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-2.5-flash-image';
+        const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
         const step2 = await client.generate(loadCharPrompts().step2, {
           referenceImages: [step1Path],
@@ -666,7 +666,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-2.5-flash-image';
+        const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
         const referenceImages = [portraitPath, ...clothingPaths];
 
@@ -725,7 +725,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     setImmediate(async () => {
       try {
         const prompt = promptOverride?.trim() || loadCharPrompts().headSheet;
-        const modelId = 'gemini-2.5-flash-image';
+        const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
         const result = await client.generate(prompt, {
@@ -779,7 +779,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (bodyFrames.length === 0) return json(res, { error: 'No body frames — complete Steps 5-6 first' }, 400);
 
     try {
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = model || 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
       const finalDir = path.join(TMP_DIR, 'characters', name, 'final-frames');
       fs.mkdirSync(finalDir, { recursive: true });
@@ -919,7 +919,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found' }, 400);
 
     try {
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = model || 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const results = [];
