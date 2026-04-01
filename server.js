@@ -70,10 +70,11 @@ function serveStatic(res, filePath, contentType) {
   try {
     const stat = fs.statSync(filePath);
     const etag = `"${stat.mtimeMs.toString(36)}-${stat.size.toString(36)}"`;
+    const isHtml = contentType === 'text/html';
     res.writeHead(200, {
       'Content-Type': contentType,
       'Content-Length': stat.size,
-      'Cache-Control': 'public, max-age=300',
+      'Cache-Control': isHtml ? 'no-cache' : 'public, max-age=300',
       'ETag': etag,
     });
     fs.createReadStream(filePath).pipe(res);
