@@ -706,10 +706,6 @@
                 <div class="hero-strip-label">Body</div>
                 <div class="hero-strip-row" id="detailBody"></div>
               </div>
-              <div class="hero-strip">
-                <div class="hero-strip-label">Clothes</div>
-                <div class="hero-strip-row" id="detailClothes"></div>
-              </div>
             </div>
           </div>
           <!-- Grid — STATE 1 only (hidden in STATE 2) -->
@@ -1615,21 +1611,26 @@ function selectDashChar(name) {
 
   const ANGLE_NAMES = ['front','front-3/4-R','side-R','back-3/4-R','back','back-3/4-L','side-L','front-3/4-L'];
 
-  const makeHeadshotStrip = () => [0,1,2,3,4,5,6,7].map(i => {
-    const angle = ANGLE_NAMES[i];
-    return `<div class="hero-thumb" draggable="true" data-angle="${angle}" data-layer="headshot" data-index="${i}" ondblclick="openAnglePromptEditor(this,'${name}',${i},'headshot')">` +
-      `<img src="/assets/${name}-headshot-${i}.png" onerror="this.style.display='none'" /></div>`;
-  }).join('');
+  const makeAngleThumb = (imgSrc, type, i) => {
+    const label = ANGLE_NAMES[i] || `angle-${i}`;
+    const imgId = `dashThumb-${type}-${i}`;
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div class="hero-thumb" data-angle="${label}" data-layer="${type}" data-index="${i}">
+        <img id="${imgId}" src="${imgSrc}" onerror="this.style.display='none'"
+          onclick="cpOpenRegen('${name}','${type === 'headshot' ? 'head' : 'body'}',${i},this.src,'${label}')"
+          title="Click to regenerate with changes"
+          style="cursor:pointer" />
+      </div>
+      <input class="cp-label-input" value="${label}" style="width:100%;max-width:56px"
+        data-type="${type === 'headshot' ? 'head' : 'body'}" data-index="${i}" data-name="${name}"
+        onblur="cpRenameAngle(this)" />
+    </div>`;
+  };
 
-  const makeBodyStrip = (prefix, layer) => [0,1,2,3,4,5,6,7].map(i => {
-    const angle = ANGLE_NAMES[i];
-    return `<div class="hero-thumb" data-angle="${angle}" data-layer="${layer}" data-index="${i}" ondblclick="openAnglePromptEditor(this,'${name}',${i},'${layer}')">` +
-      `<img src="/assets/${name}-${prefix}-${i}.png" onerror="this.style.display='none'" /></div>`;
-  }).join('');
-
-  document.getElementById('detailHeadshots').innerHTML = makeHeadshotStrip();
-  document.getElementById('detailBody').innerHTML = makeBodyStrip('angle', 'body');
-  document.getElementById('detailClothes').innerHTML = makeBodyStrip('clothes', 'clothes');
+  document.getElementById('detailHeadshots').innerHTML = [0,1,2,3,4,5,6,7].map(i =>
+    makeAngleThumb(`/assets/${name}-headshot-${i}.png`, 'headshot', i)).join('');
+  document.getElementById('detailBody').innerHTML = [0,1,2,3,4,5,6,7].map(i =>
+    makeAngleThumb(`/assets/${name}-angle-${i}.png`, 'body', i)).join('');
 
   attachDashDragDrop(name);
 
@@ -1648,32 +1649,28 @@ function deselectDashChar() {
 // Visual-only overrides stored until Rebuild is clicked.
 // { charName: { angleIndex: { head?: {src,angle}, clothes?: {src,angle} } } }
 function attachDashDragDrop(charName) {
-  // Headshot AND clothes thumbs are draggable sources
-  ['#detailHeadshots .hero-thumb', '#detailClothes .hero-thumb'].forEach(sel => {
-    document.querySelectorAll(sel).forEach(thumb => {
-      thumb.setAttribute('draggable', 'true');
-      thumb.addEventListener('dragstart', e => {
-        e.dataTransfer.setData('text/plain', JSON.stringify({
-          angle: thumb.dataset.angle,
-          layer: thumb.dataset.layer,
-          index: parseInt(thumb.dataset.index),
-        }));
-        thumb.classList.add('dragging');
-      });
-      thumb.addEventListener('dragend', () => thumb.classList.remove('dragging'));
+  // Headshot thumbs are draggable sources
+  document.querySelectorAll('#detailHeadshots .hero-thumb').forEach(thumb => {
+    thumb.setAttribute('draggable', 'true');
+    thumb.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', JSON.stringify({
+        angle: thumb.dataset.angle,
+        layer: thumb.dataset.layer,
+        index: parseInt(thumb.dataset.index),
+      }));
+      thumb.classList.add('dragging');
     });
+    thumb.addEventListener('dragend', () => thumb.classList.remove('dragging'));
   });
 
-  // Headshot and clothes thumbs reject drops — sources only
-  ['#detailHeadshots .hero-thumb', '#detailClothes .hero-thumb'].forEach(sel => {
-    document.querySelectorAll(sel).forEach(thumb => {
-      thumb.addEventListener('dragover', e => { e.preventDefault(); thumb.classList.add('drop-target'); });
-      thumb.addEventListener('dragleave', () => thumb.classList.remove('drop-target'));
-      thumb.addEventListener('drop', e => {
-        e.preventDefault();
-        thumb.classList.remove('drop-target');
-        toast('Can only drop onto body angles', true);
-      });
+  // Headshot thumbs reject drops — sources only
+  document.querySelectorAll('#detailHeadshots .hero-thumb').forEach(thumb => {
+    thumb.addEventListener('dragover', e => { e.preventDefault(); thumb.classList.add('drop-target'); });
+    thumb.addEventListener('dragleave', () => thumb.classList.remove('drop-target'));
+    thumb.addEventListener('drop', e => {
+      e.preventDefault();
+      thumb.classList.remove('drop-target');
+      toast('Can only drop onto body angles', true);
     });
   });
 
