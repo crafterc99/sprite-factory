@@ -853,9 +853,9 @@
               <!-- Generation result -->
               <div class="card" id="studioResultCard" style="display:none;margin-top:20px">
                 <div class="card-title">Result</div>
-                <img id="studioResultImg" style="max-width:100%;border-radius:6px;image-rendering:pixelated;display:block" />
-                <div id="studioResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:8px"></div>
-                <button class="btn btn-primary btn-sm" id="studioSaveBtn" onclick="studioSaveToChar()" style="margin-top:12px">Save to Character</button>
+                <div id="studioFrameGrid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+                <div id="studioResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:4px;margin-bottom:12px"></div>
+                <button class="btn btn-primary btn-sm" id="studioSaveBtn" onclick="studioSaveToChar()" style="width:100%">Save Animation</button>
               </div>
 
             </div>
@@ -2231,20 +2231,6 @@ async function studioPollJob(jobKey) {
           if (log) log.innerHTML += `<span class="ok">✓ ${result.frameCount} frames complete</span>\n`;
           showStudioResult(result);
         }
-        // Auto-save to character
-        try {
-          await fetch(`${API}/api/character/${encodeURIComponent(charName)}/save-animation`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ animId: animName, animName, spriteUrl: result.spriteUrl, fps: result.fps, frameCount: result.frameCount }),
-          });
-          // Mark save button as saved if result is visible
-          const saveBtn = document.getElementById('studioSaveBtn');
-          if (saveBtn && STUDIO.lastResult?.animName === animName) saveBtn.textContent = '✓ Saved';
-          toast(`"${animName}" saved to ${charName}`);
-          await loadRoster();
-          if (STATE.dashSelected === charName) selectDashChar(charName);
-        } catch {}
       } else if (data.status === 'error') {
         clearInterval(interval);
         delete STUDIO_JOBS[jobKey];
@@ -2265,13 +2251,112 @@ function studioUpdateRing(done, total) {
 function showStudioResult(result) {
   STUDIO.lastResult = result;
   const card = document.getElementById('studioResultCard');
-  document.getElementById('studioResultImg').src = result.spriteUrl + '?t=' + Date.now();
+  const grid = document.getElementById('studioFrameGrid');
+
+  // Render individual frame thumbnails with regenerate buttons
+  grid.innerHTML = '';
+  for (let i = 0; i < result.frameCount; i++) {
+    grid.appendChild(studioMakeFrameCell(result.charName, result.animName, i, result.frameCount));
+  }
+
   document.getElementById('studioResultMeta').textContent =
     `${result.charName} · ${result.animName} · ${result.frameCount} frames · ${result.fps}fps`;
   const saveBtn = document.getElementById('studioSaveBtn');
-  if (saveBtn) { saveBtn.textContent = `Save to ${result.charName}`; saveBtn.disabled = false; }
+  if (saveBtn) { saveBtn.textContent = 'Save Animation'; saveBtn.disabled = false; }
   card.style.display = 'block';
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function studioMakeFrameCell(charName, animName, frameIndex, totalFrames) {
+  const cell = document.createElement('div');
+  cell.id = `frame-cell-${frameIndex}`;
+  cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;';
+
+  const img = document.createElement('img');
+  img.src = `/assets/${charName}-${animName}-frames/frame-${frameIndex}.png?t=${Date.now()}`;
+  img.style.cssText = 'width:80px;height:80px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14;border:1px solid #1e1e30;';
+
+  const label = document.createElement('div');
+  label.style.cssText = 'font-family:var(--mono);font-size:9px;color:#50507a;';
+  label.textContent = `f${frameIndex + 1}`;
+
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-secondary btn-sm';
+  btn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
+  btn.textContent = '↻ Regen';
+  btn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, btn);
+
+  cell.appendChild(img);
+  cell.appendChild(label);
+  cell.appendChild(btn);
+  return cell;
+}
+
+async function studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  img.style.opacity = '0.4';
+
+  try {
+    const res = await fetch(`${API}/api/regen-frame`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character: charName, animation: animName, frameIndex, totalFrames }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // Show new candidate — offer accept or retry
+    img.src = data.processedUrl + '?t=' + Date.now();
+    img.style.opacity = '1';
+
+    btn.textContent = '✓ Keep';
+    btn.className = 'btn btn-primary btn-sm';
+    btn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
+    btn.disabled = false;
+    btn.onclick = async () => {
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        await fetch(`${API}/api/cherry-pick`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ character: charName, animation: animName, frameIndex, processedPath: data.processedPath }),
+        });
+        btn.textContent = '✓ Kept';
+        btn.className = 'btn btn-secondary btn-sm';
+        btn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
+        // Re-attach regen option
+        const regenBtn = document.createElement('button');
+        regenBtn.className = 'btn btn-secondary btn-sm';
+        regenBtn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;margin-top:2px;';
+        regenBtn.textContent = '↻ Regen';
+        regenBtn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, regenBtn);
+        cell.appendChild(regenBtn);
+      } catch (e) { toast('Cherry-pick failed: ' + e.message, true); btn.disabled = false; }
+    };
+
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'btn btn-secondary btn-sm';
+    retryBtn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
+    retryBtn.textContent = '↻ Again';
+    retryBtn.onclick = () => {
+      retryBtn.remove();
+      btn.textContent = '↻ Regen';
+      btn.className = 'btn btn-secondary btn-sm';
+      btn.disabled = false;
+      btn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, btn);
+      studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, btn);
+    };
+    cell.appendChild(retryBtn);
+
+  } catch (e) {
+    toast('Regen failed: ' + e.message, true);
+    img.style.opacity = '1';
+    btn.disabled = false;
+    btn.textContent = '↻ Regen';
+    btn.className = 'btn btn-secondary btn-sm';
+  }
 }
 
 async function studioSaveToChar() {

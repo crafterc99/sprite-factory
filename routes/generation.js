@@ -424,26 +424,8 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const tasks = upscaledPaths.map((upPath, i) => async () => {
         sse({ type: 'frame_start', frame: i, total: totalFrames });
 
-        let prompt;
-        if (customSections) {
-          prompt = buildSectionedPrompt(character, animation, {
-            frameIndex: i,
-            totalFrames,
-            customSections,
-          });
-        } else {
-          // Use saved overrides if available, otherwise fall back to default
-          const active = getActiveSections(character, animation, { frameIndex: i, totalFrames });
-          const hasOverrides = Object.values(active).some(s => s.isCustom);
-          if (hasOverrides) {
-            const merged = {};
-            for (const [k, v] of Object.entries(active)) merged[k] = { enabled: true, text: v.text };
-            prompt = buildSectionedPrompt(character, animation, { frameIndex: i, totalFrames, customSections: merged });
-          } else {
-            const promptData = buildSingleFramePrompt(character, animation, i, totalFrames);
-            prompt = promptData.prompt;
-          }
-        }
+        // Always use the universal fixed prompt — no per-frame overrides
+        const prompt = buildSingleFramePrompt(character, animation, i, totalFrames).prompt;
 
         const outPath = path.join(fbfDir, `raw-frame-${String(i).padStart(3, '0')}.png`);
 
@@ -578,26 +560,8 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const upPath = path.join(upscaledDir, `frame-${String(frameIndex).padStart(3, '0')}.png`);
       await upscaleNN(refFramePath, upPath, { width: 512, height: 512 });
 
-      // Build prompt
-      let prompt;
-      if (customSections) {
-        prompt = buildSectionedPrompt(character, animation, {
-          frameIndex,
-          totalFrames,
-          customSections,
-        });
-      } else {
-        const active = getActiveSections(character, animation, { frameIndex, totalFrames });
-        const hasOverrides = Object.values(active).some(s => s.isCustom);
-        if (hasOverrides) {
-          const merged = {};
-          for (const [k, v] of Object.entries(active)) merged[k] = { enabled: true, text: v.text };
-          prompt = buildSectionedPrompt(character, animation, { frameIndex, totalFrames, customSections: merged });
-        } else {
-          const promptData = buildSingleFramePrompt(character, animation, frameIndex, totalFrames);
-          prompt = promptData.prompt;
-        }
-      }
+      // Always use the universal fixed prompt — no per-frame overrides
+      const prompt = buildSingleFramePrompt(character, animation, frameIndex, totalFrames).prompt;
 
       // Generate
       const attemptNum = Date.now();
