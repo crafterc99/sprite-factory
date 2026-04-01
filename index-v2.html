@@ -1484,13 +1484,8 @@ const STATE = {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  // Restore any in-progress generation state from last session
-  const saved = cpLoadState();
-  if (saved && saved.name && saved.stage && saved.stage !== 'idle' && saved.stage !== 'done') {
-    CP.name = saved.name;
-    CP.stage = saved.stage;
-    CP.portraitBase64 = saved.portraitBase64 || null;
-  }
+  // Restore any in-progress generation jobs from last session
+  Object.assign(CPJobs, cpLoadJobs());
 
   loadRoster();
   loadCosts();
@@ -1553,29 +1548,30 @@ function renderRoster() {}
 function renderDashboard() {
   const grid = document.getElementById('dashGrid');
 
-  // In-progress card — shows when a generation is running in background
+  // In-progress cards — one per active background job
   const stageLabels = {
     step1: 'Converting to pixel art…',
     step2: 'Generating portrait…',
     awaiting_confirm: 'Portrait ready — tap to confirm',
     angles: 'Generating angles…',
   };
-  const inProgressName = CP.name && CP.stage && CP.stage !== 'idle' && CP.stage !== 'done' ? CP.name : null;
-  const inProgressCard = inProgressName
-    ? `<div class="dash-card-wrap">
-        <div class="dash-card generating" onclick="cpResumeModal('${inProgressName}')" title="Click to open generation">
-          <div class="dash-portrait-empty" style="font-size:28px;animation:spin 1.4s linear infinite">⟳</div>
-          <div class="dash-card-info">
-            <div class="dash-name">${inProgressName}</div>
-            <div style="font-family:var(--mono);font-size:8px;color:#7070a0;margin-top:2px">${stageLabels[CP.stage] || 'Generating…'}</div>
-          </div>
+  const activeJobs = Object.values(CPJobs).filter(j => j.stage && j.stage !== 'idle' && j.stage !== 'done');
+  const inProgressNames = new Set(activeJobs.map(j => j.name));
+  const inProgressCard = activeJobs.map(j =>
+    `<div class="dash-card-wrap">
+      <div class="dash-card generating" onclick="cpResumeModal('${j.name}')" title="Click to open generation">
+        <div class="dash-portrait-empty" style="font-size:28px;animation:spin 1.4s linear infinite">⟳</div>
+        <div class="dash-card-info">
+          <div class="dash-name">${j.name}</div>
+          <div style="font-family:var(--mono);font-size:8px;color:#7070a0;margin-top:2px">${stageLabels[j.stage] || 'Generating…'}</div>
         </div>
-      </div>`
-    : '';
+      </div>
+    </div>`
+  ).join('');
 
   const cards = STATE.roster.map(char => {
-    // Skip if this char is the one currently being generated (show in-progress card instead)
-    if (char.name === inProgressName) return '';
+    // Skip chars currently being generated (show in-progress card instead)
+    if (inProgressNames.has(char.name)) return '';
     const isSelected = STATE.dashSelected === char.name;
     const portrait = char.portrait
       ? `<img class="dash-portrait" src="${char.portrait}" onerror="this.style.display='none'" />`
@@ -2217,31 +2213,28 @@ async function exportToSoulJam() {
 }
 
 // ─── NEW CHARACTER ─────────────────────────────────────────────────────────
-const CP = { name: '', photo: null, clothing: [], portraitBase64: null, dressedPortraitBase64: null, stage: 'idle' };
+// Modal-only state (what the user has typed/uploaded in the form)
+const CP = { name: '', photo: null, clothing: [], portraitBase64: null, dressedPortraitBase64: null };
 const WD = { photo: null }; // wardrobe upload state
 
-// Persist CP stage + portrait to localStorage so dashboard can show in-progress chars
+// Background job map — one entry per in-progress character; persisted to localStorage
+// { [name]: { name, stage, portraitBase64 } }
+const CPJobs = {};
+
 function cpSaveState() {
-  try {
-    localStorage.setItem('cp_state', JSON.stringify({
-      name: CP.name,
-      stage: CP.stage,
-      portraitBase64: CP.portraitBase64,
-    }));
-  } catch {}
+  try { localStorage.setItem('cp_jobs', JSON.stringify(CPJobs)); } catch {}
 }
-function cpLoadState() {
-  try { return JSON.parse(localStorage.getItem('cp_state') || 'null'); } catch { return null; }
+function cpLoadJobs() {
+  try { return JSON.parse(localStorage.getItem('cp_jobs') || '{}'); } catch { return {}; }
 }
-function cpClearState() {
-  try { localStorage.removeItem('cp_state'); } catch {}
+function cpClearJob(name) {
+  delete CPJobs[name];
+  cpSaveState();
 }
 
 function openAddChar() {
-  // If a generation is in progress for a different character, open fresh
-  // (in-progress character can be resumed via dashboard card)
-  CP.name = ''; CP.photo = null; CP.clothing = []; CP.portraitBase64 = null; CP.dressedPortraitBase64 = null; CP.stage = 'idle';
-  cpClearState();
+  // Reset modal form — in-progress jobs keep running; resume via dashboard card
+  CP.name = ''; CP.photo = null; CP.clothing = []; CP.portraitBase64 = null; CP.dressedPortraitBase64 = null;
   document.getElementById('cpName').value = '';
   document.getElementById('cpJersey').value = '';
   document.getElementById('cpHeight').value = '72';
@@ -2264,33 +2257,32 @@ function openAddChar() {
 
 // Resume the modal for a character that's currently generating
 async function cpResumeModal(name) {
+  const job = CPJobs[name] || {};
   CP.name = name;
-  // Restore form
+  CP.portraitBase64 = job.portraitBase64 || null;
+  CP.dressedPortraitBase64 = job.portraitBase64 || null;
+
   document.getElementById('cpName').value = name;
   document.getElementById('cpGenBtn').disabled = true;
   document.getElementById('cpProgress').style.display = 'block';
   document.getElementById('cpAngleResults').style.display = 'none';
   document.getElementById('cpPortraitConfirm').style.display = 'none';
   document.getElementById('cpOutfitPicker').style.display = 'none';
+  document.getElementById('cpLog').innerHTML = '';
   document.getElementById('addCharModal').classList.add('open');
 
-  const saved = cpLoadState();
-
-  if (CP.stage === 'awaiting_confirm' || saved?.stage === 'awaiting_confirm') {
-    // Portrait is ready, show confirm UI
-    CP.stage = 'awaiting_confirm';
-    const portrait = CP.portraitBase64 || (saved?.portraitBase64) || `${API}/api/char-pipeline/preview/${name}`;
+  const stage = job.stage;
+  if (stage === 'awaiting_confirm') {
+    const portrait = CP.portraitBase64 || `${API}/api/char-pipeline/preview/${name}`;
     CP.portraitBase64 = portrait;
     document.getElementById('cpPortraitPreview').src = portrait;
     document.getElementById('cpPortraitConfirm').style.display = 'block';
     document.getElementById('cpLog').innerHTML = '<span class="ok">✓ Portrait ready — confirm to continue</span>\n';
     document.getElementById('cpGenBtn').disabled = false;
-  } else if (CP.stage === 'angles' || saved?.stage === 'angles') {
-    CP.stage = 'angles';
+  } else if (stage === 'angles') {
     document.getElementById('cpLog').innerHTML = '<span class="info">⋯ Generating body + head angles in background…</span>\n';
   } else {
-    // step1 or step2 still running
-    const stageLabel = { step1: 'Converting to pixel art', step2: 'Generating portrait' }[CP.stage] || 'Generating';
+    const stageLabel = { step1: 'Converting to pixel art', step2: 'Generating portrait' }[stage] || 'Generating';
     document.getElementById('cpLog').innerHTML = `<span class="info">⋯ ${stageLabel} — running in background…</span>\n`;
   }
 }
@@ -2382,7 +2374,12 @@ async function cpGenerate() {
   if (!CP.photo) return toast('Upload a photo first', true);
 
   CP.name = name;
-  CP.stage = 'step1';
+  // Capture photo now — modal may switch to another char later
+  const photoBase64 = CP.photo;
+
+  // Create/update the background job entry for this character
+  const job = { name, stage: 'step1', portraitBase64: null };
+  CPJobs[name] = job;
   cpSaveState();
   renderDashboard(); // show in-progress card immediately
 
@@ -2401,7 +2398,7 @@ async function cpGenerate() {
     cpLog('Step 1 — Converting to pixel art…');
     const r1 = await fetch(`${API}/api/char-pipeline/pixel-char/step1`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, photoBase64: CP.photo }),
+      body: JSON.stringify({ name, photoBase64 }),
     });
     const d1 = await r1.json();
     if (d1.error) throw new Error(d1.error);
@@ -2409,7 +2406,7 @@ async function cpGenerate() {
     cpLog('✓ Pixel art done — generating portrait…', 'ok');
 
     // Step 2: pixel art → standing portrait (async job)
-    CP.stage = 'step2'; cpSaveState(); renderDashboard();
+    job.stage = 'step2'; cpSaveState(); renderDashboard();
     const r2 = await fetch(`${API}/api/char-pipeline/pixel-char/step2`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
@@ -2419,25 +2416,24 @@ async function cpGenerate() {
     const portraitResult = await waitForJob(d2.jobId, cpLog, 'Generating portrait');
     cpLog('✓ Portrait ready — confirm to continue', 'ok');
 
-    // Store base64 inline — no separate HTTP request needed for preview
-    CP.portraitBase64 = portraitResult.imageBase64;
-    CP.stage = 'awaiting_confirm';
+    // Store portrait in job (survives modal switch)
+    job.portraitBase64 = portraitResult.imageBase64;
+    job.stage = 'awaiting_confirm';
     cpSaveState();
-    renderDashboard(); // update card to show "tap to confirm"
+    renderDashboard(); // update card label to "tap to confirm"
 
-    // Show portrait for confirmation — do NOT proceed automatically
-    const confirmEl = document.getElementById('cpPortraitConfirm');
-    document.getElementById('cpPortraitPreview').src = portraitResult.imageBase64;
-    confirmEl.style.display = 'block';
-
-    // If modal was closed, notify via dashboard ping
-    if (!document.getElementById('addCharModal').classList.contains('open')) {
-      toast(`${name} portrait ready — tap to confirm`, false);
+    // Only update modal UI if this character is still the active one
+    if (CP.name === name) {
+      CP.portraitBase64 = job.portraitBase64;
+      document.getElementById('cpPortraitPreview').src = job.portraitBase64;
+      document.getElementById('cpPortraitConfirm').style.display = 'block';
+    } else {
+      toast(`${name} portrait ready — tap card to confirm`, false);
     }
 
   } catch (e) {
     cpLog(`Error: ${e.message}`, 'err');
-    CP.stage = 'idle'; cpClearState(); renderDashboard();
+    cpClearJob(name); renderDashboard();
     toast('Portrait generation failed: ' + e.message, true);
     btn.disabled = false;
   } finally {
@@ -2568,6 +2564,8 @@ async function cpProceedToAngles() {
   document.getElementById('cpOutfitPicker').style.display = 'none';
   // Use dressed portrait (may be same as original if no outfit applied)
   CP.portraitBase64 = CP.dressedPortraitBase64 || CP.portraitBase64;
+  // Sync back to job so it survives if modal is closed mid-generation
+  if (CPJobs[CP.name]) CPJobs[CP.name].portraitBase64 = CP.portraitBase64;
   await cpConfirmAndGenerateAngles();
 }
 
@@ -2606,7 +2604,8 @@ async function cpConfirmAndGenerateAngles() {
 
     // Start both angle generation jobs in parallel (async — each returns a jobId immediately)
     cpLog('Starting body turnaround + headshot generation…');
-    CP.stage = 'angles'; cpSaveState(); renderDashboard();
+    if (!CPJobs[name]) CPJobs[name] = { name, stage: 'idle', portraitBase64: CP.portraitBase64 };
+    CPJobs[name].stage = 'angles'; cpSaveState(); renderDashboard();
     const [jBody, jHead] = await Promise.all([
       fetch(`${API}/api/char-pipeline/generate-body-angles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2651,11 +2650,11 @@ async function cpConfirmAndGenerateAngles() {
     ).join('');
 
     document.getElementById('cpAngleResults').style.display = 'block';
-    CP.stage = 'done'; cpClearState();
+    cpClearJob(name);
     loadRoster(); // refresh dashboard so card updates from "generating" to normal
 
-    // If modal was closed, notify user
-    if (!document.getElementById('addCharModal').classList.contains('open')) {
+    // If modal was closed or switched to another char, notify user
+    if (!document.getElementById('addCharModal').classList.contains('open') || CP.name !== name) {
       toast(`${name} done — open dashboard to view`, false);
     } else {
       toast(`${name} ready — 8 body angles + 8 headshots`);
@@ -2663,7 +2662,7 @@ async function cpConfirmAndGenerateAngles() {
 
   } catch (e) {
     cpLog(`Error: ${e.message}`, 'err');
-    CP.stage = 'idle'; cpClearState(); renderDashboard();
+    cpClearJob(name); renderDashboard();
     toast('Generation failed: ' + e.message, true);
   } finally {
     btn.disabled = false;
