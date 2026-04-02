@@ -370,15 +370,6 @@ if (require.main === module) {
       console.warn('  [startup] metadata restore failed (non-fatal):', e.message);
     }
 
-    // On startup, push any data that's on disk but wasn't committed before last restart
-    if (process.env.GITHUB_TOKEN) {
-      const { scheduleSync } = require('./lib/auto-git-sync');
-      setTimeout(() => {
-        console.log('  [startup] scheduling data sync to GitHub…');
-        scheduleSync();
-      }, 5000); // wait 5s for server to be fully ready
-    }
-
     const server = http.createServer(handler);
     server.listen(PORT, () => {
       const { CHARACTERS } = require('./lib/sprite-generator/prompts');
