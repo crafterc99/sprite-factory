@@ -450,7 +450,10 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     const { animId, animName, spriteUrl, fps, frameCount } = body;
     if (!animId) return json(res, { error: 'animId required' }, 400);
     const registry = loadCharacters();
-    if (!registry[params.name]) return json(res, { error: 'Character not found' }, 404);
+    // Auto-register character if they're in the roster (have angle files) but not in registry
+    if (!registry[params.name]) {
+      registry[params.name] = { name: params.name, id: params.name, savedAnimations: {} };
+    }
     if (!registry[params.name].savedAnimations) registry[params.name].savedAnimations = {};
     registry[params.name].savedAnimations[animId] = {
       animId, animName: animName || animId, spriteUrl, fps: fps || 8, frameCount: frameCount || 1,

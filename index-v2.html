@@ -2435,7 +2435,7 @@ async function studioRegenFrame(charName, animName, frameIndex, totalFrames, cel
   img.style.opacity = '0.4';
 
   try {
-    const res = await fetch(`${API}/api/regen-frame`, {
+    const res = await fetch(`${API}/api/generate-frame`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ character: charName, animation: animName, frameIndex, totalFrames }),
