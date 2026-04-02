@@ -479,7 +479,41 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     }
   });
 
-  // POST /api/video/extract-subjects — Background removal for selected frames
+  // POST /api/video/extract-subject — Extract a SINGLE subject frame (for progressive UI)
+  // Body: { sessionId, frameFile, frameIndex, customPrompt? }
+  router.post('/api/video/extract-subject', async (req, res) => {
+    const body = await parseBody(req);
+    const { sessionId, frameFile, frameIndex, customPrompt } = body;
+    if (!sessionId || !frameFile) return json(res, { error: 'sessionId and frameFile required' }, 400);
+
+    const framesDir   = path.join(TMP_DIR, sessionId, 'frames');
+    const subjectsDir = path.join(TMP_DIR, sessionId, 'subjects');
+    const framePath   = path.join(framesDir, frameFile);
+
+    if (!fs.existsSync(framePath)) return json(res, { error: 'Frame not found' }, 404);
+    fs.mkdirSync(subjectsDir, { recursive: true });
+
+    let prompt = 'Extract the person and basketball from this image. Remove the background completely. Output ONLY the person and ball on a transparent background. Keep exact pose, proportions, and position. No background, no floor, no court markings.';
+    if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
+
+    try {
+      const client = new NanaBananaClient({ model: 'gemini-2.5-flash-image' });
+      const result  = await client.generate(prompt, {
+        referenceImages: [framePath],
+        aspectRatio:     '1:1',
+        resolution:      '1K',
+        model:           'gemini-2.5-flash-image',
+      });
+      const outFile = `subject-${frameIndex}.png`;
+      fs.writeFileSync(path.join(subjectsDir, outFile), result.imageBuffer);
+      recordCost('gemini-2.5-flash-image', 'subject-extract', '1K', 1, { sessionId, frameIndex });
+      return json(res, { frameIndex, url: `/api/video/subject/${sessionId}/${outFile}` });
+    } catch (err) {
+      return json(res, { frameIndex, error: err.message }, 500);
+    }
+  });
+
+  // POST /api/video/extract-subjects — Extract ALL subjects (kept for compatibility)
   router.post('/api/video/extract-subjects', async (req, res) => {
     const body = await parseBody(req);
     const { sessionId, frameFiles, customPrompt } = body;

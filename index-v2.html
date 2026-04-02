@@ -4342,41 +4342,44 @@ async function confirmVideoSelection() {
 }
 
 async function extractVideoSubjects(frameFiles) {
-  try {
-    const res = await fetch(`${API}/api/video/extract-subjects`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: VID.sessionId, frameFiles }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Extraction failed');
+  // Fire one request per frame — each slot updates the moment its result lands
+  // Max 3 concurrent to avoid rate-limiting the AI
+  const CONCURRENCY = 3;
 
-    for (const subject of data.subjects) {
-      const thumb = document.querySelector(`#vstSubjectGrid [data-frame-index="${subject.frameIndex}"]`);
-      if (!thumb) continue;
-      const slot = thumb.querySelector('.vst-subject');
-      if (!slot) continue;
-      if (subject.error) {
-        slot.innerHTML = `<span style="font-size:9px;color:var(--danger)">${subject.error}</span>`;
+  async function extractOne(file, i) {
+    const thumb = document.querySelector(`#vstSubjectGrid [data-frame-index="${i}"]`);
+    const slot  = thumb?.querySelector('.vst-subject');
+
+    try {
+      const res  = await fetch(`${API}/api/video/extract-subject`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ sessionId: VID.sessionId, frameFile: file, frameIndex: i }),
+      });
+      const data = await res.json();
+
+      if (!slot) return;
+      if (data.error) {
+        slot.innerHTML = `<span style="font-size:9px;color:var(--danger)">${data.error}</span>`;
       } else {
         const img = document.createElement('img');
-        img.src = subject.url;
+        img.src   = data.url + '?t=' + Date.now();
         slot.innerHTML = '';
         slot.appendChild(img);
-        const frameFile = thumb.dataset.frameFile;
-        const frameIndex = subject.frameIndex;
-        slot.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slot, frameIndex, frameFile); };
+        slot.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slot, i, file); };
         slot.title = 'Double-click to edit';
       }
-      slot.classList.remove('vst-pending');
+    } catch (e) {
+      if (slot) slot.innerHTML = `<span style="font-size:9px;color:var(--text-muted)">—</span>`;
+    } finally {
+      slot?.classList.remove('vst-pending');
     }
-  } catch (e) {
-    // Non-fatal — show dash in each pending slot
-    document.querySelectorAll('#vstSubjectGrid .vst-subject.vst-pending').forEach(slot => {
-      slot.innerHTML = `<span style="font-size:9px;color:var(--text-muted)">—</span>`;
-      slot.classList.remove('vst-pending');
-    });
-    console.warn('[extract-subjects]', e.message);
+  }
+
+  // Process in batches of CONCURRENCY
+  for (let start = 0; start < frameFiles.length; start += CONCURRENCY) {
+    const batch = frameFiles.slice(start, start + CONCURRENCY);
+    await Promise.all(batch.map((file, offset) => extractOne(file, start + offset)));
   }
 }
 
