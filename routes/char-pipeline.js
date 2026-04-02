@@ -1231,7 +1231,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-2.5-flash-image'; // fast model — outfit swap doesn't need top quality
+        const modelId = 'gemini-3.1-flash-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
         const tmpDir = path.join(TMP_DIR, 'outfit-tmp');
