@@ -137,7 +137,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody }) {
       });
       const compiledPrompt = buildFinalPrompt(pipeline, state);
 
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
       const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
       const poseRefPath = path.join(ASSETS_DIR, animData.breezyFile);

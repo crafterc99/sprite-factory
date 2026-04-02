@@ -119,7 +119,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody }) {
     if (!animation) return json(res, { error: 'animation required' }, 400);
 
     try {
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const ref = await prepareRefFrame(character, animation, frameIndex || 0);
@@ -169,7 +169,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody }) {
     if (!sectionsB) return json(res, { error: 'sectionsB required' }, 400);
 
     try {
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const ref = await prepareRefFrame(character, animation, frameIndex || 0);
@@ -359,7 +359,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody }) {
         return json(res, { error: 'promptType, context, and character required' }, 400);
       }
 
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
       const animation = context; // context is the animation name for sectioned prompts
 

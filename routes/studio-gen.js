@@ -149,7 +149,7 @@ function register(router, ctx) {
 
     setImmediate(async () => {
       try {
-        const modelId = model || 'gemini-3-pro-image-preview';
+        const modelId = model || 'gemini-3.1-flash-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
         const genDir = path.join(TMP_DIR, 'studio-gen', `${charName}-${animName}`);
@@ -257,7 +257,7 @@ function register(router, ctx) {
     if (!resolvedAnglePath) return json(res, { error: `No body angle or portrait found for "${charName}"` }, 400);
 
     try {
-      const modelId = model || 'gemini-3-pro-image-preview';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const genDir = path.join(TMP_DIR, 'studio-gen', `${charName}-${animName}`);

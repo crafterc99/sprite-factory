@@ -440,7 +440,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-3.1-flash-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
         // Step 1: photo → pixel art
@@ -504,7 +504,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-3.1-flash-image-preview';
         const client = new NanaBananaClient({ model: modelId });
         const step1 = await client.generate(loadCharPrompts().step1, {
           referenceImages: [originalPath],
@@ -540,7 +540,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-3.1-flash-image-preview';
         const client = new NanaBananaClient({ model: modelId });
         const step2 = await client.generate(loadCharPrompts().step2, {
           referenceImages: [step1Path],
@@ -630,7 +630,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     try {
       const prompt = promptOverride?.trim() || loadCharPrompts().headSheet;
-      const modelId = 'gemini-3-pro-image-preview';
+      const modelId = 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const result = await client.generate(prompt, {
@@ -715,7 +715,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         basePrompt += '\nMatch the outfit from the additional clothing reference images exactly.';
       }
 
-      const modelId = 'gemini-3-pro-image-preview';
+      const modelId = 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
       const referenceImages = [portraitPath, ...clothingPaths];
 
@@ -803,7 +803,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-3.1-flash-image-preview';
         const client = new NanaBananaClient({ model: modelId });
         const referenceImages = [portraitPath, ...clothingPaths];
 
@@ -891,7 +891,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     setImmediate(async () => {
       try {
         const prompt = promptOverride?.trim() || loadCharPrompts().headSheet;
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-3.1-flash-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
         // Generate all 8 headshot angles in parallel
@@ -975,7 +975,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (bodyFrames.length === 0) return json(res, { error: 'No body frames — complete Steps 5-6 first' }, 400);
 
     try {
-      const modelId = model || 'gemini-3-pro-image-preview';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
       const finalDir = path.join(TMP_DIR, 'characters', name, 'final-frames');
       fs.mkdirSync(finalDir, { recursive: true });
@@ -1076,7 +1076,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           : loadCharPrompts().bodySheet;
         const prompt = basePrompt + `\n\nKeep everything the exact same but: ${modifier.trim()}\nGenerate only the ${angleLabel} angle view.`;
 
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-3.1-flash-image-preview';
         const client = new NanaBananaClient({ model: modelId });
         const result = await client.generate(prompt, {
           referenceImages: [portraitPath, framePath],
@@ -1169,7 +1169,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found' }, 400);
 
     try {
-      const modelId = model || 'gemini-3-pro-image-preview';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const results = [];
@@ -1230,7 +1230,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-3-pro-image-preview';
+        const modelId = 'gemini-3.1-flash-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
         const tmpDir = path.join(TMP_DIR, 'outfit-tmp');

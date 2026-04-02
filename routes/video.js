@@ -225,7 +225,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       const count = frameCount || 6;
       const animDescription = action || animName || 'custom move';
       const data = buildFilmToSpritePrompt(character, animDescription, count);
-      const client = new NanaBananaClient({ model: model || 'gemini-2.5-flash-image' });
+      const client = new NanaBananaClient({ model: model || 'gemini-3.1-flash-image-preview' });
 
       const charRef = CHARACTERS[character] ? path.join(ASSETS_DIR, `${character === '99' ? '99' : character}full.png`) : null;
       const safeName = (animName || 'custom').replace(/[^a-zA-Z0-9_-]/g, '-');
@@ -235,11 +235,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       await client.generateSprite(data.prompt, stripPath, charRef, {
         aspectRatio: count >= 6 ? '21:9' : '16:9',
         resolution: '2K',
-        model: model || 'gemini-2.5-flash-image',
+        model: model || 'gemini-3.1-flash-image-preview',
         outputPath,
       });
 
-      const vidCost = recordCost(model || 'gemini-2.5-flash-image', 'video', '2K', charRef ? 2 : 1, { character, animation: safeName });
+      const vidCost = recordCost(model || 'gemini-3.1-flash-image-preview', 'video', '2K', charRef ? 2 : 1, { character, animation: safeName });
 
       const processed = await processSprite(outputPath, `${character}-${safeName}`, {
         frameCount: count,
@@ -310,7 +310,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
 
         const videoFramePath = path.join(selectDir, selectedFrames[i]);
         const promptData = buildFilmToSingleFramePrompt(character, animDescription, i, totalFrames);
-        const client = new NanaBananaClient({ model: model || 'gemini-2.5-flash-image' });
+        const client = new NanaBananaClient({ model: model || 'gemini-3.1-flash-image-preview' });
 
         const rawPath = path.join(RAW_DIR, `${character}-${safeName}-frame-${i}-raw.png`);
 
@@ -318,11 +318,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
         await client.generateSprite(promptData.prompt, videoFramePath, charRef, {
           aspectRatio: '1:1',
           resolution: '1K',
-          model: model || 'gemini-2.5-flash-image',
+          model: model || 'gemini-3.1-flash-image-preview',
           outputPath: rawPath,
         });
 
-        const frameCost = recordCost(model || 'gemini-2.5-flash-image', 'video_fbf_frame', '1K', charRef ? 2 : 1, {
+        const frameCost = recordCost(model || 'gemini-3.1-flash-image-preview', 'video_fbf_frame', '1K', charRef ? 2 : 1, {
           character, animation: safeName, frame: i,
         });
         totalCost += frameCost?.totalCost || 0;
@@ -419,17 +419,17 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       const rawPath = path.join(RAW_DIR, `${character}-${safeName}-frame-${frameIndex}-regen-raw.png`);
       fs.mkdirSync(RAW_DIR, { recursive: true });
 
-      const client = new NanaBananaClient({ model: model || 'gemini-2.5-flash-image' });
+      const client = new NanaBananaClient({ model: model || 'gemini-3.1-flash-image-preview' });
       const refImage = videoRefPath && fs.existsSync(videoRefPath) ? videoRefPath : charRef;
 
       await client.generateSprite(fullPrompt, refImage, charRef && refImage !== charRef ? charRef : null, {
         aspectRatio: '1:1',
         resolution: '1K',
-        model: model || 'gemini-2.5-flash-image',
+        model: model || 'gemini-3.1-flash-image-preview',
         outputPath: rawPath,
       });
 
-      recordCost(model || 'gemini-2.5-flash-image', 'video_fbf_frame', '1K', (refImage ? 1 : 0) + (charRef && refImage !== charRef ? 1 : 0), {
+      recordCost(model || 'gemini-3.1-flash-image-preview', 'video_fbf_frame', '1K', (refImage ? 1 : 0) + (charRef && refImage !== charRef ? 1 : 0), {
         character, animation: safeName, frame: frameIndex,
       });
 
@@ -499,12 +499,12 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
 
     try {
       const { removeBackground } = require('../lib/sprite-processor/index');
-      const client = new NanaBananaClient({ model: 'gemini-2.5-flash-image' });
+      const client = new NanaBananaClient({ model: 'gemini-3.1-flash-image-preview' });
       const result  = await client.generate(prompt, {
         referenceImages: [framePath],
         aspectRatio:     '1:1',
         resolution:      '1K',
-        model:           'gemini-2.5-flash-image',
+        model:           'gemini-3.1-flash-image-preview',
       });
 
       const outFile = `subject-${frameIndex}.png`;
@@ -520,7 +520,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
         padding: 8,  // minimal padding so character fills the frame
       });
 
-      recordCost('gemini-2.5-flash-image', 'subject-extract', '1K', 1, { sessionId, frameIndex });
+      recordCost('gemini-3.1-flash-image-preview', 'subject-extract', '1K', 1, { sessionId, frameIndex });
       return json(res, { frameIndex, url: `/api/video/subject/${sessionId}/${outFile}` });
     } catch (err) {
       return json(res, { frameIndex, error: err.message }, 500);
@@ -544,7 +544,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     let prompt = 'Extract the person and basketball from this image. Place them on a PURE GREEN (#00FF00) background. Fill the entire background with solid green. Keep the person and ball exactly as they appear — same pose, proportions, size, and position. No shadows, no floor, no court. Just the person and ball on solid green.';
     if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
     const { removeBackground: removeBg } = require('../lib/sprite-processor/index');
-    const client = new NanaBananaClient({ model: 'gemini-2.5-flash-image' });
+    const client = new NanaBananaClient({ model: 'gemini-3.1-flash-image-preview' });
     const subjects = [];
 
     for (let i = 0; i < frameFiles.length; i++) {
@@ -558,7 +558,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
           referenceImages: [framePath],
           aspectRatio: '1:1',
           resolution: '1K',
-          model: 'gemini-2.5-flash-image',
+          model: 'gemini-3.1-flash-image-preview',
         });
         const outFile    = `subject-${i}.png`;
         const rawPath    = path.join(subjectsDir, `raw-${i}.png`);
@@ -566,7 +566,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
         fs.writeFileSync(rawPath, result.imageBuffer);
         await removeBg(rawPath, greenPath);
         await cropToContent(greenPath, path.join(subjectsDir, outFile), { width: 512, height: 512, padding: 8 });
-        recordCost('gemini-2.5-flash-image', 'subject-extract', '1K', 1, { sessionId, frameIndex: i });
+        recordCost('gemini-3.1-flash-image-preview', 'subject-extract', '1K', 1, { sessionId, frameIndex: i });
         subjects.push({ frameIndex: i, url: `/api/video/subject/${sessionId}/${outFile}` });
       } catch (err) {
         subjects.push({ frameIndex: i, error: err.message });

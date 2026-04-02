@@ -80,7 +80,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     }
 
     try {
-      const modelId = model || 'gemini-2.5-flash-image';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
       const budgetLimit = parseFloat(budget) || 5.00;
       const animOrder = animations || DEFAULT_ANIM_ORDER;

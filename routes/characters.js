@@ -424,7 +424,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       // Does not block the confirm response.
       (() => {
         const port = process.env.PORT || 3456;
-        const body = JSON.stringify({ model: 'gemini-2.5-flash-image' });
+        const body = JSON.stringify({ model: 'gemini-3.1-flash-image-preview' });
         const req = http.request(
           { hostname: 'localhost', port, path: `/api/pipeline/fill-gaps/${encodeURIComponent(name)}`, method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
           res => { res.resume(); } // drain response, don't block
@@ -1491,18 +1491,18 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         outFilename = `${name}-angle-head-rebuilt-${idx}.png`;
       }
 
-      const client = new NanaBananaClient({ model: 'gemini-2.5-flash-image' });
+      const client = new NanaBananaClient({ model: 'gemini-3.1-flash-image-preview' });
       const result = await client.generateSprite(prompt, bodyPath, refPath, {
         aspectRatio: '1:1',
         resolution: '1K',
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-3.1-flash-image-preview',
       });
 
       const outPath = path.join(ASSETS_DIR, outFilename);
       fs.mkdirSync(ASSETS_DIR, { recursive: true });
       fs.writeFileSync(outPath, result.imageBuffer);
 
-      recordCost('gemini-2.5-flash-image', 'rebuild', '1K', 2, {
+      recordCost('gemini-3.1-flash-image-preview', 'rebuild', '1K', 2, {
         character: name,
         angleIndex: idx,
         type: isClothes ? 'clothes' : 'head',

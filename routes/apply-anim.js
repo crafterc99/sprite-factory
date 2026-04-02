@@ -167,7 +167,7 @@ function register(router, ctx) {
     const animId      = (settings.animId || `apply-${Date.now().toString(36)}`).replace(/[^a-z0-9-_]/gi, '-').toLowerCase();
     const charName    = settings.charName || null;
     const animLabel   = settings.animLabel || animId;
-    const modelId     = model || 'gemini-3-pro-image-preview';
+    const modelId     = model || 'gemini-3.1-flash-image-preview';
 
     const jobId = startJob({ animId, charName });
 
