@@ -494,7 +494,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     fs.mkdirSync(subjectsDir, { recursive: true });
 
     // Green background so removeBackground (chroma-key) works reliably
-    let prompt = 'Extract the person and basketball from this image. Place them on a PURE GREEN (#00FF00) background. Fill the entire background with solid green. Keep the person and ball exactly as they appear — same pose, proportions, size, and position. No shadows, no floor, no court. Just the person and ball on solid green.';
+    let prompt = 'Extract the basketball player from this image. Place them centered on a PURE GREEN (#00FF00) background — no court, no arena, no floor, no shadows. Scale the player up so they fill at least 70% of the image height — if they are far from the camera, zoom in so the player is large and centered. Keep their exact pose, body proportions, and the basketball if visible. Solid pure green everywhere the player is not.';
     if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
 
     try {
@@ -543,7 +543,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     const subjectsDir = path.join(TMP_DIR, sessionId, 'subjects');
     fs.mkdirSync(subjectsDir, { recursive: true });
 
-    let prompt = 'Extract the person and basketball from this image. Place them on a PURE GREEN (#00FF00) background. Fill the entire background with solid green. Keep the person and ball exactly as they appear — same pose, proportions, size, and position. No shadows, no floor, no court. Just the person and ball on solid green.';
+    let prompt = 'Extract the basketball player from this image. Place them centered on a PURE GREEN (#00FF00) background — no court, no arena, no floor, no shadows. Scale the player up so they fill at least 70% of the image height — if they are far from the camera, zoom in so the player is large and centered. Keep their exact pose, body proportions, and the basketball if visible. Solid pure green everywhere the player is not.';
     if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
     const { removeBackground: removeBg } = require('../lib/sprite-processor/index');
     const client = new NanaBananaClient({ model: 'gemini-3-pro-image-preview' });
