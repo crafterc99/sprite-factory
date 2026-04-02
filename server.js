@@ -42,6 +42,7 @@ class Router {
 
   get(pattern, handler) { this._add('GET', pattern, handler); }
   post(pattern, handler) { this._add('POST', pattern, handler); }
+  patch(pattern, handler) { this._add('PATCH', pattern, handler); }
   delete(pattern, handler) { this._add('DELETE', pattern, handler); }
 
   async handle(req, res, pathname) {
@@ -194,7 +195,7 @@ async function handler(req, res) {
 
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
@@ -257,17 +258,33 @@ if (require.main === module) {
       // Not fatal — offline or no remote, just start with local data
     }
 
-    // Restore character body angle images from .characters.json base64 on startup
+    // ── STEP 1: Sync deletions from Supabase FIRST — before any asset restore
+    // This ensures we know exactly which characters are deleted before downloading anything.
+    // Returns a Set of deleted character names so later steps can skip their files.
+    let deletedCharSet = new Set();
+    try {
+      const { syncDeletedFromSupabase } = require('./routes/characters');
+      deletedCharSet = await syncDeletedFromSupabase();
+      if (deletedCharSet.size > 0) {
+        console.log(`  [startup] tombstoned ${deletedCharSet.size} deleted character(s): ${[...deletedCharSet].join(', ')}`);
+      }
+    } catch (e) {
+      console.warn('  [startup] character deletion sync failed (non-fatal):', e.message);
+    }
+
+    // ── STEP 2: Restore character body angle images from .characters.json base64
     try {
       const CHARACTERS_FILE = path.join(__dirname, 'data/.characters.json');
       const ASSETS_DIR_RESTORE = path.join(__dirname, 'data/assets');
       if (fs.existsSync(CHARACTERS_FILE)) {
         const chars = JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
-        const deletedSet = new Set(Array.isArray(chars._deleted) ? chars._deleted : []);
+        // Merge disk deletedSet with Supabase deletedSet for full coverage
+        const localDeleted = Array.isArray(chars._deleted) ? chars._deleted : [];
+        const fullDeletedSet = new Set([...deletedCharSet, ...localDeleted]);
         fs.mkdirSync(ASSETS_DIR_RESTORE, { recursive: true });
         for (const [name, char] of Object.entries(chars)) {
           if (name === '_deleted') continue;
-          if (deletedSet.has(name)) continue; // don't restore assets for deleted chars
+          if (fullDeletedSet.has(name)) continue; // don't restore assets for deleted chars
           if (char.bodyAngles) {
             for (const [idx, b64] of Object.entries(char.bodyAngles)) {
               const p = path.join(ASSETS_DIR_RESTORE, `${name}-angle-${idx}.png`);
@@ -291,15 +308,15 @@ if (require.main === module) {
       console.warn('  [startup] asset restore failed (non-fatal):', e.message);
     }
 
-    // Restore any assets missing from disk that are in Supabase Storage
+    // ── STEP 3: Restore missing assets from Supabase — skipping deleted chars
     try {
       const { restoreAssetsToDir } = require('./lib/supabase-storage');
-      await restoreAssetsToDir(path.join(__dirname, 'data/assets'));
+      await restoreAssetsToDir(path.join(__dirname, 'data/assets'), deletedCharSet);
     } catch (e) {
       console.warn('  [startup] Supabase restore failed (non-fatal):', e.message);
     }
 
-    // Restore animation library from Supabase if local index is empty (survives fresh git clone)
+    // ── STEP 4: Restore animation library from Supabase if local index is empty
     try {
       const { restoreFromSupabase: restoreAnimLib } = require('./routes/anim-lib');
       await restoreAnimLib();
@@ -307,20 +324,12 @@ if (require.main === module) {
       console.warn('  [startup] anim-lib restore failed (non-fatal):', e.message);
     }
 
-    // Restore wardrobe from Supabase if local is empty
+    // ── STEP 5: Restore wardrobe from Supabase if local is empty
     try {
       const { restoreFromSupabase: restoreWardrobe } = require('./routes/wardrobe');
       await restoreWardrobe();
     } catch (e) {
       console.warn('  [startup] wardrobe restore failed (non-fatal):', e.message);
-    }
-
-    // Apply character deletions from Supabase (so deleted chars stay gone after redeploy)
-    try {
-      const { syncDeletedFromSupabase } = require('./routes/characters');
-      await syncDeletedFromSupabase();
-    } catch (e) {
-      console.warn('  [startup] character deletion sync failed (non-fatal):', e.message);
     }
 
     // On startup, push any data that's on disk but wasn't committed before last restart

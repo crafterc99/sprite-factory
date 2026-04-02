@@ -108,8 +108,9 @@ function recomputePackageStatus(pkg) {
 
 // ─── Persistent Character Registry ────────────────────────────────────
 
-const { uploadFile: sbUpload, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, deleteFiles: sbDeleteFiles, isAvailable: sbAvailable } = require('../lib/supabase-storage');
 const SB_DELETED_KEY = '_meta/deleted-chars.json';
+const SB_REGISTRY_KEY = '_meta/characters-full.json';
 
 function loadCharacters() {
   try {
@@ -128,36 +129,67 @@ function saveCharacters(data) {
   const dir = path.dirname(CHARACTERS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(data, null, 2));
-  // Back up the deleted list to Supabase so it survives Railway redeploys
-  const deleted = Array.isArray(data._deleted) ? data._deleted : [];
-  if (sbAvailable() && deleted.length > 0) {
-    sbUpload(SB_DELETED_KEY, Buffer.from(JSON.stringify({ deleted })));
+  // Back up FULL registry + deleted list to Supabase — survives Railway redeploys
+  // even if git push fails (Supabase is the source of truth for deletions)
+  if (sbAvailable()) {
+    const deleted = Array.isArray(data._deleted) ? data._deleted : [];
+    // Full registry backup (source of truth)
+    sbUploadJson(SB_REGISTRY_KEY, data);
+    // Deleted-only backup for fast startup sync
+    if (deleted.length > 0) {
+      sbUploadJson(SB_DELETED_KEY, { deleted });
+    }
   }
 }
 
 /**
  * Called at startup — merges any deletions stored in Supabase into local registry.
- * This ensures characters deleted on Railway stay deleted after a fresh git clone.
+ * Also checks the full registry backup in case git push failed to capture a deletion.
+ * Returns the final Set of deleted character names so startup can skip re-downloading their files.
  */
 async function syncDeletedFromSupabase() {
-  if (!sbAvailable()) return;
+  if (!sbAvailable()) return new Set();
+  const remoteDeleted = new Set();
   try {
-    const buf = await sbDownload(SB_DELETED_KEY);
-    if (!buf) return;
-    const { deleted: remoteDeleted } = JSON.parse(buf.toString('utf8'));
-    if (!Array.isArray(remoteDeleted) || remoteDeleted.length === 0) return;
+    // Primary source: full registry backup (most authoritative — includes all deletions)
+    const fullBuf = await sbDownload(SB_REGISTRY_KEY);
+    if (fullBuf) {
+      const remoteRegistry = JSON.parse(fullBuf.toString('utf8'));
+      if (Array.isArray(remoteRegistry._deleted)) {
+        for (const n of remoteRegistry._deleted) remoteDeleted.add(n);
+      }
+    }
+
+    // Secondary source: dedicated deleted-chars backup (smaller, faster)
+    const delBuf = await sbDownload(SB_DELETED_KEY);
+    if (delBuf) {
+      const { deleted } = JSON.parse(delBuf.toString('utf8'));
+      if (Array.isArray(deleted)) {
+        for (const n of deleted) remoteDeleted.add(n);
+      }
+    }
+
+    if (remoteDeleted.size === 0) return new Set();
 
     const registry = loadCharacters();
     const localDeleted = new Set(Array.isArray(registry._deleted) ? registry._deleted : []);
     const merged = [...new Set([...localDeleted, ...remoteDeleted])];
-    if (merged.length === localDeleted.size) return; // nothing new
+    const newCount = merged.length - localDeleted.size;
 
-    registry._deleted = merged;
-    for (const name of merged) delete registry[name]; // remove any that came back via git
-    saveCharacters(registry);
-    console.log(`  [characters] applied ${merged.length - localDeleted.size} deletion(s) from Supabase`);
+    if (newCount > 0) {
+      registry._deleted = merged;
+      for (const name of merged) delete registry[name]; // remove any that came back via git
+      // Write to disk only (don't re-upload to Supabase — we just downloaded it)
+      const dir = path.dirname(CHARACTERS_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(registry, null, 2));
+      console.log(`  [characters] applied ${newCount} deletion(s) from Supabase`);
+    }
+
+    return new Set(merged);
   } catch (e) {
     console.warn('  [characters] Supabase deletion sync failed (non-fatal):', e.message);
+    return remoteDeleted;
   }
 }
 
@@ -527,14 +559,13 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     // Delete from Supabase Storage so restoreAssetsToDir doesn't bring files back
     if (sbAvailable()) {
       const { listFiles } = require('../lib/supabase-storage');
-      listFiles().then(files => {
-        const toRemove = files.filter(f => f.startsWith(`${name}-`) || f === `${name}full.png` || f.startsWith(`${name}-angle-`) || f.startsWith(`applyf-${name}`));
-        const { getClient } = require('../lib/supabase-storage');
-        // Fire-and-forget Supabase file deletion
-        if (toRemove.length > 0) {
-          const sb = require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
-          sb.storage.from('sprite-assets').remove(toRemove).catch(() => {});
-        }
+      listFiles().then(async files => {
+        const toRemove = files.filter(f =>
+          f === `${name}full.png` ||
+          f.startsWith(`${name}-`) ||
+          f.startsWith(`applyf-${name}`)
+        );
+        if (toRemove.length > 0) await sbDeleteFiles(toRemove);
       }).catch(() => {});
     }
 
