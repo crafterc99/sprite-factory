@@ -502,7 +502,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       const client = new NanaBananaClient({ model: 'gemini-3-pro-image-preview' });
       const result  = await client.generate(prompt, {
         referenceImages: [framePath],
-        aspectRatio:     '1:1',
+        aspectRatio:     '3:4',
         resolution:      '1K',
         model:           'gemini-3-pro-image-preview',
       });
@@ -510,15 +510,17 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       const outFile = `subject-${frameIndex}.png`;
       const rawPath = path.join(subjectsDir, `raw-${frameIndex}.png`);
       const greenRemovedPath = path.join(subjectsDir, `green-${frameIndex}.png`);
+      const croppedPath = path.join(subjectsDir, `cropped-${frameIndex}.png`);
       fs.writeFileSync(rawPath, result.imageBuffer);
 
-      // Remove green background → tight crop to character → scale up to 512×512
+      // Remove green → crop tight to character → composite on white (portrait 3:4)
       await removeBackground(rawPath, greenRemovedPath);
-      await cropToContent(greenRemovedPath, path.join(subjectsDir, outFile), {
-        width:   512,
-        height:  512,
-        padding: 8,  // minimal padding so character fills the frame
-      });
+      await cropToContent(greenRemovedPath, croppedPath, { width: 384, height: 512, padding: 6 });
+      const sharp = require('sharp');
+      await sharp({ create: { width: 384, height: 512, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 255 } } })
+        .composite([{ input: croppedPath }])
+        .png()
+        .toFile(path.join(subjectsDir, outFile));
 
       recordCost('gemini-3-pro-image-preview', 'subject-extract', '1K', 1, { sessionId, frameIndex });
       return json(res, { frameIndex, url: `/api/video/subject/${sessionId}/${outFile}` });
@@ -556,16 +558,22 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       try {
         const result = await client.generate(prompt, {
           referenceImages: [framePath],
-          aspectRatio: '1:1',
+          aspectRatio: '3:4',
           resolution: '1K',
           model: 'gemini-3-pro-image-preview',
         });
         const outFile    = `subject-${i}.png`;
         const rawPath    = path.join(subjectsDir, `raw-${i}.png`);
         const greenPath  = path.join(subjectsDir, `green-${i}.png`);
+        const cropPath   = path.join(subjectsDir, `crop-${i}.png`);
         fs.writeFileSync(rawPath, result.imageBuffer);
         await removeBg(rawPath, greenPath);
-        await cropToContent(greenPath, path.join(subjectsDir, outFile), { width: 512, height: 512, padding: 8 });
+        await cropToContent(greenPath, cropPath, { width: 384, height: 512, padding: 6 });
+        const sharp2 = require('sharp');
+        await sharp2({ create: { width: 384, height: 512, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 255 } } })
+          .composite([{ input: cropPath }])
+          .png()
+          .toFile(path.join(subjectsDir, outFile));
         recordCost('gemini-3-pro-image-preview', 'subject-extract', '1K', 1, { sessionId, frameIndex: i });
         subjects.push({ frameIndex: i, url: `/api/video/subject/${sessionId}/${outFile}` });
       } catch (err) {

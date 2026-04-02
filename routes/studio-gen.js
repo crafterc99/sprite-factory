@@ -21,14 +21,8 @@ const { uploadFile: sbUpload } = require('../lib/supabase-storage');
 const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
 const ANIM_LIB_INDEX = path.join(ANIM_LIB_DIR, 'index.json');
 
-const DEFAULT_STUDIO_PROMPT = [
-  'Keep the exact pixelated character from Image 1. Copy only the exact pose and limb/body position from Image 2.',
-  'Do not mix faces or identities. make sure the characters face does not change at all.',
-  'Do not change body shape, skin tone, hairstyle, or facial structure.',
-  'Match Image 2\'s full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.',
-  'natural anatomy, no distortions.',
-  'Pure green (#00FF00) background.',
-].join('\n');
+const DEFAULT_STUDIO_PROMPT =
+  'Replace the pixelated character from Image 2 with the pose from Image 1. The background is white.';
 
 const PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
 
@@ -103,8 +97,16 @@ async function buildStrip(framePaths, outputPath) {
 }
 
 async function processFrame(srcPath, outPath) {
-  await removeBackground(srcPath, srcPath);
-  await cropToContent(srcPath, outPath, { width: 180, height: 180, padding: 10 });
+  // Remove green background → transparent → crop tight → composite over white
+  const transparentPath = srcPath + '-transparent.png';
+  await removeBackground(srcPath, transparentPath);
+  const croppedPath = srcPath + '-cropped.png';
+  await cropToContent(transparentPath, croppedPath, { width: 180, height: 240, padding: 8 });
+  // Composite over white canvas so output has clean white background
+  await sharp({ create: { width: 180, height: 240, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 255 } } })
+    .composite([{ input: croppedPath }])
+    .png()
+    .toFile(outPath);
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -180,8 +182,8 @@ function register(router, ctx) {
             }
 
             const result = await client.generate(loadStudioPrompt(), {
-              referenceImages: [resolvedAnglePath, posePath],
-              aspectRatio: '1:1',
+              referenceImages: [posePath, resolvedAnglePath],
+              aspectRatio: '3:4',
               resolution: '1K',
               model: modelId,
               maxRetries: 2,
@@ -271,8 +273,8 @@ function register(router, ctx) {
       fs.writeFileSync(posePath, Buffer.from(anim.framesBase64[fi], 'base64'));
 
       const result = await client.generate(loadStudioPrompt(), {
-        referenceImages: [resolvedAnglePath, posePath],
-        aspectRatio: '1:1',
+        referenceImages: [posePath, resolvedAnglePath],
+        aspectRatio: '3:4',
         resolution: '1K',
         model: modelId,
         maxRetries: 2,
