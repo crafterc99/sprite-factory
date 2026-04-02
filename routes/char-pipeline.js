@@ -1231,7 +1231,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const modelId = 'gemini-3.1-flash-image-preview';
+        const modelId = 'gemini-2.5-flash-image'; // fast model — outfit swap doesn't need top quality
         const client = new NanaBananaClient({ model: modelId });
 
         const tmpDir = path.join(TMP_DIR, 'outfit-tmp');
@@ -1254,44 +1254,41 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           return p;
         }
 
-        // Step 1: Apply top garment
-        if (topId) {
-          const topPath = wardrobeItemPath(topId);
+        const genOpts = { aspectRatio: '3:4', resolution: '1K', model: modelId, maxRetries: 3, timeoutMs: 120000 };
 
-          const topPrompt = 'Keep everything about this pixelated character the exact same just substitute their top garments for the second uploaded image.';
-          const topResult = await client.generate(topPrompt, {
-            referenceImages: [currentPortraitPath, topPath],
-            aspectRatio: '3:4',
-            resolution: '2K',
-            model: modelId,
-            maxRetries: 3,
-            timeoutMs: 150000,
-          });
-
-          const topResultPath = path.join(tmpDir, `after-top-${tmpId}.png`);
-          fs.writeFileSync(topResultPath, topResult.imageBuffer);
-          currentPortraitPath = topResultPath;
-          recordCost(modelId, 'char_pipeline', '2K', 2, { step: 'apply-top' });
-        }
-
-        // Step 2: Apply bottom garment (to the top-applied result, or original if no top)
-        if (bottomId) {
+        if (topId && bottomId) {
+          // Both garments — combine into one call
+          const topPath    = wardrobeItemPath(topId);
           const bottomPath = wardrobeItemPath(bottomId);
-
-          const bottomPrompt = 'Keep everything about this pixelated character the exact same just substitute their bottom garments for the second uploaded image.';
-          const bottomResult = await client.generate(bottomPrompt, {
-            referenceImages: [currentPortraitPath, bottomPath],
-            aspectRatio: '3:4',
-            resolution: '2K',
-            model: modelId,
-            maxRetries: 3,
-            timeoutMs: 150000,
+          const prompt = 'Keep everything about this pixelated character exactly the same. Replace their top garment with the second image and their bottom garment with the third image.';
+          const result = await client.generate(prompt, {
+            referenceImages: [currentPortraitPath, topPath, bottomPath],
+            ...genOpts,
           });
-
-          const bottomResultPath = path.join(tmpDir, `after-bottom-${tmpId}.png`);
-          fs.writeFileSync(bottomResultPath, bottomResult.imageBuffer);
-          currentPortraitPath = bottomResultPath;
-          recordCost(modelId, 'char_pipeline', '2K', 2, { step: 'apply-bottom' });
+          const outPath = path.join(tmpDir, `after-outfit-${tmpId}.png`);
+          fs.writeFileSync(outPath, result.imageBuffer);
+          currentPortraitPath = outPath;
+          recordCost(modelId, 'char_pipeline', '1K', 3, { step: 'apply-outfit' });
+        } else if (topId) {
+          const topPath = wardrobeItemPath(topId);
+          const result = await client.generate(
+            'Keep everything about this pixelated character exactly the same. Replace only their top garment with the second image.',
+            { referenceImages: [currentPortraitPath, topPath], ...genOpts }
+          );
+          const outPath = path.join(tmpDir, `after-top-${tmpId}.png`);
+          fs.writeFileSync(outPath, result.imageBuffer);
+          currentPortraitPath = outPath;
+          recordCost(modelId, 'char_pipeline', '1K', 2, { step: 'apply-top' });
+        } else if (bottomId) {
+          const bottomPath = wardrobeItemPath(bottomId);
+          const result = await client.generate(
+            'Keep everything about this pixelated character exactly the same. Replace only their bottom garment with the second image.',
+            { referenceImages: [currentPortraitPath, bottomPath], ...genOpts }
+          );
+          const outPath = path.join(tmpDir, `after-bottom-${tmpId}.png`);
+          fs.writeFileSync(outPath, result.imageBuffer);
+          currentPortraitPath = outPath;
+          recordCost(modelId, 'char_pipeline', '1K', 2, { step: 'apply-bottom' });
         }
 
         const imageBase64 = 'data:image/png;base64,' + fs.readFileSync(currentPortraitPath).toString('base64');
