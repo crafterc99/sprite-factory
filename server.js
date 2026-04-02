@@ -263,8 +263,11 @@ if (require.main === module) {
       const ASSETS_DIR_RESTORE = path.join(__dirname, 'data/assets');
       if (fs.existsSync(CHARACTERS_FILE)) {
         const chars = JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
+        const deletedSet = new Set(Array.isArray(chars._deleted) ? chars._deleted : []);
         fs.mkdirSync(ASSETS_DIR_RESTORE, { recursive: true });
         for (const [name, char] of Object.entries(chars)) {
+          if (name === '_deleted') continue;
+          if (deletedSet.has(name)) continue; // don't restore assets for deleted chars
           if (char.bodyAngles) {
             for (const [idx, b64] of Object.entries(char.bodyAngles)) {
               const p = path.join(ASSETS_DIR_RESTORE, `${name}-angle-${idx}.png`);
@@ -310,6 +313,14 @@ if (require.main === module) {
       await restoreWardrobe();
     } catch (e) {
       console.warn('  [startup] wardrobe restore failed (non-fatal):', e.message);
+    }
+
+    // Apply character deletions from Supabase (so deleted chars stay gone after redeploy)
+    try {
+      const { syncDeletedFromSupabase } = require('./routes/characters');
+      await syncDeletedFromSupabase();
+    } catch (e) {
+      console.warn('  [startup] character deletion sync failed (non-fatal):', e.message);
     }
 
     // On startup, push any data that's on disk but wasn't committed before last restart

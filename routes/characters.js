@@ -108,6 +108,9 @@ function recomputePackageStatus(pkg) {
 
 // ─── Persistent Character Registry ────────────────────────────────────
 
+const { uploadFile: sbUpload, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const SB_DELETED_KEY = '_meta/deleted-chars.json';
+
 function loadCharacters() {
   try {
     if (fs.existsSync(CHARACTERS_FILE)) return JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
@@ -115,10 +118,47 @@ function loadCharacters() {
   return {};
 }
 
+/** Returns the set of permanently deleted character names */
+function loadDeletedSet() {
+  const data = loadCharacters();
+  return new Set(Array.isArray(data._deleted) ? data._deleted : []);
+}
+
 function saveCharacters(data) {
   const dir = path.dirname(CHARACTERS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(data, null, 2));
+  // Back up the deleted list to Supabase so it survives Railway redeploys
+  const deleted = Array.isArray(data._deleted) ? data._deleted : [];
+  if (sbAvailable() && deleted.length > 0) {
+    sbUpload(SB_DELETED_KEY, Buffer.from(JSON.stringify({ deleted })));
+  }
+}
+
+/**
+ * Called at startup — merges any deletions stored in Supabase into local registry.
+ * This ensures characters deleted on Railway stay deleted after a fresh git clone.
+ */
+async function syncDeletedFromSupabase() {
+  if (!sbAvailable()) return;
+  try {
+    const buf = await sbDownload(SB_DELETED_KEY);
+    if (!buf) return;
+    const { deleted: remoteDeleted } = JSON.parse(buf.toString('utf8'));
+    if (!Array.isArray(remoteDeleted) || remoteDeleted.length === 0) return;
+
+    const registry = loadCharacters();
+    const localDeleted = new Set(Array.isArray(registry._deleted) ? registry._deleted : []);
+    const merged = [...new Set([...localDeleted, ...remoteDeleted])];
+    if (merged.length === localDeleted.size) return; // nothing new
+
+    registry._deleted = merged;
+    for (const name of merged) delete registry[name]; // remove any that came back via git
+    saveCharacters(registry);
+    console.log(`  [characters] applied ${merged.length - localDeleted.size} deletion(s) from Supabase`);
+  } catch (e) {
+    console.warn('  [characters] Supabase deletion sync failed (non-fatal):', e.message);
+  }
 }
 
 // ─── Custom Animation Registry ────────────────────────────────────────
@@ -468,7 +508,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   router.delete('/api/character/:name', (req, res, params) => {
     const name = params.name;
 
-    // Delete portrait and all angle/headshot assets
+    // Delete portrait and all angle/headshot assets from disk
     const assetsToDelete = fs.existsSync(ASSETS_DIR)
       ? fs.readdirSync(ASSETS_DIR).filter(f => f.startsWith(`${name}-`) || f === `${name}full.png`)
       : [];
@@ -477,10 +517,26 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     }
     delete CHARACTERS[name];
 
-    // Remove from persistent registry
+    // Remove from registry + add to tombstone list so safety net can't re-add them
     const registry = loadCharacters();
     delete registry[name];
-    saveCharacters(registry);
+    if (!Array.isArray(registry._deleted)) registry._deleted = [];
+    if (!registry._deleted.includes(name)) registry._deleted.push(name);
+    saveCharacters(registry);  // also backs up _deleted to Supabase
+
+    // Delete from Supabase Storage so restoreAssetsToDir doesn't bring files back
+    if (sbAvailable()) {
+      const { listFiles } = require('../lib/supabase-storage');
+      listFiles().then(files => {
+        const toRemove = files.filter(f => f.startsWith(`${name}-`) || f === `${name}full.png` || f.startsWith(`${name}-angle-`) || f.startsWith(`applyf-${name}`));
+        const { getClient } = require('../lib/supabase-storage');
+        // Fire-and-forget Supabase file deletion
+        if (toRemove.length > 0) {
+          const sb = require('@supabase/supabase-js').createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
+          sb.storage.from('sprite-assets').remove(toRemove).catch(() => {});
+        }
+      }).catch(() => {});
+    }
 
     // git rm the deleted asset files so they don't come back on next redeploy
     const { scheduleSync: _sync, _gitRmAndSync } = require('../lib/auto-git-sync');
@@ -499,21 +555,25 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   router.get('/api/roster', (req, res) => {
     // .characters.json is the source of truth — chars exist even if portrait file is missing
     const registry = loadCharacters();
+    const deletedSet = new Set(Array.isArray(registry._deleted) ? registry._deleted : []);
     const customAnims = loadCustomAnimations();
     const allAnims = { ...ANIMATIONS, ...customAnims };
     const fileSet = new Set(fs.existsSync(ASSETS_DIR) ? fs.readdirSync(ASSETS_DIR) : []);
     const roster = [];
 
-    // Also include any portrait-file-only chars not yet in registry (safety net)
+    // Safety net: add portrait-file-only chars — but NEVER re-add deleted characters
     for (const f of fileSet) {
       if (!f.endsWith('full.png')) continue;
       const n = f.replace('full.png', '');
+      if (deletedSet.has(n)) continue; // tombstoned — skip even if file exists on disk
       if (!registry[n]) {
         registry[n] = { name: n, id: n, status: 'portrait_done', portraitPath: f };
       }
     }
 
     for (const [name, charData] of Object.entries(registry)) {
+      if (name === '_deleted') continue; // skip metadata key
+      if (deletedSet.has(name)) continue; // skip tombstoned characters
       // Portrait: full.png on disk > angle-0 fallback
       let portrait = null;
       if (fileSet.has(`${name}full.png`)) portrait = `/assets/${name}full.png`;
@@ -1455,4 +1515,4 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   });
 }
 
-module.exports = { register, loadCharacters, saveCharacters, getCharacterRegistry, computeScale, loadCustomAnimations, saveCustomAnimations, loadPackage, savePackage, initPackage, ANGLE_NAMES, CLOTHING_CATEGORIES };
+module.exports = { register, loadCharacters, saveCharacters, syncDeletedFromSupabase, getCharacterRegistry, computeScale, loadCustomAnimations, saveCustomAnimations, loadPackage, savePackage, initPackage, ANGLE_NAMES, CLOTHING_CATEGORIES };
