@@ -13,8 +13,10 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const { scheduleSync } = require('../lib/auto-git-sync');
+const { uploadFile: sbUpload, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
 
 const WARDROBE_INDEX = path.resolve(__dirname, '../data/wardrobe.json');
+const SB_META_KEY = '_meta/wardrobe.json';
 
 function loadIndex() {
   try {
@@ -25,7 +27,27 @@ function loadIndex() {
 
 function saveIndex(items) {
   fs.mkdirSync(path.dirname(WARDROBE_INDEX), { recursive: true });
-  fs.writeFileSync(WARDROBE_INDEX, JSON.stringify(items, null, 2));
+  const jsonStr = JSON.stringify(items, null, 2);
+  fs.writeFileSync(WARDROBE_INDEX, jsonStr);
+  // Back up to Supabase so it survives Railway redeploys
+  if (sbAvailable()) sbUpload(SB_META_KEY, Buffer.from(jsonStr));
+}
+
+async function restoreFromSupabase() {
+  if (!sbAvailable()) return;
+  try {
+    const local = loadIndex();
+    if (local.length > 0) return;
+    const buf = await sbDownload(SB_META_KEY);
+    if (!buf) return;
+    const remote = JSON.parse(buf.toString('utf8'));
+    if (!Array.isArray(remote) || remote.length === 0) return;
+    fs.mkdirSync(path.dirname(WARDROBE_INDEX), { recursive: true });
+    fs.writeFileSync(WARDROBE_INDEX, JSON.stringify(remote, null, 2));
+    console.log(`  [wardrobe] restored ${remote.length} item(s) from Supabase`);
+  } catch (e) {
+    console.warn('  [wardrobe] Supabase restore failed (non-fatal):', e.message);
+  }
 }
 
 function json(res, data, status = 200) {
@@ -103,4 +125,4 @@ function register(router) {
 
 }
 
-module.exports = { register };
+module.exports = { register, restoreFromSupabase };

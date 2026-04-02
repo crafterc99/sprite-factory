@@ -296,6 +296,22 @@ if (require.main === module) {
       console.warn('  [startup] Supabase restore failed (non-fatal):', e.message);
     }
 
+    // Restore animation library from Supabase if local index is empty (survives fresh git clone)
+    try {
+      const { restoreFromSupabase: restoreAnimLib } = require('./routes/anim-lib');
+      await restoreAnimLib();
+    } catch (e) {
+      console.warn('  [startup] anim-lib restore failed (non-fatal):', e.message);
+    }
+
+    // Restore wardrobe from Supabase if local is empty
+    try {
+      const { restoreFromSupabase: restoreWardrobe } = require('./routes/wardrobe');
+      await restoreWardrobe();
+    } catch (e) {
+      console.warn('  [startup] wardrobe restore failed (non-fatal):', e.message);
+    }
+
     // On startup, push any data that's on disk but wasn't committed before last restart
     if (process.env.GITHUB_TOKEN) {
       const { scheduleSync } = require('./lib/auto-git-sync');

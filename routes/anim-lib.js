@@ -15,9 +15,11 @@
 const fs = require('fs');
 const path = require('path');
 const { scheduleSync } = require('../lib/auto-git-sync');
+const { uploadFile: sbUpload, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
 
 const LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
 const INDEX_FILE = path.join(LIB_DIR, 'index.json');
+const SB_META_KEY = '_meta/anim-lib-index.json';
 
 // These labels match ANGLE_LABELS_8 in char-pipeline.js exactly — index = body angle file index
 const ANGLE_LABELS = ['Front', 'Front Right', 'Right', 'Back Right', 'Back', 'Back Left', 'Left', 'Front Left'];
@@ -31,7 +33,33 @@ function loadIndex() {
 
 function saveIndex(data) {
   fs.mkdirSync(LIB_DIR, { recursive: true });
-  fs.writeFileSync(INDEX_FILE, JSON.stringify(data, null, 2));
+  const json = JSON.stringify(data, null, 2);
+  fs.writeFileSync(INDEX_FILE, json);
+  // Back up to Supabase so it survives Railway redeploys (fresh git clone wipes local file)
+  if (sbAvailable()) {
+    sbUpload(SB_META_KEY, Buffer.from(json));
+  }
+}
+
+/**
+ * Called on server startup — restores anim-lib index from Supabase if local is empty.
+ * Prevents animations from being wiped when Railway redeploys from a fresh git clone.
+ */
+async function restoreFromSupabase() {
+  if (!sbAvailable()) return;
+  try {
+    const local = loadIndex();
+    if (Object.keys(local).length > 0) return; // Already have data locally
+    const buf = await sbDownload(SB_META_KEY);
+    if (!buf) return;
+    const remote = JSON.parse(buf.toString('utf8'));
+    if (Object.keys(remote).length === 0) return;
+    fs.mkdirSync(LIB_DIR, { recursive: true });
+    fs.writeFileSync(INDEX_FILE, JSON.stringify(remote, null, 2));
+    console.log(`  [anim-lib] restored ${Object.keys(remote).length} animation(s) from Supabase`);
+  } catch (e) {
+    console.warn('  [anim-lib] Supabase restore failed (non-fatal):', e.message);
+  }
 }
 
 function json(res, data, status = 200) {
@@ -177,4 +205,4 @@ function register(router, ctx) {
   });
 }
 
-module.exports = { register, ANGLE_LABELS };
+module.exports = { register, ANGLE_LABELS, restoreFromSupabase };
