@@ -746,7 +746,7 @@
               <div class="hero-portrait-wrap" id="heroPortraitWrap"></div>
               <div class="hero-bottom">
                 <div class="hero-name" id="heroName"></div>
-                <button class="btn btn-primary btn-sm" onclick="openCharAngles(STATE.dashSelected)">Edit</button>
+                <button class="btn btn-primary btn-sm" onclick="openCharAngles(STATE.dashSelected)">↺ Re-make</button>
               </div>
             </div>
             <div class="hero-right">
@@ -1317,7 +1317,10 @@
 <div class="modal-overlay" id="addCharModal">
   <div class="modal" style="width:620px;max-width:95vw;max-height:92vh">
     <button class="modal-close" onclick="closeAddChar()">×</button>
-    <div class="modal-title">New Character</div>
+    <div class="modal-title" id="addCharModalTitle">New Character</div>
+    <div id="cpRemakeNote" style="display:none;font-family:var(--mono);font-size:10px;color:#c06020;background:#2a1a08;border:1px solid #5a3010;border-radius:6px;padding:8px 12px;margin-bottom:14px">
+      ↺ Re-making <strong id="cpRemakeName"></strong> — upload a new photo and regenerate. This will replace the existing character.
+    </div>
 
     <div id="cpForm">
 
@@ -1387,7 +1390,7 @@
       <!-- Generate button -->
       <button class="btn btn-primary" id="cpGenBtn" onclick="cpGenerate()" style="width:100%;padding:14px;font-size:14px;letter-spacing:0.5px">
         <span class="spinner" id="cpGenSpinner"></span>
-        Generate Character Angles
+        <span id="cpGenBtnLabel">Generate Character Angles</span>
       </button>
 
       <!-- Progress + results (hidden until generating) -->
@@ -2813,10 +2816,16 @@ function cpCancelJob(name) {
   toast(`${name} cancelled`);
 }
 
-function openAddChar() {
+function openAddChar(remakeName) {
   // Reset modal form — in-progress jobs keep running; resume via dashboard card
   CP.name = ''; CP.photo = null; CP.clothing = []; CP.portraitBase64 = null; CP.dressedPortraitBase64 = null;
-  document.getElementById('cpName').value = '';
+  const isRemake = !!remakeName;
+  document.getElementById('addCharModalTitle').textContent = isRemake ? 'Re-make Character' : 'New Character';
+  document.getElementById('cpRemakeNote').style.display = isRemake ? 'block' : 'none';
+  if (isRemake) document.getElementById('cpRemakeName').textContent = remakeName;
+  document.getElementById('cpName').value = isRemake ? remakeName : '';
+  document.getElementById('cpName').readOnly = isRemake;
+  document.getElementById('cpName').style.opacity = isRemake ? '0.5' : '';
   document.getElementById('cpJersey').value = '';
   document.getElementById('cpHeight').value = '72';
   document.getElementById('cpWeight').value = '185';
@@ -2828,6 +2837,7 @@ function openAddChar() {
   document.getElementById('cpClothingEmpty').style.display = 'block';
   document.getElementById('cpClothingList').querySelectorAll('.cp-clothing-thumb').forEach(el => el.remove());
   document.getElementById('cpGenBtn').disabled = false;
+  document.getElementById('cpGenBtnLabel').textContent = isRemake ? '↺ Re-generate Character' : 'Generate Character Angles';
   document.getElementById('cpProgress').style.display = 'none';
   document.getElementById('cpAngleResults').style.display = 'none';
   document.getElementById('cpPortraitConfirm').style.display = 'none';
@@ -3566,10 +3576,9 @@ async function cpComplete() {
   }
 }
 
-// openCharAngles — open new character modal pre-filled for an existing character
+// openCharAngles — open modal in remake mode for an existing character
 function openCharAngles(name) {
-  openAddChar();
-  document.getElementById('cpName').value = name;
+  openAddChar(name);
 }
 
 // ─── WARDROBE PAGE ────────────────────────────────────────────────────────
