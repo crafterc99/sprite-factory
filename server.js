@@ -157,6 +157,7 @@ require('./routes/char-pipeline').register(router, ctx);
 require('./routes/wardrobe').register(router);
 require('./routes/anim-lib').register(router, ctx);
 require('./routes/studio-gen').register(router, ctx);
+require('./routes/apply-anim').register(router, ctx);
 
 // ─── Sync Status Endpoint ────────────────────────────────────────────────
 router.get('/api/sync-status', (req, res) => {

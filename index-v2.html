@@ -802,8 +802,22 @@
 
             <div id="studioContent" style="padding:0 24px 24px">
 
-              <!-- Animation library grid -->
-              <div id="studioAnimGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px"></div>
+              <!-- Mode toggle -->
+              <div style="display:flex;gap:0;margin-bottom:20px;border:1px solid #1e1e30;border-radius:6px;overflow:hidden;width:fit-content">
+                <button id="studioModeLibBtn" onclick="studioSetMode('library')"
+                  style="font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:7px 18px;background:#1e1e30;color:#c0c0d0;border:none;cursor:pointer;text-transform:uppercase">
+                  Library Mode
+                </button>
+                <button id="studioModeApplyBtn" onclick="studioSetMode('apply')"
+                  style="font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:7px 18px;background:#0a0a14;color:#50507a;border:none;cursor:pointer;text-transform:uppercase;border-left:1px solid #1e1e30">
+                  Apply Mode ✦
+                </button>
+              </div>
+
+              <!-- ── LIBRARY MODE content ── -->
+              <div id="studioLibraryContent">
+                <!-- Animation library grid -->
+                <div id="studioAnimGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px"></div>
 
               <!-- Generation detail panel -->
               <div class="card" id="studioGenPanel" style="display:none;margin-top:20px">
@@ -857,6 +871,127 @@
                 <div id="studioResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:4px;margin-bottom:12px"></div>
                 <button class="btn btn-primary btn-sm" id="studioSaveBtn" onclick="studioSaveToChar()" style="width:100%">Save Animation</button>
               </div>
+
+              </div><!-- /studioLibraryContent -->
+
+              <!-- ── APPLY MODE content ── -->
+              <div id="studioApplyContent" style="display:none">
+
+                <!-- Upload panel -->
+                <div class="card" style="margin-bottom:16px">
+                  <div class="card-title" style="margin-bottom:16px">Apply Animation to Character</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+                    <!-- Character reference upload -->
+                    <div>
+                      <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">1. Character Reference</div>
+                      <label id="applyCharDropzone" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:120px;border:2px dashed #1e1e30;border-radius:6px;cursor:pointer;background:#0a0a14;transition:border-color 0.2s"
+                        onmouseenter="this.style.borderColor='#00ff88'" onmouseleave="this.style.borderColor='#1e1e30'">
+                        <div id="applyCharPreview" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">
+                          <div style="text-align:center;font-family:var(--mono);font-size:10px;color:#50507a">
+                            <div style="font-size:22px;margin-bottom:4px">＋</div>
+                            <div>Upload character image</div>
+                            <div style="color:#30304a;font-size:9px;margin-top:3px">PNG / JPG</div>
+                          </div>
+                        </div>
+                        <input type="file" id="applyCharInput" accept="image/*" style="display:none" onchange="applyHandleChar(this)" />
+                      </label>
+                    </div>
+
+                    <!-- Pose sequence upload -->
+                    <div>
+                      <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">2. Pose Sequence <span style="color:#30304a">(ordered)</span></div>
+                      <label id="applyPoseDropzone" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:120px;border:2px dashed #1e1e30;border-radius:6px;cursor:pointer;background:#0a0a14;transition:border-color 0.2s"
+                        onmouseenter="this.style.borderColor='#00ff88'" onmouseleave="this.style.borderColor='#1e1e30'">
+                        <div style="text-align:center;font-family:var(--mono);font-size:10px;color:#50507a">
+                          <div style="font-size:22px;margin-bottom:4px">＋</div>
+                          <div>Upload pose images</div>
+                          <div style="color:#30304a;font-size:9px;margin-top:3px">Multiple files, in order</div>
+                        </div>
+                        <input type="file" id="applyPoseInput" accept="image/*" multiple style="display:none" onchange="applyHandlePoses(this)" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Pose preview strip -->
+                  <div id="applyPoseStrip" style="display:none;margin-top:14px">
+                    <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Pose Frames (<span id="applyPoseCount">0</span>)</div>
+                    <div id="applyPoseThumbs" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+                  </div>
+
+                  <!-- Settings row -->
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr;gap:12px;margin-top:16px;align-items:end">
+                    <div>
+                      <div style="font-family:var(--mono);font-size:9px;color:#50507a;margin-bottom:4px">FRAME W</div>
+                      <input id="applyFW" type="number" value="256" min="64" max="512" step="32"
+                        style="width:100%;background:#0a0a14;border:1px solid #1e1e30;color:#e0e0f0;font-family:var(--mono);font-size:11px;padding:5px 8px;border-radius:4px" />
+                    </div>
+                    <div>
+                      <div style="font-family:var(--mono);font-size:9px;color:#50507a;margin-bottom:4px">FRAME H</div>
+                      <input id="applyFH" type="number" value="256" min="64" max="512" step="32"
+                        style="width:100%;background:#0a0a14;border:1px solid #1e1e30;color:#e0e0f0;font-family:var(--mono);font-size:11px;padding:5px 8px;border-radius:4px" />
+                    </div>
+                    <div>
+                      <div style="font-family:var(--mono);font-size:9px;color:#50507a;margin-bottom:4px">COLUMNS</div>
+                      <input id="applyColumns" type="number" value="4" min="1" max="12"
+                        style="width:100%;background:#0a0a14;border:1px solid #1e1e30;color:#e0e0f0;font-family:var(--mono);font-size:11px;padding:5px 8px;border-radius:4px" />
+                    </div>
+                    <div>
+                      <div style="font-family:var(--mono);font-size:9px;color:#50507a;margin-bottom:4px">ANIMATION NAME</div>
+                      <input id="applyAnimLabel" type="text" placeholder="e.g. walk-cycle"
+                        style="width:100%;background:#0a0a14;border:1px solid #1e1e30;color:#e0e0f0;font-family:var(--mono);font-size:11px;padding:5px 8px;border-radius:4px" />
+                    </div>
+                  </div>
+
+                  <button class="btn btn-primary" id="applyGenBtn" onclick="applyGenerate()" style="width:100%;margin-top:16px">
+                    <span class="spinner" id="applyGenSpinner"></span>
+                    Generate Animation
+                  </button>
+                </div>
+
+                <!-- Apply progress -->
+                <div class="card" id="applyProgress" style="display:none;margin-bottom:16px">
+                  <div class="card-title">Generating — Frame by Frame</div>
+                  <div class="progress-ring" style="margin-bottom:12px">
+                    <svg class="ring-chart" viewBox="0 0 52 52">
+                      <circle cx="26" cy="26" r="22" fill="none" stroke="#1e1e30" stroke-width="4"/>
+                      <circle id="applyRingFill" cx="26" cy="26" r="22" fill="none" stroke="#a78bfa" stroke-width="4"
+                        stroke-dasharray="138" stroke-dashoffset="138" stroke-linecap="round"
+                        transform="rotate(-90 26 26)" style="transition:stroke-dashoffset 0.4s"/>
+                    </svg>
+                    <div class="ring-info">
+                      <div class="ring-label" id="applyRingLabel">0/0</div>
+                      <div class="ring-sub">FRAMES DONE</div>
+                    </div>
+                  </div>
+                  <div class="sse-log" id="applyProgressLog"></div>
+                  <!-- Live frame preview during generation -->
+                  <div id="applyLiveFrames" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px"></div>
+                </div>
+
+                <!-- Apply result -->
+                <div class="card" id="applyResult" style="display:none">
+                  <div class="card-title">Result</div>
+                  <!-- Individual frames -->
+                  <div style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Frames</div>
+                  <div id="applyResultFrames" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px"></div>
+                  <!-- Sprite sheet -->
+                  <div style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Sprite Sheet</div>
+                  <div id="applySheetPreview" style="margin-bottom:16px;background:#0a0a14;border-radius:6px;padding:12px;display:inline-block;max-width:100%;overflow:auto">
+                    <img id="applySheetImg" style="image-rendering:pixelated;max-width:100%;display:block" />
+                  </div>
+                  <div id="applyResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-bottom:12px"></div>
+                  <div style="display:flex;gap:8px">
+                    <button class="btn btn-primary btn-sm" id="applySaveBtn" onclick="applySaveToChar()" style="flex:1">
+                      Save to Character
+                    </button>
+                    <a id="applyDownloadBtn" class="btn btn-secondary btn-sm" download style="flex:1;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center">
+                      Download Sheet
+                    </a>
+                  </div>
+                </div>
+
+              </div><!-- /studioApplyContent -->
 
             </div>
           </div>
@@ -2081,10 +2216,12 @@ async function renderStudio() {
   const char = STATE.selectedChar;
   document.getElementById('studioTitle').textContent = char ? char.name : 'Studio';
   document.getElementById('studioSub').textContent = char
-    ? 'Pick an animation from the library to generate'
-    : 'Select a character, then pick an animation to generate';
+    ? 'Library Mode: pick from library  ·  Apply Mode: upload your own poses'
+    : 'Select a character, then pick a mode';
   const exportBtn = document.getElementById('exportSJBtn');
   if (exportBtn) exportBtn.style.display = char ? '' : 'none';
+  // Ensure mode toggle reflects current state
+  studioSetMode(APPLY.mode || 'library');
   await studioLoadAnimLib();
 }
 
@@ -2376,6 +2513,254 @@ async function studioSaveToChar() {
     toast(`Saved "${r.animName}" to ${r.charName}`);
     await loadRoster();
     if (STATE.dashSelected === r.charName) selectDashChar(r.charName);
+  } catch (e) {
+    toast('Save failed: ' + e.message, true);
+    btn.disabled = false;
+  }
+}
+
+// ─── APPLY ANIMATION MODE ─────────────────────────────────────────────────
+
+const APPLY = {
+  mode:         'library', // 'library' | 'apply'
+  charBase64:   null,
+  poseBase64s:  [],
+  jobId:        null,
+  pollInterval: null,
+  lastResult:   null,
+};
+
+function studioSetMode(mode) {
+  APPLY.mode = mode;
+  const libBtn   = document.getElementById('studioModeLibBtn');
+  const applyBtn = document.getElementById('studioModeApplyBtn');
+  const libCont  = document.getElementById('studioLibraryContent');
+  const applyCont = document.getElementById('studioApplyContent');
+
+  if (mode === 'library') {
+    libBtn.style.background   = '#1e1e30';
+    libBtn.style.color        = '#c0c0d0';
+    applyBtn.style.background = '#0a0a14';
+    applyBtn.style.color      = '#50507a';
+    libCont.style.display  = '';
+    applyCont.style.display = 'none';
+  } else {
+    applyBtn.style.background = '#1e1e30';
+    applyBtn.style.color      = '#a78bfa';
+    libBtn.style.background   = '#0a0a14';
+    libBtn.style.color        = '#50507a';
+    libCont.style.display  = 'none';
+    applyCont.style.display = '';
+  }
+}
+
+function applyHandleChar(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    APPLY.charBase64 = e.target.result;
+    const preview = document.getElementById('applyCharPreview');
+    preview.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated;border-radius:4px" />`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function applyHandlePoses(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+
+  APPLY.poseBase64s = [];
+  const strip = document.getElementById('applyPoseStrip');
+  const thumbs = document.getElementById('applyPoseThumbs');
+  const count  = document.getElementById('applyPoseCount');
+  thumbs.innerHTML = '';
+
+  let loaded = 0;
+  const results = new Array(files.length);
+
+  files.forEach((file, i) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      results[i] = e.target.result;
+      loaded++;
+      if (loaded === files.length) {
+        APPLY.poseBase64s = results;
+        count.textContent = files.length;
+        thumbs.innerHTML = results.map((b64, idx) =>
+          `<div style="position:relative">
+            <img src="${b64}" style="width:52px;height:52px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14;border:1px solid #1e1e30" />
+            <div style="position:absolute;bottom:2px;right:2px;background:rgba(0,0,0,0.7);font-family:var(--mono);font-size:7px;color:#a78bfa;padding:1px 3px;border-radius:2px">${idx+1}</div>
+          </div>`
+        ).join('');
+        strip.style.display = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function applyGenerate() {
+  if (!APPLY.charBase64)         return toast('Upload a character reference image first', true);
+  if (!APPLY.poseBase64s.length) return toast('Upload at least one pose image', true);
+
+  const btn     = document.getElementById('applyGenBtn');
+  const spinner = document.getElementById('applyGenSpinner');
+  btn.disabled  = true;
+  spinner.classList.add('active');
+
+  const prog  = document.getElementById('applyProgress');
+  const log   = document.getElementById('applyProgressLog');
+  const lives = document.getElementById('applyLiveFrames');
+  prog.style.display = 'block';
+  document.getElementById('applyResult').style.display = 'none';
+  log.innerHTML = '<span class="info">Uploading + starting job…</span>\n';
+  lives.innerHTML = '';
+  applyUpdateRing(0, APPLY.poseBase64s.length);
+
+  const char     = STATE.selectedChar;
+  const fw       = parseInt(document.getElementById('applyFW').value)      || 256;
+  const fh       = parseInt(document.getElementById('applyFH').value)      || 256;
+  const cols     = parseInt(document.getElementById('applyColumns').value)  || 4;
+  const label    = document.getElementById('applyAnimLabel').value.trim() ||
+                   (char ? `${char.name}-apply-${Date.now().toString(36)}` : `apply-${Date.now().toString(36)}`);
+  const animId   = label.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-_]/g, '');
+
+  try {
+    const res = await fetch(`${API}/api/apply-anim/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        charImageBase64:   APPLY.charBase64,
+        poseImagesBase64:  APPLY.poseBase64s,
+        settings: { frameWidth: fw, frameHeight: fh, columns: cols,
+                    animId, animLabel: label, charName: char?.name || null },
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to start job');
+
+    APPLY.jobId = data.jobId;
+    btn.disabled = false;
+    spinner.classList.remove('active');
+    toast('Generating — sequential frame-by-frame…');
+
+    applyPollJob();
+  } catch (e) {
+    log.innerHTML += `<span class="err">✗ ${e.message}</span>\n`;
+    toast('Failed: ' + e.message, true);
+    btn.disabled = false;
+    spinner.classList.remove('active');
+  }
+}
+
+function applyPollJob() {
+  if (APPLY.pollInterval) clearInterval(APPLY.pollInterval);
+  const jobId = APPLY.jobId;
+  if (!jobId) return;
+
+  const log   = document.getElementById('applyProgressLog');
+  const lives = document.getElementById('applyLiveFrames');
+
+  APPLY.pollInterval = setInterval(async () => {
+    try {
+      const res  = await fetch(`${API}/api/apply-anim/job/${jobId}`);
+      const data = await res.json();
+
+      if (data.progress) {
+        const { frame, total, msg, frames } = data.progress;
+        applyUpdateRing(frame, total);
+        if (log) log.innerHTML = `<span class="info">${msg || ''}</span>\n`;
+
+        // Show live frames as they complete
+        if (frames && frames.length > 0 && lives) {
+          lives.innerHTML = frames.map((url, i) =>
+            `<img src="${url}?t=${Date.now()}" style="width:64px;height:64px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14;border:1px solid #a78bfa" />`
+          ).join('');
+        }
+      }
+
+      if (data.status === 'done') {
+        clearInterval(APPLY.pollInterval);
+        APPLY.pollInterval = null;
+        const result = data.result;
+        applyUpdateRing(result.frameCount, result.frameCount);
+        log.innerHTML += `<span class="ok">✓ ${result.frameCount} frames generated</span>\n`;
+        applyShowResult(result);
+      } else if (data.status === 'error') {
+        clearInterval(APPLY.pollInterval);
+        APPLY.pollInterval = null;
+        log.innerHTML += `<span class="err">✗ ${data.error}</span>\n`;
+        toast('Generation failed: ' + data.error, true);
+      }
+    } catch {}
+  }, 3000);
+}
+
+function applyUpdateRing(done, total) {
+  const circ = 138;
+  const pct  = total > 0 ? done / total : 0;
+  document.getElementById('applyRingFill').style.strokeDashoffset = circ - (circ * pct);
+  document.getElementById('applyRingLabel').textContent = `${done}/${total}`;
+}
+
+function applyShowResult(result) {
+  APPLY.lastResult = result;
+
+  const resDiv    = document.getElementById('applyResult');
+  const framesDiv = document.getElementById('applyResultFrames');
+  const sheetImg  = document.getElementById('applySheetImg');
+  const metaDiv   = document.getElementById('applyResultMeta');
+  const dlBtn     = document.getElementById('applyDownloadBtn');
+
+  // Individual frames
+  framesDiv.innerHTML = result.frames.map((f, i) =>
+    `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+      <img src="${f.url}?t=${Date.now()}" style="width:80px;height:80px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14;border:1px solid #1e1e30" />
+      <div style="font-family:var(--mono);font-size:9px;color:#50507a">f${i+1}</div>
+    </div>`
+  ).join('');
+
+  // Sprite sheet
+  sheetImg.src = `${result.spriteSheetUrl}?t=${Date.now()}`;
+  dlBtn.href   = result.spriteSheetUrl;
+
+  metaDiv.textContent = `${result.animId} · ${result.frameCount} frames · ${result.frameWidth}×${result.frameHeight}px · ${result.columns} cols`;
+
+  const saveBtn = document.getElementById('applySaveBtn');
+  if (saveBtn) { saveBtn.textContent = 'Save to Character'; saveBtn.disabled = false; }
+
+  resDiv.style.display = '';
+  resDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function applySaveToChar() {
+  const r    = APPLY.lastResult;
+  const char = STATE.selectedChar;
+  if (!r) return toast('No result to save', true);
+  if (!char) return toast('Select a character in the sidebar first', true);
+
+  const btn = document.getElementById('applySaveBtn');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/api/character/${encodeURIComponent(char.name)}/save-animation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        animId:     r.animId,
+        animName:   r.animLabel || r.animId,
+        spriteUrl:  r.spriteSheetUrl,
+        fps:        r.fps || 8,
+        frameCount: r.frameCount,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    btn.textContent = '✓ Saved';
+    toast(`Saved "${r.animLabel || r.animId}" to ${char.name}`);
+    await loadRoster();
+    if (STATE.dashSelected === char.name) selectDashChar(char.name);
   } catch (e) {
     toast('Save failed: ' + e.message, true);
     btn.disabled = false;
