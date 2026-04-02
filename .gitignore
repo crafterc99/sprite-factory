@@ -5,3 +5,24 @@ node_modules/
 data/.video-tmp/
 .vercel
 .railway/
+
+# ── Runtime data — persisted via Supabase Storage, not git ──────────────────
+# Schema/config files (animation-contract.json, character-package.schema.json,
+# .gitkeep placeholders) are still tracked. Everything else is Supabase-only.
+data/assets/
+data/raw-sprites/
+data/.regen-tmp/
+data/anim-lib/*.json
+data/apply-anim/*.json
+data/apply-anim/frames/
+data/apply-anim/characters/
+data/apply-anim/poses/
+data/apply-anim/spritesheets/
+data/.characters.json
+data/.char-prompts.json
+data/.clothing-registry.json
+data/.cost-tracking.json
+data/.custom-animations.json
+data/wardrobe.json
+data/frame-prompts.json
+data/regen-anim-results.json

@@ -1,4 +1,0 @@
-{
-  "_comment": "Per-frame prompt overrides. Keyed by character.animationName.frameIndex. Example key: 'breezy.dribble.0'. Each value has { prompt, updatedAt }.",
-  "overrides": {}
-}
