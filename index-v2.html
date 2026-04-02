@@ -2476,10 +2476,10 @@ async function studioRegenFrame(charName, animName, frameIndex, totalFrames, cel
   img.style.opacity = '0.4';
 
   try {
-    const res = await fetch(`${API}/api/generate-frame`, {
+    const res = await fetch(`${API}/api/studio/regen-frame`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ character: charName, animation: animName, frameIndex, totalFrames }),
+      body: JSON.stringify({ charName, animName, frameIndex }),
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -2492,26 +2492,17 @@ async function studioRegenFrame(charName, animName, frameIndex, totalFrames, cel
     btn.className = 'btn btn-primary btn-sm';
     btn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
     btn.disabled = false;
-    btn.onclick = async () => {
-      btn.disabled = true;
-      btn.textContent = '...';
-      try {
-        await fetch(`${API}/api/cherry-pick`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ character: charName, animation: animName, frameIndex, processedPath: data.processedPath }),
-        });
-        btn.textContent = '✓ Kept';
-        btn.className = 'btn btn-secondary btn-sm';
-        btn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
-        // Re-attach regen option
-        const regenBtn = document.createElement('button');
-        regenBtn.className = 'btn btn-secondary btn-sm';
-        regenBtn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;margin-top:2px;';
-        regenBtn.textContent = '↻ Regen';
-        regenBtn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, regenBtn);
-        cell.appendChild(regenBtn);
-      } catch (e) { toast('Cherry-pick failed: ' + e.message, true); btn.disabled = false; }
+    btn.onclick = () => {
+      // Frame already saved by regen endpoint — just mark as kept
+      btn.textContent = '✓ Kept';
+      btn.className = 'btn btn-secondary btn-sm';
+      btn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
+      const regenBtn = document.createElement('button');
+      regenBtn.className = 'btn btn-secondary btn-sm';
+      regenBtn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;margin-top:2px;';
+      regenBtn.textContent = '↻ Regen';
+      regenBtn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, regenBtn);
+      cell.appendChild(regenBtn);
     };
 
     const retryBtn = document.createElement('button');

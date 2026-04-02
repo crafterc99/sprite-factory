@@ -176,6 +176,24 @@ function register(router, ctx) {
     }
   });
 
+  // PATCH /api/anim-lib/:name/frame/:index — replace a single frame with a better cutout
+  // Body: { frameBase64 } — called automatically by client when a background subject lands
+  router.patch('/api/anim-lib/:name/frame/:index', async (req, res, params) => {
+    const body = await parseBody(req);
+    const { frameBase64 } = body;
+    if (!frameBase64) return json(res, { error: 'frameBase64 required' }, 400);
+    const frameIdx = parseInt(params.index, 10);
+    const index = loadIndex();
+    const anim = index[params.name];
+    if (!anim) return json(res, { error: 'not found' }, 404);
+    if (frameIdx < 0 || frameIdx >= anim.framesBase64.length) return json(res, { error: 'frame index out of range' }, 400);
+    anim.framesBase64[frameIdx] = frameBase64.replace(/^data:image\/\w+;base64,/, '');
+    index[params.name] = anim;
+    saveIndex(index);
+    scheduleSync();
+    json(res, { success: true, frameIdx });
+  });
+
   // DELETE /api/anim-lib/:name — delete animation
   router.delete('/api/anim-lib/:name', (req, res, params) => {
     const { name } = params;

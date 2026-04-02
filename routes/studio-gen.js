@@ -228,6 +228,78 @@ function register(router, ctx) {
 
     return json(res, { jobId, status: 'started' });
   });
+
+  // POST /api/studio/regen-frame — regenerate a single frame from an anim-lib animation
+  // Body: { charName, animName, frameIndex, model? }
+  router.post('/api/studio/regen-frame', async (req, res) => {
+    const body = await parseBody(req);
+    const { charName, animName, frameIndex, model } = body;
+    if (!charName || !animName || frameIndex == null) {
+      return json(res, { error: 'charName, animName, and frameIndex required' }, 400);
+    }
+
+    const lib = loadAnimLib();
+    const anim = lib[animName];
+    if (!anim) return json(res, { error: `Animation "${animName}" not found in library` }, 400);
+
+    const fi = parseInt(frameIndex, 10);
+    if (fi < 0 || fi >= anim.frameCount) return json(res, { error: 'frameIndex out of range' }, 400);
+
+    // Resolve character angle reference
+    let resolvedAnglePath = null;
+    const tryIndices = [anim.angleIndex, 0, 1, 2, 3, 4, 5, 6, 7];
+    for (const idx of tryIndices) {
+      const p = path.join(ASSETS_DIR, `${charName}-angle-${idx}.png`);
+      if (fs.existsSync(p)) { resolvedAnglePath = p; break; }
+    }
+    const portraitPath = path.join(ASSETS_DIR, `${charName}full.png`);
+    if (!resolvedAnglePath && fs.existsSync(portraitPath)) resolvedAnglePath = portraitPath;
+    if (!resolvedAnglePath) return json(res, { error: `No body angle or portrait found for "${charName}"` }, 400);
+
+    try {
+      const modelId = model || 'gemini-3-pro-image-preview';
+      const client = new NanaBananaClient({ model: modelId });
+
+      const genDir = path.join(TMP_DIR, 'studio-gen', `${charName}-${animName}`);
+      fs.mkdirSync(genDir, { recursive: true });
+
+      // Write the specific pose frame from base64
+      const posePath = path.join(genDir, `pose-regen-${fi}.png`);
+      if (!anim.framesBase64 || !anim.framesBase64[fi]) {
+        return json(res, { error: `Pose frame ${fi} not found in library` }, 400);
+      }
+      fs.writeFileSync(posePath, Buffer.from(anim.framesBase64[fi], 'base64'));
+
+      const result = await client.generate(loadStudioPrompt(), {
+        referenceImages: [resolvedAnglePath, posePath],
+        aspectRatio: '1:1',
+        resolution: '1K',
+        model: modelId,
+        maxRetries: 2,
+        timeoutMs: 90000,
+      });
+
+      const attemptNum = Date.now();
+      const rawPath = path.join(genDir, `raw-regen-${fi}-${attemptNum}.png`);
+      fs.writeFileSync(rawPath, result.imageBuffer);
+      recordCost(modelId, 'studio_regen', '1K', 2, { charName, animName, frame: fi });
+
+      const processedPath = path.join(genDir, `regen-${fi}-${attemptNum}.png`);
+      await processFrame(rawPath, processedPath);
+
+      // Update the frame in assets dir
+      const framesOutDir = path.join(ASSETS_DIR, `${charName}-${animName}-frames`);
+      fs.mkdirSync(framesOutDir, { recursive: true });
+      const frameDest = path.join(framesOutDir, `frame-${fi}.png`);
+      fs.copyFileSync(processedPath, frameDest);
+      sbUpload(`${charName}-${animName}-frames/frame-${fi}.png`, frameDest);
+
+      const processedUrl = `/assets/${charName}-${animName}-frames/frame-${fi}.png`;
+      json(res, { success: true, processedUrl, processedPath });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+  });
 }
 
 module.exports = { register };

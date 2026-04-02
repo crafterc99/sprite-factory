@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { CHARACTERS, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt } = require('../lib/sprite-generator/prompts');
-const { processSprite } = require('../lib/sprite-processor/index');
+const { processSprite, cropToContent } = require('../lib/sprite-processor/index');
 const { smartSelect, recordFeedback } = require('../lib/sprite-generator/smart-selector');
 const { extract } = require('../lib/sprite-generator/video-extractor');
 const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
@@ -493,10 +493,12 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     if (!fs.existsSync(framePath)) return json(res, { error: 'Frame not found' }, 404);
     fs.mkdirSync(subjectsDir, { recursive: true });
 
-    let prompt = 'Extract the person and basketball from this image. Remove the background completely. Output ONLY the person and ball on a transparent background. Keep exact pose, proportions, and position. No background, no floor, no court markings.';
+    // Green background so removeBackground (chroma-key) works reliably
+    let prompt = 'Extract the person and basketball from this image. Place them on a PURE GREEN (#00FF00) background. Fill the entire background with solid green. Keep the person and ball exactly as they appear — same pose, proportions, size, and position. No shadows, no floor, no court. Just the person and ball on solid green.';
     if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
 
     try {
+      const { removeBackground } = require('../lib/sprite-processor/index');
       const client = new NanaBananaClient({ model: 'gemini-2.5-flash-image' });
       const result  = await client.generate(prompt, {
         referenceImages: [framePath],
@@ -504,8 +506,20 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
         resolution:      '1K',
         model:           'gemini-2.5-flash-image',
       });
+
       const outFile = `subject-${frameIndex}.png`;
-      fs.writeFileSync(path.join(subjectsDir, outFile), result.imageBuffer);
+      const rawPath = path.join(subjectsDir, `raw-${frameIndex}.png`);
+      const greenRemovedPath = path.join(subjectsDir, `green-${frameIndex}.png`);
+      fs.writeFileSync(rawPath, result.imageBuffer);
+
+      // Remove green background → tight crop to character → scale up to 512×512
+      await removeBackground(rawPath, greenRemovedPath);
+      await cropToContent(greenRemovedPath, path.join(subjectsDir, outFile), {
+        width:   512,
+        height:  512,
+        padding: 8,  // minimal padding so character fills the frame
+      });
+
       recordCost('gemini-2.5-flash-image', 'subject-extract', '1K', 1, { sessionId, frameIndex });
       return json(res, { frameIndex, url: `/api/video/subject/${sessionId}/${outFile}` });
     } catch (err) {
@@ -527,8 +541,9 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     const subjectsDir = path.join(TMP_DIR, sessionId, 'subjects');
     fs.mkdirSync(subjectsDir, { recursive: true });
 
-    let prompt = 'Extract the person and basketball from this image. Remove the background completely. Output ONLY the person and ball on a transparent background. Keep exact pose, proportions, and position. No background, no floor, no court markings.';
+    let prompt = 'Extract the person and basketball from this image. Place them on a PURE GREEN (#00FF00) background. Fill the entire background with solid green. Keep the person and ball exactly as they appear — same pose, proportions, size, and position. No shadows, no floor, no court. Just the person and ball on solid green.';
     if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
+    const { removeBackground: removeBg } = require('../lib/sprite-processor/index');
     const client = new NanaBananaClient({ model: 'gemini-2.5-flash-image' });
     const subjects = [];
 
@@ -545,8 +560,12 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
           resolution: '1K',
           model: 'gemini-2.5-flash-image',
         });
-        const outFile = `subject-${i}.png`;
-        fs.writeFileSync(path.join(subjectsDir, outFile), result.imageBuffer);
+        const outFile    = `subject-${i}.png`;
+        const rawPath    = path.join(subjectsDir, `raw-${i}.png`);
+        const greenPath  = path.join(subjectsDir, `green-${i}.png`);
+        fs.writeFileSync(rawPath, result.imageBuffer);
+        await removeBg(rawPath, greenPath);
+        await cropToContent(greenPath, path.join(subjectsDir, outFile), { width: 512, height: 512, padding: 8 });
         recordCost('gemini-2.5-flash-image', 'subject-extract', '1K', 1, { sessionId, frameIndex: i });
         subjects.push({ frameIndex: i, url: `/api/video/subject/${sessionId}/${outFile}` });
       } catch (err) {
