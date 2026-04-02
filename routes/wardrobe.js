@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const { scheduleSync } = require('../lib/auto-git-sync');
-const { uploadFile: sbUpload, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
 
 const WARDROBE_INDEX = path.resolve(__dirname, '../data/wardrobe.json');
 const SB_META_KEY = '_meta/wardrobe.json';
@@ -30,7 +30,7 @@ function saveIndex(items) {
   const jsonStr = JSON.stringify(items, null, 2);
   fs.writeFileSync(WARDROBE_INDEX, jsonStr);
   // Back up to Supabase so it survives Railway redeploys
-  if (sbAvailable()) sbUpload(SB_META_KEY, Buffer.from(jsonStr));
+  if (sbAvailable()) sbUploadJson(SB_META_KEY, items);
 }
 
 async function restoreFromSupabase() {

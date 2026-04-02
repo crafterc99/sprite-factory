@@ -15,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scheduleSync } = require('../lib/auto-git-sync');
-const { uploadFile: sbUpload, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
 
 const LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
 const INDEX_FILE = path.join(LIB_DIR, 'index.json');
@@ -36,9 +36,7 @@ function saveIndex(data) {
   const json = JSON.stringify(data, null, 2);
   fs.writeFileSync(INDEX_FILE, json);
   // Back up to Supabase so it survives Railway redeploys (fresh git clone wipes local file)
-  if (sbAvailable()) {
-    sbUpload(SB_META_KEY, Buffer.from(json));
-  }
+  if (sbAvailable()) sbUploadJson(SB_META_KEY, data);
 }
 
 /**

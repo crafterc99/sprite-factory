@@ -218,7 +218,9 @@ function register(router, ctx) {
           spriteUrl: `/assets/${charName}-${animName}.png`,
         });
       } catch (err) {
-        failJob(jobId, err.message);
+        const msg = err?.message || String(err) || 'Unknown error';
+        console.error('[studio-gen] job failed:', err);
+        failJob(jobId, msg);
       }
     });
 
