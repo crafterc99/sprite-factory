@@ -15,7 +15,7 @@ const path = require('path');
 const sharp = require('sharp');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
-const { removeBackground, cropToContent } = require('../lib/sprite-processor/index');
+const { removeWhiteBackground, cropToContent } = require('../lib/sprite-processor/index');
 const { uploadFile: sbUpload } = require('../lib/supabase-storage');
 
 const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
@@ -97,16 +97,10 @@ async function buildStrip(framePaths, outputPath) {
 }
 
 async function processFrame(srcPath, outPath) {
-  // Remove green background → transparent → crop tight → composite over white
+  // Remove white background → transparent → crop tight to 180×180 (matches all other animations)
   const transparentPath = srcPath + '-transparent.png';
-  await removeBackground(srcPath, transparentPath);
-  const croppedPath = srcPath + '-cropped.png';
-  await cropToContent(transparentPath, croppedPath, { width: 180, height: 240, padding: 8 });
-  // Composite over white canvas so output has clean white background
-  await sharp({ create: { width: 180, height: 240, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 255 } } })
-    .composite([{ input: croppedPath }])
-    .png()
-    .toFile(outPath);
+  await removeWhiteBackground(srcPath, transparentPath, { threshold: 238, feather: 6 });
+  await cropToContent(transparentPath, outPath, { width: 180, height: 180, padding: 6 });
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
