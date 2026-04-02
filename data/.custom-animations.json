@@ -1,14 +1,1 @@
-{
-  "cross test": {
-    "frames": 14,
-    "fps": 8,
-    "loop": false,
-    "action": "crossover",
-    "frameBreakdown": "",
-    "breezyFile": null,
-    "custom": true,
-    "source": "video",
-    "createdAt": "2026-03-23T01:48:16.105Z",
-    "updatedAt": "2026-03-23T01:48:16.105Z"
-  }
-}
+{}
