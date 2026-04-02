@@ -71,7 +71,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
   // POST /api/video/extract — Extract frames from uploaded video
   router.post('/api/video/extract', async (req, res) => {
     const body = await parseBody(req);
-    const { sessionId, fps } = body;
+    const { sessionId, fps, startTime, endTime } = body;
     const sessionDir = path.join(TMP_DIR, sessionId);
     if (!fs.existsSync(sessionDir)) return json(res, { error: 'Session not found' }, 404);
 
@@ -80,8 +80,19 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       if (!videoFiles.length) return json(res, { error: 'No video in session' }, 400);
 
       const framesDir = path.join(sessionDir, 'frames');
+      // Clear previous extraction if re-extracting with new trim
+      if (fs.existsSync(framesDir)) {
+        fs.readdirSync(framesDir).filter(f => f.endsWith('.png')).forEach(f => fs.unlinkSync(path.join(framesDir, f)));
+      }
       fs.mkdirSync(framesDir, { recursive: true });
-      const result = await extract(path.join(sessionDir, videoFiles[0]), framesDir, { fps: fps || 10 });
+
+      const extractOpts = { fps: fps || 10 };
+      if (startTime != null && startTime > 0) extractOpts.start = String(startTime);
+      if (startTime != null && endTime != null && endTime > startTime) {
+        extractOpts.duration = String(Math.max(0.1, endTime - startTime));
+      }
+
+      const result = await extract(path.join(sessionDir, videoFiles[0]), framesDir, extractOpts);
       const frames = fs.readdirSync(framesDir).filter(f => f.endsWith('.png')).sort();
       return json(res, { frameCount: frames.length, framesDir, sessionId, frames: frames.map(f => ({ file: f, fileName: f, url: `/api/video/frame/${sessionId}/${f}` })) });
     } catch (err) {
