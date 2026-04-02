@@ -185,7 +185,7 @@ function register(router, ctx) {
               resolution: '1K',
               model: modelId,
               maxRetries: 2,
-              timeoutMs: 90000,
+              timeoutMs: 150000,
             });
 
             const rawPath = path.join(genDir, `raw-${i}.png`);
@@ -276,7 +276,7 @@ function register(router, ctx) {
         resolution: '1K',
         model: modelId,
         maxRetries: 2,
-        timeoutMs: 90000,
+        timeoutMs: 150000,
       });
 
       const attemptNum = Date.now();

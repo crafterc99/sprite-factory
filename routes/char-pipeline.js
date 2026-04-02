@@ -453,7 +453,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           resolution: '1K',
           model: modelId,
           maxRetries: 2,
-          timeoutMs: 90000,
+          timeoutMs: 150000,
         });
         const step1Path = path.join(charDir, 'step1-pixel.png');
         fs.writeFileSync(step1Path, step1.imageBuffer);
@@ -468,7 +468,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           resolution: '1K',
           model: modelId,
           maxRetries: 2,
-          timeoutMs: 90000,
+          timeoutMs: 150000,
         });
         recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step2' });
 
@@ -512,8 +512,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           aspectRatio: '3:4',
           resolution: '2K',
           model: modelId,
-          maxRetries: 1,
-          timeoutMs: 80000,
+          maxRetries: 3,
+          timeoutMs: 150000,
         });
         const step1Path = path.join(charDir, 'step1-pixel.png');
         fs.writeFileSync(step1Path, step1.imageBuffer);
@@ -548,8 +548,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           aspectRatio: '3:4',
           resolution: '2K',
           model: modelId,
-          maxRetries: 1,
-          timeoutMs: 80000,
+          maxRetries: 3,
+          timeoutMs: 150000,
         });
         recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'pixel-char-step2' });
         // Also persist portrait to disk so client can resume after page refresh
@@ -725,8 +725,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         aspectRatio: '16:9',
         resolution: '2K',
         model: modelId,
-        maxRetries: 1,
-        timeoutMs: 80000,
+        maxRetries: 3,
+        timeoutMs: 150000,
       });
 
       const sheetPath = path.join(charDir, 'body-sheet.png');
@@ -830,7 +830,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
             resolution: '1K',
             model: modelId,
             maxRetries: 2,
-            timeoutMs: 90000,
+            timeoutMs: 150000,
           });
 
           const framePath = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
@@ -917,7 +917,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
             resolution: '1K',
             model: modelId,
             maxRetries: 2,
-            timeoutMs: 90000,
+            timeoutMs: 150000,
           });
 
           const framePath = path.join(ASSETS_DIR, `${name}-headshot-${i}.png`);
@@ -1084,8 +1084,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           aspectRatio: isHead ? '1:1' : '1:1',
           resolution: '1K',
           model: modelId,
-          maxRetries: 1,
-          timeoutMs: 80000,
+          maxRetries: 3,
+          timeoutMs: 150000,
         });
 
         // Center, save, and sync to git so it survives redeployment
@@ -1264,8 +1264,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
             aspectRatio: '3:4',
             resolution: '2K',
             model: modelId,
-            maxRetries: 1,
-            timeoutMs: 80000,
+            maxRetries: 3,
+            timeoutMs: 150000,
           });
 
           const topResultPath = path.join(tmpDir, `after-top-${tmpId}.png`);
@@ -1284,8 +1284,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
             aspectRatio: '3:4',
             resolution: '2K',
             model: modelId,
-            maxRetries: 1,
-            timeoutMs: 80000,
+            maxRetries: 3,
+            timeoutMs: 150000,
           });
 
           const bottomResultPath = path.join(tmpDir, `after-bottom-${tmpId}.png`);
