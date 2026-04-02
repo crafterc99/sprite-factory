@@ -1020,59 +1020,17 @@
             <input type="file" id="videoFileInput" accept="video/*" onchange="handleVideoFile(this.files[0])" />
           </div>
 
-          <!-- Trim panel — hidden until video loaded -->
-          <div id="videoTrimPanel" style="display:none">
-            <!-- Video preview -->
-            <video id="videoPreview" style="width:100%;max-height:260px;border-radius:6px;background:#000;margin-bottom:12px;display:block"
-              preload="metadata" playsinline muted></video>
-
-            <!-- Trim slider -->
-            <div style="margin-bottom:10px">
-              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                <span style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;text-transform:uppercase">Trim Clip</span>
-                <span id="videoTrimRange" style="font-family:var(--mono);font-size:10px;color:#00ff88">0.0s – 0.0s</span>
-              </div>
-              <!-- Dual-range trim track -->
-              <div id="videoTrimTrack" style="position:relative;height:36px;user-select:none">
-                <!-- Background track -->
-                <div style="position:absolute;top:50%;left:0;right:0;height:4px;background:#1e1e30;border-radius:2px;transform:translateY(-50%)"></div>
-                <!-- Selected region highlight -->
-                <div id="videoTrimFill" style="position:absolute;top:50%;height:4px;background:#00ff88;border-radius:2px;transform:translateY(-50%);left:0%;right:100%"></div>
-                <!-- Thumbnail strip -->
-                <canvas id="videoTrimCanvas" style="position:absolute;top:0;left:0;width:100%;height:36px;border-radius:4px;opacity:0.35;pointer-events:none"></canvas>
-                <!-- Start handle (range input, inverted) -->
-                <input type="range" id="videoTrimStart" min="0" max="100" value="0" step="0.1"
-                  style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;z-index:3"
-                  oninput="videoTrimUpdate()" />
-                <!-- End handle -->
-                <input type="range" id="videoTrimEnd" min="0" max="100" value="100" step="0.1"
-                  style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;margin:0;z-index:4"
-                  oninput="videoTrimUpdate()" />
-                <!-- Visual handles -->
-                <div id="videoHandleStart" style="position:absolute;top:50%;width:14px;height:14px;background:#00ff88;border-radius:50%;transform:translate(-50%,-50%);left:0%;pointer-events:none;z-index:5;box-shadow:0 0 6px rgba(0,255,136,0.5)"></div>
-                <div id="videoHandleEnd"   style="position:absolute;top:50%;width:14px;height:14px;background:#00ff88;border-radius:50%;transform:translate(-50%,-50%);left:100%;pointer-events:none;z-index:5;box-shadow:0 0 6px rgba(0,255,136,0.5)"></div>
-              </div>
-              <div style="display:flex;justify-content:space-between;margin-top:4px">
-                <span id="videoTrimDuration" style="font-family:var(--mono);font-size:9px;color:#50507a"></span>
-                <span id="videoTrimTotal"    style="font-family:var(--mono);font-size:9px;color:#30304a"></span>
-              </div>
-            </div>
-
-            <!-- FPS + Extract -->
+          <!-- FPS + Extract (shown after file picked) -->
+          <div id="videoPreExtract" style="display:none">
+            <div id="videoFileInfo" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-bottom:10px"></div>
             <div style="display:flex;gap:8px;align-items:center">
               <label class="form-label" style="margin:0;white-space:nowrap">FPS</label>
               <input class="input" type="number" id="videoFps" value="10" min="1" max="30" style="width:60px" />
-              <div style="flex:1;font-family:var(--mono);font-size:9px;color:#50507a" id="videoFrameEstimate"></div>
               <button class="btn btn-primary" id="videoExtractBtn" onclick="extractVideoFrames()">
                 <span class="spinner" id="videoExtractSpinner"></span>
                 Extract Frames
               </button>
             </div>
-          </div>
-
-          <!-- Show FPS + extract before video is loaded too (hidden until file picked) -->
-          <div id="videoPreExtract" style="display:none">
-            <div id="videoFileInfo" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-bottom:10px"></div>
           </div>
         </div>
 
@@ -3986,7 +3944,7 @@ const VIDEO_PRESETS = [
   { label: 'defense-backpedal', frames: 6,  fps: 8,  extractFps: 10, action: 'defensive backpedal' },
 ];
 
-const VID = { sessionId: null, frames: [], selected: new Set(), mode: 'strip', file: null, preset: null, duration: 0, trimStart: 0, trimEnd: null };
+const VID = { sessionId: null, frames: [], selected: new Set(), mode: 'strip', file: null, preset: null, duration: 0 };
 
 function initVideoPage() {
   // no-op: character select and preset grid removed from video flow
@@ -4026,113 +3984,16 @@ function applyVideoPreset(i) {
 function handleVideoFile(file) {
   if (!file) return;
   VID.file = file;
-  VID.sessionId = null; // reset any previous session
+  VID.sessionId = null;
   document.getElementById('videoDropZone').classList.remove('dragover');
 
-  // Show file info
   const info = document.getElementById('videoFileInfo');
-  if (info) {
-    info.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
-    info.style.display = 'block';
-  }
-
-  // Set video preview
-  const vid = document.getElementById('videoPreview');
-  const objUrl = URL.createObjectURL(file);
-  vid.src = objUrl;
-  vid.onloadedmetadata = () => {
-    VID.duration = vid.duration;
-    videoTrimInit(vid.duration);
-    document.getElementById('videoTrimPanel').style.display = 'block';
-    // Draw thumbnail strip from video
-    videoDrawThumbnailStrip(vid);
-  };
+  if (info) info.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
+  document.getElementById('videoPreExtract').style.display = 'block';
 }
 
-function videoTrimInit(duration) {
-  const startEl = document.getElementById('videoTrimStart');
-  const endEl   = document.getElementById('videoTrimEnd');
-  startEl.value = 0;
-  endEl.value   = 100;
-  document.getElementById('videoTrimTotal').textContent = `Total: ${duration.toFixed(1)}s`;
-  videoTrimUpdate();
-}
 
-function videoTrimUpdate() {
-  const duration = VID.duration || 0;
-  const startEl  = document.getElementById('videoTrimStart');
-  const endEl    = document.getElementById('videoTrimEnd');
-  let startPct   = parseFloat(startEl.value);
-  let endPct     = parseFloat(endEl.value);
-
-  // Prevent handles crossing (keep 1% min gap)
-  if (startPct >= endPct - 1) {
-    if (document.activeElement === startEl) startPct = endPct - 1;
-    else endPct = startPct + 1;
-    startEl.value = startPct;
-    endEl.value   = endPct;
-  }
-
-  const startSec = (startPct / 100) * duration;
-  const endSec   = (endPct   / 100) * duration;
-  VID.trimStart  = startSec;
-  VID.trimEnd    = endSec;
-
-  // Update visual handles
-  document.getElementById('videoHandleStart').style.left = startPct + '%';
-  document.getElementById('videoHandleEnd').style.left   = endPct   + '%';
-
-  // Update fill bar
-  const fill = document.getElementById('videoTrimFill');
-  fill.style.left  = startPct + '%';
-  fill.style.width = (endPct - startPct) + '%';
-  fill.style.right = 'auto';
-
-  // Update labels
-  const trimSec = endSec - startSec;
-  document.getElementById('videoTrimRange').textContent    = `${startSec.toFixed(1)}s – ${endSec.toFixed(1)}s`;
-  document.getElementById('videoTrimDuration').textContent = `Selected: ${trimSec.toFixed(1)}s`;
-
-  // Estimate frame count
-  const fps = parseInt(document.getElementById('videoFps')?.value) || 10;
-  const est = Math.round(trimSec * fps);
-  const estEl = document.getElementById('videoFrameEstimate');
-  if (estEl) estEl.textContent = `~${est} frame${est !== 1 ? 's' : ''} at ${fps}fps`;
-
-  // Scrub video preview to start point
-  const vid = document.getElementById('videoPreview');
-  if (vid && !isNaN(startSec)) vid.currentTime = startSec;
-}
-
-function videoDrawThumbnailStrip(vid) {
-  const canvas = document.getElementById('videoTrimCanvas');
-  if (!canvas) return;
-  const ctx    = canvas.getContext('2d');
-  const W      = canvas.offsetWidth || canvas.width;
-  const H      = 36;
-  canvas.width  = W;
-  canvas.height = H;
-
-  const thumbCount = Math.min(16, Math.max(4, Math.floor(W / 40)));
-  const tw = W / thumbCount;
-
-  // Snapshot frames evenly across the video
-  let drawn = 0;
-  for (let i = 0; i < thumbCount; i++) {
-    const t = (i / (thumbCount - 1)) * vid.duration;
-    const seekVid = document.createElement('video');
-    seekVid.src         = vid.src;
-    seekVid.currentTime = t;
-    seekVid.muted       = true;
-    seekVid.onloadeddata = () => {};
-    seekVid.onseeked = () => {
-      ctx.drawImage(seekVid, Math.round(i * tw), 0, Math.ceil(tw), H);
-      drawn++;
-    };
-  }
-}
-
-// Drag and drop + fps change
+// Drag and drop
 document.addEventListener('DOMContentLoaded', () => {
   const dz = document.getElementById('videoDropZone');
   if (dz) {
@@ -4144,9 +4005,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (f && f.type.startsWith('video/')) handleVideoFile(f);
     });
   }
-  // Re-estimate frame count when FPS changes
-  const fpsEl = document.getElementById('videoFps');
-  if (fpsEl) fpsEl.addEventListener('input', () => { if (VID.duration) videoTrimUpdate(); });
 });
 
 async function extractVideoFrames() {
@@ -4172,14 +4030,12 @@ async function extractVideoFrames() {
       VID.sessionId = upData.sessionId;
     }
 
-    const fps       = parseInt(document.getElementById('videoFps').value) || 10;
-    const startTime = VID.trimStart != null ? VID.trimStart : 0;
-    const endTime   = VID.trimEnd   != null ? VID.trimEnd   : VID.duration;
+    const fps = parseInt(document.getElementById('videoFps').value) || 10;
 
     const exRes = await fetch(`${API}/api/video/extract`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: VID.sessionId, fps, startTime, endTime }),
+      body: JSON.stringify({ sessionId: VID.sessionId, fps }),
     });
     const exData = await exRes.json();
     if (!exRes.ok) throw new Error(exData.error || 'Extract failed');
@@ -4512,14 +4368,10 @@ function videoReset() {
   VID.selected = new Set();
   VID.file = null;
   VID.duration = 0;
-  VID.trimStart = 0;
-  VID.trimEnd = null;
   document.getElementById('videoGalleryCard').style.display = 'none';
   document.getElementById('videoConfigCard').style.display = 'none';
   document.getElementById('videoSaveResult').style.display = 'none';
-  document.getElementById('videoTrimPanel').style.display = 'none';
-  const vid = document.getElementById('videoPreview');
-  if (vid) { vid.src = ''; }
+  document.getElementById('videoPreExtract').style.display = 'none';
   document.getElementById('videoUploadCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
