@@ -10,7 +10,7 @@ const { processSprite, cutFrames, upscaleNN, buildStrip, processSingleFrame, nor
 const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
 const jobStore = require('../job-store');
-const { uploadFile: sbUpload } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/supabase-storage');
 
 const FRAME_PROMPTS_PATH = path.join(__dirname, '../data/frame-prompts.json');
 
@@ -46,6 +46,7 @@ function loadFramePrompts() {
 
 function saveFramePrompts(data) {
   fs.writeFileSync(FRAME_PROMPTS_PATH, JSON.stringify(data, null, 2) + '\n', 'utf8');
+  if (sbAvailable()) sbUploadJson('_meta/frame-prompts.json', data);
 }
 
 function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parseBody }) {

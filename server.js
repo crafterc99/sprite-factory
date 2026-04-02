@@ -332,6 +332,44 @@ if (require.main === module) {
       console.warn('  [startup] wardrobe restore failed (non-fatal):', e.message);
     }
 
+    // ── STEP 6: Restore remaining metadata from Supabase if missing locally
+    try {
+      const { downloadFile, isAvailable } = require('./lib/supabase-storage');
+      if (isAvailable()) {
+        const restoreJson = async (sbKey, localPath, label) => {
+          if (fs.existsSync(localPath)) return; // already on disk
+          const buf = await downloadFile(sbKey);
+          if (!buf) return;
+          fs.mkdirSync(path.dirname(localPath), { recursive: true });
+          fs.writeFileSync(localPath, buf);
+          console.log(`  [startup] restored ${label} from Supabase`);
+        };
+        await Promise.all([
+          restoreJson('_meta/custom-animations.json',  path.join(__dirname, 'data/.custom-animations.json'),  'custom-animations'),
+          restoreJson('_meta/char-prompts.json',        path.join(__dirname, 'data/.char-prompts.json'),        'char-prompts'),
+          restoreJson('_meta/frame-prompts.json',       path.join(__dirname, 'data/frame-prompts.json'),        'frame-prompts'),
+          restoreJson('_meta/cost-tracking.json',       path.join(__dirname, 'data/.cost-tracking.json'),       'cost-tracking'),
+        ]);
+        // Restore apply-anim metadata files
+        const { listFiles } = require('./lib/supabase-storage');
+        const applyMetaFiles = (await listFiles('_meta/apply-anim')).filter(f => f.endsWith('.json'));
+        const applyAnimDir = path.join(__dirname, 'data/apply-anim');
+        fs.mkdirSync(applyAnimDir, { recursive: true });
+        await Promise.all(applyMetaFiles.map(async (sbKey) => {
+          const fname = path.basename(sbKey);
+          const localPath = path.join(applyAnimDir, fname);
+          if (fs.existsSync(localPath)) return;
+          const buf = await downloadFile(sbKey);
+          if (buf) { fs.writeFileSync(localPath, buf); }
+        }));
+        if (applyMetaFiles.length > 0) {
+          console.log(`  [startup] restored ${applyMetaFiles.length} apply-anim metadata file(s) from Supabase`);
+        }
+      }
+    } catch (e) {
+      console.warn('  [startup] metadata restore failed (non-fatal):', e.message);
+    }
+
     // On startup, push any data that's on disk but wasn't committed before last restart
     if (process.env.GITHUB_TOKEN) {
       const { scheduleSync } = require('./lib/auto-git-sync');

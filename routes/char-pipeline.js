@@ -26,7 +26,7 @@ const { recordCost } = require('../middleware/cost-tracker');
 const { cutFrames, removeBackground, cropToContent } = require('../lib/sprite-processor/index');
 const { CHARACTERS } = require('../lib/sprite-generator/prompts');
 const { scheduleSync } = require('../lib/auto-git-sync');
-const { uploadFile: sbUpload } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/supabase-storage');
 
 const CHARACTERS_FILE = path.resolve(__dirname, '../data/.characters.json');
 const CHAR_PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
@@ -57,6 +57,7 @@ function saveCharPrompts(data) {
   const dir = path.dirname(CHAR_PROMPTS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CHAR_PROMPTS_FILE, JSON.stringify(data, null, 2));
+  if (sbAvailable()) sbUploadJson('_meta/char-prompts.json', data);
 }
 
 function computeScale(heightInches) {

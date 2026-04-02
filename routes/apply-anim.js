@@ -18,7 +18,7 @@ const sharp = require('sharp');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost }       = require('../middleware/cost-tracker');
 const { removeBackground, cropToContent } = require('../lib/sprite-processor/index');
-const { uploadFile: sbUpload } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/supabase-storage');
 const { scheduleSync } = require('../lib/auto-git-sync');
 
 // ── Prompt ────────────────────────────────────────────────────────────────────
@@ -282,10 +282,11 @@ function register(router, ctx) {
           })),
         };
 
-        // Persist metadata to data/apply-anim/
+        // Persist metadata to data/apply-anim/ and Supabase
         const metaDir = path.resolve(__dirname, '../data/apply-anim');
         fs.mkdirSync(metaDir, { recursive: true });
         fs.writeFileSync(path.join(metaDir, `${animId}.json`), JSON.stringify(metadata, null, 2));
+        if (sbAvailable()) sbUploadJson(`_meta/apply-anim/${animId}.json`, metadata);
         scheduleSync();
 
         updateJob(jobId, {

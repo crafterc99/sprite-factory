@@ -206,6 +206,7 @@ function saveCustomAnimations(data) {
   const dir = path.dirname(CUSTOM_ANIMS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CUSTOM_ANIMS_FILE, JSON.stringify(data, null, 2));
+  if (sbAvailable()) sbUploadJson('_meta/custom-animations.json', data);
 }
 
 // ─── Clothing Registry ─────────────────────────────────────────────────

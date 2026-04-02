@@ -4,6 +4,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/supabase-storage');
 
 const COST_FILE = process.env.COST_FILE || path.resolve(__dirname, '../data/.cost-tracking.json');
 
@@ -42,6 +43,7 @@ function saveCostData(data) {
   const dir = path.dirname(COST_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(COST_FILE, JSON.stringify(data, null, 2));
+  if (sbAvailable()) sbUploadJson('_meta/cost-tracking.json', data);
 }
 
 /**
