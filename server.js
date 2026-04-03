@@ -160,6 +160,42 @@ require('./routes/anim-lib').register(router, ctx);
 require('./routes/studio-gen').register(router, ctx);
 require('./routes/apply-anim').register(router, ctx);
 
+// ─── Testing Config Endpoint ─────────────────────────────────────────────
+const TESTING_CONFIG_FILE = path.join(__dirname, 'data/.testing-config.json');
+router.get('/api/testing-config', async (req, res) => {
+  try {
+    if (fs.existsSync(TESTING_CONFIG_FILE)) {
+      const data = JSON.parse(fs.readFileSync(TESTING_CONFIG_FILE, 'utf8'));
+      return json(res, data);
+    }
+    const { downloadFile, isAvailable } = require('./lib/supabase-storage');
+    if (isAvailable()) {
+      const buf = await downloadFile('_meta/testing-config.json');
+      if (buf) {
+        const data = JSON.parse(buf.toString('utf8'));
+        return json(res, data);
+      }
+    }
+    return json(res, {});
+  } catch (e) {
+    json(res, { error: e.message }, 500);
+  }
+});
+router.post('/api/testing-config', async (req, res) => {
+  try {
+    const body = await parseBody(req);
+    fs.mkdirSync(path.dirname(TESTING_CONFIG_FILE), { recursive: true });
+    fs.writeFileSync(TESTING_CONFIG_FILE, JSON.stringify(body, null, 2));
+    const { uploadJson, isAvailable } = require('./lib/supabase-storage');
+    if (isAvailable()) {
+      await uploadJson('_meta/testing-config.json', body);
+    }
+    return json(res, { success: true });
+  } catch (e) {
+    json(res, { error: e.message }, 500);
+  }
+});
+
 // ─── Sync Status Endpoint ────────────────────────────────────────────────
 router.get('/api/sync-status', (req, res) => {
   try {
@@ -349,6 +385,7 @@ if (require.main === module) {
           restoreJson('_meta/char-prompts.json',        path.join(__dirname, 'data/.char-prompts.json'),        'char-prompts'),
           restoreJson('_meta/frame-prompts.json',       path.join(__dirname, 'data/frame-prompts.json'),        'frame-prompts'),
           restoreJson('_meta/cost-tracking.json',       path.join(__dirname, 'data/.cost-tracking.json'),       'cost-tracking'),
+          restoreJson('_meta/testing-config.json',      path.join(__dirname, 'data/.testing-config.json'),      'testing-config'),
         ]);
         // Restore apply-anim metadata files
         const { listFiles } = require('./lib/supabase-storage');

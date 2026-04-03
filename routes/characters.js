@@ -158,6 +158,13 @@ async function syncDeletedFromSupabase() {
       if (Array.isArray(remoteRegistry._deleted)) {
         for (const n of remoteRegistry._deleted) remoteDeleted.add(n);
       }
+      // Always restore registry to disk if local file is missing
+      if (!fs.existsSync(CHARACTERS_FILE) && Object.keys(remoteRegistry).filter(k => k !== '_deleted').length > 0) {
+        const dir = path.dirname(CHARACTERS_FILE);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(remoteRegistry, null, 2));
+        console.log(`  [characters] restored ${Object.keys(remoteRegistry).filter(k=>k!=='_deleted').length} character(s) from Supabase`);
+      }
     }
 
     // Secondary source: dedicated deleted-chars backup (smaller, faster)

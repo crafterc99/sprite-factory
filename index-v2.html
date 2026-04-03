@@ -1314,6 +1314,9 @@
                   <input type="checkbox" id="testingShowOob" checked /> Show out-of-bounds
                 </label>
               </div>
+              <div class="testing-control-row" style="margin-top:8px">
+                <button id="testingEditBtn" class="btn btn-secondary btn-sm" style="font-family:var(--mono);font-size:9px;width:100%">✏ Edit Zones/OOB</button>
+              </div>
             </div>
             <div class="testing-info">
               <div id="testingInfoText" style="font-family:var(--mono);font-size:9px;color:#50507a;line-height:1.6"></div>
@@ -5433,79 +5436,150 @@ function ptCopy() {
 // TESTING PAGE — Soul Jam court preview with sprite animation playback
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── Court zone definitions ──────────────────────────────────────────────────
-// 5 zones from near-basket (top of canvas) → far baseline (bottom of canvas)
-// Y boundaries are on the 960×640 canvas. Adjust yMin/yMax to tune alignment.
-const COURT_ZONES = [
-  { id: 1, label: 'Front',       angleIdx: 0, angleName: 'front',      color: 'rgba(255,80,80,',    yMin: 0,   yMax: 268 },
-  { id: 2, label: 'Front Left',  angleIdx: 7, angleName: 'front_left', color: 'rgba(255,160,0,',   yMin: 268, yMax: 376 },
-  { id: 3, label: 'Left',        angleIdx: 6, angleName: 'left',       color: 'rgba(180,255,0,',   yMin: 376, yMax: 470 },
-  { id: 4, label: 'Back Left',   angleIdx: 5, angleName: 'back_left',  color: 'rgba(0,210,120,',   yMin: 470, yMax: 560 },
-  { id: 5, label: 'Back',        angleIdx: 4, angleName: 'back',       color: 'rgba(80,160,255,',  yMin: 560, yMax: Infinity },
+// ── Court zone dividers (diagonal, perspective-aware) ─────────────────────
+// Each divider is defined by two points (left edge → right edge of canvas).
+// Zones are the regions BETWEEN consecutive dividers, from top to bottom.
+// p1.x is always 0 (left edge), p2.x is always 960 (right edge).
+// Adjust p1.y / p2.y to tilt the lines to match the court perspective.
+let ZONE_DIVIDERS = [
+  { p1: { x: 0, y: 248 }, p2: { x: 960, y: 185 } }, // zone 1 / zone 2 boundary
+  { p1: { x: 0, y: 365 }, p2: { x: 960, y: 318 } }, // zone 2 / zone 3 boundary
+  { p1: { x: 0, y: 462 }, p2: { x: 960, y: 428 } }, // zone 3 / zone 4 boundary
+  { p1: { x: 0, y: 552 }, p2: { x: 960, y: 524 } }, // zone 4 / zone 5 boundary
 ];
 
-function getZoneForY(y) {
-  return COURT_ZONES.find(z => y >= z.yMin && y < z.yMax) || COURT_ZONES[0];
+const COURT_ZONES = [
+  { id: 1, label: 'Front',      angleIdx: 0, angleName: 'front',      color: 'rgba(255,80,80,'   },
+  { id: 2, label: 'Front Left', angleIdx: 7, angleName: 'front_left', color: 'rgba(255,160,0,'  },
+  { id: 3, label: 'Left',       angleIdx: 6, angleName: 'left',       color: 'rgba(180,255,0,'  },
+  { id: 4, label: 'Back Left',  angleIdx: 5, angleName: 'back_left',  color: 'rgba(0,210,120,'  },
+  { id: 5, label: 'Back',       angleIdx: 4, angleName: 'back',       color: 'rgba(80,160,255,' },
+];
+
+// Returns +1 if (px,py) is "below" the directed line from a→b, -1 if above
+function lineSide(a, b, px, py) {
+  return (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
+}
+
+function getZoneForPos(x, y) {
+  // Count how many dividers the point is below (positive side = below/further)
+  let idx = 0;
+  for (const d of ZONE_DIVIDERS) {
+    if (lineSide(d.p1, d.p2, x, y) > 0) idx++;
+  }
+  return COURT_ZONES[Math.min(idx, COURT_ZONES.length - 1)];
 }
 
 // ── Out-of-bounds boundary ──────────────────────────────────────────────────
-// Trapezoid defining the IN-BOUNDS court area on the 960×640 canvas.
-// Adjust these 4 corner points to match the court.webp geometry.
-// Points go clockwise: top-left, top-right, bottom-right, bottom-left
-const OOB_BOUNDS = {
+// Editable trapezoid (4 corners). Persisted to Supabase via /api/testing-config.
+let OOB_BOUNDS = {
   topLeft:     { x: 88,  y: 175 },
   topRight:    { x: 955, y: 175 },
   bottomRight: { x: 955, y: 628 },
   bottomLeft:  { x: 88,  y: 628 },
 };
 
+async function loadTestingConfig() {
+  try {
+    const r = await fetch(`${API}/api/testing-config`);
+    const d = await r.json();
+    if (d.oobBounds) OOB_BOUNDS = d.oobBounds;
+    if (d.zoneDividers) ZONE_DIVIDERS = d.zoneDividers;
+  } catch {}
+}
+
+async function saveTestingConfig() {
+  try {
+    await fetch(`${API}/api/testing-config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS }),
+    });
+  } catch {}
+}
+
 function isOutOfBounds(x, y) {
   const { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl } = OOB_BOUNDS;
-  // Point-in-trapezoid using cross products (convex polygon test)
   const crosses = [
-    cross(tl, tr, x, y),
-    cross(tr, br, x, y),
-    cross(br, bl, x, y),
-    cross(bl, tl, x, y),
+    lineSide(tl, tr, x, y),
+    lineSide(tr, br, x, y),
+    lineSide(br, bl, x, y),
+    lineSide(bl, tl, x, y),
   ];
   return !crosses.every(c => c >= 0);
 }
 
-function cross(a, b, px, py) {
-  return (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
-}
-
 function drawOobOverlay(ctx, W, H, isOob) {
   const { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl } = OOB_BOUNDS;
-
   ctx.save();
-
-  // Fill the 4 OOB border strips around the court (red tint)
   ctx.fillStyle = 'rgba(255,30,30,0.22)';
   ctx.beginPath();
-  // Outer rect minus inner court polygon
-  ctx.rect(0, 0, W, H);        // outer (clockwise)
-  ctx.moveTo(tl.x, tl.y);      // inner court (counter-clockwise = hole)
+  ctx.rect(0, 0, W, H);
+  ctx.moveTo(tl.x, tl.y);
   ctx.lineTo(bl.x, bl.y);
   ctx.lineTo(br.x, br.y);
   ctx.lineTo(tr.x, tr.y);
   ctx.closePath();
   ctx.fill('evenodd');
-
-  // Court boundary outline
   ctx.strokeStyle = isOob ? 'rgba(255,60,60,0.95)' : 'rgba(255,60,60,0.5)';
   ctx.lineWidth = isOob ? 3 : 1.5;
   ctx.setLineDash(isOob ? [] : [6, 4]);
   ctx.beginPath();
-  ctx.moveTo(tl.x, tl.y);
-  ctx.lineTo(tr.x, tr.y);
-  ctx.lineTo(br.x, br.y);
-  ctx.lineTo(bl.x, bl.y);
+  ctx.moveTo(tl.x, tl.y); ctx.lineTo(tr.x, tr.y);
+  ctx.lineTo(br.x, br.y); ctx.lineTo(bl.x, bl.y);
   ctx.closePath();
   ctx.stroke();
   ctx.setLineDash([]);
-
   ctx.restore();
+}
+
+// Draw draggable corner handles in edit mode
+function drawEditHandles(ctx) {
+  const corners = Object.entries(OOB_BOUNDS);
+  for (const [key, pt] of corners) {
+    const isActive = TESTING.editDragCorner === key;
+    ctx.save();
+    ctx.strokeStyle = isActive ? '#fff' : '#ff6666';
+    ctx.fillStyle   = isActive ? 'rgba(255,255,255,0.9)' : 'rgba(255,80,80,0.7)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, isActive ? 10 : 7, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = isActive ? '#000' : '#fff';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(key.replace(/([A-Z])/g, ' $1').trim().split(' ').map(w=>w[0]).join('').toUpperCase(), pt.x, pt.y + 3);
+    ctx.textAlign = 'start';
+    ctx.restore();
+  }
+
+  // Zone divider handles — left endpoint of each divider line
+  for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
+    const d = ZONE_DIVIDERS[i];
+    const isActiveL = TESTING.editDragDivider === `${i}-L`;
+    const isActiveR = TESTING.editDragDivider === `${i}-R`;
+    for (const [side, pt, isAct] of [['L', d.p1, isActiveL], ['R', d.p2, isActiveR]]) {
+      ctx.save();
+      ctx.strokeStyle = isAct ? '#fff' : COURT_ZONES[i].color + '1)';
+      ctx.fillStyle   = isAct ? 'rgba(255,255,255,0.9)' : COURT_ZONES[i].color + '0.7)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, isAct ? 9 : 6, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    // Draw the divider line
+    ctx.save();
+    ctx.strokeStyle = COURT_ZONES[i].color + '0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(d.p1.x, d.p1.y);
+    ctx.lineTo(d.p2.x, d.p2.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
 }
 
 const TESTING = {
@@ -5514,14 +5588,11 @@ const TESTING = {
   animations: {},
   selectedChar: null,
   selectedAnim: null,
-  // Court canvas state
   ctx: null,
   courtImg: null,
   courtLoaded: false,
-  // Character on court
   charX: 480,
   charY: 380,
-  // Animation playback
   stripImg: null,
   stripLoaded: false,
   currentFrame: 0,
@@ -5531,7 +5602,6 @@ const TESTING = {
   playing: true,
   lastFrameTime: 0,
   animId: null,
-  // Sprite calibration (from Soul Jam)
   scale: 3,
   speed: 1,
   frameSize: 180,
@@ -5540,12 +5610,12 @@ const TESTING = {
   showHitbox: false,
   showZones: true,
   showOob: true,
-  // Zone / angle tracking
+  editMode: false,         // OOB/zone corner edit mode
+  editDragCorner: null,    // which OOB corner is being dragged (key name)
+  editDragDivider: null,   // which zone divider point is being dragged ('i-L' or 'i-R')
   currentZone: null,
   currentAngleIdx: 0,
-  // Per-angle strip cache: angleIdx → { img, loaded, frameCount }
   angleStrips: {},
-  // Movement
   keysDown: new Set(),
   moveSpeed: 2,
 };
@@ -5556,17 +5626,15 @@ function initTestingPage() {
   TESTING.ctx = canvas.getContext('2d');
   TESTING.ctx.imageSmoothingEnabled = false;
 
-  // Load court background
   if (!TESTING.courtLoaded) {
     TESTING.courtImg = new Image();
     TESTING.courtImg.onload = () => { TESTING.courtLoaded = true; };
     TESTING.courtImg.src = '/assets/court.webp';
   }
 
-  // Load roster data
   loadTestingRoster();
+  loadTestingConfig(); // restore OOB corners + zone dividers from Supabase
 
-  // Set up controls
   document.getElementById('testingScale').oninput = (e) => {
     TESTING.scale = parseFloat(e.target.value);
     document.getElementById('testingScaleLabel').textContent = TESTING.scale + 'x';
@@ -5575,40 +5643,97 @@ function initTestingPage() {
     TESTING.speed = parseFloat(e.target.value);
     document.getElementById('testingSpeedLabel').textContent = TESTING.speed + 'x';
   };
-  document.getElementById('testingShowHitbox').onchange = (e) => {
-    TESTING.showHitbox = e.target.checked;
-  };
-  document.getElementById('testingShowZones').onchange = (e) => {
-    TESTING.showZones = e.target.checked;
-  };
-  document.getElementById('testingShowOob').onchange = (e) => {
-    TESTING.showOob = e.target.checked;
-  };
+  document.getElementById('testingShowHitbox').onchange = (e) => { TESTING.showHitbox = e.target.checked; };
+  document.getElementById('testingShowZones').onchange  = (e) => { TESTING.showZones  = e.target.checked; };
+  document.getElementById('testingShowOob').onchange    = (e) => { TESTING.showOob    = e.target.checked; };
+  document.getElementById('testingEditBtn').onclick     = toggleEditMode;
 
-  // Click on court to place character
-  canvas.onclick = (e) => {
+  // ── Canvas mouse: click-to-place (normal) or drag-corner (edit mode) ──
+  const getCanvasXY = (e) => {
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    TESTING.charX = (e.clientX - rect.left) * scaleX;
-    TESTING.charY = (e.clientY - rect.top) * scaleY;
+    return {
+      x: (e.clientX - rect.left) * (canvas.width  / rect.width),
+      y: (e.clientY - rect.top)  * (canvas.height / rect.height),
+    };
   };
 
-  // Keyboard movement
+  const SNAP = 12; // px snap radius for corner handles
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (!TESTING.editMode) return;
+    const { x, y } = getCanvasXY(e);
+
+    // Check OOB corners first
+    for (const [key, pt] of Object.entries(OOB_BOUNDS)) {
+      if (Math.hypot(x - pt.x, y - pt.y) < SNAP) {
+        TESTING.editDragCorner  = key;
+        TESTING.editDragDivider = null;
+        e.preventDefault(); return;
+      }
+    }
+    // Check zone divider endpoints
+    for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
+      const d = ZONE_DIVIDERS[i];
+      if (Math.hypot(x - d.p1.x, y - d.p1.y) < SNAP) {
+        TESTING.editDragDivider = `${i}-L`;
+        TESTING.editDragCorner  = null;
+        e.preventDefault(); return;
+      }
+      if (Math.hypot(x - d.p2.x, y - d.p2.y) < SNAP) {
+        TESTING.editDragDivider = `${i}-R`;
+        TESTING.editDragCorner  = null;
+        e.preventDefault(); return;
+      }
+    }
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!TESTING.editMode) return;
+    const { x, y } = getCanvasXY(e);
+    if (TESTING.editDragCorner) {
+      OOB_BOUNDS[TESTING.editDragCorner] = { x: Math.round(x), y: Math.round(y) };
+    } else if (TESTING.editDragDivider) {
+      const [idxStr, side] = TESTING.editDragDivider.split('-');
+      const d = ZONE_DIVIDERS[parseInt(idxStr)];
+      if (side === 'L') d.p1 = { x: 0, y: Math.round(y) };  // keep x=0 (left edge)
+      else              d.p2 = { x: 960, y: Math.round(y) }; // keep x=960 (right edge)
+    }
+    // Cursor feedback
+    const corners = Object.values(OOB_BOUNDS);
+    const divPts  = ZONE_DIVIDERS.flatMap(d => [d.p1, d.p2]);
+    const nearAny = [...corners, ...divPts].some(pt => Math.hypot(x - pt.x, y - pt.y) < SNAP);
+    canvas.style.cursor = nearAny ? 'grab' : 'crosshair';
+  });
+
+  const stopDrag = () => {
+    if (TESTING.editMode && (TESTING.editDragCorner || TESTING.editDragDivider)) {
+      TESTING.editDragCorner = TESTING.editDragDivider = null;
+      saveTestingConfig(); // persist to Supabase
+    }
+  };
+  canvas.addEventListener('mouseup',   stopDrag);
+  canvas.addEventListener('mouseleave', stopDrag);
+
+  // Click-to-place only when NOT in edit mode and NOT dragging
+  canvas.addEventListener('click', (e) => {
+    if (TESTING.editMode) return;
+    const { x, y } = getCanvasXY(e);
+    TESTING.charX = x;
+    TESTING.charY = y;
+  });
+
   if (!TESTING.initialized) {
     window.addEventListener('keydown', (e) => {
       if (document.getElementById('page-testing')?.classList.contains('active')) {
-        TESTING.keysDown.add(e.key.toLowerCase());
+        if (e.key === 'Escape' && TESTING.editMode) toggleEditMode();
+        else TESTING.keysDown.add(e.key.toLowerCase());
       }
     });
-    window.addEventListener('keyup', (e) => {
-      TESTING.keysDown.delete(e.key.toLowerCase());
-    });
+    window.addEventListener('keyup', (e) => { TESTING.keysDown.delete(e.key.toLowerCase()); });
   }
 
   TESTING.initialized = true;
 
-  // Start render loop
   if (TESTING.animId) cancelAnimationFrame(TESTING.animId);
   testingRenderLoop();
 }
@@ -5761,8 +5886,20 @@ function loadAngleStrips(charName, animName, fallbackUrl) {
   }
 }
 
+function toggleEditMode() {
+  TESTING.editMode = !TESTING.editMode;
+  TESTING.editDragCorner = TESTING.editDragDivider = null;
+  const btn = document.getElementById('testingEditBtn');
+  if (btn) {
+    btn.textContent = TESTING.editMode ? '✓ Done Editing' : '✏ Edit Zones/OOB';
+    btn.className   = TESTING.editMode ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+  }
+  const canvas = document.getElementById('testingCourt');
+  if (canvas) canvas.style.cursor = TESTING.editMode ? 'crosshair' : 'default';
+}
+
 function getActiveStrip() {
-  const zone = getZoneForY(TESTING.charY);
+  const zone = getZoneForPos(TESTING.charX, TESTING.charY);
   const entry = TESTING.angleStrips[zone.angleIdx];
   if (entry && entry.loaded) return { img: entry.img, frameCount: entry.frameCount, zone };
   // Fall back to default strip
@@ -5885,30 +6022,63 @@ function testingRenderLoop(timestamp) {
     ctx.textAlign = 'start';
   }
 
-  // ── Draw zone overlay ──────────────────────────────────────────────────────
-  const currentZone = getZoneForY(TESTING.charY);
+  // ── Draw zone overlay (diagonal fills using ZONE_DIVIDERS) ───────────────
+  const currentZone = getZoneForPos(TESTING.charX, TESTING.charY);
   if (TESTING.showZones) {
     ctx.save();
-    for (const zone of COURT_ZONES) {
-      const isActive = zone.id === currentZone.id;
-      const y1 = zone.yMin === 0 ? 0 : zone.yMin;
-      const y2 = zone.yMax === Infinity ? H : zone.yMax;
-      // Fill
-      ctx.fillStyle = zone.color + (isActive ? '0.35)' : '0.15)');
-      ctx.fillRect(0, y1, W, y2 - y1);
-      // Border line at top of zone
-      if (zone.yMin > 0) {
-        ctx.strokeStyle = zone.color + '0.9)';
-        ctx.lineWidth = isActive ? 3 : 1.5;
-        ctx.setLineDash(isActive ? [] : [8, 6]);
-        ctx.beginPath();
-        ctx.moveTo(0, zone.yMin);
-        ctx.lineTo(W, zone.yMin);
-        ctx.stroke();
-        ctx.setLineDash([]);
+    // Draw each zone as a polygon defined by the divider lines
+    // Zones: 0=above div[0], 1=between div[0] and div[1], ..., 4=below div[3]
+    const divPts = ZONE_DIVIDERS.map(d => ({ p1: d.p1, p2: d.p2 }));
+    const zonePolygons = COURT_ZONES.map((zone, zi) => {
+      // Build polygon for zone zi
+      // Top boundary: dividers[zi-1] line (or top of canvas for zone 0)
+      // Bottom boundary: dividers[zi] line (or bottom of canvas for last zone)
+      const pts = [];
+      if (zi === 0) {
+        pts.push({ x: 0, y: 0 }, { x: W, y: 0 });
+        pts.push({ x: divPts[0].p2.x, y: divPts[0].p2.y });
+        pts.push({ x: divPts[0].p1.x, y: divPts[0].p1.y });
+      } else if (zi === COURT_ZONES.length - 1) {
+        pts.push({ x: divPts[zi-1].p1.x, y: divPts[zi-1].p1.y });
+        pts.push({ x: divPts[zi-1].p2.x, y: divPts[zi-1].p2.y });
+        pts.push({ x: W, y: H }, { x: 0, y: H });
+      } else {
+        pts.push({ x: divPts[zi-1].p1.x, y: divPts[zi-1].p1.y });
+        pts.push({ x: divPts[zi-1].p2.x, y: divPts[zi-1].p2.y });
+        pts.push({ x: divPts[zi].p2.x, y: divPts[zi].p2.y });
+        pts.push({ x: divPts[zi].p1.x, y: divPts[zi].p1.y });
       }
-      // Zone label
-      const midY = Math.min(y2, H) - (Math.min(y2, H) - y1) / 2;
+      return { zone, pts };
+    });
+
+    for (const { zone, pts } of zonePolygons) {
+      const isActive = zone.id === currentZone.id;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.fillStyle = zone.color + (isActive ? '0.35)' : '0.15)');
+      ctx.fill();
+    }
+
+    // Draw divider lines
+    for (let i = 0; i < divPts.length; i++) {
+      const d = divPts[i];
+      const isActiveZone = COURT_ZONES[i].id === currentZone.id || COURT_ZONES[i + 1]?.id === currentZone.id;
+      ctx.strokeStyle = COURT_ZONES[i].color + '0.9)';
+      ctx.lineWidth = isActiveZone ? 2.5 : 1.5;
+      ctx.setLineDash(isActiveZone ? [] : [8, 6]);
+      ctx.beginPath();
+      ctx.moveTo(d.p1.x, d.p1.y);
+      ctx.lineTo(d.p2.x, d.p2.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Zone labels
+    for (const { zone, pts } of zonePolygons) {
+      const isActive = zone.id === currentZone.id;
+      const midY = pts.reduce((s, p) => s + p.y, 0) / pts.length;
       ctx.fillStyle = zone.color + (isActive ? '1)' : '0.7)');
       ctx.font = `bold ${isActive ? 13 : 11}px "Space Mono", monospace`;
       ctx.textAlign = 'right';
@@ -5917,6 +6087,9 @@ function testingRenderLoop(timestamp) {
     }
     ctx.restore();
   }
+
+  // ── Edit mode handles ─────────────────────────────────────────────────────
+  if (TESTING.editMode) drawEditHandles(ctx);
 
   // ── Draw character sprite ─────────────────────────────────────────────────
   const activeStrip = TESTING.selectedAnim ? getActiveStrip() : null;
