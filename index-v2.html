@@ -64,6 +64,15 @@
   .roster-delete-no:hover { background:var(--surface); }
 
   /* ─── STUDIO LAYOUT ─── */
+  .frame-action-row { display:flex; gap:2px; width:80px; }
+  .frame-action-btn { flex:1; background:var(--surface2); border:1px solid var(--border); color:#aaa; font-size:10px; border-radius:4px; padding:2px 0; cursor:pointer; transition:all 0.1s; font-family:var(--mono); }
+  .frame-action-btn:hover { border-color:var(--accent); color:#fff; }
+  .frame-action-btn.active { border-color:#7c6aff; color:#7c6aff; background:rgba(124,106,255,0.1); }
+  .frame-edit-panel { width:80px; margin-top:4px; }
+  .frame-edit-input { width:100%; box-sizing:border-box; background:var(--surface2); border:1px solid #7c6aff; border-radius:4px; color:#ccc; font-family:var(--mono); font-size:9px; padding:4px 5px; resize:none; height:52px; outline:none; }
+  .id-fix-headshot { width:64px; height:64px; object-fit:contain; border-radius:6px; border:2px solid var(--border); cursor:pointer; image-rendering:pixelated; background:var(--surface2); transition:border-color 0.15s; }
+  .id-fix-headshot:hover { border-color:#7c6aff; }
+  .id-fix-headshot.selected { border-color:#00ff88; box-shadow:0 0 0 2px rgba(0,255,136,0.3); }
   .studio-layout { display:flex; height:calc(100vh - 52px); overflow:hidden; }
   .studio-sidebar { width:220px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; background:var(--surface); }
   .studio-sidebar-header { padding:12px 14px; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:#50507a; display:flex; align-items:center; justify-content:space-between; }
@@ -1486,6 +1495,21 @@
   </div>
 </div>
 
+<!-- ─── MODAL: Identity Fix ─── -->
+<div class="modal-overlay" id="idFixModal">
+  <div class="modal" style="width:480px;max-width:95vw">
+    <button class="modal-close" onclick="closeIdFix()">×</button>
+    <div class="modal-title">Identity Fix</div>
+    <div style="font-family:var(--mono);font-size:10px;color:#50507a;margin-bottom:14px">Select a headshot — the frame will be re-generated using the pose from the current frame and this head.</div>
+    <div id="idFixHeadshotGrid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px"></div>
+    <div style="font-family:var(--mono);font-size:9px;color:#50507a;margin-bottom:12px" id="idFixSelected">No headshot selected</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" id="idFixConfirmBtn" style="flex:1" onclick="confirmIdFix()" disabled>⚡ Fix Identity</button>
+      <button class="btn btn-secondary" onclick="closeIdFix()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── MODAL: Adjust Source ─── -->
 <div class="modal-overlay" id="adjustModal">
   <div class="modal" style="width:640px;max-width:95vw">
@@ -2409,7 +2433,7 @@ function showStudioResult(result) {
 function studioMakeFrameCell(charName, animName, frameIndex, totalFrames) {
   const cell = document.createElement('div');
   cell.id = `frame-cell-${frameIndex}`;
-  cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;';
+  cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px;';
 
   const img = document.createElement('img');
   img.src = `/assets/${charName}-${animName}-frames/frame-${frameIndex}.png?t=${Date.now()}`;
@@ -2419,73 +2443,162 @@ function studioMakeFrameCell(charName, animName, frameIndex, totalFrames) {
   label.style.cssText = 'font-family:var(--mono);font-size:9px;color:#50507a;';
   label.textContent = `f${frameIndex + 1}`;
 
-  const btn = document.createElement('button');
-  btn.className = 'btn btn-secondary btn-sm';
-  btn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
-  btn.textContent = '↻ Regen';
-  btn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, btn);
+  // Three action buttons: Re-make | Edit | Fix ID
+  const actionRow = document.createElement('div');
+  actionRow.className = 'frame-action-row';
+
+  const remakeBtn = document.createElement('button');
+  remakeBtn.className = 'frame-action-btn';
+  remakeBtn.title = 'Re-make';
+  remakeBtn.textContent = '↻';
+  remakeBtn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, actionRow, null);
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'frame-action-btn';
+  editBtn.title = 'Edit';
+  editBtn.textContent = '✏';
+  editBtn.onclick = () => studioToggleEditPanel(cell, charName, animName, frameIndex, totalFrames, img, actionRow, editBtn);
+
+  const fixIdBtn = document.createElement('button');
+  fixIdBtn.className = 'frame-action-btn';
+  fixIdBtn.title = 'Identity Fix';
+  fixIdBtn.textContent = '⚡';
+  fixIdBtn.onclick = () => openIdFix(charName, animName, frameIndex, totalFrames, cell, img, actionRow);
+
+  actionRow.appendChild(remakeBtn);
+  actionRow.appendChild(editBtn);
+  actionRow.appendChild(fixIdBtn);
 
   cell.appendChild(img);
   cell.appendChild(label);
-  cell.appendChild(btn);
+  cell.appendChild(actionRow);
   return cell;
 }
 
-async function studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, btn) {
-  btn.disabled = true;
-  btn.textContent = '...';
+function studioToggleEditPanel(cell, charName, animName, frameIndex, totalFrames, img, actionRow, editBtn) {
+  const existing = cell.querySelector('.frame-edit-panel');
+  if (existing) { existing.remove(); editBtn.classList.remove('active'); return; }
+  editBtn.classList.add('active');
+
+  const panel = document.createElement('div');
+  panel.className = 'frame-edit-panel';
+
+  const ta = document.createElement('textarea');
+  ta.className = 'frame-edit-input';
+  ta.placeholder = 'e.g. fix the left arm, add more bend in the knee…';
+
+  const goBtn = document.createElement('button');
+  goBtn.className = 'btn btn-primary btn-sm';
+  goBtn.style.cssText = 'width:100%;margin-top:3px;font-size:10px;padding:3px 0;';
+  goBtn.textContent = '→ Apply';
+  goBtn.onclick = () => {
+    const val = ta.value.trim();
+    if (!val) return;
+    panel.remove();
+    editBtn.classList.remove('active');
+    studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, actionRow, { customPrompt: val });
+  };
+
+  panel.appendChild(ta);
+  panel.appendChild(goBtn);
+  cell.appendChild(panel);
+  ta.focus();
+}
+
+// ── Identity Fix modal state ──────────────────────────────────────────────
+let ID_FIX = { charName: null, animName: null, frameIndex: null, totalFrames: null, cell: null, img: null, actionRow: null, headshotIndex: null };
+
+function openIdFix(charName, animName, frameIndex, totalFrames, cell, img, actionRow) {
+  ID_FIX = { charName, animName, frameIndex, totalFrames, cell, img, actionRow, headshotIndex: null };
+  const grid = document.getElementById('idFixHeadshotGrid');
+  grid.innerHTML = '';
+  document.getElementById('idFixSelected').textContent = 'No headshot selected';
+  document.getElementById('idFixConfirmBtn').disabled = true;
+
+  // Try to load headshots 0–7 for this character
+  for (let i = 0; i < 8; i++) {
+    const thumb = document.createElement('img');
+    thumb.className = 'id-fix-headshot';
+    thumb.src = `/assets/${charName}-headshot-${i}.png`;
+    thumb.dataset.index = i;
+    thumb.onerror = () => thumb.style.display = 'none';
+    thumb.onclick = () => {
+      grid.querySelectorAll('.id-fix-headshot').forEach(t => t.classList.remove('selected'));
+      thumb.classList.add('selected');
+      ID_FIX.headshotIndex = i;
+      document.getElementById('idFixSelected').textContent = `Headshot ${i + 1} selected`;
+      document.getElementById('idFixConfirmBtn').disabled = false;
+    };
+    grid.appendChild(thumb);
+  }
+
+  document.getElementById('idFixModal').classList.add('open');
+}
+
+function closeIdFix() {
+  document.getElementById('idFixModal').classList.remove('open');
+  ID_FIX = { charName: null, animName: null, frameIndex: null, totalFrames: null, cell: null, img: null, actionRow: null, headshotIndex: null };
+}
+
+function confirmIdFix() {
+  if (ID_FIX.headshotIndex == null) return;
+  const { charName, animName, frameIndex, totalFrames, cell, img, actionRow, headshotIndex } = ID_FIX;
+  closeIdFix();
+  studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, actionRow, { identityFix: { headshotIndex } });
+}
+
+async function studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, actionRow, opts) {
+  // Disable all action buttons during generation
+  actionRow.querySelectorAll('button').forEach(b => { b.disabled = true; });
   img.style.opacity = '0.4';
+
+  const body = { charName, animName, frameIndex };
+  if (opts?.customPrompt) body.customPrompt = opts.customPrompt;
+  if (opts?.identityFix) body.identityFix = opts.identityFix;
 
   try {
     const res = await fetch(`${API}/api/studio/regen-frame`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ charName, animName, frameIndex }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    // Show new candidate — offer accept or retry
     img.src = data.processedUrl + '?t=' + Date.now();
     img.style.opacity = '1';
 
-    btn.textContent = '✓ Keep';
-    btn.className = 'btn btn-primary btn-sm';
-    btn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
-    btn.disabled = false;
-    btn.onclick = () => {
-      // Frame already saved by regen endpoint — just mark as kept
-      btn.textContent = '✓ Kept';
-      btn.className = 'btn btn-secondary btn-sm';
-      btn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
-      const regenBtn = document.createElement('button');
-      regenBtn.className = 'btn btn-secondary btn-sm';
-      regenBtn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;margin-top:2px;';
-      regenBtn.textContent = '↻ Regen';
-      regenBtn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, regenBtn);
-      cell.appendChild(regenBtn);
+    // Replace action row with Keep/Again choice
+    actionRow.innerHTML = '';
+    const keepBtn = document.createElement('button');
+    keepBtn.className = 'frame-action-btn active';
+    keepBtn.style.flex = '2';
+    keepBtn.textContent = '✓ Keep';
+    keepBtn.onclick = () => {
+      actionRow.innerHTML = '';
+      // Restore normal action buttons
+      const rb = document.createElement('button'); rb.className = 'frame-action-btn'; rb.title = 'Re-make'; rb.textContent = '↻';
+      rb.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, actionRow, null);
+      const eb = document.createElement('button'); eb.className = 'frame-action-btn'; eb.title = 'Edit'; eb.textContent = '✏';
+      eb.onclick = () => studioToggleEditPanel(cell, charName, animName, frameIndex, totalFrames, img, actionRow, eb);
+      const fb = document.createElement('button'); fb.className = 'frame-action-btn'; fb.title = 'Identity Fix'; fb.textContent = '⚡';
+      fb.onclick = () => openIdFix(charName, animName, frameIndex, totalFrames, cell, img, actionRow);
+      actionRow.appendChild(rb); actionRow.appendChild(eb); actionRow.appendChild(fb);
     };
 
-    const retryBtn = document.createElement('button');
-    retryBtn.className = 'btn btn-secondary btn-sm';
-    retryBtn.style.cssText = 'font-size:11px;padding:2px 8px;width:80px;';
-    retryBtn.textContent = '↻ Again';
-    retryBtn.onclick = () => {
-      retryBtn.remove();
-      btn.textContent = '↻ Regen';
-      btn.className = 'btn btn-secondary btn-sm';
-      btn.disabled = false;
-      btn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, btn);
-      studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, btn);
-    };
-    cell.appendChild(retryBtn);
+    const againBtn = document.createElement('button');
+    againBtn.className = 'frame-action-btn';
+    againBtn.textContent = '↻';
+    againBtn.title = 'Try again';
+    againBtn.onclick = () => studioRegenFrame(charName, animName, frameIndex, totalFrames, cell, img, actionRow, opts);
+
+    actionRow.appendChild(keepBtn);
+    actionRow.appendChild(againBtn);
 
   } catch (e) {
     toast('Regen failed: ' + e.message, true);
     img.style.opacity = '1';
-    btn.disabled = false;
-    btn.textContent = '↻ Regen';
-    btn.className = 'btn btn-secondary btn-sm';
+    actionRow.querySelectorAll('button').forEach(b => { b.disabled = false; });
   }
 }
 

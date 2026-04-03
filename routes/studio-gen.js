@@ -22,7 +22,7 @@ const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
 const ANIM_LIB_INDEX = path.join(ANIM_LIB_DIR, 'index.json');
 
 const DEFAULT_STUDIO_PROMPT =
-  'Replace the pixelated character from Image 2 with the pose from Image 1. The background is white.';
+  'Replace the pixelated character from Image 2 with the pose from Image 1. The background is pure green (#00FF00).';
 
 const PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
 
@@ -228,10 +228,10 @@ function register(router, ctx) {
   });
 
   // POST /api/studio/regen-frame — regenerate a single frame from an anim-lib animation
-  // Body: { charName, animName, frameIndex, model? }
+  // Body: { charName, animName, frameIndex, model?, customPrompt?, identityFix?: { headshotIndex } }
   router.post('/api/studio/regen-frame', async (req, res) => {
     const body = await parseBody(req);
-    const { charName, animName, frameIndex, model } = body;
+    const { charName, animName, frameIndex, model, customPrompt, identityFix } = body;
     if (!charName || !animName || frameIndex == null) {
       return json(res, { error: 'charName, animName, and frameIndex required' }, 400);
     }
@@ -268,8 +268,37 @@ function register(router, ctx) {
       }
       fs.writeFileSync(posePath, Buffer.from(anim.framesBase64[fi], 'base64'));
 
-      const result = await client.generate(loadStudioPrompt(), {
-        referenceImages: [posePath, resolvedAnglePath],
+      // Determine prompt and image order based on mode
+      let prompt;
+      let referenceImages;
+
+      if (identityFix) {
+        // Identity Fix: pose frame (Image 1) + selected headshot (Image 2)
+        const hsIdx = parseInt(identityFix.headshotIndex, 10);
+        const headshotPath = path.join(ASSETS_DIR, `${charName}-headshot-${hsIdx}.png`);
+        if (!fs.existsSync(headshotPath)) {
+          return json(res, { error: `Headshot ${hsIdx} not found for "${charName}"` }, 400);
+        }
+        prompt = [
+          'Keep the exact character from Image 1. Copy only the head from Image 2.',
+          'Do not mix faces or identities. Make sure the character\'s face does not change at all.',
+          'Do not change body shape, skin tone, hairstyle, or facial structure.',
+          'Use Image 2\'s head completely while maintaining all other details from Image 1.',
+          'The background is pure green (#00FF00).',
+        ].join(' ');
+        referenceImages = [posePath, headshotPath];
+      } else if (customPrompt) {
+        // Edit mode: keep character but apply user modification
+        prompt = `Keep all details about the character exactly the same but: ${customPrompt}. The background is pure green (#00FF00).`;
+        referenceImages = [posePath, resolvedAnglePath];
+      } else {
+        // Standard regen
+        prompt = loadStudioPrompt();
+        referenceImages = [posePath, resolvedAnglePath];
+      }
+
+      const result = await client.generate(prompt, {
+        referenceImages,
         aspectRatio: '3:4',
         resolution: '1K',
         model: modelId,
