@@ -2624,7 +2624,8 @@ async function studioSaveToChar() {
     const res = await fetch(`${API}/api/character/${encodeURIComponent(r.charName)}/save-animation`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ animId: r.animName, animName: r.animName, spriteUrl: r.spriteUrl, fps: r.fps, frameCount: r.frameCount }),
+      const libEntry = STUDIO.animLib.find(a => a.name === r.animName);
+      body: JSON.stringify({ animId: r.animName, animName: r.animName, spriteUrl: r.spriteUrl, fps: r.fps, frameCount: r.frameCount, angle: libEntry?.angle, angleIndex: libEntry?.angleIndex }),
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -5695,8 +5696,8 @@ function initTestingPage() {
     } else if (TESTING.editDragDivider) {
       const [idxStr, side] = TESTING.editDragDivider.split('-');
       const d = ZONE_DIVIDERS[parseInt(idxStr)];
-      if (side === 'L') d.p1 = { x: 0, y: Math.round(y) };  // keep x=0 (left edge)
-      else              d.p2 = { x: 960, y: Math.round(y) }; // keep x=960 (right edge)
+      if (side === 'L') d.p1 = { x: Math.round(x), y: Math.round(y) };
+      else              d.p2 = { x: Math.round(x), y: Math.round(y) };
     }
     // Cursor feedback
     const corners = Object.values(OOB_BOUNDS);
@@ -5804,10 +5805,10 @@ function renderTestingAnimList(charName) {
     for (const anim of saved) {
       const activeClass = TESTING.selectedAnim === `__saved__${anim.animId}` ? 'active' : '';
       html += `
-        <div class="testing-anim-item ${activeClass}" onclick="testingSelectSavedAnim('${anim.animId}','${anim.spriteUrl}',${anim.frameCount},${anim.fps})">
+        <div class="testing-anim-item ${activeClass}" onclick="testingSelectSavedAnim('${anim.animId}','${anim.spriteUrl}',${anim.frameCount},${anim.fps},${anim.angleIndex ?? 'null'})">
           <div class="anim-dot exists"></div>
           <span class="anim-label">${anim.animName || anim.animId}</span>
-          <span class="anim-cat">${anim.frameCount}f</span>
+          <span class="anim-cat">${anim.frameCount}f${anim.angle ? ' · ' + anim.angle : ''}</span>
         </div>`;
     }
   }
@@ -5907,7 +5908,7 @@ function getActiveStrip() {
   return null;
 }
 
-function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps) {
+function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps, angleIndex) {
   TESTING.selectedAnim = `__saved__${animId}`;
   TESTING.currentFrame = 0;
   TESTING.stripLoaded = false;
@@ -5922,6 +5923,24 @@ function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps) {
     if (inferred > 0) TESTING.frameCount = inferred;
   };
   TESTING.stripImg.src = spriteUrl;
+
+  // Build angleStrips: this anim was recorded at a specific angle.
+  // Mark the matching zone's angleIdx as non-fallback so the HUD correctly reports it.
+  TESTING.angleStrips = {};
+  const recordedAngleIdx = (angleIndex !== null && angleIndex !== undefined) ? angleIndex : null;
+  for (const zone of COURT_ZONES) {
+    const ai = zone.angleIdx;
+    const img = new Image();
+    img.src = spriteUrl;
+    const isSameAngle = recordedAngleIdx !== null && ai === recordedAngleIdx;
+    const entry = { img, loaded: false, frameCount: frameCount || 4, fallback: !isSameAngle };
+    img.onload = () => {
+      entry.loaded = true;
+      const inf = Math.round(img.width / TESTING.frameSize);
+      if (inf > 0) entry.frameCount = inf;
+    };
+    TESTING.angleStrips[ai] = entry;
+  }
 
   renderTestingAnimList(TESTING.selectedChar);
   updateTestingInfo();

@@ -527,7 +527,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   // POST /api/character/:name/save-animation — attach a generated sprite to the character
   router.post('/api/character/:name/save-animation', async (req, res, params) => {
     const body = await parseBody(req);
-    const { animId, animName, spriteUrl, fps, frameCount } = body;
+    const { animId, animName, spriteUrl, fps, frameCount, angle, angleIndex } = body;
     if (!animId) return json(res, { error: 'animId required' }, 400);
     const registry = loadCharacters();
     // Auto-register character if they're in the roster (have angle files) but not in registry
@@ -537,6 +537,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     if (!registry[params.name].savedAnimations) registry[params.name].savedAnimations = {};
     registry[params.name].savedAnimations[animId] = {
       animId, animName: animName || animId, spriteUrl, fps: fps || 8, frameCount: frameCount || 1,
+      angle: angle || null, angleIndex: angleIndex !== undefined ? angleIndex : null,
       savedAt: new Date().toISOString(),
     };
     saveCharacters(registry);
