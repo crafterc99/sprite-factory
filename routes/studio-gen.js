@@ -15,7 +15,7 @@ const path = require('path');
 const sharp = require('sharp');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
-const { removeWhiteBackground, cropToContent } = require('../lib/sprite-processor/index');
+const { removeGreenBackground, cropToContent } = require('../lib/sprite-processor/index');
 const { uploadFile: sbUpload } = require('../lib/supabase-storage');
 
 const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
@@ -97,9 +97,9 @@ async function buildStrip(framePaths, outputPath) {
 }
 
 async function processFrame(srcPath, outPath) {
-  // Remove white background → transparent → crop tight to 180×180 (matches all other animations)
+  // Remove green (#00FF00) chroma-key background → transparent → crop tight to 180×180
   const transparentPath = srcPath + '-transparent.png';
-  await removeWhiteBackground(srcPath, transparentPath, { threshold: 238, feather: 6 });
+  await removeGreenBackground(srcPath, transparentPath, { feather: 4 });
   await cropToContent(transparentPath, outPath, { width: 180, height: 180, padding: 6 });
 }
 
@@ -320,6 +320,17 @@ function register(router, ctx) {
       const frameDest = path.join(framesOutDir, `frame-${fi}.png`);
       fs.copyFileSync(processedPath, frameDest);
       sbUpload(`${charName}-${animName}-frames/frame-${fi}.png`, frameDest);
+
+      // Rebuild the sprite strip from all frames so Save picks up the changes
+      const totalFrames = anim.frameCount;
+      const allFramePaths = Array.from({ length: totalFrames }, (_, i) =>
+        path.join(framesOutDir, `frame-${i}.png`)
+      ).filter(p => fs.existsSync(p));
+      if (allFramePaths.length > 0) {
+        const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);
+        await buildStrip(allFramePaths, stripPath);
+        sbUpload(`${charName}-${animName}.png`, stripPath);
+      }
 
       const processedUrl = `/assets/${charName}-${animName}-frames/frame-${fi}.png`;
       json(res, { success: true, processedUrl, processedPath });
