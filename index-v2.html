@@ -2621,10 +2621,10 @@ async function studioSaveToChar() {
   const btn = document.getElementById('studioSaveBtn');
   btn.disabled = true;
   try {
+    const libEntry = STUDIO.animLib.find(a => a.name === r.animName);
     const res = await fetch(`${API}/api/character/${encodeURIComponent(r.charName)}/save-animation`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      const libEntry = STUDIO.animLib.find(a => a.name === r.animName);
       body: JSON.stringify({ animId: r.animName, animName: r.animName, spriteUrl: r.spriteUrl, fps: r.fps, frameCount: r.frameCount, angle: libEntry?.angle, angleIndex: libEntry?.angleIndex }),
     });
     const data = await res.json();
