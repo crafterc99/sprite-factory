@@ -1304,6 +1304,11 @@
                   <input type="checkbox" id="testingShowHitbox" /> Show hitbox
                 </label>
               </div>
+              <div class="testing-control-row" style="margin-top:4px">
+                <label style="font-size:10px;color:#60608a;display:flex;align-items:center;gap:6px;cursor:pointer">
+                  <input type="checkbox" id="testingShowZones" checked /> Show zones
+                </label>
+              </div>
             </div>
             <div class="testing-info">
               <div id="testingInfoText" style="font-family:var(--mono);font-size:9px;color:#50507a;line-height:1.6"></div>
@@ -5423,6 +5428,21 @@ function ptCopy() {
 // TESTING PAGE — Soul Jam court preview with sprite animation playback
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── Court zone definitions ──────────────────────────────────────────────────
+// 5 zones from near-basket (top of canvas) → far baseline (bottom of canvas)
+// Y boundaries are on the 960×640 canvas. Adjust yMin/yMax to tune alignment.
+const COURT_ZONES = [
+  { id: 1, label: 'Front',       angleIdx: 0, angleName: 'front',      color: 'rgba(255,80,80,',    yMin: 0,   yMax: 268 },
+  { id: 2, label: 'Front Left',  angleIdx: 7, angleName: 'front_left', color: 'rgba(255,160,0,',   yMin: 268, yMax: 376 },
+  { id: 3, label: 'Left',        angleIdx: 6, angleName: 'left',       color: 'rgba(180,255,0,',   yMin: 376, yMax: 470 },
+  { id: 4, label: 'Back Left',   angleIdx: 5, angleName: 'back_left',  color: 'rgba(0,210,120,',   yMin: 470, yMax: 560 },
+  { id: 5, label: 'Back',        angleIdx: 4, angleName: 'back',       color: 'rgba(80,160,255,',  yMin: 560, yMax: Infinity },
+];
+
+function getZoneForY(y) {
+  return COURT_ZONES.find(z => y >= z.yMin && y < z.yMax) || COURT_ZONES[0];
+}
+
 const TESTING = {
   initialized: false,
   roster: [],
@@ -5453,6 +5473,12 @@ const TESTING = {
   pixelHeight: 112,
   scaleMultiplier: 1,
   showHitbox: false,
+  showZones: true,
+  // Zone / angle tracking
+  currentZone: null,
+  currentAngleIdx: 0,
+  // Per-angle strip cache: angleIdx → { img, loaded, frameCount }
+  angleStrips: {},
   // Movement
   keysDown: new Set(),
   moveSpeed: 2,
@@ -5485,6 +5511,9 @@ function initTestingPage() {
   };
   document.getElementById('testingShowHitbox').onchange = (e) => {
     TESTING.showHitbox = e.target.checked;
+  };
+  document.getElementById('testingShowZones').onchange = (e) => {
+    TESTING.showZones = e.target.checked;
   };
 
   // Click on court to place character
@@ -5616,32 +5645,60 @@ function testingSelectAnim(animName) {
   TESTING.selectedAnim = animName;
   TESTING.currentFrame = 0;
   TESTING.stripLoaded = false;
+  TESTING.angleStrips = {};
 
   const animDef = TESTING.animations[animName];
   TESTING.frameCount = animDef?.frames || 4;
   TESTING.fps = animDef?.fps || DEFAULT_FPS_ANIM[animName] || 8;
   TESTING.loop = animDef?.loop !== false;
 
-  // Load the animation strip
-  const stripUrl = `/assets/${TESTING.selectedChar}-${animName}.png`;
+  // Load the default (angle 0 / front) strip
+  const defaultUrl = `/assets/${TESTING.selectedChar}-${animName}.png`;
   TESTING.stripImg = new Image();
   TESTING.stripImg.onload = () => {
     TESTING.stripLoaded = true;
-    // Infer frame count from actual image width
     const inferredFrames = Math.round(TESTING.stripImg.width / TESTING.frameSize);
     if (inferredFrames > 0) TESTING.frameCount = inferredFrames;
   };
-  TESTING.stripImg.src = stripUrl;
+  TESTING.stripImg.src = defaultUrl;
 
-  // Update animation list highlight
+  // Preload angle-specific strips for each zone
+  loadAngleStrips(TESTING.selectedChar, animName, defaultUrl);
+
   renderTestingAnimList(TESTING.selectedChar);
-
-  // Update info
   updateTestingInfo();
-
-  // Hide hint
   const hint = document.getElementById('testingCourtHint');
   if (hint) hint.style.display = 'none';
+}
+
+function loadAngleStrips(charName, animName, fallbackUrl) {
+  TESTING.angleStrips = {};
+  for (const zone of COURT_ZONES) {
+    const ai = zone.angleIdx;
+    if (TESTING.angleStrips[ai]) continue; // already loading
+    const entry = { img: new Image(), loaded: false, frameCount: TESTING.frameCount, fallback: false };
+    entry.img.onload = () => {
+      entry.loaded = true;
+      const inf = Math.round(entry.img.width / TESTING.frameSize);
+      if (inf > 0) entry.frameCount = inf;
+    };
+    entry.img.onerror = () => {
+      // Fall back to the default strip
+      entry.img.src = fallbackUrl;
+      entry.fallback = true;
+    };
+    entry.img.src = `/assets/${charName}-${animName}-angle-${ai}.png`;
+    TESTING.angleStrips[ai] = entry;
+  }
+}
+
+function getActiveStrip() {
+  const zone = getZoneForY(TESTING.charY);
+  const entry = TESTING.angleStrips[zone.angleIdx];
+  if (entry && entry.loaded) return { img: entry.img, frameCount: entry.frameCount, zone };
+  // Fall back to default strip
+  if (TESTING.stripLoaded) return { img: TESTING.stripImg, frameCount: TESTING.frameCount, zone };
+  return null;
 }
 
 function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps) {
@@ -5738,40 +5795,79 @@ function testingRenderLoop(timestamp) {
     ctx.stroke();
   }
 
-  // Draw character sprite
-  if (TESTING.stripLoaded && TESTING.stripImg && TESTING.selectedAnim) {
-    // Advance frame based on time
+  // ── Draw zone overlay ──────────────────────────────────────────────────────
+  const currentZone = getZoneForY(TESTING.charY);
+  if (TESTING.showZones) {
+    ctx.save();
+    for (const zone of COURT_ZONES) {
+      const isActive = zone.id === currentZone.id;
+      const y1 = zone.yMin === 0 ? 0 : zone.yMin;
+      const y2 = zone.yMax === Infinity ? H : zone.yMax;
+      // Fill
+      ctx.fillStyle = zone.color + (isActive ? '0.35)' : '0.15)');
+      ctx.fillRect(0, y1, W, y2 - y1);
+      // Border line at top of zone
+      if (zone.yMin > 0) {
+        ctx.strokeStyle = zone.color + '0.9)';
+        ctx.lineWidth = isActive ? 3 : 1.5;
+        ctx.setLineDash(isActive ? [] : [8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(0, zone.yMin);
+        ctx.lineTo(W, zone.yMin);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      // Zone label
+      const midY = Math.min(y2, H) - (Math.min(y2, H) - y1) / 2;
+      ctx.fillStyle = zone.color + (isActive ? '1)' : '0.7)');
+      ctx.font = `bold ${isActive ? 13 : 11}px "Space Mono", monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(`${zone.id} · ${zone.label}`, W - 10, midY + 4);
+      ctx.textAlign = 'start';
+    }
+    ctx.restore();
+  }
+
+  // ── Draw character sprite ─────────────────────────────────────────────────
+  const activeStrip = TESTING.selectedAnim ? getActiveStrip() : null;
+  if (activeStrip) {
+    const { img: activeImg, frameCount: activeFCount, zone: activeZone } = activeStrip;
+
+    // Zone changed → reset frame to avoid out-of-bounds
+    if (TESTING.currentZone !== activeZone.id) {
+      TESTING.currentZone = activeZone.id;
+      TESTING.currentFrame = 0;
+      TESTING.lastFrameTime = 0;
+    }
+
+    // Advance frame
     if (TESTING.playing && timestamp) {
       const frameDuration = 1000 / (TESTING.fps * TESTING.speed);
       if (!TESTING.lastFrameTime) TESTING.lastFrameTime = timestamp;
       if (timestamp - TESTING.lastFrameTime >= frameDuration) {
-        if (TESTING.loop || TESTING.currentFrame < TESTING.frameCount - 1) {
-          TESTING.currentFrame = (TESTING.currentFrame + 1) % TESTING.frameCount;
+        if (TESTING.loop || TESTING.currentFrame < activeFCount - 1) {
+          TESTING.currentFrame = (TESTING.currentFrame + 1) % activeFCount;
         }
         TESTING.lastFrameTime = timestamp;
       }
     }
+    TESTING.currentFrame = Math.min(TESTING.currentFrame, activeFCount - 1);
 
-    // Soul Jam sprite calibration:
-    // frameSize is 180px source, pixelHeight is the character's actual pixel height within that frame
-    // scaleMultiplier adjusts for character height differences
     const drawScale = TESTING.scale * TESTING.scaleMultiplier;
     const drawW = TESTING.frameSize * drawScale;
     const drawH = TESTING.frameSize * drawScale;
     const drawX = TESTING.charX - drawW / 2;
-    // Anchor at feet: character's feet should be at charY
     const drawY = TESTING.charY - drawH + (TESTING.frameSize - TESTING.pixelHeight) * drawScale / 2;
 
-    // Draw the current frame from the strip
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
-      TESTING.stripImg,
-      TESTING.currentFrame * TESTING.frameSize, 0,   // source x, y
-      TESTING.frameSize, TESTING.frameSize,           // source w, h
-      drawX, drawY, drawW, drawH                      // dest
+      activeImg,
+      TESTING.currentFrame * TESTING.frameSize, 0,
+      TESTING.frameSize, TESTING.frameSize,
+      drawX, drawY, drawW, drawH
     );
 
-    // Draw shadow ellipse under character
+    // Shadow
     ctx.save();
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = '#000';
@@ -5785,25 +5881,37 @@ function testingRenderLoop(timestamp) {
       ctx.strokeStyle = '#ff440088';
       ctx.lineWidth = 1;
       ctx.strokeRect(drawX, drawY, drawW, drawH);
-      // Pixel height box
       const phH = TESTING.pixelHeight * drawScale;
       ctx.strokeStyle = '#00ff8888';
       ctx.setLineDash([4, 4]);
       ctx.strokeRect(TESTING.charX - drawW * 0.3, TESTING.charY - phH, drawW * 0.6, phH);
       ctx.setLineDash([]);
-      // Foot marker
       ctx.fillStyle = '#ff4400';
       ctx.beginPath();
       ctx.arc(TESTING.charX, TESTING.charY, 3, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Frame counter overlay
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(8, H - 28, 120, 20);
-    ctx.fillStyle = '#aaa';
+    // HUD: zone + angle info
+    const angleEntry = TESTING.angleStrips[currentZone.angleIdx];
+    const hasAngleStrip = angleEntry && angleEntry.loaded && !angleEntry.fallback;
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(8, H - 48, 260, 40);
     ctx.font = '10px "Space Mono", monospace';
-    ctx.fillText(`Frame ${TESTING.currentFrame + 1}/${TESTING.frameCount}  ${TESTING.fps}fps`, 14, H - 14);
+    ctx.fillStyle = currentZone.color + '1)';
+    ctx.fillText(`Zone ${currentZone.id}: ${currentZone.label.toUpperCase()}  (angle-${currentZone.angleIdx})`, 14, H - 31);
+    ctx.fillStyle = hasAngleStrip ? '#00ff88' : '#888';
+    ctx.fillText(
+      hasAngleStrip ? `✓ angle strip loaded` : `↳ using default strip (no angle-${currentZone.angleIdx} found)`,
+      14, H - 16
+    );
+    // Frame counter
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(W - 130, H - 28, 122, 20);
+    ctx.fillStyle = '#aaa';
+    ctx.textAlign = 'right';
+    ctx.fillText(`Frame ${TESTING.currentFrame + 1}/${activeFCount}  ${TESTING.fps}fps`, W - 8, H - 14);
+    ctx.textAlign = 'start';
   } else if (TESTING.selectedChar && !TESTING.selectedAnim) {
     // Draw static portrait at position
     const char = TESTING.roster.find(c => c.name === TESTING.selectedChar);
