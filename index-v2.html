@@ -1309,6 +1309,11 @@
                   <input type="checkbox" id="testingShowZones" checked /> Show zones
                 </label>
               </div>
+              <div class="testing-control-row" style="margin-top:4px">
+                <label style="font-size:10px;color:#60608a;display:flex;align-items:center;gap:6px;cursor:pointer">
+                  <input type="checkbox" id="testingShowOob" checked /> Show out-of-bounds
+                </label>
+              </div>
             </div>
             <div class="testing-info">
               <div id="testingInfoText" style="font-family:var(--mono);font-size:9px;color:#50507a;line-height:1.6"></div>
@@ -5443,6 +5448,66 @@ function getZoneForY(y) {
   return COURT_ZONES.find(z => y >= z.yMin && y < z.yMax) || COURT_ZONES[0];
 }
 
+// ── Out-of-bounds boundary ──────────────────────────────────────────────────
+// Trapezoid defining the IN-BOUNDS court area on the 960×640 canvas.
+// Adjust these 4 corner points to match the court.webp geometry.
+// Points go clockwise: top-left, top-right, bottom-right, bottom-left
+const OOB_BOUNDS = {
+  topLeft:     { x: 88,  y: 175 },
+  topRight:    { x: 955, y: 175 },
+  bottomRight: { x: 955, y: 628 },
+  bottomLeft:  { x: 88,  y: 628 },
+};
+
+function isOutOfBounds(x, y) {
+  const { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl } = OOB_BOUNDS;
+  // Point-in-trapezoid using cross products (convex polygon test)
+  const crosses = [
+    cross(tl, tr, x, y),
+    cross(tr, br, x, y),
+    cross(br, bl, x, y),
+    cross(bl, tl, x, y),
+  ];
+  return !crosses.every(c => c >= 0);
+}
+
+function cross(a, b, px, py) {
+  return (b.x - a.x) * (py - a.y) - (b.y - a.y) * (px - a.x);
+}
+
+function drawOobOverlay(ctx, W, H, isOob) {
+  const { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl } = OOB_BOUNDS;
+
+  ctx.save();
+
+  // Fill the 4 OOB border strips around the court (red tint)
+  ctx.fillStyle = 'rgba(255,30,30,0.22)';
+  ctx.beginPath();
+  // Outer rect minus inner court polygon
+  ctx.rect(0, 0, W, H);        // outer (clockwise)
+  ctx.moveTo(tl.x, tl.y);      // inner court (counter-clockwise = hole)
+  ctx.lineTo(bl.x, bl.y);
+  ctx.lineTo(br.x, br.y);
+  ctx.lineTo(tr.x, tr.y);
+  ctx.closePath();
+  ctx.fill('evenodd');
+
+  // Court boundary outline
+  ctx.strokeStyle = isOob ? 'rgba(255,60,60,0.95)' : 'rgba(255,60,60,0.5)';
+  ctx.lineWidth = isOob ? 3 : 1.5;
+  ctx.setLineDash(isOob ? [] : [6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(tl.x, tl.y);
+  ctx.lineTo(tr.x, tr.y);
+  ctx.lineTo(br.x, br.y);
+  ctx.lineTo(bl.x, bl.y);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.restore();
+}
+
 const TESTING = {
   initialized: false,
   roster: [],
@@ -5474,6 +5539,7 @@ const TESTING = {
   scaleMultiplier: 1,
   showHitbox: false,
   showZones: true,
+  showOob: true,
   // Zone / angle tracking
   currentZone: null,
   currentAngleIdx: 0,
@@ -5514,6 +5580,9 @@ function initTestingPage() {
   };
   document.getElementById('testingShowZones').onchange = (e) => {
     TESTING.showZones = e.target.checked;
+  };
+  document.getElementById('testingShowOob').onchange = (e) => {
+    TESTING.showOob = e.target.checked;
   };
 
   // Click on court to place character
@@ -5793,6 +5862,27 @@ function testingRenderLoop(timestamp) {
     ctx.beginPath();
     ctx.arc(W / 2, H / 2, 80, 0, Math.PI * 2);
     ctx.stroke();
+  }
+
+  // ── Out-of-bounds overlay ─────────────────────────────────────────────────
+  const isOob = isOutOfBounds(TESTING.charX, TESTING.charY);
+  if (TESTING.showOob) {
+    drawOobOverlay(ctx, W, H, isOob);
+  }
+  if (isOob) {
+    // Flash red banner
+    ctx.save();
+    ctx.globalAlpha = 0.18 + 0.12 * Math.sin(Date.now() / 150);
+    ctx.fillStyle = '#ff2222';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    ctx.fillStyle = 'rgba(200,0,0,0.85)';
+    ctx.fillRect(W / 2 - 80, 12, 160, 24);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px "Space Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('OUT OF BOUNDS', W / 2, 29);
+    ctx.textAlign = 'start';
   }
 
   // ── Draw zone overlay ──────────────────────────────────────────────────────
