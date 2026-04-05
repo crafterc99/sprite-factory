@@ -531,8 +531,13 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     const body = await parseBody(req);
     const { ratings } = body;
     if (!ratings || typeof ratings !== 'object') return json(res, { error: 'ratings object required' }, 400);
-    const registry = loadCharacters();
-    if (!registry[params.name]) return json(res, { error: 'Character not found' }, 404);
+    const registry = getCharacterRegistry(ASSETS_DIR);
+    // Auto-register if discoverable (has portrait file) but not yet in JSON registry
+    if (!registry[params.name]) {
+      const portraitPath = path.join(ASSETS_DIR, `${params.name}full.png`);
+      if (!fs.existsSync(portraitPath)) return json(res, { error: 'Character not found' }, 404);
+      registry[params.name] = { name: params.name, id: params.name };
+    }
     registry[params.name].ratings = { ...ratings };
     saveCharacters(registry);
     scheduleSync();
