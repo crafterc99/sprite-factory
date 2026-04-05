@@ -15,7 +15,7 @@ const path = require('path');
 const sharp = require('sharp');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
-const { removeGreenBackground, cropToContent } = require('../lib/sprite-processor/index');
+const { removeGreenBackground, cropToContent, getContentBounds, placeContentInFrame, processFrameSetConsistently } = require('../lib/sprite-processor/index');
 const { uploadFile: sbUpload } = require('../lib/supabase-storage');
 
 const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
@@ -34,6 +34,17 @@ function loadStudioPrompt() {
     }
   } catch {}
   return DEFAULT_STUDIO_PROMPT;
+}
+
+const CHARACTERS_FILE = process.env.CHARACTERS_FILE || path.resolve(__dirname, '../data/.characters.json');
+function loadCharPixelHeight(charName) {
+  try {
+    if (fs.existsSync(CHARACTERS_FILE)) {
+      const reg = JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
+      return reg[charName]?.pixelHeight || null;
+    }
+  } catch {}
+  return null;
 }
 
 function loadAnimLib() {
@@ -167,8 +178,8 @@ function register(router, ctx) {
         const frameCount = anim.frameCount;
         updateJob(jobId, { frame: 0, total: frameCount, msg: `Generating all ${frameCount} frames in parallel…` });
 
-        // Generate all frames in parallel for maximum speed
-        const processedPaths = await Promise.all(
+        // Phase 1: Generate all raw frames in parallel
+        const rawPaths = await Promise.all(
           Array.from({ length: frameCount }, async (_, i) => {
             const posePath = posePaths[i];
             if (!posePath || !fs.existsSync(posePath)) {
@@ -187,13 +198,24 @@ function register(router, ctx) {
             const rawPath = path.join(genDir, `raw-${i}.png`);
             fs.writeFileSync(rawPath, result.imageBuffer);
             recordCost(modelId, 'studio_gen', '1K', 2, { charName, animName, frame: i });
-
-            const processedPath = path.join(genDir, `frame-${i}.png`);
-            await processFrame(rawPath, processedPath);
             updateJob(jobId, { frame: i + 1, total: frameCount, msg: `✓ Frame ${i + 1} done` });
-            return processedPath;
+            return rawPath;
           })
         );
+
+        // Phase 2: Process all frames together with consistent scale (no shrinking on jump/extend)
+        updateJob(jobId, { frame: frameCount, total: frameCount, msg: 'Normalizing frame scales…' });
+        const outPaths = rawPaths.map((_, i) => path.join(genDir, `frame-${i}.png`));
+        const pixelHeight = loadCharPixelHeight(charName);
+        const { processedPaths, meta: genMeta } = await processFrameSetConsistently(
+          rawPaths, outPaths,
+          { frameSize: 180, padding: 8, targetContentHeight: pixelHeight || undefined }
+        );
+
+        // Persist scale metadata so regen uses same scale
+        const metaPath = path.join(ASSETS_DIR, `${charName}-${animName}-genmeta.json`);
+        fs.writeFileSync(metaPath, JSON.stringify(genMeta, null, 2));
+        sbUpload(`${charName}-${animName}-genmeta.json`, metaPath);
 
         // Assemble sprite strip
         const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);
@@ -311,8 +333,30 @@ function register(router, ctx) {
       fs.writeFileSync(rawPath, result.imageBuffer);
       recordCost(modelId, 'studio_regen', '1K', 2, { charName, animName, frame: fi });
 
+      // Remove green background from regen raw
+      const transparentPath = rawPath + '-transparent.png';
+      await removeGreenBackground(rawPath, transparentPath, { feather: 4 });
+
+      // Load stored scale metadata from initial generation for consistency
+      const metaPath = path.join(ASSETS_DIR, `${charName}-${animName}-genmeta.json`);
+      let regenScale = null, regenFrameSize = 180, regenPadding = 8;
+      if (fs.existsSync(metaPath)) {
+        try {
+          const m = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+          regenScale = m.scale; regenFrameSize = m.frameSize || 180; regenPadding = m.padding || 8;
+        } catch {}
+      }
+
       const processedPath = path.join(genDir, `regen-${fi}-${attemptNum}.png`);
-      await processFrame(rawPath, processedPath);
+      if (regenScale) {
+        // Use the same scale as original generation so regen frames match
+        const bounds = await getContentBounds(transparentPath);
+        await placeContentInFrame(transparentPath, bounds, regenScale, regenFrameSize, regenPadding, processedPath);
+      } else {
+        // Fallback: no stored meta, use default processing
+        await cropToContent(transparentPath, processedPath, { width: 180, height: 180, padding: 8 });
+      }
+      try { fs.unlinkSync(transparentPath); } catch {}
 
       // Update the frame in assets dir
       const framesOutDir = path.join(ASSETS_DIR, `${charName}-${animName}-frames`);
