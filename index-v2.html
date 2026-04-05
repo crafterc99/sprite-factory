@@ -647,9 +647,10 @@
 
   /* ─── OUTFIT PICKER (in new char modal) ─── */
   .cp-outfit-panel { border:1px solid var(--border); border-radius:8px; padding:8px; min-height:80px; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; max-height:160px; overflow-y:auto; background:var(--surface2); }
-  .cp-wardrobe-item { width:64px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:grab; border:1px solid var(--border); border-radius:6px; padding:4px; background:var(--surface3); transition:border-color 0.15s; }
-  .cp-wardrobe-item:hover { border-color:var(--accent); }
-  .cp-wardrobe-item img { width:56px; height:56px; object-fit:contain; image-rendering:pixelated; border-radius:4px; background:var(--surface); }
+  .cp-wardrobe-item { width:64px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:grab; border:1px solid var(--border); border-radius:6px; padding:4px; background:var(--surface3); transition:border-color 0.15s, transform 0.1s, opacity 0.1s; user-select:none; touch-action:none; }
+  .cp-wardrobe-item:hover { border-color:var(--accent); transform:scale(1.05); }
+  .cp-wardrobe-item.dragging { opacity:0.4; transform:scale(0.95); }
+  .cp-wardrobe-item img { width:56px; height:56px; object-fit:contain; image-rendering:pixelated; border-radius:4px; background:var(--surface); pointer-events:none; }
   .cp-wardrobe-item-name { font-family:var(--mono); font-size:7px; color:#6060a0; text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .cp-outfit-drop-zone { border:2px dashed var(--border); border-radius:10px; padding:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; background:var(--surface2); transition:border-color 0.2s, background 0.2s; min-height:180px; }
   .cp-outfit-drop-zone.dragover { border-color:var(--accent); background:rgba(255,68,0,0.05); }
@@ -670,6 +671,9 @@
   .wardrobe-delete-btn:hover { background:var(--danger); color:#fff; border-color:var(--danger); }
   .wardrobe-grid { display:flex; flex-wrap:wrap; gap:10px; }
   .wardrobe-section-heading { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#50507a; margin-bottom:10px; margin-top:20px; }
+  .wd-angle-zone { border:1.5px dashed var(--border); border-radius:6px; width:52px; height:58px; cursor:pointer; display:flex; align-items:center; justify-content:center; overflow:hidden; background:var(--surface); transition:border-color 0.15s; }
+  .wd-angle-zone:hover { border-color:var(--accent); }
+  .wardrobe-item-subcategory { font-family:var(--mono); font-size:7px; color:#50507a; text-align:center; margin-top:-2px; }
   .wardrobe-empty { font-family:var(--mono); font-size:10px; color:#30304a; padding:16px 0; }
 
   /* ─── TESTING PAGE ─── */
@@ -1223,33 +1227,72 @@
       <div class="page" id="page-wardrobe" style="padding:20px 24px;max-width:900px">
 
         <!-- Upload form -->
-        <div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:24px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
-          <!-- Image drop zone -->
-          <div id="wdDropZone" class="wardrobe-upload-zone" onclick="document.getElementById('wdPhotoFile').click()">
-            <input type="file" id="wdPhotoFile" accept="image/*" style="display:none" onchange="wdHandlePhoto(this.files[0])" />
-            <img id="wdPhotoThumb" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
-            <div id="wdPhotoPlaceholder" style="text-align:center;color:#30304a">
-              <div style="font-size:24px;margin-bottom:2px">👕</div>
-              <div style="font-family:var(--mono);font-size:8px">drop image</div>
-            </div>
-          </div>
-          <!-- Fields -->
-          <div style="display:flex;flex-direction:column;gap:10px;flex:1">
-            <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a">ADD TO WARDROBE</div>
-            <div style="display:flex;gap:10px">
-              <div style="flex:2">
-                <label style="font-family:var(--mono);font-size:8px;color:#50507a;display:block;margin-bottom:4px">NAME</label>
-                <input class="input" id="wdName" placeholder="e.g. Blue jersey" style="width:100%" />
-              </div>
-              <div style="flex:1">
-                <label style="font-family:var(--mono);font-size:8px;color:#50507a;display:block;margin-bottom:4px">TYPE</label>
-                <select class="input" id="wdType" style="width:100%">
-                  <option value="top">Top</option>
-                  <option value="bottom">Bottom</option>
-                </select>
+        <div style="padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;margin-bottom:24px">
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;margin-bottom:12px">ADD TO WARDROBE</div>
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <!-- Main front image -->
+            <div>
+              <div style="font-family:var(--mono);font-size:8px;color:#50507a;margin-bottom:4px">FRONT IMAGE *</div>
+              <div id="wdDropZone" class="wardrobe-upload-zone" onclick="document.getElementById('wdPhotoFile').click()">
+                <input type="file" id="wdPhotoFile" accept="image/*" style="display:none" onchange="wdHandlePhoto(this.files[0])" />
+                <img id="wdPhotoThumb" style="display:none;width:100%;height:100%;object-fit:contain;image-rendering:pixelated" />
+                <div id="wdPhotoPlaceholder" style="text-align:center;color:#30304a">
+                  <div style="font-size:20px;margin-bottom:2px">👕</div>
+                  <div style="font-family:var(--mono);font-size:8px">drop / click</div>
+                </div>
               </div>
             </div>
-            <button class="btn btn-primary" onclick="wdAdd()" style="align-self:flex-start;padding:8px 20px">Save to Wardrobe</button>
+            <!-- Fields -->
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1">
+              <div style="display:flex;gap:10px">
+                <div style="flex:2">
+                  <label style="font-family:var(--mono);font-size:8px;color:#50507a;display:block;margin-bottom:4px">NAME</label>
+                  <input class="input" id="wdName" placeholder="e.g. Orange hoodie" style="width:100%" />
+                </div>
+                <div style="flex:1">
+                  <label style="font-family:var(--mono);font-size:8px;color:#50507a;display:block;margin-bottom:4px">TYPE</label>
+                  <select class="input" id="wdType" style="width:100%" onchange="wdUpdateSubcategories()">
+                    <option value="top">Top</option>
+                    <option value="bottom">Bottom</option>
+                  </select>
+                </div>
+                <div style="flex:1">
+                  <label style="font-family:var(--mono);font-size:8px;color:#50507a;display:block;margin-bottom:4px">CATEGORY</label>
+                  <select class="input" id="wdSubcategory" style="width:100%"></select>
+                </div>
+              </div>
+              <!-- Optional angle uploads -->
+              <div>
+                <div style="font-family:var(--mono);font-size:8px;color:#30305a;margin-bottom:6px">ADDITIONAL ANGLES <span style="opacity:0.5">(optional)</span></div>
+                <div style="display:flex;gap:8px">
+                  <div style="text-align:center">
+                    <div style="font-family:var(--mono);font-size:7px;color:#30304a;margin-bottom:3px">BACK</div>
+                    <div class="wd-angle-zone" onclick="document.getElementById('wdAngleBack').click()">
+                      <input type="file" id="wdAngleBack" accept="image/*" style="display:none" onchange="wdHandleAngle('back',this.files[0])" />
+                      <img id="wdAngleBackThumb" style="display:none;width:100%;height:100%;object-fit:contain" />
+                      <span id="wdAngleBackPlus" style="font-size:16px;color:#30304a">+</span>
+                    </div>
+                  </div>
+                  <div style="text-align:center">
+                    <div style="font-family:var(--mono);font-size:7px;color:#30304a;margin-bottom:3px">LEFT</div>
+                    <div class="wd-angle-zone" onclick="document.getElementById('wdAngleLeft').click()">
+                      <input type="file" id="wdAngleLeft" accept="image/*" style="display:none" onchange="wdHandleAngle('left',this.files[0])" />
+                      <img id="wdAngleLeftThumb" style="display:none;width:100%;height:100%;object-fit:contain" />
+                      <span id="wdAngleLeftPlus" style="font-size:16px;color:#30304a">+</span>
+                    </div>
+                  </div>
+                  <div style="text-align:center">
+                    <div style="font-family:var(--mono);font-size:7px;color:#30304a;margin-bottom:3px">RIGHT</div>
+                    <div class="wd-angle-zone" onclick="document.getElementById('wdAngleRight').click()">
+                      <input type="file" id="wdAngleRight" accept="image/*" style="display:none" onchange="wdHandleAngle('right',this.files[0])" />
+                      <img id="wdAngleRightThumb" style="display:none;width:100%;height:100%;object-fit:contain" />
+                      <span id="wdAngleRightPlus" style="font-size:16px;color:#30304a">+</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="wdAdd()" style="align-self:flex-start;padding:8px 20px">Save to Wardrobe</button>
+            </div>
           </div>
         </div>
 
@@ -1745,6 +1788,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadRoster();
   loadCosts();
   initAdjustInteraction();
+  wdUpdateSubcategories(); // init subcategory dropdown with defaults
 
   const dz = document.getElementById('cpDropZone');
   if (dz) {
@@ -2933,7 +2977,17 @@ async function exportToSoulJam() {
 // ─── NEW CHARACTER ─────────────────────────────────────────────────────────
 // Modal-only state (what the user has typed/uploaded in the form)
 const CP = { name: '', photo: null, clothing: [], portraitBase64: null, dressedPortraitBase64: null };
-const WD = { photo: null }; // wardrobe upload state
+const WD = { photo: null, angles: {} }; // wardrobe upload state
+
+// Subcategory options from server (loaded on page open)
+let WD_SUBCATS = { top: ['hoodie','t-shirt','long sleeve','tank top','jersey','jacket','sweatshirt','polo'], bottom: ['pants','shorts','three-quarter','leggings','joggers','sweatpants','jeans'] };
+
+function wdUpdateSubcategories() {
+  const type = document.getElementById('wdType').value;
+  const sel = document.getElementById('wdSubcategory');
+  const options = WD_SUBCATS[type] || [];
+  sel.innerHTML = options.map(o => `<option value="${o}">${o.charAt(0).toUpperCase() + o.slice(1)}</option>`).join('');
+}
 
 // Background job map — one entry per in-progress character; persisted to localStorage
 // { [name]: { name, stage, portraitBase64 } }
@@ -3186,57 +3240,89 @@ async function cpUsePortrait() {
     const tops = (data.items || []).filter(i => i.type === 'top');
     const bottoms = (data.items || []).filter(i => i.type === 'bottom');
 
+    const makeCard = item => `
+      <div class="cp-wardrobe-item" draggable="true"
+           data-id="${item.id}" data-type="${item.type}" data-name="${item.name.replace(/"/g,'&quot;')}" data-subcat="${item.subcategory||''}"
+           ondragstart="cpDragOutfit(event,'${item.id}','${item.type}','${item.name.replace(/'/g,'&#39;')}','${(item.subcategory||'').replace(/'/g,'&#39;')}')"
+           title="${item.name}${item.subcategory ? ' · '+item.subcategory : ''}">
+        <img src="${API}/api/wardrobe/image/${item.id}" draggable="false" />
+        <div class="cp-wardrobe-item-name">${item.name}</div>
+        ${item.subcategory ? `<div style="font-family:var(--mono);font-size:7px;color:#50507a">${item.subcategory}</div>` : ''}
+      </div>`;
+
     document.getElementById('cpTopsPanel').innerHTML = tops.length === 0
       ? '<div style="color:#30304a;font-family:var(--mono);font-size:9px;width:100%;text-align:center;padding:12px 0">No tops in wardrobe</div>'
-      : tops.map(item => `
-        <div class="cp-wardrobe-item" draggable="true"
-             ondragstart="cpDragOutfit(event,'${item.id}','top','${item.name.replace(/'/g,'&#39;')}')"
-             title="${item.name}">
-          <img src="${API}/api/wardrobe/image/${item.id}" />
-          <div class="cp-wardrobe-item-name">${item.name}</div>
-        </div>`).join('');
+      : tops.map(makeCard).join('');
 
     document.getElementById('cpBottomsPanel').innerHTML = bottoms.length === 0
       ? '<div style="color:#30304a;font-family:var(--mono);font-size:9px;width:100%;text-align:center;padding:12px 0">No bottoms in wardrobe</div>'
-      : bottoms.map(item => `
-        <div class="cp-wardrobe-item" draggable="true"
-             ondragstart="cpDragOutfit(event,'${item.id}','bottom','${item.name.replace(/'/g,'&#39;')}')"
-             title="${item.name}">
-          <img src="${API}/api/wardrobe/image/${item.id}" />
-          <div class="cp-wardrobe-item-name">${item.name}</div>
-        </div>`).join('');
+      : bottoms.map(makeCard).join('');
+
+    // Touch drag support for iPad
+    cpInitTouchDrag();
   } catch (e) {
     cpLog('Could not load wardrobe: ' + e.message, 'err');
   }
 }
 
-function cpDragOutfit(e, id, type, name) {
-  e.dataTransfer.setData('text/plain', JSON.stringify({ id, type, name }));
+// ── Outfit drag helpers ───────────────────────────────────────────────────
+
+function cpDragOutfit(e, id, type, name, subcategory) {
+  e.dataTransfer.setData('text/plain', JSON.stringify({ id, type, name, subcategory }));
   e.dataTransfer.effectAllowed = 'copy';
+  e.currentTarget.classList.add('dragging');
+  e.currentTarget.addEventListener('dragend', () => e.currentTarget.classList.remove('dragging'), { once: true });
 }
 
 function cpOutfitDragOver(e) {
   e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
   document.getElementById('cpOutfitDropZone').classList.add('dragover');
 }
 
 function cpOutfitDragLeave(e) {
-  document.getElementById('cpOutfitDropZone').classList.remove('dragover');
+  // Only remove if leaving the zone itself, not a child
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    document.getElementById('cpOutfitDropZone').classList.remove('dragover');
+  }
 }
 
-async function cpOutfitDrop(e) {
+function cpOutfitDrop(e) {
   e.preventDefault();
   document.getElementById('cpOutfitDropZone').classList.remove('dragover');
   try {
-    const { id, type, name } = JSON.parse(e.dataTransfer.getData('text/plain'));
-    await cpApplyOutfitItem(id, type, name);
+    const { id, type, name, subcategory } = JSON.parse(e.dataTransfer.getData('text/plain'));
+    cpEnqueueOutfit(id, type, name, subcategory);
   } catch {}
 }
 
-async function cpApplyOutfitItem(id, type, name) {
+// ── Sequential outfit queue ───────────────────────────────────────────────
+
+const CP_OUTFIT_QUEUE = [];
+let CP_OUTFIT_RUNNING = false;
+
+function cpEnqueueOutfit(id, type, name, subcategory) {
+  // Replace any pending item of the same type in queue (last drop wins)
+  const existing = CP_OUTFIT_QUEUE.findIndex(q => q.type === type);
+  if (existing >= 0) CP_OUTFIT_QUEUE.splice(existing, 1);
+  CP_OUTFIT_QUEUE.push({ id, type, name, subcategory });
+  cpProcessOutfitQueue();
+}
+
+async function cpProcessOutfitQueue() {
+  if (CP_OUTFIT_RUNNING || CP_OUTFIT_QUEUE.length === 0) return;
+  CP_OUTFIT_RUNNING = true;
+  const { id, type, name, subcategory } = CP_OUTFIT_QUEUE.shift();
+  await cpApplyOutfitItem(id, type, name, subcategory);
+  CP_OUTFIT_RUNNING = false;
+  cpProcessOutfitQueue(); // process next if queued
+}
+
+async function cpApplyOutfitItem(id, type, name, subcategory) {
   const statusEl = document.getElementById('cpOutfitApplyStatus');
   statusEl.style.display = 'flex';
-  cpLog(`Applying ${type} "${name}"…`);
+  statusEl.querySelector('span + *') && (statusEl.lastChild.textContent = `Applying ${subcategory || type} "${name}"…`);
+  cpLog(`Applying ${subcategory || type} "${name}"…`);
 
   try {
     const r = await fetch(`${API}/api/char-pipeline/apply-outfit`, {
@@ -3244,13 +3330,15 @@ async function cpApplyOutfitItem(id, type, name) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         portraitBase64: CP.dressedPortraitBase64,
-        topId: type === 'top' ? id : undefined,
-        bottomId: type === 'bottom' ? id : undefined,
+        topId:           type === 'top'    ? id : undefined,
+        bottomId:        type === 'bottom' ? id : undefined,
+        topSubcategory:    type === 'top'    ? (subcategory || undefined) : undefined,
+        bottomSubcategory: type === 'bottom' ? (subcategory || undefined) : undefined,
       }),
     });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
-    const result = await waitForJob(d.jobId, cpLog, `Applying ${type}`);
+    const result = await waitForJob(d.jobId, cpLog, `Applying ${subcategory || type}`);
 
     CP.dressedPortraitBase64 = result.imageBase64;
     const preview = document.getElementById('cpDressedPreview');
@@ -3258,19 +3346,67 @@ async function cpApplyOutfitItem(id, type, name) {
     preview.style.display = 'block';
     document.getElementById('cpOutfitDropHint').style.display = 'none';
 
-    // Show applied badge
     const badgeEl = document.getElementById(type === 'top' ? 'cpAppliedTop' : 'cpAppliedBottom');
-    const nameEl = document.getElementById(type === 'top' ? 'cpAppliedTopName' : 'cpAppliedBottomName');
-    nameEl.textContent = name;
+    const nameEl  = document.getElementById(type === 'top' ? 'cpAppliedTopName' : 'cpAppliedBottomName');
+    nameEl.textContent = `${subcategory ? subcategory+': ' : ''}${name}`;
     badgeEl.style.display = 'flex';
 
-    cpLog(`✓ ${type} "${name}" applied`, 'ok');
+    cpLog(`✓ "${name}" applied`, 'ok');
   } catch (e) {
     cpLog(`Error: ${e.message}`, 'err');
-    toast(`Failed to apply ${type}: ${e.message}`, true);
+    toast(`Failed to apply outfit: ${e.message}`, true);
   } finally {
     statusEl.style.display = 'none';
   }
+}
+
+// ── Touch drag for iPad ───────────────────────────────────────────────────
+
+function cpInitTouchDrag() {
+  let dragEl = null, dragData = null, ghost = null;
+
+  document.querySelectorAll('.cp-wardrobe-item').forEach(el => {
+    el.addEventListener('touchstart', e => {
+      dragEl = el;
+      dragData = {
+        id:    el.dataset.id,
+        type:  el.dataset.type,
+        name:  el.dataset.name,
+        subcategory: el.dataset.subcat,
+      };
+      ghost = el.cloneNode(true);
+      ghost.style.cssText = 'position:fixed;opacity:0.75;pointer-events:none;z-index:9999;width:64px;transform:scale(1.1)';
+      document.body.appendChild(ghost);
+    }, { passive: true });
+
+    el.addEventListener('touchmove', e => {
+      if (!ghost) return;
+      const t = e.touches[0];
+      ghost.style.left = (t.clientX - 32) + 'px';
+      ghost.style.top  = (t.clientY - 32) + 'px';
+
+      const dz = document.getElementById('cpOutfitDropZone');
+      const r  = dz.getBoundingClientRect();
+      const over = t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom;
+      dz.classList.toggle('dragover', over);
+      e.preventDefault();
+    }, { passive: false });
+
+    el.addEventListener('touchend', e => {
+      if (!ghost || !dragData) return;
+      ghost.remove(); ghost = null;
+
+      const t = e.changedTouches[0];
+      const dz = document.getElementById('cpOutfitDropZone');
+      const r  = dz.getBoundingClientRect();
+      dz.classList.remove('dragover');
+
+      if (t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom) {
+        cpEnqueueOutfit(dragData.id, dragData.type, dragData.name, dragData.subcategory);
+      }
+      dragEl = dragData = null;
+    });
+  });
 }
 
 function cpClearOutfitPiece(type) {
@@ -3730,6 +3866,9 @@ async function loadWardrobePage() {
     const r = await fetch(`${API}/api/wardrobe`);
     const d = await r.json();
     WARDROBE_ITEMS = d.items || [];
+    if (d.topSubcategories) WD_SUBCATS.top = d.topSubcategories;
+    if (d.bottomSubcategories) WD_SUBCATS.bottom = d.bottomSubcategories;
+    wdUpdateSubcategories(); // init subcategory select
     renderWardrobePage();
   } catch (e) {
     console.error('Wardrobe load error', e);
@@ -3750,9 +3889,11 @@ function renderWardrobePage() {
 }
 
 function wardrobeCardHtml(item) {
+  const subcat = item.subcategory ? `<div class="wardrobe-item-subcategory">${item.subcategory}</div>` : '';
   return `<div class="wardrobe-item-card">
     <img src="${API}/api/wardrobe/image/${item.id}" alt="${item.name}" />
     <div class="wardrobe-item-label">${item.name}</div>
+    ${subcat}
     <button class="wardrobe-delete-btn" onclick="wdDelete('${item.id}')" title="Remove">×</button>
   </div>`;
 }
@@ -3770,17 +3911,32 @@ function wdHandlePhoto(file) {
   reader.readAsDataURL(file);
 }
 
+function wdHandleAngle(side, file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    WD.angles[side] = e.target.result;
+    const thumb = document.getElementById(`wdAngle${side.charAt(0).toUpperCase()+side.slice(1)}Thumb`);
+    const plus  = document.getElementById(`wdAngle${side.charAt(0).toUpperCase()+side.slice(1)}Plus`);
+    thumb.src = e.target.result;
+    thumb.style.display = 'block';
+    plus.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
 async function wdAdd() {
-  const name = document.getElementById('wdName').value.trim();
-  const type = document.getElementById('wdType').value;
+  const name       = document.getElementById('wdName').value.trim();
+  const type       = document.getElementById('wdType').value;
+  const subcategory = document.getElementById('wdSubcategory').value;
   if (!name) return toast('Name required', true);
-  if (!WD.photo) return toast('Upload an image first', true);
+  if (!WD.photo) return toast('Upload a front image first', true);
 
   try {
     const r = await fetch(`${API}/api/wardrobe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, type, imageBase64: WD.photo }),
+      body: JSON.stringify({ name, type, subcategory, imageBase64: WD.photo, anglesBase64: WD.angles }),
     });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
@@ -3789,9 +3945,16 @@ async function wdAdd() {
     // Reset form
     document.getElementById('wdName').value = '';
     WD.photo = null;
+    WD.angles = {};
     document.getElementById('wdPhotoThumb').style.display = 'none';
     document.getElementById('wdPhotoPlaceholder').style.display = 'block';
-    toast(`${type === 'top' ? 'Top' : 'Bottom'} "${name}" saved to wardrobe`);
+    for (const side of ['Back','Left','Right']) {
+      const thumb = document.getElementById(`wdAngle${side}Thumb`);
+      const plus  = document.getElementById(`wdAngle${side}Plus`);
+      if (thumb) { thumb.src = ''; thumb.style.display = 'none'; }
+      if (plus)  plus.style.display = '';
+    }
+    toast(`"${name}" saved to wardrobe`);
   } catch (e) {
     toast('Save failed: ' + e.message, true);
   }

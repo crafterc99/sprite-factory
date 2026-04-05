@@ -1,11 +1,8 @@
 /**
  * Wardrobe Routes — Clothing library for character outfit application
  *
- * Items: { id, name, type: 'top'|'bottom', imageData: 'base64...', createdAt }
+ * Items: { id, name, type: 'top'|'bottom', subcategory, imageData, angles: { front?, back?, left?, right? }, createdAt }
  * Index (with embedded image data) stored in: data/wardrobe.json
- *
- * Images are embedded as base64 in the JSON so they survive Railway redeploys.
- * No separate image files are needed — everything lives in one committed file.
  */
 'use strict';
 
@@ -18,6 +15,9 @@ const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload
 const WARDROBE_INDEX = path.resolve(__dirname, '../data/wardrobe.json');
 const SB_META_KEY = '_meta/wardrobe.json';
 
+const TOP_SUBCATEGORIES    = ['hoodie', 't-shirt', 'long sleeve', 'tank top', 'jersey', 'jacket', 'sweatshirt', 'polo'];
+const BOTTOM_SUBCATEGORIES = ['pants', 'shorts', 'three-quarter', 'leggings', 'joggers', 'sweatpants', 'jeans'];
+
 function loadIndex() {
   try {
     if (fs.existsSync(WARDROBE_INDEX)) return JSON.parse(fs.readFileSync(WARDROBE_INDEX, 'utf8'));
@@ -27,9 +27,7 @@ function loadIndex() {
 
 function saveIndex(items) {
   fs.mkdirSync(path.dirname(WARDROBE_INDEX), { recursive: true });
-  const jsonStr = JSON.stringify(items, null, 2);
-  fs.writeFileSync(WARDROBE_INDEX, jsonStr);
-  // Back up to Supabase so it survives Railway redeploys
+  fs.writeFileSync(WARDROBE_INDEX, JSON.stringify(items, null, 2));
   if (sbAvailable()) sbUploadJson(SB_META_KEY, items);
 }
 
@@ -58,54 +56,75 @@ function json(res, data, status = 200) {
 async function parseBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', chunk => { body += chunk; if (body.length > 20 * 1024 * 1024) req.destroy(); });
+    req.on('data', chunk => { body += chunk; if (body.length > 50 * 1024 * 1024) req.destroy(); });
     req.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve({}); } });
     req.on('error', reject);
   });
 }
 
+async function resizeImage(base64) {
+  const raw = base64.replace(/^data:image\/\w+;base64,/, '');
+  const buf = await sharp(Buffer.from(raw, 'base64'))
+    .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+    .png({ compressionLevel: 8 })
+    .toBuffer();
+  return buf.toString('base64');
+}
+
 function register(router) {
 
-  // GET /api/wardrobe — list all wardrobe items (without imageData to keep response small)
+  // GET /api/wardrobe — list all items (strip image data to keep response small)
   router.get('/api/wardrobe', (req, res) => {
-    const items = loadIndex().map(({ imageData, ...rest }) => rest);
-    json(res, { items });
+    const items = loadIndex().map(({ imageData, angles, ...rest }) => ({
+      ...rest,
+      hasAngles: angles ? Object.keys(angles).filter(k => !!angles[k]) : [],
+    }));
+    json(res, { items, topSubcategories: TOP_SUBCATEGORIES, bottomSubcategories: BOTTOM_SUBCATEGORIES });
   });
 
   // POST /api/wardrobe — add a new wardrobe item
   router.post('/api/wardrobe', async (req, res) => {
     const body = await parseBody(req);
-    const { name, type, imageBase64 } = body;
+    const { name, type, subcategory, imageBase64, anglesBase64 } = body;
     if (!name || !type || !imageBase64) return json(res, { error: 'name, type, imageBase64 required' }, 400);
     if (!['top', 'bottom'].includes(type)) return json(res, { error: 'type must be "top" or "bottom"' }, 400);
 
     try {
-      // Resize to max 512px on longest side to keep JSON file size manageable
-      const rawData = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-      const resized = await sharp(Buffer.from(rawData, 'base64'))
-        .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
-        .png({ compressionLevel: 8 })
-        .toBuffer();
-      const imageData = resized.toString('base64');
+      const imageData = await resizeImage(imageBase64);
+
+      // Process optional angle images
+      const angles = {};
+      if (anglesBase64 && typeof anglesBase64 === 'object') {
+        for (const side of ['front', 'back', 'left', 'right']) {
+          if (anglesBase64[side]) {
+            angles[side] = await resizeImage(anglesBase64[side]);
+          }
+        }
+      }
 
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       const items = loadIndex();
-      const item = { id, name, type, imageData, createdAt: new Date().toISOString() };
+      const item = {
+        id, name, type,
+        subcategory: subcategory || (type === 'top' ? 't-shirt' : 'pants'),
+        imageData,
+        angles: Object.keys(angles).length > 0 ? angles : undefined,
+        createdAt: new Date().toISOString(),
+      };
       items.push(item);
       saveIndex(items);
       scheduleSync();
 
-      json(res, { success: true, item: { id, name, type, createdAt: item.createdAt } });
+      json(res, { success: true, item: { id, name, type, subcategory: item.subcategory, createdAt: item.createdAt } });
     } catch (err) {
       json(res, { error: err.message }, 500);
     }
   });
 
-  // DELETE /api/wardrobe/:id — remove a wardrobe item
+  // DELETE /api/wardrobe/:id
   router.delete('/api/wardrobe/:id', (req, res, params) => {
-    const { id } = params;
     const items = loadIndex();
-    const idx = items.findIndex(i => i.id === id);
+    const idx = items.findIndex(i => i.id === params.id);
     if (idx === -1) return json(res, { error: 'not found' }, 404);
     items.splice(idx, 1);
     saveIndex(items);
@@ -113,12 +132,21 @@ function register(router) {
     json(res, { success: true });
   });
 
-  // GET /api/wardrobe/image/:id — serve wardrobe item image from embedded base64
+  // GET /api/wardrobe/image/:id — main front image
   router.get('/api/wardrobe/image/:id', (req, res, params) => {
-    const items = loadIndex();
-    const item = items.find(i => i.id === params.id);
-    if (!item || !item.imageData) { res.writeHead(404); res.end(); return; }
+    const item = loadIndex().find(i => i.id === params.id);
+    if (!item?.imageData) { res.writeHead(404); res.end(); return; }
     const buf = Buffer.from(item.imageData, 'base64');
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+    res.end(buf);
+  });
+
+  // GET /api/wardrobe/angle/:id/:side — front/back/left/right angle image
+  router.get('/api/wardrobe/angle/:id/:side', (req, res, params) => {
+    const item = loadIndex().find(i => i.id === params.id);
+    const data = item?.angles?.[params.side];
+    if (!data) { res.writeHead(404); res.end(); return; }
+    const buf = Buffer.from(data, 'base64');
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
     res.end(buf);
   });

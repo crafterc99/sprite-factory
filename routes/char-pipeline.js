@@ -1216,7 +1216,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
   // Returns a new portrait base64 with the outfit swapped in.
   router.post('/api/char-pipeline/apply-outfit', async (req, res) => {
     const body = await parseBody(req);
-    const { portraitBase64, topId, bottomId } = body;
+    const { portraitBase64, topId, bottomId, topSubcategory, bottomSubcategory } = body;
     if (!portraitBase64) return json(res, { error: 'portraitBase64 required' }, 400);
     if (!topId && !bottomId) return json(res, { error: 'topId or bottomId required' }, 400);
 
@@ -1256,33 +1256,26 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
         const genOpts = { aspectRatio: '3:4', resolution: '1K', model: modelId, maxRetries: 3, timeoutMs: 120000 };
 
-        if (topId && bottomId) {
-          // Both garments — combine into one call
-          const topPath    = wardrobeItemPath(topId);
-          const bottomPath = wardrobeItemPath(bottomId);
-          const prompt = 'Keep everything about this pixelated character exactly the same. Replace their top garment with the second image and their bottom garment with the third image.';
-          const result = await client.generate(prompt, {
-            referenceImages: [currentPortraitPath, topPath, bottomPath],
-            ...genOpts,
-          });
-          const outPath = path.join(tmpDir, `after-outfit-${tmpId}.png`);
-          fs.writeFileSync(outPath, result.imageBuffer);
-          currentPortraitPath = outPath;
-          recordCost(modelId, 'char_pipeline', '1K', 3, { step: 'apply-outfit' });
-        } else if (topId) {
+        // Resolve subcategory labels for precise prompts
+        const topLabel    = topSubcategory    || 'top garment';
+        const bottomLabel = bottomSubcategory || 'bottom garment';
+
+        if (topId) {
           const topPath = wardrobeItemPath(topId);
           const result = await client.generate(
-            'Keep everything about this pixelated character exactly the same. Replace only their top garment with the second image.',
+            `Keep everything about this pixelated character exactly the same. Replace only their ${topLabel} with the one shown in the second image. Match the style, color and fit exactly.`,
             { referenceImages: [currentPortraitPath, topPath], ...genOpts }
           );
           const outPath = path.join(tmpDir, `after-top-${tmpId}.png`);
           fs.writeFileSync(outPath, result.imageBuffer);
           currentPortraitPath = outPath;
           recordCost(modelId, 'char_pipeline', '1K', 2, { step: 'apply-top' });
-        } else if (bottomId) {
+        }
+
+        if (bottomId) {
           const bottomPath = wardrobeItemPath(bottomId);
           const result = await client.generate(
-            'Keep everything about this pixelated character exactly the same. Replace only their bottom garment with the second image.',
+            `Keep everything about this pixelated character exactly the same. Replace only their ${bottomLabel} with the one shown in the second image. Match the style, color and fit exactly.`,
             { referenceImages: [currentPortraitPath, bottomPath], ...genOpts }
           );
           const outPath = path.join(tmpDir, `after-bottom-${tmpId}.png`);
