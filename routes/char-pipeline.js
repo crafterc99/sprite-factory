@@ -431,8 +431,10 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     const originalPath = path.join(charDir, 'original.png');
 
     if (photoBase64) {
+      // Strip data URL prefix, decode, then re-encode to PNG via sharp
+      // This normalises JPEG/WEBP/PNG to a clean PNG regardless of what the client sent
       const data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
-      fs.writeFileSync(originalPath, Buffer.from(data, 'base64'));
+      await sharp(Buffer.from(data, 'base64')).png().toFile(originalPath);
     } else if (!fs.existsSync(originalPath)) {
       return json(res, { error: 'Photo required' }, 400);
     }
@@ -496,7 +498,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     if (photoBase64) {
       const data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
-      fs.writeFileSync(originalPath, Buffer.from(data, 'base64'));
+      await sharp(Buffer.from(data, 'base64')).png().toFile(originalPath);
     } else if (!fs.existsSync(originalPath)) {
       return json(res, { error: 'Photo required' }, 400);
     }
