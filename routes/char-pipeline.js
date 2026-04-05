@@ -71,6 +71,19 @@ const ANGLE_LABELS_8 = ['Front', 'Front Right', 'Right', 'Back Right', 'Back', '
 
 // ── Prompt builders ─────────────────────────────────────────────────────────
 
+function getDefaultPortraitPrompt() {
+  return [
+    'Convert this photo into a 16-bit arcade pixel art character portrait.',
+    'The character must be standing upright, facing forward, full body visible.',
+    'RULES:',
+    'Preserve exact face, skin tone, hairstyle, and clothing from the photo.',
+    'Pure white background (#FFFFFF). No environment, no shadows, no extra elements.',
+    '16-bit pixel art style: bold black outlines, flat color fills, high-contrast shading.',
+    'No anti-aliasing. No blur. No gradients.',
+    'Character centered, feet at bottom, head near top of frame.',
+  ].join('\n');
+}
+
 function getDefaultStep1Prompt() {
   return [
     'Transform the uploaded image into 16-bit arcade pixel art.',
@@ -102,6 +115,7 @@ function getDefaultStep2Prompt() {
 
 function getDefaultPrompts() {
   return {
+    portrait: getDefaultPortraitPrompt(),
     step1: getDefaultStep1Prompt(),
     step2: getDefaultStep2Prompt(),
     bodySheet: buildBodySheetPrompt(),
@@ -393,6 +407,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
   // GET /api/char-pipeline/prompts — Return current prompts
   router.get('/api/char-pipeline/prompts', (req, res) => {
     const p = loadCharPrompts();
+    if (!p.portrait) p.portrait = getDefaultPortraitPrompt();
     // Include studio default if not saved yet
     if (!p.studio) {
       const DEFAULT_STUDIO = [
@@ -413,6 +428,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     const body = await parseBody(req);
     const current = loadCharPrompts();
     const updated = { ...current };
+    if (body.portrait !== undefined) updated.portrait = body.portrait;
     if (body.step1 !== undefined) updated.step1 = body.step1;
     if (body.step2 !== undefined) updated.step2 = body.step2;
     if (body.studio !== undefined) updated.studio = body.studio;
@@ -446,37 +462,22 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
-        // Step 1: photo → pixel art
-        updateJob(jobId, { step: 1, total: 2, msg: 'Step 1/2 — Converting photo to pixel art…' });
-        const step1Prompt = loadCharPrompts().step1;
-        const step1 = await client.generate(step1Prompt, {
+        // Single call: photo → pixel art portrait directly (2x faster than step1+step2)
+        updateJob(jobId, { step: 1, total: 1, msg: 'Converting photo to pixel art portrait…' });
+        const prompt = loadCharPrompts().portrait || getDefaultPortraitPrompt();
+        const result = await client.generate(prompt, {
           referenceImages: [originalPath],
           aspectRatio: '3:4',
           resolution: '1K',
           model: modelId,
-          maxRetries: 2,
-          timeoutMs: 150000,
+          maxRetries: 1,
+          timeoutMs: 90000,
         });
-        const step1Path = path.join(charDir, 'step1-pixel.png');
-        fs.writeFileSync(step1Path, step1.imageBuffer);
-        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step1' });
-
-        // Step 2: pixel art → clean standing portrait
-        updateJob(jobId, { step: 2, total: 2, msg: 'Step 2/2 — Building standing portrait…' });
-        const step2Prompt = loadCharPrompts().step2;
-        const step2 = await client.generate(step2Prompt, {
-          referenceImages: [step1Path],
-          aspectRatio: '3:4',
-          resolution: '1K',
-          model: modelId,
-          maxRetries: 2,
-          timeoutMs: 150000,
-        });
-        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step2' });
+        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait' });
 
         const previewPath = path.join(charDir, 'step2-preview.png');
-        fs.writeFileSync(previewPath, step2.imageBuffer);
-        const imageBase64 = 'data:image/png;base64,' + step2.imageBuffer.toString('base64');
+        fs.writeFileSync(previewPath, result.imageBuffer);
+        const imageBase64 = 'data:image/png;base64,' + result.imageBuffer.toString('base64');
         finishJob(jobId, { success: true, name, imageBase64 });
       } catch (err) {
         failJob(jobId, err.message);
