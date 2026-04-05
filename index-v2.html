@@ -1804,7 +1804,11 @@ window.addEventListener('DOMContentLoaded', () => {
   // Restore any in-progress generation jobs from last session
   Object.assign(CPJobs, cpLoadJobs());
 
-  loadRoster();
+  loadRoster().then(() => {
+    // After roster loads, re-poll any jobs that were mid-flight when the page reloaded
+    cpResumeInFlightJobs();
+  });
+
   loadCosts();
   initAdjustInteraction();
   wdUpdateSubcategories(); // init subcategory dropdown with defaults
@@ -1860,6 +1864,18 @@ async function loadRoster() {
     const r = await fetch(`${API}/api/roster`);
     const data = await r.json();
     STATE.roster = data.roster || [];
+
+    // Clear stale jobs: if a character already exists in the roster, its generation completed
+    const rosterNames = new Set(STATE.roster.map(c => c.name));
+    let staleCleaned = false;
+    for (const name of Object.keys(CPJobs)) {
+      if (rosterNames.has(name)) {
+        delete CPJobs[name];
+        staleCleaned = true;
+      }
+    }
+    if (staleCleaned) cpSaveState();
+
     renderRoster();
     renderDashboard();
     renderStudioRoster();
@@ -3285,6 +3301,48 @@ function cpCancelJob(name) {
   toast(`${name} cancelled`);
 }
 
+// On page reload, resume polling for any jobs that were mid-generation.
+// If a character is in the roster already, its job is stale and already cleaned by loadRoster.
+// This handles the case where the server is STILL processing and we need to re-attach polling.
+async function cpResumeInFlightJobs() {
+  const inFlight = Object.values(CPJobs).filter(j => j.stage === 'angles' && j.bodyJobId && j.headJobId);
+  for (const job of inFlight) {
+    const { name, bodyJobId, headJobId } = job;
+    // Fire-and-forget: re-poll until done, then finalize
+    (async () => {
+      try {
+        const [d4body, d4head] = await Promise.all([
+          waitForJob(bodyJobId, null, null),
+          waitForJob(headJobId, null, null),
+        ]);
+        await fetch(`${API}/api/char-pipeline/complete`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        cpClearJob(name);
+        await loadRoster();
+        toast(`${name} generation complete`, false);
+      } catch (e) {
+        cpClearJob(name);
+        renderDashboard();
+        toast(`${name} generation failed: ${e.message}`, true);
+      }
+    })();
+  }
+
+  // For jobs stuck in any stage without jobIds (can't re-poll) — mark done if char is in roster, else clear
+  const rosterNames = new Set(STATE.roster.map(c => c.name));
+  let cleaned = false;
+  for (const [name, job] of Object.entries(CPJobs)) {
+    if (job.stage && job.stage !== 'idle' && job.stage !== 'done' && !job.bodyJobId) {
+      // Can't recover — clear so the stuck card goes away
+      delete CPJobs[name];
+      cleaned = true;
+    }
+  }
+  if (cleaned) { cpSaveState(); renderDashboard(); }
+}
+
 function openAddChar(remakeName) {
   // Reset modal form — in-progress jobs keep running; resume via dashboard card
   CP.name = ''; CP.photo = null; CP.clothing = []; CP.portraitBase64 = null; CP.dressedPortraitBase64 = null;
@@ -3751,6 +3809,11 @@ async function cpConfirmAndGenerateAngles() {
     ]);
     if (jBody.error) throw new Error('Body angles: ' + jBody.error);
     if (jHead.error) throw new Error('Head angles: ' + jHead.error);
+
+    // Save jobIds so a page reload can re-poll
+    CPJobs[name].bodyJobId = jBody.jobId;
+    CPJobs[name].headJobId = jHead.jobId;
+    cpSaveState();
 
     // Poll both jobs in parallel until done (generation continues even if modal is closed)
     cpLog('⋯ Generating angles (this takes 1-3 min)…');
