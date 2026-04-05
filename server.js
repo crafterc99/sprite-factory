@@ -91,13 +91,14 @@ function json(res, data, status = 200) {
 }
 
 function parseBody(req) {
-  return new Promise((resolve) => {
-    let body = '';
-    req.on('data', chunk => body += chunk);
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
     req.on('end', () => {
-      try { resolve(JSON.parse(body)); }
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
       catch { resolve({}); }
     });
+    req.on('error', reject);
   });
 }
 
