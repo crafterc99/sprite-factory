@@ -342,7 +342,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       weightLbs: body.weightLbs || existing.weightLbs || 185,
       build: body.build || existing.build || 'athletic',
       jerseyNumber: body.jerseyNumber != null ? body.jerseyNumber : (existing.jerseyNumber || ''),
-      teamColors: body.teamColors || existing.teamColors || { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
+      teamColors: existing.teamColors || { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
+      ratings: body.ratings || existing.ratings || null,
       portraitPath: existing.portraitPath || `${name}full.png`,
       originalPhotoPath: body.originalPhotoPath || existing.originalPhotoPath || null,
       scaleMultiplier,
@@ -419,7 +420,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   // POST /api/character/confirm — Pick the best option and save as final
   router.post('/api/character/confirm', async (req, res) => {
     const body = await parseBody(req);
-    const { name, optionIndex, feedback, heightInches, weightLbs, build, jerseyNumber, teamColors } = body;
+    const { name, optionIndex, feedback, heightInches, weightLbs, build, jerseyNumber, teamColors, ratings } = body;
     if (!name) return json(res, { error: 'Character name required' }, 400);
 
     try {
@@ -451,7 +452,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         weightLbs: weightLbs || 185,
         build: build || 'athletic',
         jerseyNumber: jerseyNumber || '',
-        teamColors: teamColors || { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
+        teamColors: (registry[name] || {}).teamColors || { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
+        ratings: ratings || (registry[name] || {}).ratings || null,
         portraitPath: `${name}full.png`,
         scaleMultiplier,
         pixelHeight,
@@ -522,6 +524,19 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   // GET /api/character/image/:name/:file — Serve character images
   router.get('/api/character/image/:name/:file', (req, res, params) => {
     return serveImage(res, path.join(TMP_DIR, 'characters', params.name, params.file));
+  });
+
+  // POST /api/character/:name/ratings — update player ratings
+  router.post('/api/character/:name/ratings', async (req, res, params) => {
+    const body = await parseBody(req);
+    const { ratings } = body;
+    if (!ratings || typeof ratings !== 'object') return json(res, { error: 'ratings object required' }, 400);
+    const registry = loadCharacters();
+    if (!registry[params.name]) return json(res, { error: 'Character not found' }, 404);
+    registry[params.name].ratings = { ...ratings };
+    saveCharacters(registry);
+    scheduleSync();
+    return json(res, { success: true, ratings: registry[params.name].ratings });
   });
 
   // POST /api/character/:name/save-animation — attach a generated sprite to the character

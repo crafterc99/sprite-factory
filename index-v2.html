@@ -647,6 +647,15 @@
 
   /* ─── OUTFIT PICKER (in new char modal) ─── */
   .cp-outfit-panel { border:1px solid var(--border); border-radius:8px; padding:8px; min-height:80px; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; max-height:160px; overflow-y:auto; background:var(--surface2); }
+  /* Ratings sliders */
+  .rating-row { display:flex; flex-direction:column; gap:3px; }
+  .rating-row-top { display:flex; justify-content:space-between; align-items:center; }
+  .rating-key { font-family:var(--mono); font-size:8px; color:#8080a0; letter-spacing:1px; }
+  .rating-val { font-family:var(--mono); font-size:11px; font-weight:bold; min-width:24px; text-align:right; }
+  .rating-slider { -webkit-appearance:none; appearance:none; width:100%; height:5px; border-radius:3px; outline:none; cursor:pointer; background:#1a1a2e; }
+  .rating-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%; cursor:pointer; border:2px solid #0a0a14; }
+  .rating-slider::-moz-range-thumb { width:14px; height:14px; border-radius:50%; cursor:pointer; border:2px solid #0a0a14; }
+  .rating-mini-badge { font-family:var(--mono); font-size:7px; padding:1px 4px; border-radius:3px; font-weight:bold; }
   .cp-wardrobe-item { width:64px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:grab; border:1px solid var(--border); border-radius:6px; padding:4px; background:var(--surface3); transition:border-color 0.15s, transform 0.1s, opacity 0.1s; user-select:none; touch-action:none; }
   .cp-wardrobe-item:hover { border-color:var(--accent); transform:scale(1.05); }
   .cp-wardrobe-item.dragging { opacity:0.4; transform:scale(0.95); }
@@ -1435,20 +1444,18 @@
             </div>
             <div class="form-group" style="margin:0">
               <label class="form-label">Build</label>
-              <select class="input" id="cpBuild">
+              <select class="input" id="cpBuild" onchange="cpInitRatings(this.value)">
                 <option>athletic</option><option>lean</option><option>stocky</option><option>heavy</option><option>slim</option>
               </select>
             </div>
           </div>
-          <div class="form-row" style="margin:0">
-            <div class="form-group" style="margin:0">
-              <label class="form-label">Primary</label>
-              <input class="input" type="color" id="cpColor1" value="#FF4400" />
+          <!-- Ratings row preview (OVR badge) -->
+          <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="cpToggleRatings()">
+            <div id="cpOvrBadge" style="font-family:var(--mono);font-size:18px;font-weight:bold;color:#fff;background:#1a1a2e;border:2px solid #30305a;border-radius:6px;padding:2px 8px;min-width:46px;text-align:center">75</div>
+            <div style="flex:1">
+              <div id="cpRatingsMini" style="display:flex;gap:4px;flex-wrap:wrap"></div>
             </div>
-            <div class="form-group" style="margin:0">
-              <label class="form-label">Secondary</label>
-              <input class="input" type="color" id="cpColor2" value="#FFFFFF" />
-            </div>
+            <div style="font-family:var(--mono);font-size:8px;color:#50507a">▼ Ratings</div>
           </div>
         </div>
       </div>
@@ -1462,6 +1469,18 @@
             <div id="cpClothingEmpty" style="color:#30304a;font-size:11px;font-family:var(--mono);width:100%;text-align:center;padding:8px 0">Drop outfit photos here or click to browse</div>
           </div>
         </label>
+      </div>
+
+      <!-- Ratings panel (collapsed by default) -->
+      <div id="cpRatingsPanel" style="display:none;margin-bottom:16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a">PLAYER RATINGS</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div id="cpOvrBig" style="font-family:var(--mono);font-size:28px;font-weight:bold;color:#fff">75</div>
+            <div style="font-family:var(--mono);font-size:8px;color:#50507a">OVR</div>
+          </div>
+        </div>
+        <div id="cpRatingsSliders" style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px"></div>
       </div>
 
       <!-- Generate button -->
@@ -1991,6 +2010,28 @@ function selectDashChar(name) {
     document.getElementById('dashHero').appendChild(savedDiv);
   }
   savedDiv.innerHTML = savedAnimsHtml;
+
+  // Ratings editor section — create/reset container
+  let ratingsDiv = document.getElementById('dashRatingsEditor');
+  if (!ratingsDiv) {
+    ratingsDiv = document.createElement('div');
+    ratingsDiv.id = 'dashRatingsEditor';
+    ratingsDiv.style.cssText = 'padding:0 20px 16px';
+    document.getElementById('dashHero').appendChild(ratingsDiv);
+  }
+  const existingRatings = char.ratings || RATINGS_DEFAULTS[char.build] || RATINGS_DEFAULTS.athletic;
+  ratingsDiv.innerHTML = `
+    <div style="border-top:1px solid var(--border);padding-top:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a">PLAYER RATINGS</div>
+        <button class="btn btn-primary btn-sm" onclick="dashToggleRatingsSliders('${name}')" style="font-size:10px;padding:5px 10px">Edit</button>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap" id="dashRatingsMini">
+        ${RATINGS_DEF.map(rd => { const v = existingRatings[rd.key] || 70; return `<span class="rating-mini-badge" style="background:${ratingColor(v)}22;color:${ratingColor(v)}">${rd.key} ${v}</span>`; }).join('')}
+      </div>
+      <div id="dashRatingsSlidersWrap" style="display:none;margin-top:12px"></div>
+    </div>`;
+  dashRatingsOpen = name;
 
   attachDashDragDrop(name);
 
@@ -2979,6 +3020,241 @@ async function exportToSoulJam() {
 const CP = { name: '', photo: null, clothing: [], portraitBase64: null, dressedPortraitBase64: null };
 const WD = { photo: null, angles: {} }; // wardrobe upload state
 
+// ─── RATINGS SYSTEM ──────────────────────────────────────────────────────────
+
+const RATINGS_DEF = [
+  { key: 'SPD', label: 'Speed',       weight: 0.10 },
+  { key: 'ACC', label: 'Accel',       weight: 0.08 },
+  { key: 'BHD', label: 'Ball Handle', weight: 0.12 },
+  { key: 'SHT', label: 'Shooting',    weight: 0.12 },
+  { key: '3PT', label: 'Three Point', weight: 0.10 },
+  { key: 'PAS', label: 'Passing',     weight: 0.08 },
+  { key: 'FIN', label: 'Finishing',   weight: 0.12 },
+  { key: 'DEF', label: 'Defense',     weight: 0.12 },
+  { key: 'ATH', label: 'Athleticism', weight: 0.08 },
+  { key: 'STR', label: 'Strength',    weight: 0.08 },
+];
+
+const RATINGS_DEFAULTS = {
+  athletic: { SPD:75, ACC:78, BHD:72, SHT:72, '3PT':70, PAS:68, FIN:74, DEF:70, ATH:78, STR:72 },
+  lean:     { SPD:80, ACC:82, BHD:78, SHT:75, '3PT':75, PAS:72, FIN:70, DEF:65, ATH:80, STR:60 },
+  stocky:   { SPD:65, ACC:65, BHD:65, SHT:68, '3PT':65, PAS:70, FIN:78, DEF:75, ATH:65, STR:82 },
+  heavy:    { SPD:55, ACC:55, BHD:60, SHT:65, '3PT':60, PAS:68, FIN:78, DEF:72, ATH:58, STR:88 },
+  slim:     { SPD:82, ACC:85, BHD:80, SHT:70, '3PT':72, PAS:74, FIN:68, DEF:62, ATH:82, STR:58 },
+};
+
+function ratingColor(v) {
+  if (v >= 90) return '#00d4ff';
+  if (v >= 80) return '#50e070';
+  if (v >= 70) return '#e0d050';
+  if (v >= 60) return '#e07030';
+  return '#cc3333';
+}
+
+function computeOVR(ratings) {
+  let ovr = 0;
+  for (const r of RATINGS_DEF) ovr += (ratings[r.key] || 65) * r.weight;
+  return Math.round(ovr);
+}
+
+function cpReadRatings() {
+  const r = {};
+  for (const rd of RATINGS_DEF) {
+    const el = document.getElementById(`cpRating_${rd.key}`);
+    r[rd.key] = el ? parseInt(el.value) : 70;
+  }
+  return r;
+}
+
+function cpSetRatings(ratings) {
+  for (const rd of RATINGS_DEF) {
+    const el = document.getElementById(`cpRating_${rd.key}`);
+    if (el) { el.value = ratings[rd.key] || 70; cpUpdateRatingDisplay(rd.key); }
+  }
+  cpUpdateOVR();
+}
+
+function cpUpdateRatingDisplay(key) {
+  const el = document.getElementById(`cpRating_${key}`);
+  const valEl = document.getElementById(`cpRatingVal_${key}`);
+  const trackEl = document.getElementById(`cpRatingTrack_${key}`);
+  if (!el || !valEl) return;
+  const v = parseInt(el.value);
+  const col = ratingColor(v);
+  valEl.textContent = v;
+  valEl.style.color = col;
+  el.style.setProperty('--c', col);
+  // Update thumb + fill color via inline style on range track
+  const pct = ((v - 25) / (99 - 25)) * 100;
+  el.style.background = `linear-gradient(to right, ${col} ${pct}%, #1a1a2e ${pct}%)`;
+  el.style.setProperty('--thumb-color', col);
+  el.style.setProperty('accent-color', col);
+  cpUpdateOVR();
+}
+
+function cpUpdateOVR() {
+  const ratings = cpReadRatings();
+  const ovr = computeOVR(ratings);
+  const col = ratingColor(ovr);
+  const badge = document.getElementById('cpOvrBadge');
+  const big   = document.getElementById('cpOvrBig');
+  if (badge) { badge.textContent = ovr; badge.style.borderColor = col; badge.style.color = col; }
+  if (big)   { big.textContent = ovr; big.style.color = col; }
+
+  // Mini badges
+  const mini = document.getElementById('cpRatingsMini');
+  if (mini) {
+    mini.innerHTML = RATINGS_DEF.map(rd => {
+      const v = ratings[rd.key] || 70;
+      return `<span class="rating-mini-badge" style="background:${ratingColor(v)}22;color:${ratingColor(v)}">${rd.key} ${v}</span>`;
+    }).join('');
+  }
+}
+
+function cpToggleRatings() {
+  const panel = document.getElementById('cpRatingsPanel');
+  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function cpBuildRatingsSliders(ratings) {
+  const container = document.getElementById('cpRatingsSliders');
+  if (!container) return;
+  container.innerHTML = RATINGS_DEF.map(rd => {
+    const v = ratings[rd.key] || 70;
+    const col = ratingColor(v);
+    const pct = ((v - 25) / (99 - 25)) * 100;
+    return `<div class="rating-row">
+      <div class="rating-row-top">
+        <span class="rating-key">${rd.label.toUpperCase()}</span>
+        <span class="rating-val" id="cpRatingVal_${rd.key}" style="color:${col}">${v}</span>
+      </div>
+      <input type="range" class="rating-slider" id="cpRating_${rd.key}"
+        min="25" max="99" value="${v}"
+        style="background:linear-gradient(to right,${col} ${pct}%,#1a1a2e ${pct}%)"
+        oninput="cpUpdateRatingDisplay('${rd.key}')" />
+    </div>`;
+  }).join('');
+  cpUpdateOVR();
+}
+
+function cpInitRatings(build) {
+  const defaults = RATINGS_DEFAULTS[build] || RATINGS_DEFAULTS.athletic;
+  cpBuildRatingsSliders(defaults);
+}
+
+// ─── RATINGS EDITOR (Dashboard) ──────────────────────────────────────────────
+
+let dashRatingsOpen = null; // name of character whose ratings panel is open
+
+async function dashOpenRatings(name) {
+  const char = STATE.roster.find(c => c.name === name);
+  if (!char) return;
+  const ratings = char.ratings || RATINGS_DEFAULTS[char.build] || RATINGS_DEFAULTS.athletic;
+
+  // Find or create the ratings editor container in the dash hero panel
+  let container = document.getElementById('dashRatingsEditor');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'dashRatingsEditor';
+    container.style.cssText = 'padding:16px 20px;border-top:1px solid var(--border)';
+    document.getElementById('dashHero').appendChild(container);
+  }
+  dashRatingsOpen = name;
+  renderDashRatingsEditor(name, ratings, container);
+}
+
+function renderDashRatingsEditor(name, ratings, container) {
+  const ovr = computeOVR(ratings);
+  const col = ratingColor(ovr);
+  container.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a">PLAYER RATINGS</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="dashOvrBig" style="font-family:var(--mono);font-size:28px;font-weight:bold;color:${col}">${ovr}</div>
+        <div style="font-family:var(--mono);font-size:8px;color:#50507a">OVR</div>
+        <button class="btn btn-primary btn-sm" onclick="dashSaveRatings('${name}')" style="font-size:10px;padding:6px 12px">Save</button>
+      </div>
+    </div>
+    <div id="dashRatingsSliders" style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px">
+      ${RATINGS_DEF.map(rd => {
+        const v = ratings[rd.key] || 70;
+        const c = ratingColor(v);
+        const pct = ((v - 25) / (99 - 25)) * 100;
+        return `<div class="rating-row">
+          <div class="rating-row-top">
+            <span class="rating-key">${rd.label.toUpperCase()}</span>
+            <span class="rating-val" id="dashRatingVal_${rd.key}" style="color:${c}">${v}</span>
+          </div>
+          <input type="range" class="rating-slider" id="dashRating_${rd.key}"
+            min="25" max="99" value="${v}"
+            style="background:linear-gradient(to right,${c} ${pct}%,#1a1a2e ${pct}%)"
+            oninput="dashUpdateRatingDisplay('${rd.key}')" />
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function dashUpdateRatingDisplay(key) {
+  const el    = document.getElementById(`dashRating_${key}`);
+  const valEl = document.getElementById(`dashRatingVal_${key}`);
+  if (!el || !valEl) return;
+  const v   = parseInt(el.value);
+  const col = ratingColor(v);
+  valEl.textContent = v;
+  valEl.style.color = col;
+  const pct = ((v - 25) / (99 - 25)) * 100;
+  el.style.background = `linear-gradient(to right, ${col} ${pct}%, #1a1a2e ${pct}%)`;
+  // Update OVR live
+  const ratings = {};
+  for (const rd of RATINGS_DEF) {
+    const e = document.getElementById(`dashRating_${rd.key}`);
+    ratings[rd.key] = e ? parseInt(e.value) : 70;
+  }
+  const ovr = computeOVR(ratings);
+  const ovrEl = document.getElementById('dashOvrBig');
+  if (ovrEl) { ovrEl.textContent = ovr; ovrEl.style.color = ratingColor(ovr); }
+}
+
+function dashToggleRatingsSliders(name) {
+  const wrap = document.getElementById('dashRatingsSlidersWrap');
+  if (!wrap) return;
+  if (wrap.style.display === 'none') {
+    const char = STATE.roster.find(c => c.name === name);
+    const ratings = char?.ratings || RATINGS_DEFAULTS[char?.build] || RATINGS_DEFAULTS.athletic;
+    renderDashRatingsEditor(name, ratings, wrap);
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
+async function dashSaveRatings(name) {
+  const ratings = {};
+  for (const rd of RATINGS_DEF) {
+    const el = document.getElementById(`dashRating_${rd.key}`);
+    ratings[rd.key] = el ? parseInt(el.value) : 70;
+  }
+  try {
+    const r = await fetch(`${API}/api/character/${encodeURIComponent(name)}/ratings`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ratings }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    // Update local roster cache
+    const char = STATE.roster.find(c => c.name === name);
+    if (char) char.ratings = ratings;
+    // Refresh mini badges
+    const miniEl = document.getElementById('dashRatingsMini');
+    if (miniEl) {
+      miniEl.innerHTML = RATINGS_DEF.map(rd => { const v = ratings[rd.key] || 70; return `<span class="rating-mini-badge" style="background:${ratingColor(v)}22;color:${ratingColor(v)}">${rd.key} ${v}</span>`; }).join('');
+    }
+    toast(`Ratings saved for ${name}`);
+  } catch (e) {
+    toast('Save failed: ' + e.message, true);
+  }
+}
+
 // Subcategory options from server (loaded on page open)
 let WD_SUBCATS = { top: ['hoodie','t-shirt','long sleeve','tank top','jersey','jacket','sweatshirt','polo'], bottom: ['pants','shorts','three-quarter','leggings','joggers','sweatpants','jeans'] };
 
@@ -3024,8 +3300,7 @@ function openAddChar(remakeName) {
   document.getElementById('cpHeightIn').value = '0';
   document.getElementById('cpWeight').value = '185';
   document.getElementById('cpBuild').value = 'athletic';
-  document.getElementById('cpColor1').value = '#FF4400';
-  document.getElementById('cpColor2').value = '#FFFFFF';
+  cpInitRatings('athletic');
   document.getElementById('cpPhotoThumb').style.display = 'none';
   document.getElementById('cpPhotoPlaceholder').style.display = 'block';
   document.getElementById('cpClothingEmpty').style.display = 'block';
@@ -3442,7 +3717,7 @@ async function cpConfirmAndGenerateAngles() {
     weightLbs: parseInt(document.getElementById('cpWeight').value) || 185,
     build: document.getElementById('cpBuild').value,
     jerseyNumber: document.getElementById('cpJersey').value,
-    teamColors: { primary: document.getElementById('cpColor1').value, secondary: document.getElementById('cpColor2').value, accent: '#000000' },
+    ratings: cpReadRatings(),
   };
 
   try {
