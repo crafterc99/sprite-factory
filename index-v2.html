@@ -1371,8 +1371,20 @@
           </div>
           <div class="form-row" style="margin:0">
             <div class="form-group" style="margin:0">
-              <label class="form-label">Height (in)</label>
-              <input class="input" type="number" id="cpHeight" value="72" min="60" max="90" />
+              <label class="form-label">Height</label>
+              <div style="display:flex;gap:6px">
+                <select class="input" id="cpHeightFt" style="flex:1">
+                  <option value="5">5′</option>
+                  <option value="6" selected>6′</option>
+                  <option value="7">7′</option>
+                </select>
+                <select class="input" id="cpHeightIn" style="flex:1">
+                  <option value="0">0″</option><option value="1">1″</option><option value="2">2″</option>
+                  <option value="3">3″</option><option value="4">4″</option><option value="5">5″</option>
+                  <option value="6">6″</option><option value="7">7″</option><option value="8">8″</option>
+                  <option value="9">9″</option><option value="10">10″</option><option value="11">11″</option>
+                </select>
+              </div>
             </div>
             <div class="form-group" style="margin:0">
               <label class="form-label">Weight (lbs)</label>
@@ -2954,7 +2966,8 @@ function openAddChar(remakeName) {
   document.getElementById('cpName').readOnly = isRemake;
   document.getElementById('cpName').style.opacity = isRemake ? '0.5' : '';
   document.getElementById('cpJersey').value = '';
-  document.getElementById('cpHeight').value = '72';
+  document.getElementById('cpHeightFt').value = '6';
+  document.getElementById('cpHeightIn').value = '0';
   document.getElementById('cpWeight').value = '185';
   document.getElementById('cpBuild').value = 'athletic';
   document.getElementById('cpColor1').value = '#FF4400';
@@ -3289,7 +3302,7 @@ async function cpConfirmAndGenerateAngles() {
   btn.disabled = true; spinner.classList.add('active');
 
   const charMeta = {
-    heightInches: parseInt(document.getElementById('cpHeight').value) || 72,
+    heightInches: (parseInt(document.getElementById('cpHeightFt').value) || 6) * 12 + (parseInt(document.getElementById('cpHeightIn').value) || 0),
     weightLbs: parseInt(document.getElementById('cpWeight').value) || 185,
     build: document.getElementById('cpBuild').value,
     jerseyNumber: document.getElementById('cpJersey').value,
