@@ -3487,13 +3487,14 @@ async function waitForJob(jobId, logFn, statusMsg) {
     } catch { continue; }
     if (d.status === 'done') return d.result;
     if (d.status === 'error') throw new Error(d.error);
-    // Show server-side progress message if available, otherwise show elapsed time
+    // Only log when the step message changes — avoids spamming the log every 3s
     if (logFn) {
-      const elapsed = Math.round((Date.now() - start) / 1000);
-      const msg = d.progress?.msg
-        ? `⋯ ${d.progress.msg} (${elapsed}s)`
-        : `⋯ ${statusMsg || 'Working'} (${elapsed}s)…`;
-      if (msg !== lastMsg) { logFn(msg); lastMsg = msg; }
+      const serverMsg = d.progress?.msg || '';
+      if (serverMsg !== lastMsg) {
+        const elapsed = Math.round((Date.now() - start) / 1000);
+        logFn(`⋯ ${serverMsg || statusMsg || 'Working'} (${elapsed}s)`);
+        lastMsg = serverMsg;
+      }
     }
   }
   throw new Error('Generation timed out (>10 min) — please try again');

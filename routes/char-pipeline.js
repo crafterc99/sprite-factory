@@ -462,22 +462,37 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
-        // Single call: photo → pixel art portrait directly (2x faster than step1+step2)
-        updateJob(jobId, { step: 1, total: 1, msg: 'Converting photo to pixel art portrait…' });
-        const prompt = loadCharPrompts().portrait || getDefaultPortraitPrompt();
-        const result = await client.generate(prompt, {
+        // Step 1: photo → pixel art
+        updateJob(jobId, { step: 1, total: 2, msg: 'Step 1/2 — Converting photo to pixel art…' });
+        const step1 = await client.generate(loadCharPrompts().step1, {
           referenceImages: [originalPath],
           aspectRatio: '3:4',
           resolution: '1K',
           model: modelId,
-          maxRetries: 1,
-          timeoutMs: 90000,
+          maxRetries: 2,
+          timeoutMs: 120000,
         });
-        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait' });
+        if (!step1.imageBuffer) throw new Error('Step 1 returned no image');
+        const step1Path = path.join(charDir, 'step1-pixel.png');
+        fs.writeFileSync(step1Path, step1.imageBuffer);
+        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step1' });
+
+        // Step 2: pixel art → clean standing portrait
+        updateJob(jobId, { step: 2, total: 2, msg: 'Step 2/2 — Building standing portrait…' });
+        const step2 = await client.generate(loadCharPrompts().step2, {
+          referenceImages: [step1Path],
+          aspectRatio: '3:4',
+          resolution: '1K',
+          model: modelId,
+          maxRetries: 2,
+          timeoutMs: 120000,
+        });
+        if (!step2.imageBuffer) throw new Error('Step 2 returned no image');
+        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step2' });
 
         const previewPath = path.join(charDir, 'step2-preview.png');
-        fs.writeFileSync(previewPath, result.imageBuffer);
-        const imageBase64 = 'data:image/png;base64,' + result.imageBuffer.toString('base64');
+        fs.writeFileSync(previewPath, step2.imageBuffer);
+        const imageBase64 = 'data:image/png;base64,' + step2.imageBuffer.toString('base64');
         finishJob(jobId, { success: true, name, imageBase64 });
       } catch (err) {
         failJob(jobId, err.message);
