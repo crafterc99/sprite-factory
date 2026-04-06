@@ -1106,12 +1106,26 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           timeoutMs: 150000,
         });
 
-        // Center, save, and sync to git so it survives redeployment
-        const centered = await centerFrame(result.imageBuffer);
-        fs.writeFileSync(framePath, centered);
+        // Save raw, then process exactly like initial generation: remove BG → crop → upload
+        fs.writeFileSync(framePath, result.imageBuffer);
+
+        if (isHead) {
+          // Headshots: just center (white BG, no chroma key needed)
+          const centered = await centerFrame(result.imageBuffer);
+          fs.writeFileSync(framePath, centered);
+        } else {
+          // Body angles: remove green BG, crop to content
+          await removeBackground(framePath, framePath);
+          const tmpPath = framePath + '.crop.tmp.png';
+          await cropToContent(framePath, tmpPath, { width: 180, height: 180, padding: 10 });
+          fs.renameSync(tmpPath, framePath);
+        }
+
+        // Upload to Supabase so it survives Railway redeploys
+        sbUpload(`${prefix}${index}.png`, framePath);
         scheduleSync();
 
-        const imageBase64 = 'data:image/png;base64,' + centered.toString('base64');
+        const imageBase64 = 'data:image/png;base64,' + fs.readFileSync(framePath).toString('base64');
         recordCost(modelId, 'char_pipeline', '1K', 2, { character: name, step: 'regen-angle', index });
         finishJob(jobId, { success: true, name, type, index, imageBase64, url: `/assets/${prefix}${index}.png` });
       } catch (err) {
