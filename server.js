@@ -238,7 +238,13 @@ async function handler(req, res) {
 
   // API routes
   if (pathname.startsWith('/api/')) {
-    return router.handle(req, res, pathname);
+    try {
+      return await router.handle(req, res, pathname);
+    } catch (err) {
+      console.error('[server] Unhandled route error:', err);
+      if (!res.headersSent) json(res, { error: err.message || 'Internal server error' }, 500);
+      return;
+    }
   }
 
   // Serve sprite assets — disk first, Supabase fallback

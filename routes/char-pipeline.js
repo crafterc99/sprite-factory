@@ -438,6 +438,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
   // POST /api/char-pipeline/pixel-char/portrait — FAST: photo → pixel art → standing portrait in one job
   router.post('/api/char-pipeline/pixel-char/portrait', async (req, res) => {
+    try {
     const body = await parseBody(req);
     const { name, photoBase64 } = body;
     if (!name) return json(res, { error: 'name required' }, 400);
@@ -500,6 +501,10 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     });
 
     return json(res, { jobId, status: 'started' });
+    } catch (err) {
+      console.error('[char-pipeline/portrait]', err);
+      return json(res, { error: err.message || 'Portrait generation failed' }, 500);
+    }
   });
 
   // POST /api/char-pipeline/pixel-char/step1 — Start async: save photo + convert to pixel art
