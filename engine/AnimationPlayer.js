@@ -23,11 +23,15 @@ const ACTION_ANIMS = {
   jumpshot:  ['jumpshot', 'ac-jumpshot', 'tween-tween'],
   crossover: ['crossover', 'tween-cross', 'ac-cgs'],
   stepback:  ['stepback'],
+  steal:     ['steal'],
   dribble:   ['static-dribble', 'dribble'],
+  defense:   ['defense-shuffle', 'defense-backpedal'],
 };
 
-const IDLE_ANIMS    = ['static-dribble', 'dribble'];
-const MOVING_ANIMS  = ['dribble', 'static-dribble'];
+const IDLE_ANIMS         = ['static-dribble', 'dribble'];
+const MOVING_ANIMS       = ['dribble', 'static-dribble'];
+const DEFENSE_IDLE_ANIMS = ['defense-shuffle', 'defense-backpedal'];
+const DEFENSE_MOVE_ANIMS = ['defense-shuffle', 'defense-backpedal'];
 
 class AnimationPlayer {
   /**
@@ -79,12 +83,13 @@ class AnimationPlayer {
 
   /**
    * Main update — call every animation frame.
-   * @param {number}  timestamp  performance.now() / rAF timestamp
-   * @param {object}  input      from ControllerInput.poll()
-   * @param {number}  dt         ms since last frame
+   * @param {number}  timestamp    performance.now() / rAF timestamp
+   * @param {object}  input        from ControllerInput.poll()
+   * @param {number}  dt           ms since last frame
+   * @param {boolean} defenseMode  L2 held
    * @returns {object} { animName, frame, facingRight, state }
    */
-  update(timestamp, input, dt) {
+  update(timestamp, input, dt, defenseMode) {
     // ── Action timer ────────────────────────────────────────────────────────
     if (this.state === PLAYER_STATES.ACTION) {
       this.actionTimer -= dt;
@@ -100,7 +105,13 @@ class AnimationPlayer {
       const moving = Math.abs(input?.moveX ?? 0) > 0.1 || Math.abs(input?.moveY ?? 0) > 0.1;
       this.state = moving ? PLAYER_STATES.MOVING : PLAYER_STATES.IDLE;
 
-      const candidates = this.state === PLAYER_STATES.MOVING ? MOVING_ANIMS : IDLE_ANIMS;
+      // Pick animation pool based on defense mode
+      let candidates;
+      if (defenseMode) {
+        candidates = moving ? DEFENSE_MOVE_ANIMS : DEFENSE_IDLE_ANIMS;
+      } else {
+        candidates = moving ? MOVING_ANIMS : IDLE_ANIMS;
+      }
       const desired = this._findFirstMatch(candidates) ?? this.availableAnims[0];
       if (desired && desired.name !== this.currentAnim) {
         this._setAnim(desired.name);

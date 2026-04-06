@@ -16,8 +16,9 @@ const MOVEMENT_PRESETS = {
   // ── Stationary ──────────────────────────────────────────────────────────
   'dribble':         { type: 'stationary', velocityX: 0,  velocityY: 0,   acceleration: 0,   duration: 0,   curve: 'linear',   lockMovement: false },
   'static-dribble':  { type: 'stationary', velocityX: 0,  velocityY: 0,   acceleration: 0,   duration: 0,   curve: 'linear',   lockMovement: false },
-  'defense-shuffle': { type: 'stationary', velocityX: 1,  velocityY: 0,   acceleration: 0.2, duration: 300, curve: 'ease-out', lockMovement: false },
-  'defense-backpedal':{ type: 'horizontal',velocityX: -2, velocityY: 0,   acceleration: 0,   duration: 350, curve: 'ease-out', lockMovement: false },
+  // L2 hold = defense sliding — lateral shuffle, slower maxSpeed, lower center of gravity
+  'defense-shuffle':   { type: 'horizontal', velocityX: 2,  velocityY: 0,   acceleration: 0.3, duration: 200, curve: 'ease-out', lockMovement: false, isDefense: true },
+  'defense-backpedal': { type: 'horizontal', velocityX: -2, velocityY: 0,   acceleration: 0,   duration: 350, curve: 'ease-out', lockMovement: false, isDefense: true },
 
   // ── Vertical (jumps) ─────────────────────────────────────────────────────
   'jumpshot':        { type: 'vertical',   velocityX: 0,  velocityY: -10, acceleration: 0,   duration: 750, curve: 'arc',      lockMovement: true  },

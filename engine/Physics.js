@@ -37,17 +37,25 @@ class PhysicsEngine {
     }
   }
 
-  /** Update physics state. Call once per render frame. Returns {x,y,vx,vy,grounded} */
-  update(inputX, inputY) {
+  /**
+   * Update physics state. Call once per render frame.
+   * @param {number}  inputX      -1..1
+   * @param {number}  inputY      -1..1
+   * @param {boolean} defenseMode  L2 held — slower speed, no jumping, shuffle stance
+   * Returns {x, y, vx, vy, grounded}
+   */
+  update(inputX, inputY, defenseMode) {
+    const effectiveMax = defenseMode ? this.maxSpeed * 0.55 : this.maxSpeed;
+    const accel        = defenseMode ? 0.45 : 0.75;
+
     // Horizontal input (only when not locked by action anim)
     if (!this._locked && inputX !== 0) {
-      const accel = 0.75;
       this.vx += inputX * accel;
       if (inputX !== 0) this.facingRight = inputX > 0;
     }
 
     // Clamp speed
-    this.vx = Math.max(-this.maxSpeed, Math.min(this.maxSpeed, this.vx));
+    this.vx = Math.max(-effectiveMax, Math.min(effectiveMax, this.vx));
 
     // Friction
     const fric = this.grounded ? this.friction : this.airFriction;

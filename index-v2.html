@@ -1397,18 +1397,22 @@
 
             <!-- Game Mode Controller Reference (hidden until active) -->
             <div id="gmControlsRef" class="gm-controls-ref" style="display:none">
-              <div style="color:#a0a0c0;margin-bottom:4px;letter-spacing:1px">CONTROLS</div>
+              <div style="color:#a0a0c0;margin-bottom:6px;letter-spacing:1px">CONTROLLER</div>
+              <div class="gm-row"><span class="gm-key">L-Stick</span> Move</div>
+              <div class="gm-row"><span class="gm-key">L-Stick flick</span> Crossover</div>
+              <div class="gm-row"><span class="gm-key">□ Square</span> Jumpshot</div>
+              <div class="gm-row"><span class="gm-key">L2</span> Defense slide</div>
+              <div class="gm-row"><span style="color:#888;font-size:8px">L2 + □</span> Steal</div>
+              <div class="gm-row"><span class="gm-key">✕ Cross</span> Dribble</div>
+              <div class="gm-row"><span class="gm-key">○ Circle</span> Stepback</div>
+              <div style="margin-top:8px;color:#a0a0c0;letter-spacing:1px">KEYBOARD</div>
               <div class="gm-row"><span class="gm-key">WASD</span> Move</div>
+              <div class="gm-row"><span class="gm-key">Q</span><span class="gm-key">E</span> Crossover ←→</div>
               <div class="gm-row"><span class="gm-key">I</span><span class="gm-key">⇧</span> Jumpshot</div>
+              <div class="gm-row"><span class="gm-key">F</span> Defense (hold)</div>
+              <div class="gm-row"><span style="color:#888;font-size:8px">F + I</span> Steal</div>
               <div class="gm-row"><span class="gm-key">J</span><span class="gm-key">SPC</span> Dribble</div>
-              <div class="gm-row"><span class="gm-key">K</span> Crossover</div>
-              <div class="gm-row"><span class="gm-key">U</span> Stepback</div>
-              <div style="margin-top:6px;color:#30305a">── gamepad ──</div>
-              <div class="gm-row">L-Stick → Move</div>
-              <div class="gm-row">△ → Jumpshot</div>
-              <div class="gm-row">○ → Crossover</div>
-              <div class="gm-row">✕ → Dribble</div>
-              <div class="gm-row">□ → Stepback</div>
+              <div class="gm-row"><span class="gm-key">L</span> Stepback</div>
             </div>
 
             <!-- Movement Data Editor (shown when anim selected) -->
@@ -6702,6 +6706,23 @@ function testingRenderLoop(timestamp) {
     ctx.stroke();
   }
 
+  // ── Defense mode tint (subtle blue overlay when L2 held) ────────────────
+  if (GM.active && GM._defenseMode) {
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = '#2244ff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    ctx.save();
+    ctx.font = 'bold 10px "Space Mono", monospace';
+    ctx.fillStyle = '#4488ff';
+    ctx.globalAlpha = 0.9;
+    ctx.textAlign = 'center';
+    ctx.fillText('DEF', W / 2, 22);
+    ctx.textAlign = 'start';
+    ctx.restore();
+  }
+
   // ── Out-of-bounds overlay ─────────────────────────────────────────────────
   const isOob = isOutOfBounds(TESTING.charX, TESTING.charY);
   if (TESTING.showOob) {
@@ -7024,35 +7045,66 @@ async function loadGMAnims() {
 function gmTick(timestamp) {
   if (!GM.active || !GM.physics || !GM.input || !GM.player) return;
 
-  // Poll input
-  const input = GM.input.poll();
+  // Poll input (pass timestamp for flick timing)
+  const input = GM.input.poll(timestamp);
+  const inDefense = input.defenseMode;
 
-  // Handle action button presses (rising edge only)
-  if (input.justY) {
-    const anim = GM.charAnims.find(a => ['jumpshot','ac-jumpshot','tween-tween'].includes(a.name));
-    const md = anim?.movementData ?? resolveMovementData(anim?.name, null);
-    GM.player.triggerAction('jumpshot', md);
-  } else if (input.justB) {
-    const anim = GM.charAnims.find(a => ['crossover','tween-cross','ac-cgs'].includes(a.name));
-    const md = anim?.movementData ?? resolveMovementData(anim?.name, null);
-    GM.player.triggerAction('crossover', md);
-  } else if (input.justX) {
-    const anim = GM.charAnims.find(a => ['stepback'].includes(a.name));
-    const md = anim?.movementData ?? resolveMovementData(anim?.name, null);
-    GM.player.triggerAction('stepback', md);
+  // ── Action button handling ────────────────────────────────────────────────
+  if (GM.player.state !== 'ACTION') {
+
+    // SQUARE — Jumpshot (offense) OR Steal (while L2/defense held)
+    if (input.justSquare) {
+      if (inDefense) {
+        // Defense mode + Square = Steal
+        const anim = GM.charAnims.find(a => a.name === 'steal');
+        const md = anim?.movementData ?? resolveMovementData('steal', null);
+        GM.player.triggerAction('steal', md);
+      } else {
+        // Offense = Jumpshot
+        const anim = GM.charAnims.find(a => ['jumpshot','ac-jumpshot','tween-tween'].includes(a.name));
+        const md = anim?.movementData ?? resolveMovementData(anim?.name ?? 'jumpshot', null);
+        GM.player.triggerAction('jumpshot', md);
+      }
+    }
+
+    // CROSS — Dribble action
+    else if (input.justCross) {
+      const anim = GM.charAnims.find(a => ['static-dribble','dribble'].includes(a.name));
+      const md = anim?.movementData ?? resolveMovementData(anim?.name ?? 'dribble', null);
+      GM.player.triggerAction('dribble', md);
+    }
+
+    // CIRCLE — Stepback
+    else if (input.justCircle) {
+      const anim = GM.charAnims.find(a => a.name === 'stepback');
+      const md = anim?.movementData ?? resolveMovementData('stepback', null);
+      GM.player.triggerAction('stepback', md);
+    }
+
+    // LEFT STICK FLICK — Crossover (direction from stick)
+    else if (input.justCrossoverLeft || input.justCrossoverRight) {
+      // Set crossover direction via physics facing before triggering
+      if (input.justCrossoverLeft)  GM.physics.facingRight = false;
+      if (input.justCrossoverRight) GM.physics.facingRight = true;
+      const anim = GM.charAnims.find(a => ['crossover','tween-cross','ac-cgs'].includes(a.name));
+      const md = anim?.movementData ?? resolveMovementData(anim?.name ?? 'crossover', null);
+      // Apply directional burst
+      const directedMd = { ...md, velocityX: Math.abs(md?.velocityX ?? 5) * (input.justCrossoverRight ? 1 : -1) };
+      GM.player.triggerAction('crossover', directedMd);
+    }
   }
 
   // Compute dt
   const dt = GM.lastTimestamp ? Math.min(timestamp - GM.lastTimestamp, 50) : 16;
   GM.lastTimestamp = timestamp;
 
-  // Update physics
-  const phys = GM.physics.update(input.moveX, input.moveY);
+  // Update physics — pass defense mode (slower speed, lower friction)
+  const phys = GM.physics.update(input.moveX, input.moveY, inDefense);
   TESTING.charX = phys.x;
   TESTING.charY = phys.y;
 
   // Update animation player
-  const animState = GM.player.update(timestamp, input, dt);
+  const animState = GM.player.update(timestamp, input, dt, inDefense);
   TESTING.currentFrame = animState.frame;
 
   // Sync TESTING fps/loop for existing render code
@@ -7062,19 +7114,21 @@ function gmTick(timestamp) {
     TESTING.loop = animState.state !== 'ACTION';
   }
 
-  // Flip strip rendering if facing left
-  // (we handle this via canvas transform in gmDrawFlipped)
-  GM._facingRight = phys.vx >= 0 ? true : (phys.vx < 0 ? false : GM._facingRight ?? true);
+  // Track facing direction for sprite flip
   if (Math.abs(phys.vx) > 0.05) GM._facingRight = phys.vx > 0;
 
-  // Update HUD
-  document.getElementById('gmHudState').textContent = animState.state;
-  document.getElementById('gmHudAnim').textContent  = animState.animName ?? '—';
-  document.getElementById('gmHudVx').textContent    = phys.vx.toFixed(2);
-  document.getElementById('gmHudVy').textContent    = phys.vy.toFixed(2);
-  document.getElementById('gmHudPos').textContent   = `${Math.round(phys.x)}, ${Math.round(phys.y)}`;
-  document.getElementById('gmHudPad').textContent   = input.gamepadConnected ? '✓ connected' : 'none';
-  document.getElementById('gmHudPad').style.color   = input.gamepadConnected ? '#00ff88' : '#30305a';
+  // ── HUD update ─────────────────────────────────────────────────────────────
+  const modeLabel = inDefense ? '<span style="color:#ff9900">DEF</span>' : animState.state;
+  document.getElementById('gmHudState').innerHTML = modeLabel;
+  document.getElementById('gmHudAnim').textContent = animState.animName ?? '—';
+  document.getElementById('gmHudVx').textContent   = phys.vx.toFixed(2);
+  document.getElementById('gmHudVy').textContent   = phys.vy.toFixed(2);
+  document.getElementById('gmHudPos').textContent  = `${Math.round(phys.x)}, ${Math.round(phys.y)}`;
+  document.getElementById('gmHudPad').textContent  = input.gamepadConnected ? '✓ connected' : 'none';
+  document.getElementById('gmHudPad').style.color  = input.gamepadConnected ? '#00ff88' : '#30305a';
+
+  // Defensive stance visual tint (subtle blue on canvas when L2 held)
+  GM._defenseMode = inDefense;
 }
 
 // ── Show movement editor when animation selected in testing ────────────────
