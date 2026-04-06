@@ -3432,20 +3432,23 @@ function cpHandlePhoto(file) {
   img.src = url;
 }
 
-// Upload CP.photo to server in 300KB chunks — bypasses Railway's ~1MB body limit
+// Upload CP.photo to server in parallel 300KB chunks — bypasses Railway's ~1MB body limit
 async function cpUploadPhotoChunked(name, photoBase64) {
-  const CHUNK = 300000; // 300KB per request — well under any proxy limit
+  const CHUNK = 300000; // 300KB per chunk — well under any proxy limit
   const total = Math.ceil(photoBase64.length / CHUNK);
-  for (let i = 0; i < total; i++) {
-    const chunk = photoBase64.slice(i * CHUNK, (i + 1) * CHUNK);
-    const r = await fetch(`${API}/api/char-pipeline/photo-chunk`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, chunk, index: i, total }),
-    });
-    const d = await r.json();
-    if (d.error) throw new Error('Photo upload failed: ' + d.error);
-  }
+  // Send all chunks in parallel — server tracks by index, assembles when all arrive
+  const results = await Promise.all(
+    Array.from({ length: total }, (_, i) => {
+      const chunk = photoBase64.slice(i * CHUNK, (i + 1) * CHUNK);
+      return fetch(`${API}/api/char-pipeline/photo-chunk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, chunk, index: i, total }),
+      }).then(r => r.json());
+    })
+  );
+  const failed = results.find(d => d.error);
+  if (failed) throw new Error('Photo upload failed: ' + failed.error);
 }
 
 function cpAddClothing(files) {

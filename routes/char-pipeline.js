@@ -452,8 +452,12 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       const chunkPath = path.join(charDir, `upload-chunk-${index}.b64`);
       fs.writeFileSync(chunkPath, chunk);
 
-      // Once all chunks received, assemble and convert to PNG
-      if (index === total - 1) {
+      // Check if ALL chunks are now on disk (parallel uploads can arrive out of order)
+      let allPresent = true;
+      for (let i = 0; i < total; i++) {
+        if (!fs.existsSync(path.join(charDir, `upload-chunk-${i}.b64`))) { allPresent = false; break; }
+      }
+      if (allPresent) {
         let full = '';
         for (let i = 0; i < total; i++) {
           const cp = path.join(charDir, `upload-chunk-${i}.b64`);
