@@ -156,7 +156,7 @@ function register(router, ctx) {
 
     setImmediate(async () => {
       try {
-        const modelId = model || 'gemini-3.1-flash-image-preview';
+        const modelId = model || 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
         const genDir = path.join(TMP_DIR, 'studio-gen', `${charName}-${animName}`);
@@ -209,7 +209,7 @@ function register(router, ctx) {
         const pixelHeight = loadCharPixelHeight(charName);
         const { processedPaths, meta: genMeta } = await processFrameSetConsistently(
           rawPaths, outPaths,
-          { frameSize: 180, padding: 8, targetContentHeight: pixelHeight || undefined }
+          { frameSize: 180, padding: 8, fillFactor: 0.85, targetContentHeight: pixelHeight || undefined }
         );
 
         // Persist scale metadata so regen uses same scale
@@ -277,7 +277,7 @@ function register(router, ctx) {
     if (!resolvedAnglePath) return json(res, { error: `No body angle or portrait found for "${charName}"` }, 400);
 
     try {
-      const modelId = model || 'gemini-3.1-flash-image-preview';
+      const modelId = model || 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const genDir = path.join(TMP_DIR, 'studio-gen', `${charName}-${animName}`);
