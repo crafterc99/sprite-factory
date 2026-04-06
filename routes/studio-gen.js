@@ -191,8 +191,8 @@ function register(router, ctx) {
               aspectRatio: '3:4',
               resolution: '1K',
               model: modelId,
-              maxRetries: 2,
-              timeoutMs: 150000,
+              maxRetries: 1,
+              timeoutMs: 70000,
             });
 
             const rawPath = path.join(genDir, `raw-${i}.png`);
@@ -324,8 +324,8 @@ function register(router, ctx) {
         aspectRatio: '3:4',
         resolution: '1K',
         model: modelId,
-        maxRetries: 2,
-        timeoutMs: 150000,
+        maxRetries: 1,
+        timeoutMs: 70000,
       });
 
       const attemptNum = Date.now();
