@@ -89,6 +89,7 @@ function register(router, ctx) {
       loop: a.loop,
       frameCount: a.frameCount,
       createdAt: a.createdAt,
+      movementData: a.movementData ?? null,
       thumbUrl: `/api/anim-lib/frame/${a.name}/0`,
     }));
     json(res, { animations });
@@ -190,6 +191,34 @@ function register(router, ctx) {
     saveIndex(index);
     scheduleSync();
     json(res, { success: true, frameIdx });
+  });
+
+  // PATCH /api/anim-lib/:name/movement — save movement data for an animation
+  // Body: AnimationMovementData { type, velocityX, velocityY, acceleration, duration, curve, lockMovement }
+  router.patch('/api/anim-lib/:name/movement', async (req, res, params) => {
+    try {
+      const body = await parseBody(req);
+      const { name } = params;
+      const index = loadIndex();
+      if (!index[name]) return json(res, { error: 'not found' }, 404);
+      index[name].movementData = body; // store exactly what was sent
+      saveIndex(index);
+      scheduleSync();
+      json(res, { success: true, movementData: body });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+  });
+
+  // DELETE /api/anim-lib/:name/movement — remove movement data (revert to preset)
+  router.delete('/api/anim-lib/:name/movement', (req, res, params) => {
+    const { name } = params;
+    const index = loadIndex();
+    if (!index[name]) return json(res, { error: 'not found' }, 404);
+    delete index[name].movementData;
+    saveIndex(index);
+    scheduleSync();
+    json(res, { success: true });
   });
 
   // DELETE /api/anim-lib/:name — delete animation

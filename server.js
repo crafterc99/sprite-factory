@@ -247,6 +247,18 @@ async function handler(req, res) {
     }
   }
 
+  // Serve engine JS modules (/engine/*.js)
+  if (pathname.startsWith('/engine/')) {
+    const file = pathname.replace('/engine/', '');
+    const enginePath = path.join(__dirname, 'engine', file);
+    if (fs.existsSync(enginePath) && enginePath.endsWith('.js')) {
+      const src = fs.readFileSync(enginePath);
+      res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache', 'Content-Length': src.length });
+      return res.end(src);
+    }
+    res.writeHead(404); return res.end('Not found');
+  }
+
   // Serve sprite assets — disk first, Supabase fallback
   if (pathname.startsWith('/assets/')) {
     const file = decodeURIComponent(pathname.replace('/assets/', ''));

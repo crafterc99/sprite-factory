@@ -716,6 +716,27 @@
   .testing-court-wrap { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#0a0a14; position:relative; overflow:hidden; }
   .testing-court-wrap canvas { image-rendering:pixelated; cursor:crosshair; max-width:100%; max-height:100%; }
   .testing-court-hint { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:10px; color:#40405a; letter-spacing:1px; pointer-events:none; background:rgba(0,0,0,0.6); padding:6px 14px; border-radius:6px; }
+
+  /* ── Game Mode Styles ────────────────────────────────────────────────── */
+  .gm-toggle-btn { font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:5px 12px;border-radius:4px;border:1px solid #30304a;background:#12121e;color:#60608a;cursor:pointer;width:100%;margin-top:8px;transition:all .15s; }
+  .gm-toggle-btn.active { background:#1a3a1a;border-color:#00cc44;color:#00ff66; }
+  .gm-hud { position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.82);border:1px solid #30304a;border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:9px;color:#90909a;min-width:160px;pointer-events:none;z-index:10; }
+  .gm-hud-row { display:flex;justify-content:space-between;gap:16px;line-height:1.8; }
+  .gm-hud-val { color:#e0e0f0; }
+  .gm-hud-val.active { color:#00ff88; }
+  .gm-controls-ref { background:#0d0d1a;border:1px solid #20203a;border-radius:6px;padding:8px;margin-top:8px;font-family:var(--mono);font-size:9px;color:#50507a; }
+  .gm-controls-ref .gm-key { display:inline-block;background:#1a1a2e;border:1px solid #30305a;border-radius:3px;padding:1px 5px;color:#a0a0c0;margin-right:3px; }
+  .gm-controls-ref .gm-row { display:flex;align-items:baseline;gap:6px;line-height:2; }
+  .gm-move-section { margin-top:10px;border-top:1px solid #1a1a2e;padding-top:8px; }
+  .gm-move-label { font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;margin-bottom:4px; }
+  .gm-move-row { display:flex;align-items:center;gap:6px;margin-bottom:4px; }
+  .gm-move-row span { font-size:9px;color:#60608a;min-width:60px; }
+  .gm-move-row input[type=range] { flex:1;height:4px; }
+  .gm-move-row .gm-val { font-family:var(--mono);font-size:9px;color:var(--text);min-width:36px;text-align:right; }
+  .gm-state-badge { display:inline-block;padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:9px;font-weight:bold; }
+  .gm-state-IDLE   { background:#1a1a2e;color:#6060aa; }
+  .gm-state-MOVING { background:#0a2a0a;color:#44cc44; }
+  .gm-state-ACTION { background:#2a1a00;color:#ff9900; }
 </style>
 </head>
 <body>
@@ -1369,7 +1390,75 @@
               <div class="testing-control-row" style="margin-top:8px">
                 <button id="testingEditBtn" class="btn btn-secondary btn-sm" style="font-family:var(--mono);font-size:9px;width:100%">✏ Edit Zones/OOB</button>
               </div>
+
+              <!-- Game Mode Toggle -->
+              <button id="gameModeBtn" class="gm-toggle-btn" onclick="toggleGameMode()">▶ GAME MODE OFF</button>
             </div>
+
+            <!-- Game Mode Controller Reference (hidden until active) -->
+            <div id="gmControlsRef" class="gm-controls-ref" style="display:none">
+              <div style="color:#a0a0c0;margin-bottom:4px;letter-spacing:1px">CONTROLS</div>
+              <div class="gm-row"><span class="gm-key">WASD</span> Move</div>
+              <div class="gm-row"><span class="gm-key">I</span><span class="gm-key">⇧</span> Jumpshot</div>
+              <div class="gm-row"><span class="gm-key">J</span><span class="gm-key">SPC</span> Dribble</div>
+              <div class="gm-row"><span class="gm-key">K</span> Crossover</div>
+              <div class="gm-row"><span class="gm-key">U</span> Stepback</div>
+              <div style="margin-top:6px;color:#30305a">── gamepad ──</div>
+              <div class="gm-row">L-Stick → Move</div>
+              <div class="gm-row">△ → Jumpshot</div>
+              <div class="gm-row">○ → Crossover</div>
+              <div class="gm-row">✕ → Dribble</div>
+              <div class="gm-row">□ → Stepback</div>
+            </div>
+
+            <!-- Movement Data Editor (shown when anim selected) -->
+            <div id="gmMoveEditor" class="gm-move-section" style="display:none">
+              <div class="gm-move-label">MOVEMENT DATA</div>
+              <div class="gm-move-row">
+                <span>Type</span>
+                <select id="gmMoveType" class="input" style="font-size:9px;padding:2px 4px;height:22px;flex:1" onchange="gmUpdateMovePreview()">
+                  <option value="stationary">stationary</option>
+                  <option value="vertical">vertical (jump)</option>
+                  <option value="horizontal">horizontal (slide)</option>
+                  <option value="combo">combo</option>
+                </select>
+              </div>
+              <div class="gm-move-row">
+                <span>Vel X</span>
+                <input type="range" id="gmVelX" min="-10" max="10" value="0" step="0.5" oninput="gmUpdateMovePreview()" />
+                <span class="gm-val" id="gmVelXVal">0</span>
+              </div>
+              <div class="gm-move-row">
+                <span>Vel Y</span>
+                <input type="range" id="gmVelY" min="-15" max="5" value="0" step="0.5" oninput="gmUpdateMovePreview()" />
+                <span class="gm-val" id="gmVelYVal">0</span>
+              </div>
+              <div class="gm-move-row">
+                <span>Duration</span>
+                <input type="range" id="gmDuration" min="100" max="1500" value="500" step="50" oninput="gmUpdateMovePreview()" />
+                <span class="gm-val" id="gmDurationVal">500ms</span>
+              </div>
+              <div class="gm-move-row">
+                <span>Curve</span>
+                <select id="gmCurve" class="input" style="font-size:9px;padding:2px 4px;height:22px;flex:1">
+                  <option value="linear">linear</option>
+                  <option value="ease-in">ease-in</option>
+                  <option value="ease-out">ease-out</option>
+                  <option value="arc">arc</option>
+                </select>
+              </div>
+              <div class="gm-move-row" style="margin-top:4px">
+                <label style="font-size:9px;color:#60608a;display:flex;align-items:center;gap:4px;cursor:pointer">
+                  <input type="checkbox" id="gmLockMovement" /> Lock movement during action
+                </label>
+              </div>
+              <div style="display:flex;gap:4px;margin-top:6px">
+                <button class="btn btn-secondary btn-sm" style="font-size:9px;flex:1" onclick="gmResetMovement()">Reset</button>
+                <button class="btn btn-primary btn-sm" style="font-size:9px;flex:1" onclick="gmSaveMovement()">Save</button>
+              </div>
+              <div id="gmMoveSaveStatus" style="font-size:9px;color:#50507a;margin-top:4px;font-family:var(--mono)"></div>
+            </div>
+
             <div class="testing-info">
               <div id="testingInfoText" style="font-family:var(--mono);font-size:9px;color:#50507a;line-height:1.6"></div>
             </div>
@@ -1378,6 +1467,15 @@
           <div class="testing-court-wrap">
             <canvas id="testingCourt" width="960" height="640"></canvas>
             <div class="testing-court-hint" id="testingCourtHint">Click the court to place character. Arrow keys or WASD to move.</div>
+            <!-- Game Mode HUD (shown when active) -->
+            <div id="gmHud" class="gm-hud" style="display:none">
+              <div class="gm-hud-row"><span>STATE</span><span class="gm-hud-val" id="gmHudState">IDLE</span></div>
+              <div class="gm-hud-row"><span>ANIM</span><span class="gm-hud-val" id="gmHudAnim">—</span></div>
+              <div class="gm-hud-row"><span>vX</span><span class="gm-hud-val" id="gmHudVx">0.0</span></div>
+              <div class="gm-hud-row"><span>vY</span><span class="gm-hud-val" id="gmHudVy">0.0</span></div>
+              <div class="gm-hud-row"><span>POS</span><span class="gm-hud-val" id="gmHudPos">480, 520</span></div>
+              <div class="gm-hud-row" style="margin-top:4px"><span>PAD</span><span class="gm-hud-val" id="gmHudPad" style="color:#30305a">none</span></div>
+            </div>
           </div>
         </div>
       </div><!-- /page-testing -->
@@ -6437,6 +6535,9 @@ function testingSelectAnim(animName) {
   updateTestingInfo();
   const hint = document.getElementById('testingCourtHint');
   if (hint) hint.style.display = 'none';
+
+  // Show movement editor for this animation
+  if (typeof gmShowMoveEditor === 'function') gmShowMoveEditor(animName);
 }
 
 function loadAngleStrips(charName, animName, fallbackUrl) {
@@ -6519,6 +6620,9 @@ function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps, angleIndex) 
   updateTestingInfo();
   const hint = document.getElementById('testingCourtHint');
   if (hint) hint.style.display = 'none';
+
+  // Show movement editor
+  if (typeof gmShowMoveEditor === 'function') gmShowMoveEditor(animId);
 }
 
 function updateTestingInfo() {
@@ -6564,15 +6668,20 @@ function testingRenderLoop(timestamp) {
   const ctx = TESTING.ctx;
   const W = canvas.width, H = canvas.height;
 
-  // Handle movement
-  const ms = TESTING.moveSpeed;
-  if (TESTING.keysDown.has('arrowleft') || TESTING.keysDown.has('a')) TESTING.charX -= ms;
-  if (TESTING.keysDown.has('arrowright') || TESTING.keysDown.has('d')) TESTING.charX += ms;
-  if (TESTING.keysDown.has('arrowup') || TESTING.keysDown.has('w')) TESTING.charY -= ms;
-  if (TESTING.keysDown.has('arrowdown') || TESTING.keysDown.has('s')) TESTING.charY += ms;
-  // Clamp
-  TESTING.charX = Math.max(0, Math.min(W, TESTING.charX));
-  TESTING.charY = Math.max(0, Math.min(H, TESTING.charY));
+  // ── Game Mode physics tick (overrides manual keyboard movement when active) ──
+  if (GM.active) {
+    gmTick(timestamp);
+  } else {
+    // Handle manual movement (original behaviour — only when Game Mode is off)
+    const ms = TESTING.moveSpeed;
+    if (TESTING.keysDown.has('arrowleft') || TESTING.keysDown.has('a')) TESTING.charX -= ms;
+    if (TESTING.keysDown.has('arrowright') || TESTING.keysDown.has('d')) TESTING.charX += ms;
+    if (TESTING.keysDown.has('arrowup') || TESTING.keysDown.has('w')) TESTING.charY -= ms;
+    if (TESTING.keysDown.has('arrowdown') || TESTING.keysDown.has('s')) TESTING.charY += ms;
+    // Clamp
+    TESTING.charX = Math.max(0, Math.min(W, TESTING.charX));
+    TESTING.charY = Math.max(0, Math.min(H, TESTING.charY));
+  }
 
   // Clear
   ctx.clearRect(0, 0, W, H);
@@ -6789,6 +6898,271 @@ function testingRenderLoop(timestamp) {
   TESTING.animId = requestAnimationFrame(testingRenderLoop);
 }
 
+</script>
+
+<!-- ─── Movement Engine ─────────────────────────────────────────────────── -->
+<script src="/engine/Physics.js"></script>
+<script src="/engine/MovementEngine.js"></script>
+<script src="/engine/ControllerInput.js"></script>
+<script src="/engine/AnimationPlayer.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// GAME MODE — Animation Movement Engine + Game Tester
+// Non-destructive: when GM.active === false, everything behaves as before.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const GM = {
+  active: false,
+  physics: null,
+  input: null,
+  player: null,
+  lastTimestamp: 0,
+  animCache: {},       // { animName: { img, frameCount, fps, loop, movementData } }
+  charAnims: [],       // current character's anim list (from anim-lib)
+  selectedChar: null,
+};
+
+// ── Toggle Game Mode ────────────────────────────────────────────────────────
+function toggleGameMode() {
+  if (GM.active) {
+    stopGameMode();
+  } else {
+    startGameMode();
+  }
+}
+
+function startGameMode() {
+  if (!TESTING.ctx) { toast('Open the Testing page first', true); return; }
+  if (!TESTING.selectedChar) { toast('Select a character first', true); return; }
+
+  GM.active = true;
+  GM.selectedChar = TESTING.selectedChar;
+
+  // ── Initialise physics ──────────────────────────────────────────────────
+  GM.physics = new PhysicsEngine({
+    groundY: 520,
+    boundsX: [80, 880],
+    boundsY: [80, 520],
+    maxSpeed: 5,
+  });
+  GM.physics.reset(TESTING.charX, 520);
+
+  // ── Load character animations from anim-lib ─────────────────────────────
+  loadGMAnims().then(() => {
+    // ── Initialise animation player ─────────────────────────────────────
+    GM.player = new AnimationPlayer({
+      availableAnims: GM.charAnims,
+      physics: GM.physics,
+      onAnimChange: (name) => {
+        if (TESTING.selectedAnim !== name) {
+          // Reflect in TESTING state for strip lookup
+          TESTING.selectedAnim = name;
+          TESTING.currentFrame = 0;
+          TESTING.lastFrameTime = 0;
+        }
+      },
+    });
+
+    // ── Initialise controller input ────────────────────────────────────
+    GM.input = new ControllerInput();
+    GM.input.start();
+  });
+
+  // ── UI updates ──────────────────────────────────────────────────────────
+  document.getElementById('gameModeBtn').textContent = '◼ GAME MODE ON';
+  document.getElementById('gameModeBtn').classList.add('active');
+  document.getElementById('gmHud').style.display = 'block';
+  document.getElementById('gmControlsRef').style.display = 'block';
+  document.getElementById('testingCourtHint').style.display = 'none';
+
+  // Override the court hint text
+  toast('Game Mode ON — use WASD + I/J/K/U or controller', false);
+}
+
+function stopGameMode() {
+  GM.active = false;
+  GM.input?.stop();
+  GM.input  = null;
+  GM.physics = null;
+  GM.player  = null;
+  GM.charAnims = [];
+
+  document.getElementById('gameModeBtn').textContent = '▶ GAME MODE OFF';
+  document.getElementById('gameModeBtn').classList.remove('active');
+  document.getElementById('gmHud').style.display = 'none';
+  document.getElementById('gmControlsRef').style.display = 'none';
+  toast('Game Mode OFF', false);
+}
+
+// ── Load anim-lib entries for the current character ─────────────────────────
+async function loadGMAnims() {
+  try {
+    const r = await fetch(`${API}/api/anim-lib`);
+    const d = await r.json();
+    const allAnims = d.animations ?? [];
+    // Resolve strip images for each animation
+    GM.charAnims = [];
+    for (const anim of allAnims) {
+      const stripUrl = `/assets/${GM.selectedChar}-${anim.name}.png`;
+      GM.charAnims.push({
+        name: anim.name,
+        fps: anim.fps ?? 8,
+        loop: anim.loop ?? true,
+        frameCount: anim.frameCount ?? 1,
+        movementData: anim.movementData ?? null,
+        stripUrl,
+      });
+    }
+    if (GM.player) GM.player.setAnimations(GM.charAnims);
+  } catch (e) {
+    console.warn('[GM] Failed to load anims:', e.message);
+  }
+}
+
+// ── Game Mode tick — called inside testingRenderLoop before draw ────────────
+function gmTick(timestamp) {
+  if (!GM.active || !GM.physics || !GM.input || !GM.player) return;
+
+  // Poll input
+  const input = GM.input.poll();
+
+  // Handle action button presses (rising edge only)
+  if (input.justY) {
+    const anim = GM.charAnims.find(a => ['jumpshot','ac-jumpshot','tween-tween'].includes(a.name));
+    const md = anim?.movementData ?? resolveMovementData(anim?.name, null);
+    GM.player.triggerAction('jumpshot', md);
+  } else if (input.justB) {
+    const anim = GM.charAnims.find(a => ['crossover','tween-cross','ac-cgs'].includes(a.name));
+    const md = anim?.movementData ?? resolveMovementData(anim?.name, null);
+    GM.player.triggerAction('crossover', md);
+  } else if (input.justX) {
+    const anim = GM.charAnims.find(a => ['stepback'].includes(a.name));
+    const md = anim?.movementData ?? resolveMovementData(anim?.name, null);
+    GM.player.triggerAction('stepback', md);
+  }
+
+  // Compute dt
+  const dt = GM.lastTimestamp ? Math.min(timestamp - GM.lastTimestamp, 50) : 16;
+  GM.lastTimestamp = timestamp;
+
+  // Update physics
+  const phys = GM.physics.update(input.moveX, input.moveY);
+  TESTING.charX = phys.x;
+  TESTING.charY = phys.y;
+
+  // Update animation player
+  const animState = GM.player.update(timestamp, input, dt);
+  TESTING.currentFrame = animState.frame;
+
+  // Sync TESTING fps/loop for existing render code
+  const curAnim = GM.charAnims.find(a => a.name === animState.animName);
+  if (curAnim) {
+    TESTING.fps  = curAnim.fps;
+    TESTING.loop = animState.state !== 'ACTION';
+  }
+
+  // Flip strip rendering if facing left
+  // (we handle this via canvas transform in gmDrawFlipped)
+  GM._facingRight = phys.vx >= 0 ? true : (phys.vx < 0 ? false : GM._facingRight ?? true);
+  if (Math.abs(phys.vx) > 0.05) GM._facingRight = phys.vx > 0;
+
+  // Update HUD
+  document.getElementById('gmHudState').textContent = animState.state;
+  document.getElementById('gmHudAnim').textContent  = animState.animName ?? '—';
+  document.getElementById('gmHudVx').textContent    = phys.vx.toFixed(2);
+  document.getElementById('gmHudVy').textContent    = phys.vy.toFixed(2);
+  document.getElementById('gmHudPos').textContent   = `${Math.round(phys.x)}, ${Math.round(phys.y)}`;
+  document.getElementById('gmHudPad').textContent   = input.gamepadConnected ? '✓ connected' : 'none';
+  document.getElementById('gmHudPad').style.color   = input.gamepadConnected ? '#00ff88' : '#30305a';
+}
+
+// ── Show movement editor when animation selected in testing ────────────────
+function gmShowMoveEditor(animName) {
+  if (!animName) {
+    document.getElementById('gmMoveEditor').style.display = 'none';
+    return;
+  }
+  const preset = getMovementPreset(animName);
+  const custom = GM.charAnims?.find(a => a.name === animName)?.movementData ?? null;
+  const data   = Object.assign({}, preset ?? {}, custom ?? {});
+
+  document.getElementById('gmMoveEditor').style.display = 'block';
+  document.getElementById('gmMoveEditor').dataset.anim   = animName;
+  document.getElementById('gmMoveType').value = data.type ?? 'stationary';
+  document.getElementById('gmVelX').value = data.velocityX ?? 0;
+  document.getElementById('gmVelY').value = data.velocityY ?? 0;
+  document.getElementById('gmDuration').value = data.duration ?? 500;
+  document.getElementById('gmCurve').value = data.curve ?? 'linear';
+  document.getElementById('gmLockMovement').checked = !!data.lockMovement;
+  gmUpdateMovePreview();
+  document.getElementById('gmMoveSaveStatus').textContent = custom ? '● custom data saved' : '○ using preset';
+}
+
+function gmUpdateMovePreview() {
+  document.getElementById('gmVelXVal').textContent = parseFloat(document.getElementById('gmVelX').value).toFixed(1);
+  document.getElementById('gmVelYVal').textContent = parseFloat(document.getElementById('gmVelY').value).toFixed(1);
+  document.getElementById('gmDurationVal').textContent = document.getElementById('gmDuration').value + 'ms';
+}
+
+async function gmSaveMovement() {
+  const animName = document.getElementById('gmMoveEditor').dataset.anim;
+  if (!animName) return;
+  const data = {
+    type:         document.getElementById('gmMoveType').value,
+    velocityX:    parseFloat(document.getElementById('gmVelX').value),
+    velocityY:    parseFloat(document.getElementById('gmVelY').value),
+    duration:     parseInt(document.getElementById('gmDuration').value),
+    curve:        document.getElementById('gmCurve').value,
+    lockMovement: document.getElementById('gmLockMovement').checked,
+  };
+  try {
+    const r = await fetch(`${API}/api/anim-lib/${animName}/movement`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    document.getElementById('gmMoveSaveStatus').textContent = '✓ saved';
+    document.getElementById('gmMoveSaveStatus').style.color = '#00cc44';
+    // Update local cache
+    const entry = GM.charAnims?.find(a => a.name === animName);
+    if (entry) entry.movementData = data;
+    setTimeout(() => { document.getElementById('gmMoveSaveStatus').style.color = '#50507a'; }, 2000);
+  } catch (e) {
+    document.getElementById('gmMoveSaveStatus').textContent = '✗ ' + e.message;
+    document.getElementById('gmMoveSaveStatus').style.color = '#cc3333';
+  }
+}
+
+async function gmResetMovement() {
+  const animName = document.getElementById('gmMoveEditor').dataset.anim;
+  if (!animName) return;
+  try {
+    await fetch(`${API}/api/anim-lib/${animName}/movement`, { method: 'DELETE' });
+    const entry = GM.charAnims?.find(a => a.name === animName);
+    if (entry) delete entry.movementData;
+    gmShowMoveEditor(animName); // reload from preset
+    toast('Movement data reset to preset', false);
+  } catch (e) {
+    toast('Reset failed: ' + e.message, true);
+  }
+}
+
+// ── Draw facing flip helper (called from within testingRenderLoop when GM active)
+function gmApplyFacingFlip(ctx, charX, drawW) {
+  if (GM.active && !(GM._facingRight ?? true)) {
+    ctx.save();
+    ctx.translate(charX * 2, 0);
+    ctx.scale(-1, 1);
+    return true;
+  }
+  return false;
+}
+function gmRestoreFlip(ctx, flipped) {
+  if (flipped) ctx.restore();
+}
 </script>
 </body>
 </html>
