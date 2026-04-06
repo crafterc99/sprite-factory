@@ -91,7 +91,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
     }
 
     try {
-      const client = new NanaBananaClient({ model: model || 'gemini-3.1-flash-image-preview' });
+      const client = new NanaBananaClient({ model: model || 'gemini-3-pro-image-preview' });
 
       const prompt = [
         `Create a FULL BODY standing character portrait showing the complete person from head to shoes.`,
@@ -117,11 +117,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
       const result = await client.generate(prompt, {
         aspectRatio: '3:4',
         resolution: '2K',
-        model: model || 'gemini-3.1-flash-image-preview',
+        model: model || 'gemini-3-pro-image-preview',
       });
 
       fs.writeFileSync(portraitPath, result.imageBuffer);
-      const cost = recordCost(model || 'gemini-3.1-flash-image-preview', 'anchor-portrait', '2K', 0, { character });
+      const cost = recordCost(model || 'gemini-3-pro-image-preview', 'anchor-portrait', '2K', 0, { character });
 
       // Sync runtime CHARACTERS
       if (!CHARACTERS[character]) {
@@ -152,7 +152,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
     sseStart(res);
     sseSend(res, 'start', { character, totalAngles: ANGLE_NAMES.length });
 
-    const modelId = model || 'gemini-3.1-flash-image-preview';
+    const modelId = model || 'gemini-3-pro-image-preview';
     const client = new NanaBananaClient({ model: modelId });
     const angles = new Array(ANGLE_NAMES.length).fill(null);
     let totalCost = 0;
@@ -257,7 +257,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
     sseStart(res);
     sseSend(res, 'start', { character, totalVariants: BALL_VARIANTS.length });
 
-    const client = new NanaBananaClient({ model: model || 'gemini-3.1-flash-image-preview' });
+    const client = new NanaBananaClient({ model: model || 'gemini-3-pro-image-preview' });
     const ballRefs = [];
     let totalCost = 0;
 
@@ -289,11 +289,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
           referenceImages,
           aspectRatio: '3:4',
           resolution: '2K',
-          model: model || 'gemini-3.1-flash-image-preview',
+          model: model || 'gemini-3-pro-image-preview',
         });
 
         fs.writeFileSync(filePath, result.imageBuffer);
-        const cost = recordCost(model || 'gemini-3.1-flash-image-preview', 'anchor-ball-ref', '2K', referenceImages.length, {
+        const cost = recordCost(model || 'gemini-3-pro-image-preview', 'anchor-ball-ref', '2K', referenceImages.length, {
           character, variant, index: idx,
         });
         totalCost += cost?.totalCost || 0;
@@ -381,7 +381,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
       framesPerTarget: sourceFrames.length,
     });
 
-    const client = new NanaBananaClient({ model: model || 'gemini-3.1-flash-image-preview' });
+    const client = new NanaBananaClient({ model: model || 'gemini-3-pro-image-preview' });
     const results = {};
     let totalCost = 0;
 
@@ -429,7 +429,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
           const result = await client.generate(prompt, {
             referenceImages: [sourceFrames[fi], targetPortrait],
             resolution: '2K',
-            model: model || 'gemini-3.1-flash-image-preview',
+            model: model || 'gemini-3-pro-image-preview',
           });
 
           const framePath = path.join(targetFramesDir, `frame-${String(fi).padStart(3, '0')}.png`);
@@ -440,7 +440,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
             await processSingleFrame(framePath, framePath);
           } catch {}
 
-          const cost = recordCost(model || 'gemini-3.1-flash-image-preview', 'anchor-replicate', '2K', 2, {
+          const cost = recordCost(model || 'gemini-3-pro-image-preview', 'anchor-replicate', '2K', 2, {
             sourceCharacter, targetCharacter: targetChar, animation: sourceAnimation, frame: fi,
           });
           totalCost += cost?.totalCost || 0;
