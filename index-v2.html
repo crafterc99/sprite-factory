@@ -3419,8 +3419,9 @@ function cpHandlePhoto(file) {
   const url = URL.createObjectURL(file);
   img.onload = () => {
     URL.revokeObjectURL(url);
-    // Resize to max 1024px on longest side — keeps quality for AI but avoids Railway body-size limit
-    const MAX = 1024;
+    // Compress to max 768px JPEG 0.82 — keeps enough quality for AI while staying under Railway's ~1MB proxy limit
+    // (1024px at 0.92 can produce 700-900KB base64, too close to the limit)
+    const MAX = 768;
     let w = img.width, h = img.height;
     if (w > MAX || h > MAX) {
       if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
@@ -3429,7 +3430,13 @@ function cpHandlePhoto(file) {
     const canvas = document.createElement('canvas');
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-    CP.photo = canvas.toDataURL('image/jpeg', 0.92);
+    const compressed = canvas.toDataURL('image/jpeg', 0.82);
+    // Safety check: if still > 600KB base64, re-compress at lower quality
+    if (compressed.length > 600000) {
+      CP.photo = canvas.toDataURL('image/jpeg', 0.65);
+    } else {
+      CP.photo = compressed;
+    }
     const thumb = document.getElementById('cpPhotoThumb');
     thumb.src = CP.photo;
     thumb.style.display = 'block';
