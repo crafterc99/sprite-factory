@@ -3378,7 +3378,8 @@ async function cpResumeModal(name) {
   const job = CPJobs[name] || {};
   CP.name = name;
   CP.portraitBase64 = job.portraitBase64 || null;
-  CP.dressedPortraitBase64 = job.portraitBase64 || null;
+  CP.dressedPortraitBase64 = job.dressedPortraitBase64 || job.portraitBase64 || null;
+  CP.clothing = job.clothing ? job.clothing.map(c => ({ ...c })) : [];
 
   document.getElementById('cpName').value = name;
   document.getElementById('cpGenBtn').disabled = true;
@@ -3507,11 +3508,22 @@ async function cpGenerate() {
   if (!CP.photo) return toast('Upload a photo first', true);
 
   CP.name = name;
-  // Capture photo now — modal may switch to another char later
+  // Capture photo and clothing NOW — modal may switch to another char before portrait finishes
   const photoBase64 = CP.photo;
+  const clothingSnapshot = CP.clothing.map(c => ({ ...c }));
 
-  // Create/update the background job entry for this character
-  const job = { name, stage: 'step1', portraitBase64: null };
+  // Create/update the background job entry — store everything needed for this character
+  const job = {
+    name, stage: 'step1', portraitBase64: null, dressedPortraitBase64: null,
+    clothing: clothingSnapshot,
+    charMeta: {
+      heightInches: (parseInt(document.getElementById('cpHeightFt').value) || 6) * 12 + (parseInt(document.getElementById('cpHeightIn').value) || 0),
+      weightLbs: parseInt(document.getElementById('cpWeight').value) || 185,
+      build: document.getElementById('cpBuild').value,
+      jerseyNumber: document.getElementById('cpJersey').value,
+      ratings: cpReadRatings(),
+    },
+  };
   CPJobs[name] = job;
   cpSaveState();
   renderDashboard(); // show in-progress card immediately
@@ -3544,9 +3556,10 @@ async function cpGenerate() {
     cpSaveState();
     renderDashboard(); // update card label to "tap to confirm"
 
-    // Only update modal UI if this character is still the active one
+    // Update modal UI only if this character is still active in the modal
     if (CP.name === name) {
       CP.portraitBase64 = job.portraitBase64;
+      CP.dressedPortraitBase64 = job.portraitBase64;
       document.getElementById('cpPortraitPreview').src = job.portraitBase64;
       document.getElementById('cpPortraitConfirm').style.display = 'block';
     } else {
@@ -3567,6 +3580,7 @@ async function cpGenerate() {
 async function cpUsePortrait() {
   document.getElementById('cpPortraitConfirm').style.display = 'none';
   CP.dressedPortraitBase64 = CP.portraitBase64;
+  if (CPJobs[CP.name]) CPJobs[CP.name].dressedPortraitBase64 = CP.portraitBase64;
   document.getElementById('cpOutfitPicker').style.display = 'block';
 
   // Set initial preview
@@ -3665,17 +3679,21 @@ async function cpProcessOutfitQueue() {
 }
 
 async function cpApplyOutfitItem(id, type, name, subcategory) {
+  const charName = CP.name; // capture now — don't re-read CP.name after awaits
   const statusEl = document.getElementById('cpOutfitApplyStatus');
   statusEl.style.display = 'flex';
   statusEl.querySelector('span + *') && (statusEl.lastChild.textContent = `Applying ${subcategory || type} "${name}"…`);
   cpLog(`Applying ${subcategory || type} "${name}"…`);
+
+  // Read current dressed portrait from job (isolated per character)
+  const currentPortrait = (CPJobs[charName] && CPJobs[charName].dressedPortraitBase64) || CP.dressedPortraitBase64;
 
   try {
     const r = await fetch(`${API}/api/char-pipeline/apply-outfit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        portraitBase64: CP.dressedPortraitBase64,
+        portraitBase64: currentPortrait,
         topId:           type === 'top'    ? id : undefined,
         bottomId:        type === 'bottom' ? id : undefined,
         topSubcategory:    type === 'top'    ? (subcategory || undefined) : undefined,
@@ -3686,7 +3704,9 @@ async function cpApplyOutfitItem(id, type, name, subcategory) {
     if (d.error) throw new Error(d.error);
     const result = await waitForJob(d.jobId, cpLog, `Applying ${subcategory || type}`);
 
-    CP.dressedPortraitBase64 = result.imageBase64;
+    // Write back to job AND to CP (CP may have shifted to another char but job is always right)
+    if (CPJobs[charName]) CPJobs[charName].dressedPortraitBase64 = result.imageBase64;
+    if (CP.name === charName) CP.dressedPortraitBase64 = result.imageBase64;
     const preview = document.getElementById('cpDressedPreview');
     preview.src = result.imageBase64;
     preview.style.display = 'block';
@@ -3756,9 +3776,11 @@ function cpInitTouchDrag() {
 }
 
 function cpClearOutfitPiece(type) {
-  // Revert to original portrait and clear badge
-  CP.dressedPortraitBase64 = CP.portraitBase64;
-  document.getElementById('cpDressedPreview').src = CP.portraitBase64;
+  const charName = CP.name;
+  const base = (CPJobs[charName] && CPJobs[charName].portraitBase64) || CP.portraitBase64;
+  CP.dressedPortraitBase64 = base;
+  if (CPJobs[charName]) CPJobs[charName].dressedPortraitBase64 = base;
+  document.getElementById('cpDressedPreview').src = base;
   document.getElementById(type === 'top' ? 'cpAppliedTop' : 'cpAppliedBottom').style.display = 'none';
   cpLog(`${type} removed — reverted to original portrait`);
 }
@@ -3766,10 +3788,12 @@ function cpClearOutfitPiece(type) {
 // Called by "Generate Angles →" or "Skip Outfit"
 async function cpProceedToAngles() {
   document.getElementById('cpOutfitPicker').style.display = 'none';
-  // Use dressed portrait (may be same as original if no outfit applied)
-  CP.portraitBase64 = CP.dressedPortraitBase64 || CP.portraitBase64;
-  // Sync back to job so it survives if modal is closed mid-generation
-  if (CPJobs[CP.name]) CPJobs[CP.name].portraitBase64 = CP.portraitBase64;
+  const charName = CP.name;
+  const job = CPJobs[charName];
+  // Use dressed portrait (falls back to base portrait if no outfit applied), stored in job
+  const finalPortrait = (job && job.dressedPortraitBase64) || CP.dressedPortraitBase64 || CP.portraitBase64;
+  CP.portraitBase64 = finalPortrait;
+  if (job) job.portraitBase64 = finalPortrait;
   await cpConfirmAndGenerateAngles();
 }
 
@@ -3778,12 +3802,12 @@ async function cpConfirmAndGenerateAngles() {
   const name = CP.name;
   if (!name) return;
 
-  document.getElementById('cpPortraitConfirm').style.display = 'none';
-  const btn = document.getElementById('cpGenBtn');
-  const spinner = document.getElementById('cpGenSpinner');
-  btn.disabled = true; spinner.classList.add('active');
-
-  const charMeta = {
+  // Capture ALL character-specific data as locals NOW before any awaits
+  // Using job as source-of-truth (set when generation started), fallback to CP
+  const job = CPJobs[name] || {};
+  const portraitBase64 = job.portraitBase64 || CP.portraitBase64;
+  const clothing = job.clothing || CP.clothing || [];
+  const charMeta = job.charMeta || {
     heightInches: (parseInt(document.getElementById('cpHeightFt').value) || 6) * 12 + (parseInt(document.getElementById('cpHeightIn').value) || 0),
     weightLbs: parseInt(document.getElementById('cpWeight').value) || 185,
     build: document.getElementById('cpBuild').value,
@@ -3791,29 +3815,34 @@ async function cpConfirmAndGenerateAngles() {
     ratings: cpReadRatings(),
   };
 
+  document.getElementById('cpPortraitConfirm').style.display = 'none';
+  const btn = document.getElementById('cpGenBtn');
+  const spinner = document.getElementById('cpGenSpinner');
+  btn.disabled = true; spinner.classList.add('active');
+
   try {
-    // Save portrait
+    // Save portrait — use local variables, not CP (CP may have shifted to another character)
     cpLog('Saving portrait…');
     const r2 = await fetch(`${API}/api/char-pipeline/pixel-char/confirm`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, portraitBase64: CP.portraitBase64, ...charMeta }),
+      body: JSON.stringify({ name, portraitBase64, ...charMeta }),
     });
     const d2 = await r2.json();
     if (d2.error) throw new Error(d2.error);
     cpLog('✓ Portrait saved', 'ok');
 
-    const clothingNote = CP.clothing.length
-      ? `\nCharacter is wearing the outfit shown in the additional reference images (${CP.clothing.length} clothing photo${CP.clothing.length > 1 ? 's' : ''} provided).`
+    const clothingNote = clothing.length
+      ? `\nCharacter is wearing the outfit shown in the additional reference images (${clothing.length} clothing photo${clothing.length > 1 ? 's' : ''} provided).`
       : '';
 
     // Start both angle generation jobs in parallel (async — each returns a jobId immediately)
     cpLog('Starting body turnaround + headshot generation…');
-    if (!CPJobs[name]) CPJobs[name] = { name, stage: 'idle', portraitBase64: CP.portraitBase64 };
+    if (!CPJobs[name]) CPJobs[name] = { name, stage: 'idle', portraitBase64 };
     CPJobs[name].stage = 'angles'; cpSaveState(); renderDashboard();
     const [jBody, jHead] = await Promise.all([
       fetch(`${API}/api/char-pipeline/generate-body-angles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, clothingNote, clothingImages: CP.clothing.map(c => c.data) }),
+        body: JSON.stringify({ name, clothingNote, clothingImages: clothing.map(c => c.data) }),
       }).then(r => r.json()),
       fetch(`${API}/api/char-pipeline/generate-head-angles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
