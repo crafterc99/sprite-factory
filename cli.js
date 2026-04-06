@@ -118,7 +118,7 @@ const gen = program.command('generate').alias('gen').description('Generate sprit
 
 gen.command('strip <character> <animation>')
   .description('Generate an animation strip (all frames in one call)')
-  .option('-m, --model <model>', 'Model to use', 'gemini-3-pro-image-preview')
+  .option('-m, --model <model>', 'Model to use', 'gemini-3.1-flash-image-preview')
   .option('--prompt <prompt>', 'Custom prompt override')
   .action(async (character, animation, opts) => {
     console.error(`Generating ${animation} strip for ${character}...`);
@@ -133,7 +133,7 @@ gen.command('strip <character> <animation>')
 
 gen.command('fbf <character> <animation>')
   .description('Generate frame-by-frame (SSE stream, waits for completion)')
-  .option('-m, --model <model>', 'Model to use', 'gemini-3-pro-image-preview')
+  .option('-m, --model <model>', 'Model to use', 'gemini-3.1-flash-image-preview')
   .action(async (character, animation, opts) => {
     console.error(`Generating ${animation} FBF for ${character}...`);
     // FBF uses SSE — collect all events
@@ -180,7 +180,7 @@ gen.command('fbf <character> <animation>')
 
 gen.command('angles <character>')
   .description('Generate all 8 angle images for a character')
-  .option('-m, --model <model>', 'Model to use', 'gemini-3-pro-image-preview')
+  .option('-m, --model <model>', 'Model to use', 'gemini-3.1-flash-image-preview')
   .action(async (character, opts) => {
     console.error(`Generating angles for ${character}...`);
     const res = await post('/api/generate/angles', { character, model: opts.model });
@@ -189,7 +189,7 @@ gen.command('angles <character>')
 
 gen.command('frame <character> <animation> <frameIndex>')
   .description('Regenerate a single frame')
-  .option('-m, --model <model>', 'Model to use', 'gemini-3-pro-image-preview')
+  .option('-m, --model <model>', 'Model to use', 'gemini-3.1-flash-image-preview')
   .action(async (character, animation, frameIndex, opts) => {
     const res = await post('/api/generate-frame', {
       character,
@@ -231,7 +231,7 @@ pipe.command('fill-gaps <character>')
 
 pipe.command('bulk <animation> [characters...]')
   .description('Apply an animation to multiple characters at once')
-  .option('-m, --model <model>', 'Model override', 'gemini-3-pro-image-preview')
+  .option('-m, --model <model>', 'Model override', 'gemini-3.1-flash-image-preview')
   .option('-c, --concurrency <n>', 'Parallel jobs', '2')
   .action(async (animation, characters, opts) => {
     const chars = characters.length ? characters : undefined;

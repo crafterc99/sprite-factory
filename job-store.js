@@ -33,7 +33,7 @@ function createJob(opts = {}) {
     character: opts.character || '',
     animation: opts.animation || '',
     mode: opts.mode || 'fbf', // 'strip' | 'fbf' | 'autotest' | 'single'
-    model: 'gemini-3-pro-image-preview',
+    model: 'gemini-3.1-flash-image-preview',
     status: 'pending', // pending | generating | processing | complete | failed
     totalFrames: opts.totalFrames || 0,
     completedFrames: 0,

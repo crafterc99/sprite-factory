@@ -177,7 +177,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     const { character, animation, model, customPrompt } = body;
 
     try {
-      const modelId = model || 'gemini-3-pro-image-preview';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
@@ -365,7 +365,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     }
 
     try {
-      const modelId = model || 'gemini-3-pro-image-preview';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const anim = ANIMATIONS[animation];
@@ -524,7 +524,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     const { character, animation, frameIndex, model, customSections, jobId } = body;
 
     try {
-      const modelId = model || 'gemini-3-pro-image-preview';
+      const modelId = model || 'gemini-3.1-flash-image-preview';
       const client = new NanaBananaClient({ model: modelId });
 
       const anim = ANIMATIONS[animation];
@@ -647,9 +647,9 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
     if (!fs.existsSync(portraitPath)) return json(res, { error: `Portrait not found: ${character}full.png` }, 400);
 
-    const modelId = body.model && ['gemini-3-pro-image-preview', 'gemini-3-pro-image-preview'].includes(body.model)
+    const modelId = body.model && ['gemini-3-pro-image-preview', 'gemini-3.1-flash-image-preview', 'gemini-2.5-flash-image'].includes(body.model)
       ? body.model
-      : 'gemini-3-pro-image-preview';
+      : 'gemini-3.1-flash-image-preview';
     const client = new NanaBananaClient({ model: modelId });
 
     const indices = angleIndex != null ? [parseInt(angleIndex)] : [0, 1, 2, 3, 4, 5, 6, 7];
@@ -736,9 +736,9 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
     if (!fs.existsSync(portraitPath)) return json(res, { error: `Portrait not found: ${character}full.png` }, 400);
 
-    const modelId = body.model && ['gemini-3-pro-image-preview', 'gemini-3-pro-image-preview'].includes(body.model)
+    const modelId = body.model && ['gemini-3-pro-image-preview', 'gemini-3.1-flash-image-preview', 'gemini-2.5-flash-image'].includes(body.model)
       ? body.model
-      : 'gemini-3-pro-image-preview';
+      : 'gemini-3.1-flash-image-preview';
     const client = new NanaBananaClient({ model: modelId });
 
     const indices = angleIndex != null ? [parseInt(angleIndex)] : [0, 1, 2, 3, 4, 5, 6, 7];
@@ -854,7 +854,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
 
     try {
       const body = await parseBody(req);
-      const modelId = body.model || 'gemini-3-pro-image-preview';
+      const modelId = body.model || 'gemini-3.1-flash-image-preview';
 
       // 1. Resolve prompt: override > contract base > generated default
       const store = loadFramePrompts();
@@ -955,7 +955,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     }
 
     const bulkJobId = crypto.randomUUID();
-    const modelId = model || 'gemini-3-pro-image-preview';
+    const modelId = model || 'gemini-3.1-flash-image-preview';
     const concurrency = Math.min(Math.max(Number(concurrencyRaw) || 3, 1), 5);
 
     const jobs = characters.map(character => ({
@@ -1171,8 +1171,8 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
   router.post('/api/pipeline/fill-gaps', async (req, res) => {
     try {
       const body = await parseBody(req);
-      const modelId = (body.model && ['gemini-3-pro-image-preview', 'gemini-3-pro-image-preview'].includes(body.model))
-        ? body.model : 'gemini-3-pro-image-preview';
+      const modelId = (body.model && ['gemini-3-pro-image-preview', 'gemini-3.1-flash-image-preview', 'gemini-2.5-flash-image'].includes(body.model))
+        ? body.model : 'gemini-3.1-flash-image-preview';
 
       // Discover roster from *full.png files in ASSETS_DIR
       const portraits = fs.existsSync(ASSETS_DIR)
@@ -1194,8 +1194,8 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
     try {
       const { character } = params;
       const body = await parseBody(req);
-      const modelId = (body.model && ['gemini-3-pro-image-preview', 'gemini-3-pro-image-preview'].includes(body.model))
-        ? body.model : 'gemini-3-pro-image-preview';
+      const modelId = (body.model && ['gemini-3-pro-image-preview', 'gemini-3.1-flash-image-preview', 'gemini-2.5-flash-image'].includes(body.model))
+        ? body.model : 'gemini-3.1-flash-image-preview';
 
       const portraitPath = path.join(ASSETS_DIR, `${character}full.png`);
       if (!fs.existsSync(portraitPath)) {
