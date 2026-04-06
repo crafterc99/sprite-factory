@@ -587,7 +587,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
   // Accepts portraitBase64 (data URL) directly from client to avoid filesystem issues.
   router.post('/api/char-pipeline/pixel-char/confirm', async (req, res) => {
     const body = await parseBody(req);
-    const { name, portraitBase64, heightInches, weightLbs, build, jerseyNumber, teamColors } = body;
+    const { name, portraitBase64, heightInches, weightLbs, build, jerseyNumber, teamColors, ratings } = body;
     if (!name) return json(res, { error: 'name required' }, 400);
     if (!portraitBase64) return json(res, { error: 'portraitBase64 required' }, 400);
 
@@ -619,7 +619,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         weightLbs: weightLbs || 185,
         build: build || 'athletic',
         jerseyNumber: jerseyNumber || '',
-        teamColors: teamColors || { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
+        teamColors: teamColors || (registry[name] || {}).teamColors || { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
+        ratings: ratings || (registry[name] || {}).ratings || null,
         portraitPath: `${name}full.png`,
         portraitBase64: portraitThumb,
         scaleMultiplier, pixelHeight,
