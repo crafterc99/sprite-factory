@@ -1124,6 +1124,19 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
         // Upload to Supabase so it survives Railway redeploys
         sbUpload(`${prefix}${index}.png`, framePath);
+
+        // Update the base64 stored in .characters.json registry so it survives redeploys
+        // (Initial generation stores these; regen must update them too)
+        const registry = loadCharacters();
+        if (!registry[name]) registry[name] = { name, id: name };
+        if (isHead) {
+          if (!registry[name].headshots) registry[name].headshots = {};
+          registry[name].headshots[index] = fs.readFileSync(framePath).toString('base64');
+        } else {
+          if (!registry[name].bodyAngles) registry[name].bodyAngles = {};
+          registry[name].bodyAngles[index] = fs.readFileSync(framePath).toString('base64');
+        }
+        saveCharacters(registry);
         scheduleSync();
 
         const imageBase64 = 'data:image/png;base64,' + fs.readFileSync(framePath).toString('base64');
