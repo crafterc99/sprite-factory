@@ -436,6 +436,42 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     return json(res, { success: true, prompts: updated });
   });
 
+  // POST /api/char-pipeline/photo-chunk — Upload one chunk of a photo (bypasses body-size limits)
+  // Body: { name, chunk: base64String, index: 0, total: N }
+  // When index === total-1, assembles the full file.
+  router.post('/api/char-pipeline/photo-chunk', async (req, res) => {
+    try {
+      const body = await parseBody(req);
+      const { name, chunk, index, total } = body;
+      if (!name || chunk == null || index == null || !total) {
+        return json(res, { error: 'name, chunk, index, total required' }, 400);
+      }
+      const charDir = path.join(TMP_DIR, 'characters', name);
+      fs.mkdirSync(charDir, { recursive: true });
+      // Write this chunk to a tmp file
+      const chunkPath = path.join(charDir, `upload-chunk-${index}.b64`);
+      fs.writeFileSync(chunkPath, chunk);
+
+      // Once all chunks received, assemble and convert to PNG
+      if (index === total - 1) {
+        let full = '';
+        for (let i = 0; i < total; i++) {
+          const cp = path.join(charDir, `upload-chunk-${i}.b64`);
+          full += fs.readFileSync(cp, 'utf8');
+          fs.unlinkSync(cp);
+        }
+        const data = full.replace(/^data:image\/\w+;base64,/, '');
+        const originalPath = path.join(charDir, 'original.png');
+        await sharp(Buffer.from(data, 'base64')).png().toFile(originalPath);
+        return json(res, { done: true });
+      }
+      return json(res, { done: false, received: index + 1 });
+    } catch (err) {
+      console.error('[photo-chunk]', err);
+      return json(res, { error: err.message }, 500);
+    }
+  });
+
   // POST /api/char-pipeline/pixel-char/portrait — FAST: photo → pixel art → standing portrait in one job
   router.post('/api/char-pipeline/pixel-char/portrait', async (req, res) => {
     try {

@@ -3419,30 +3419,33 @@ function cpHandlePhoto(file) {
   const url = URL.createObjectURL(file);
   img.onload = () => {
     URL.revokeObjectURL(url);
-    // Compress to max 768px JPEG 0.82 — keeps enough quality for AI while staying under Railway's ~1MB proxy limit
-    // (1024px at 0.92 can produce 700-900KB base64, too close to the limit)
-    const MAX = 768;
-    let w = img.width, h = img.height;
-    if (w > MAX || h > MAX) {
-      if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-      else       { w = Math.round(w * MAX / h); h = MAX; }
-    }
+    // Full resolution — no resize. Photo is uploaded in chunks to bypass Railway body-size limit.
     const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-    const compressed = canvas.toDataURL('image/jpeg', 0.82);
-    // Safety check: if still > 600KB base64, re-compress at lower quality
-    if (compressed.length > 600000) {
-      CP.photo = canvas.toDataURL('image/jpeg', 0.65);
-    } else {
-      CP.photo = compressed;
-    }
+    canvas.width = img.width; canvas.height = img.height;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    CP.photo = canvas.toDataURL('image/jpeg', 0.92);
     const thumb = document.getElementById('cpPhotoThumb');
     thumb.src = CP.photo;
     thumb.style.display = 'block';
     document.getElementById('cpPhotoPlaceholder').style.display = 'none';
   };
   img.src = url;
+}
+
+// Upload CP.photo to server in 300KB chunks — bypasses Railway's ~1MB body limit
+async function cpUploadPhotoChunked(name, photoBase64) {
+  const CHUNK = 300000; // 300KB per request — well under any proxy limit
+  const total = Math.ceil(photoBase64.length / CHUNK);
+  for (let i = 0; i < total; i++) {
+    const chunk = photoBase64.slice(i * CHUNK, (i + 1) * CHUNK);
+    const r = await fetch(`${API}/api/char-pipeline/photo-chunk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, chunk, index: i, total }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error('Photo upload failed: ' + d.error);
+  }
 }
 
 function cpAddClothing(files) {
@@ -3546,11 +3549,15 @@ async function cpGenerate() {
   document.getElementById('cpPortraitConfirm').style.display = 'none';
 
   try {
-    // Combined step: photo → pixel art → portrait in one job
+    // Upload photo in chunks (bypasses Railway body-size limit — no quality reduction needed)
+    cpLog('Uploading photo…');
+    await cpUploadPhotoChunked(name, photoBase64);
+
+    // Combined step: pixel art → portrait (photo already on server from chunks)
     cpLog('Generating pixel art portrait…');
     const r1 = await fetch(`${API}/api/char-pipeline/pixel-char/portrait`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, photoBase64 }),
+      body: JSON.stringify({ name }),
     });
     const d1 = await r1.json();
     if (d1.error) throw new Error(d1.error);
