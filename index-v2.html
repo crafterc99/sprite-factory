@@ -686,56 +686,102 @@
   .wardrobe-empty { font-family:var(--mono); font-size:10px; color:#30304a; padding:16px 0; }
 
   /* ─── TESTING PAGE ─── */
-  .testing-layout { display:flex; height:calc(100vh - 52px); overflow:hidden; }
-  .testing-sidebar { width:260px; flex-shrink:0; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; background:var(--surface); }
-  .testing-sidebar-header { padding:14px 16px 10px; border-bottom:1px solid var(--border); font-family:var(--mono); font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--accent); font-weight:700; }
-  .testing-char-section { padding:12px 14px; border-bottom:1px solid var(--border); }
-  .testing-char-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(52px, 1fr)); gap:6px; }
-  .testing-char-card { border-radius:6px; border:2px solid var(--border); cursor:pointer; transition:all 0.15s; background:var(--surface2); padding:4px; text-align:center; }
-  .testing-char-card:hover { border-color:var(--border-hi); }
-  .testing-char-card.active { border-color:var(--accent); background:rgba(255,68,0,0.1); }
-  .testing-char-card img { width:44px; height:44px; image-rendering:pixelated; object-fit:contain; display:block; margin:0 auto; }
-  .testing-char-card .testing-char-name { font-family:var(--mono); font-size:7px; letter-spacing:0.5px; color:#60608a; margin-top:2px; text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .testing-char-card.active .testing-char-name { color:var(--accent); }
-  .testing-anim-section { padding:12px 14px; border-bottom:1px solid var(--border); flex:1; overflow-y:auto; }
-  .testing-anim-list { display:flex; flex-direction:column; gap:2px; max-height:300px; overflow-y:auto; }
-  .testing-anim-item { display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:6px; cursor:pointer; transition:all 0.12s; font-size:11px; border:1px solid transparent; }
-  .testing-anim-item:hover { background:var(--surface2); border-color:var(--border); }
-  .testing-anim-item.active { background:rgba(0,255,136,0.08); border-color:var(--accent2); color:var(--accent2); }
-  .testing-anim-item.disabled { opacity:0.3; cursor:not-allowed; }
-  .testing-anim-item .anim-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-  .testing-anim-item .anim-dot.exists { background:var(--accent2); }
-  .testing-anim-item .anim-dot.missing { background:#30304a; }
-  .testing-anim-item .anim-label { flex:1; font-family:var(--mono); font-size:10px; letter-spacing:0.5px; }
-  .testing-anim-item .anim-cat { font-family:var(--mono); font-size:8px; color:#40405a; }
-  .testing-controls { padding:12px 14px; border-bottom:1px solid var(--border); }
-  .testing-control-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
-  .testing-control-row input[type=range] { -webkit-appearance:none; height:3px; background:var(--border); border-radius:2px; outline:none; }
-  .testing-control-row input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:12px; height:12px; border-radius:50%; background:var(--accent); cursor:pointer; }
-  .testing-info { padding:12px 14px; }
-  .testing-court-wrap { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#0a0a14; position:relative; overflow:hidden; }
-  .testing-court-wrap canvas { image-rendering:pixelated; cursor:crosshair; max-width:100%; max-height:100%; }
-  .testing-court-hint { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:10px; color:#40405a; letter-spacing:1px; pointer-events:none; background:rgba(0,0,0,0.6); padding:6px 14px; border-radius:6px; }
+  /* ── Testing V2 — simplified full-canvas layout ─────────────────────── */
+  .tv2-layout { display:flex; flex-direction:column; height:calc(100vh - 52px); overflow:hidden; background:#07070f; }
 
-  /* ── Game Mode Styles ────────────────────────────────────────────────── */
-  .gm-toggle-btn { font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:5px 12px;border-radius:4px;border:1px solid #30304a;background:#12121e;color:#60608a;cursor:pointer;width:100%;margin-top:8px;transition:all .15s; }
-  .gm-toggle-btn.active { background:#1a3a1a;border-color:#00cc44;color:#00ff66; }
-  .gm-hud { position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.82);border:1px solid #30304a;border-radius:6px;padding:8px 12px;font-family:var(--mono);font-size:9px;color:#90909a;min-width:160px;pointer-events:none;z-index:10; }
-  .gm-hud-row { display:flex;justify-content:space-between;gap:16px;line-height:1.8; }
-  .gm-hud-val { color:#e0e0f0; }
-  .gm-hud-val.active { color:#00ff88; }
-  .gm-controls-ref { background:#0d0d1a;border:1px solid #20203a;border-radius:6px;padding:8px;margin-top:8px;font-family:var(--mono);font-size:9px;color:#50507a; }
-  .gm-controls-ref .gm-key { display:inline-block;background:#1a1a2e;border:1px solid #30305a;border-radius:3px;padding:1px 5px;color:#a0a0c0;margin-right:3px; }
-  .gm-controls-ref .gm-row { display:flex;align-items:baseline;gap:6px;line-height:2; }
-  .gm-move-section { margin-top:10px;border-top:1px solid #1a1a2e;padding-top:8px; }
-  .gm-move-label { font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;margin-bottom:4px; }
-  .gm-move-row { display:flex;align-items:center;gap:6px;margin-bottom:4px; }
-  .gm-move-row span { font-size:9px;color:#60608a;min-width:60px; }
-  .gm-move-row input[type=range] { flex:1;height:4px; }
-  .gm-move-row .gm-val { font-family:var(--mono);font-size:9px;color:var(--text);min-width:36px;text-align:right; }
-  .gm-state-badge { display:inline-block;padding:2px 7px;border-radius:3px;font-family:var(--mono);font-size:9px;font-weight:bold; }
-  .gm-state-IDLE   { background:#1a1a2e;color:#6060aa; }
-  .gm-state-MOVING { background:#0a2a0a;color:#44cc44; }
+  /* Character strip */
+  .tv2-char-strip { display:flex; align-items:center; gap:0; padding:0 10px; background:#0b0b18; border-bottom:1px solid #151528; flex-shrink:0; height:58px; overflow-x:auto; scrollbar-width:none; }
+  .tv2-char-strip::-webkit-scrollbar { display:none; }
+  .testing-char-grid { display:flex; gap:6px; align-items:center; }
+  .testing-char-card { display:flex; flex-direction:column; align-items:center; gap:2px; padding:5px 8px; border-radius:8px; border:1.5px solid #1a1a2a; cursor:pointer; transition:all .12s; background:#10101c; min-width:52px; }
+  .testing-char-card:hover { border-color:#35355a; background:#14142a; }
+  .testing-char-card.active { border-color:#00cc44; background:#091909; }
+  .testing-char-card img { width:32px; height:32px; image-rendering:pixelated; object-fit:contain; display:block; }
+  .testing-char-card .testing-char-name { font-family:var(--mono); font-size:7px; letter-spacing:0.5px; color:#50507a; text-transform:uppercase; white-space:nowrap; }
+  .testing-char-card.active .testing-char-name { color:#00cc44; }
+  .tv2-strip-sep { width:1px; background:#151528; height:36px; margin:0 8px; flex-shrink:0; }
+  .tv2-strip-actions { display:flex; gap:6px; margin-left:auto; flex-shrink:0; align-items:center; }
+
+  /* Court area */
+  .tv2-court-wrap { flex:1; position:relative; display:flex; align-items:center; justify-content:center; background:#0a0a14; overflow:hidden; }
+  .tv2-court-wrap canvas { image-rendering:pixelated; cursor:crosshair; max-width:100%; max-height:100%; }
+
+  /* Live status HUD — top-left pill */
+  .tv2-live-hud { position:absolute; top:10px; left:10px; display:flex; align-items:center; gap:6px; pointer-events:none; z-index:10; }
+  .tv2-state-badge { font-family:var(--mono); font-size:10px; letter-spacing:1px; background:rgba(5,5,16,0.88); border:1px solid #25254a; border-radius:20px; padding:4px 12px; color:#00ff88; transition:color .2s; }
+  .tv2-state-badge.def  { color:#4488ff; border-color:#224488; }
+  .tv2-state-badge.spr  { color:#ffcc00; border-color:#664400; }
+  .tv2-anim-pill { font-family:var(--mono); font-size:9px; color:#50508a; background:rgba(5,5,16,0.72); padding:4px 10px; border-radius:20px; border:1px solid #1a1a30; }
+
+  /* Top-right area */
+  .tv2-top-right { position:absolute; top:10px; right:10px; display:flex; align-items:center; gap:6px; z-index:10; }
+  .tv2-pad-pill { font-family:var(--mono); font-size:8px; color:#252545; background:rgba(5,5,16,0.72); padding:4px 9px; border-radius:20px; pointer-events:none; transition:color .2s; border:1px solid #151530; }
+  .tv2-pad-pill.connected { color:#00cc44; border-color:#114411; }
+  .tv2-icon-btn { width:28px; height:28px; border-radius:50%; border:1px solid #25254a; background:rgba(5,5,16,0.88); color:#50508a; cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; transition:all .1s; }
+  .tv2-icon-btn:hover { border-color:#4444aa; color:#a0a0d0; }
+  .tv2-icon-btn.open { background:#12122a; border-color:#5050aa; color:#a0a0ff; }
+
+  /* Overlay panels (controls + settings) */
+  .tv2-panel { position:absolute; background:rgba(6,6,18,0.97); border:1px solid #22224a; border-radius:12px; z-index:20; font-family:var(--mono); font-size:9px; color:#9090b0; backdrop-filter:blur(12px); box-shadow:0 8px 40px rgba(0,0,0,0.6); }
+  .tv2-panel-hdr { padding:12px 16px 8px; font-size:8px; letter-spacing:2px; color:#50508a; text-transform:uppercase; border-bottom:1px solid #1a1a30; }
+  .tv2-panel-body { padding:12px 16px; }
+
+  /* Controls panel */
+  #tv2CtrlPanel { top:46px; right:10px; width:290px; }
+  .tv2-ctrl-cols { display:flex; gap:16px; }
+  .tv2-ctrl-col { flex:1; }
+  .tv2-ctrl-head { color:#40406a; letter-spacing:1px; margin-bottom:8px; text-transform:uppercase; font-size:8px; padding-bottom:4px; border-bottom:1px solid #1a1a2a; }
+  .tv2-ctrl-row { display:flex; align-items:baseline; gap:6px; line-height:1.85; color:#606080; }
+  .tv2-ctrl-row kbd { display:inline-block; background:#131326; border:1px solid #2a2a50; border-radius:3px; padding:0 5px; color:#9090c0; font-family:var(--mono); font-size:8px; min-width:30px; text-align:center; }
+
+  /* Settings panel */
+  #tv2SetPanel { top:46px; right:10px; width:240px; max-height:calc(100% - 56px); overflow-y:auto; }
+  .tv2-set-section { margin-bottom:12px; }
+  .tv2-set-label { font-size:8px; letter-spacing:1px; color:#40406a; text-transform:uppercase; margin-bottom:6px; display:block; }
+  .tv2-set-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; color:#606080; }
+  .tv2-set-row > span:first-child { min-width:72px; }
+  .tv2-set-row input[type=range] { flex:1; height:3px; -webkit-appearance:none; background:#1a1a2e; border-radius:2px; }
+  .tv2-set-row input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:10px; height:10px; border-radius:50%; background:#5050aa; cursor:pointer; }
+  .tv2-set-row label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .tv2-anim-list { display:flex; flex-direction:column; gap:2px; max-height:110px; overflow-y:auto; }
+  .testing-anim-item { display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:5px; cursor:pointer; transition:all .1s; border:1px solid transparent; }
+  .testing-anim-item:hover { background:#131326; border-color:#222240; }
+  .testing-anim-item.active { background:rgba(0,255,136,0.07); border-color:#226644; color:#44ffaa; }
+  .testing-anim-item.disabled { opacity:0.3; cursor:not-allowed; }
+  .testing-anim-item .anim-dot { width:5px; height:5px; border-radius:50%; flex-shrink:0; }
+  .testing-anim-item .anim-dot.exists { background:#00cc66; }
+  .testing-anim-item .anim-dot.missing { background:#252540; }
+  .testing-anim-item .anim-label { flex:1; font-family:var(--mono); font-size:9px; }
+  .testing-anim-item .anim-cat { font-family:var(--mono); font-size:8px; color:#35355a; }
+
+  /* Action bar */
+  .tv2-action-bar { display:flex; flex-shrink:0; background:#080810; border-top:1px solid #131325; height:70px; gap:1px; }
+  .tv2-action { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; background:#0c0c1a; border:none; cursor:pointer; transition:background .1s; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+  .tv2-action:hover { background:#121228; }
+  .tv2-action:active, .tv2-action.flash { background:#1a1a38; }
+  .tv2-action.def-held { background:#0a0e22; }
+  .tv2-action.def-held .tv2-act-name { color:#4488ff; }
+  .tv2-act-icon { font-size:16px; line-height:1; }
+  .tv2-act-name { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:#40406a; text-transform:uppercase; }
+  .tv2-act-key { font-family:var(--mono); font-size:7px; color:#252540; }
+
+  /* Move editor (inside settings) */
+  .gm-move-section { border-top:1px solid #1a1a2a; padding-top:10px; margin-top:6px; }
+  .gm-move-label { font-size:8px; letter-spacing:1px; color:#40406a; text-transform:uppercase; margin-bottom:6px; }
+  .gm-move-row { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+  .gm-move-row > span:first-child { font-size:9px; color:#606080; min-width:56px; }
+  .gm-move-row input[type=range] { flex:1; height:3px; }
+  .gm-move-row .gm-val { font-family:var(--mono); font-size:9px; color:#a0a0c0; min-width:36px; text-align:right; }
+
+  /* Keep old layout classes harmless (empty override so old code doesn't break) */
+  .testing-layout { display:contents; }
+  .testing-sidebar,.testing-sidebar-header,.testing-char-section,.testing-anim-section,.testing-controls,.testing-control-row,.testing-info { display:none!important; }
+  .testing-court-wrap { flex:1; position:relative; display:flex; align-items:center; justify-content:center; background:#0a0a14; overflow:hidden; }
+  .testing-court-wrap canvas { image-rendering:pixelated; cursor:crosshair; max-width:100%; max-height:100%; }
+  .gm-toggle-btn { display:none!important; }
+  .gm-hud { display:none!important; }
+  .gm-controls-ref { display:none!important; }
+  .testing-court-hint { display:none!important; }
   .gm-state-ACTION { background:#2a1a00;color:#ff9900; }
 </style>
 </head>
@@ -1340,151 +1386,202 @@
 
       </div><!-- /page-wardrobe -->
 
-      <!-- PAGE: Testing -->
+      <!-- PAGE: Testing V2 — simplified full-canvas layout -->
       <div class="page" id="page-testing">
-        <div class="testing-layout">
-          <!-- Left panel: character & animation selector -->
-          <div class="testing-sidebar">
-            <div class="testing-sidebar-header">TESTING COURT</div>
-            <div class="testing-char-section">
-              <label class="form-label" style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;margin-bottom:6px;display:block">CHARACTER</label>
-              <div id="testingCharGrid" class="testing-char-grid"></div>
-            </div>
-            <div class="testing-anim-section">
-              <label class="form-label" style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;margin-bottom:6px;display:block">ANIMATIONS</label>
-              <div id="testingAnimList" class="testing-anim-list">
-                <div style="color:#50507a;font-size:11px;padding:8px">Select a character first</div>
-              </div>
-            </div>
-            <div class="testing-controls">
-              <label class="form-label" style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#50507a;margin-bottom:6px;display:block">CONTROLS</label>
-              <div class="testing-control-row">
-                <span style="font-size:10px;color:#60608a">Scale</span>
-                <input type="range" id="testingScale" min="1" max="6" value="3" step="0.5" style="flex:1" />
-                <span id="testingScaleLabel" style="font-family:var(--mono);font-size:10px;color:var(--text);min-width:28px;text-align:right">3x</span>
-              </div>
-              <div class="testing-control-row">
-                <span style="font-size:10px;color:#60608a">Speed</span>
-                <input type="range" id="testingSpeed" min="0.25" max="3" value="1" step="0.25" style="flex:1" />
-                <span id="testingSpeedLabel" style="font-family:var(--mono);font-size:10px;color:var(--text);min-width:28px;text-align:right">1x</span>
-              </div>
-              <div class="testing-control-row" style="gap:6px;margin-top:4px">
-                <button class="btn btn-secondary btn-sm" id="testingPlayBtn" onclick="testingTogglePlay()" style="font-family:var(--mono);font-size:9px;flex:1">Pause</button>
-                <button class="btn btn-secondary btn-sm" onclick="testingResetPosition()" style="font-family:var(--mono);font-size:9px;flex:1">Reset Pos</button>
-              </div>
-              <div class="testing-control-row" style="margin-top:8px">
-                <label style="font-size:10px;color:#60608a;display:flex;align-items:center;gap:6px;cursor:pointer">
-                  <input type="checkbox" id="testingShowHitbox" /> Show hitbox
-                </label>
-              </div>
-              <div class="testing-control-row" style="margin-top:4px">
-                <label style="font-size:10px;color:#60608a;display:flex;align-items:center;gap:6px;cursor:pointer">
-                  <input type="checkbox" id="testingShowZones" checked /> Show zones
-                </label>
-              </div>
-              <div class="testing-control-row" style="margin-top:4px">
-                <label style="font-size:10px;color:#60608a;display:flex;align-items:center;gap:6px;cursor:pointer">
-                  <input type="checkbox" id="testingShowOob" checked /> Show out-of-bounds
-                </label>
-              </div>
-              <div class="testing-control-row" style="margin-top:8px">
-                <button id="testingEditBtn" class="btn btn-secondary btn-sm" style="font-family:var(--mono);font-size:9px;width:100%">✏ Edit Zones/OOB</button>
-              </div>
+        <div class="tv2-layout">
 
-              <!-- Game Mode Toggle -->
-              <button id="gameModeBtn" class="gm-toggle-btn" onclick="toggleGameMode()">▶ GAME MODE OFF</button>
-            </div>
-
-            <!-- Game Mode Controller Reference (hidden until active) -->
-            <div id="gmControlsRef" class="gm-controls-ref" style="display:none">
-              <div style="color:#a0a0c0;margin-bottom:6px;letter-spacing:1px">CONTROLLER</div>
-              <div class="gm-row"><span class="gm-key">L-Stick</span> Move (analog)</div>
-              <div class="gm-row"><span class="gm-key">L-Stick flick</span> Crossover</div>
-              <div class="gm-row"><span class="gm-key">L1 / R1</span> Sprint</div>
-              <div class="gm-row"><span class="gm-key">L2</span> Defense (hold)</div>
-              <div class="gm-row"><span class="gm-key">□ Square</span> Jumpshot</div>
-              <div class="gm-row"><span style="color:#888;font-size:8px">L2 + □</span> Steal</div>
-              <div class="gm-row"><span class="gm-key">✕ Cross</span> Dribble</div>
-              <div class="gm-row"><span class="gm-key">○ Circle</span> Stepback</div>
-              <div style="margin-top:8px;color:#a0a0c0;letter-spacing:1px">KEYBOARD</div>
-              <div class="gm-row"><span class="gm-key">WASD</span> Move</div>
-              <div class="gm-row"><span class="gm-key">Q</span><span class="gm-key">E</span> Crossover ←→</div>
-              <div class="gm-row"><span class="gm-key">⇧ Shift</span> Sprint (hold)</div>
-              <div class="gm-row"><span class="gm-key">F</span> Defense (hold)</div>
-              <div class="gm-row"><span class="gm-key">I</span> Jumpshot</div>
-              <div class="gm-row"><span style="color:#888;font-size:8px">F + I</span> Steal</div>
-              <div class="gm-row"><span class="gm-key">J</span><span class="gm-key">SPC</span> Dribble</div>
-              <div class="gm-row"><span class="gm-key">L</span> Stepback</div>
-            </div>
-
-            <!-- Movement Data Editor (shown when anim selected) -->
-            <div id="gmMoveEditor" class="gm-move-section" style="display:none">
-              <div class="gm-move-label">MOVEMENT DATA</div>
-              <div class="gm-move-row">
-                <span>Type</span>
-                <select id="gmMoveType" class="input" style="font-size:9px;padding:2px 4px;height:22px;flex:1" onchange="gmUpdateMovePreview()">
-                  <option value="stationary">stationary</option>
-                  <option value="vertical">vertical (jump)</option>
-                  <option value="horizontal">horizontal (slide)</option>
-                  <option value="combo">combo</option>
-                </select>
-              </div>
-              <div class="gm-move-row">
-                <span>Vel X</span>
-                <input type="range" id="gmVelX" min="-10" max="10" value="0" step="0.5" oninput="gmUpdateMovePreview()" />
-                <span class="gm-val" id="gmVelXVal">0</span>
-              </div>
-              <div class="gm-move-row">
-                <span>Vel Y</span>
-                <input type="range" id="gmVelY" min="-15" max="5" value="0" step="0.5" oninput="gmUpdateMovePreview()" />
-                <span class="gm-val" id="gmVelYVal">0</span>
-              </div>
-              <div class="gm-move-row">
-                <span>Duration</span>
-                <input type="range" id="gmDuration" min="100" max="1500" value="500" step="50" oninput="gmUpdateMovePreview()" />
-                <span class="gm-val" id="gmDurationVal">500ms</span>
-              </div>
-              <div class="gm-move-row">
-                <span>Curve</span>
-                <select id="gmCurve" class="input" style="font-size:9px;padding:2px 4px;height:22px;flex:1">
-                  <option value="linear">linear</option>
-                  <option value="ease-in">ease-in</option>
-                  <option value="ease-out">ease-out</option>
-                  <option value="arc">arc</option>
-                </select>
-              </div>
-              <div class="gm-move-row" style="margin-top:4px">
-                <label style="font-size:9px;color:#60608a;display:flex;align-items:center;gap:4px;cursor:pointer">
-                  <input type="checkbox" id="gmLockMovement" /> Lock movement during action
-                </label>
-              </div>
-              <div style="display:flex;gap:4px;margin-top:6px">
-                <button class="btn btn-secondary btn-sm" style="font-size:9px;flex:1" onclick="gmResetMovement()">Reset</button>
-                <button class="btn btn-primary btn-sm" style="font-size:9px;flex:1" onclick="gmSaveMovement()">Save</button>
-              </div>
-              <div id="gmMoveSaveStatus" style="font-size:9px;color:#50507a;margin-top:4px;font-family:var(--mono)"></div>
-            </div>
-
-            <div class="testing-info">
-              <div id="testingInfoText" style="font-family:var(--mono);font-size:9px;color:#50507a;line-height:1.6"></div>
+          <!-- ① Character strip -->
+          <div class="tv2-char-strip">
+            <div id="testingCharGrid" class="testing-char-grid"></div>
+            <div class="tv2-strip-sep"></div>
+            <div class="tv2-strip-actions">
+              <button class="tv2-icon-btn" id="tv2CtrlBtn" onclick="tv2TogglePanel('ctrl')" title="Controls">?</button>
+              <button class="tv2-icon-btn" id="tv2SetBtn"  onclick="tv2TogglePanel('set')"  title="Settings">⚙</button>
             </div>
           </div>
-          <!-- Right: court canvas -->
-          <div class="testing-court-wrap">
+
+          <!-- ② Court canvas -->
+          <div class="tv2-court-wrap" id="tv2CourtWrap">
             <canvas id="testingCourt" width="960" height="640"></canvas>
-            <div class="testing-court-hint" id="testingCourtHint">Click the court to place character. Arrow keys or WASD to move.</div>
-            <!-- Game Mode HUD (shown when active) -->
-            <div id="gmHud" class="gm-hud" style="display:none">
-              <div class="gm-hud-row"><span>STATE</span><span class="gm-hud-val" id="gmHudState">IDLE</span></div>
-              <div class="gm-hud-row"><span>ANIM</span><span class="gm-hud-val" id="gmHudAnim">—</span></div>
-              <div class="gm-hud-row"><span>FACE</span><span class="gm-hud-val" id="gmHudFacing">→</span></div>
-              <div class="gm-hud-row"><span>vX</span><span class="gm-hud-val" id="gmHudVx">0.0</span></div>
-              <div class="gm-hud-row"><span>vY</span><span class="gm-hud-val" id="gmHudVy">0.0</span></div>
-              <div class="gm-hud-row"><span>POS</span><span class="gm-hud-val" id="gmHudPos">480, 520</span></div>
-              <div class="gm-hud-row" style="margin-top:4px"><span>PAD</span><span class="gm-hud-val" id="gmHudPad" style="color:#30305a">none</span></div>
+
+            <!-- Live status pill (top-left) -->
+            <div class="tv2-live-hud">
+              <span class="tv2-state-badge" id="gmHudState">IDLE</span>
+              <span class="tv2-anim-pill" id="gmHudAnim">—</span>
             </div>
+
+            <!-- Gamepad + buttons (top-right) -->
+            <div class="tv2-top-right">
+              <span class="tv2-pad-pill" id="gmHudPad">no gamepad</span>
+            </div>
+
+            <!-- Hidden data nodes (keep IDs for backward compat with gmTick) -->
+            <span id="gmHudFacing" style="display:none"></span>
+            <span id="gmHudVx"     style="display:none"></span>
+            <span id="gmHudVy"     style="display:none"></span>
+            <span id="gmHudPos"    style="display:none"></span>
+
+            <!-- Controls overlay panel -->
+            <div class="tv2-panel" id="tv2CtrlPanel" style="display:none">
+              <div class="tv2-panel-hdr">Controls</div>
+              <div class="tv2-panel-body">
+                <div class="tv2-ctrl-cols">
+                  <div class="tv2-ctrl-col">
+                    <div class="tv2-ctrl-head">Controller</div>
+                    <div class="tv2-ctrl-row"><kbd>L-Stick</kbd> Move</div>
+                    <div class="tv2-ctrl-row"><kbd>flick</kbd> Crossover</div>
+                    <div class="tv2-ctrl-row"><kbd>L1/R1</kbd> Sprint</div>
+                    <div class="tv2-ctrl-row"><kbd>L2</kbd> Defense</div>
+                    <div class="tv2-ctrl-row"><kbd>□</kbd> Jumpshot</div>
+                    <div class="tv2-ctrl-row"><kbd>L2+□</kbd> Steal</div>
+                    <div class="tv2-ctrl-row"><kbd>✕</kbd> Dribble</div>
+                    <div class="tv2-ctrl-row"><kbd>○</kbd> Stepback</div>
+                  </div>
+                  <div class="tv2-ctrl-col">
+                    <div class="tv2-ctrl-head">Keyboard</div>
+                    <div class="tv2-ctrl-row"><kbd>WASD</kbd> Move</div>
+                    <div class="tv2-ctrl-row"><kbd>Q/E</kbd> Crossover</div>
+                    <div class="tv2-ctrl-row"><kbd>⇧</kbd> Sprint</div>
+                    <div class="tv2-ctrl-row"><kbd>F</kbd> Defense</div>
+                    <div class="tv2-ctrl-row"><kbd>I</kbd> Jumpshot</div>
+                    <div class="tv2-ctrl-row"><kbd>F+I</kbd> Steal</div>
+                    <div class="tv2-ctrl-row"><kbd>J/Spc</kbd> Dribble</div>
+                    <div class="tv2-ctrl-row"><kbd>L</kbd> Stepback</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Settings overlay panel -->
+            <div class="tv2-panel" id="tv2SetPanel" style="display:none">
+              <div class="tv2-panel-hdr">Settings</div>
+              <div class="tv2-panel-body">
+                <!-- Anim override -->
+                <div class="tv2-set-section">
+                  <span class="tv2-set-label">Animation override</span>
+                  <div id="testingAnimList" class="tv2-anim-list">
+                    <div style="color:#35355a;padding:4px 8px">Select a character first</div>
+                  </div>
+                </div>
+                <!-- Scale -->
+                <div class="tv2-set-row">
+                  <span>Scale</span>
+                  <input type="range" id="testingScale" min="1" max="6" value="3" step="0.5" />
+                  <span id="testingScaleLabel" style="font-family:var(--mono);min-width:24px;text-align:right">3x</span>
+                </div>
+                <!-- Anim speed -->
+                <div class="tv2-set-row">
+                  <span>Anim speed</span>
+                  <input type="range" id="testingSpeed" min="0.25" max="3" value="1" step="0.25" />
+                  <span id="testingSpeedLabel" style="font-family:var(--mono);min-width:24px;text-align:right">1x</span>
+                </div>
+                <!-- Debug toggles -->
+                <div class="tv2-set-row"><label><input type="checkbox" id="testingShowHitbox" /> Hitbox</label></div>
+                <div class="tv2-set-row"><label><input type="checkbox" id="testingShowZones" checked /> Zones</label></div>
+                <div class="tv2-set-row"><label><input type="checkbox" id="testingShowOob" checked /> OOB</label></div>
+                <!-- Actions -->
+                <div class="tv2-set-row" style="gap:6px;margin-top:8px">
+                  <button class="btn btn-secondary btn-sm" id="testingPlayBtn" onclick="testingTogglePlay()" style="flex:1;font-size:9px">Pause</button>
+                  <button class="btn btn-secondary btn-sm" onclick="testingResetPosition()" style="flex:1;font-size:9px">Reset pos</button>
+                </div>
+                <div class="tv2-set-row">
+                  <button id="testingEditBtn" class="btn btn-secondary btn-sm" style="width:100%;font-size:9px">✏ Edit Zones / OOB</button>
+                </div>
+                <!-- Movement data editor (revealed when anim selected in game mode) -->
+                <div id="gmMoveEditor" class="gm-move-section" style="display:none">
+                  <div class="gm-move-label">Movement data</div>
+                  <div class="gm-move-row">
+                    <span>Type</span>
+                    <select id="gmMoveType" class="input" style="font-size:9px;padding:2px 4px;height:22px;flex:1" onchange="gmUpdateMovePreview()">
+                      <option value="stationary">stationary</option>
+                      <option value="vertical">vertical (jump)</option>
+                      <option value="horizontal">horizontal</option>
+                      <option value="combo">combo</option>
+                    </select>
+                  </div>
+                  <div class="gm-move-row">
+                    <span>Vel X</span>
+                    <input type="range" id="gmVelX" min="-10" max="10" value="0" step="0.5" oninput="gmUpdateMovePreview()" />
+                    <span class="gm-val" id="gmVelXVal">0</span>
+                  </div>
+                  <div class="gm-move-row">
+                    <span>Vel Y</span>
+                    <input type="range" id="gmVelY" min="-15" max="5" value="0" step="0.5" oninput="gmUpdateMovePreview()" />
+                    <span class="gm-val" id="gmVelYVal">0</span>
+                  </div>
+                  <div class="gm-move-row">
+                    <span>Duration</span>
+                    <input type="range" id="gmDuration" min="100" max="1500" value="500" step="50" oninput="gmUpdateMovePreview()" />
+                    <span class="gm-val" id="gmDurationVal">500ms</span>
+                  </div>
+                  <div class="gm-move-row">
+                    <span>Curve</span>
+                    <select id="gmCurve" class="input" style="font-size:9px;padding:2px 4px;height:22px;flex:1">
+                      <option value="linear">linear</option>
+                      <option value="ease-in">ease-in</option>
+                      <option value="ease-out">ease-out</option>
+                      <option value="arc">arc</option>
+                    </select>
+                  </div>
+                  <div class="gm-move-row">
+                    <label style="font-size:9px;color:#60608a;display:flex;align-items:center;gap:4px;cursor:pointer">
+                      <input type="checkbox" id="gmLockMovement" /> Lock movement
+                    </label>
+                  </div>
+                  <div style="display:flex;gap:4px;margin-top:6px">
+                    <button class="btn btn-secondary btn-sm" style="font-size:9px;flex:1" onclick="gmResetMovement()">Reset</button>
+                    <button class="btn btn-primary btn-sm" style="font-size:9px;flex:1" onclick="gmSaveMovement()">Save</button>
+                  </div>
+                  <div id="gmMoveSaveStatus" style="font-size:9px;color:#50507a;margin-top:4px;font-family:var(--mono)"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Invisible hint text (kept for JS compat) -->
+            <div id="testingCourtHint" style="display:none"></div>
           </div>
-        </div>
+
+          <!-- ③ Action bar -->
+          <div class="tv2-action-bar">
+            <button class="tv2-action" onpointerdown="gmOnScreenAction('dribble')" data-act="dribble">
+              <div class="tv2-act-icon">🏀</div>
+              <div class="tv2-act-name">Dribble</div>
+              <div class="tv2-act-key">J · ✕</div>
+            </button>
+            <button class="tv2-action" onpointerdown="gmOnScreenAction('jumpshot')" data-act="jumpshot">
+              <div class="tv2-act-icon">⬆</div>
+              <div class="tv2-act-name">Jumpshot</div>
+              <div class="tv2-act-key">I · □</div>
+            </button>
+            <button class="tv2-action" onpointerdown="gmOnScreenAction('crossover')" data-act="crossover">
+              <div class="tv2-act-icon">⇄</div>
+              <div class="tv2-act-name">Crossover</div>
+              <div class="tv2-act-key">Q·E · flick</div>
+            </button>
+            <button class="tv2-action" onpointerdown="gmOnScreenAction('stepback')" data-act="stepback">
+              <div class="tv2-act-icon">↩</div>
+              <div class="tv2-act-name">Stepback</div>
+              <div class="tv2-act-key">L · ○</div>
+            </button>
+            <button class="tv2-action" id="tv2DefBtn"
+              onpointerdown="gmOnScreenDefense(true)"
+              onpointerup="gmOnScreenDefense(false)"
+              onpointerleave="gmOnScreenDefense(false)" data-act="defense">
+              <div class="tv2-act-icon">🛡</div>
+              <div class="tv2-act-name">Defense</div>
+              <div class="tv2-act-key">hold F · L2</div>
+            </button>
+          </div>
+
+          <!-- Legacy hidden IDs (JS references these, keep them alive) -->
+          <div style="display:none">
+            <div id="gameModeBtn"></div>
+            <div id="gmControlsRef"></div>
+            <div id="gmHud"></div>
+            <div id="testingInfoText"></div>
+          </div>
+
+        </div><!-- /tv2-layout -->
       </div><!-- /page-testing -->
 
     </div>
@@ -2419,6 +2516,94 @@ function showPage2(name) {
     } else if (STATE.roster.length > 0) {
       selectChar(STATE.roster[0].name);
     }
+  }
+  // Auto-start game mode when Testing tab opens
+  if (name === 'testing' && TESTING.selectedChar && !GM.active) {
+    setTimeout(startGameMode, 80);
+  }
+}
+
+// ── TV2 panel toggle ─────────────────────────────────────────────────────────
+let _tv2OpenPanel = null;
+function tv2TogglePanel(which) {
+  const panels = { ctrl: 'tv2CtrlPanel', set: 'tv2SetPanel' };
+  const btns   = { ctrl: 'tv2CtrlBtn',   set: 'tv2SetBtn'   };
+  const targetId = panels[which];
+  const isOpen = document.getElementById(targetId)?.style.display !== 'none';
+
+  // Close all panels first
+  Object.values(panels).forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  Object.values(btns).forEach(id =>   { const el = document.getElementById(id); if (el) el.classList.remove('open'); });
+
+  if (!isOpen) {
+    document.getElementById(targetId).style.display = '';
+    document.getElementById(btns[which])?.classList.add('open');
+    _tv2OpenPanel = which;
+  } else {
+    _tv2OpenPanel = null;
+  }
+}
+
+// Close panels when clicking court canvas
+document.addEventListener('pointerdown', (e) => {
+  if (_tv2OpenPanel && !e.target.closest('.tv2-panel') && !e.target.closest('.tv2-icon-btn')) {
+    tv2TogglePanel(_tv2OpenPanel); // close
+  }
+});
+
+// ── On-screen action buttons ─────────────────────────────────────────────────
+function gmOnScreenAction(type) {
+  if (!GM.active) {
+    if (TESTING.selectedChar) startGameMode();
+    return;
+  }
+  if (!GM.player || GM.player.state === 'ACTION') return;
+
+  const SCREEN_ACTIONS = {
+    jumpshot:  ['jumpshot', 'ac-jumpshot', 'tween-tween'],
+    crossover: ['crossover', 'tween-cross', 'ac-cgs'],
+    stepback:  ['stepback'],
+    steal:     ['steal'],
+    dribble:   ['static-dribble', 'dribble'],
+  };
+  const candidates = SCREEN_ACTIONS[type] ?? [];
+  const anim = GM.charAnims.find(a => candidates.includes(a.name));
+  const md = anim?.movementData ?? (typeof resolveMovementData === 'function' ? resolveMovementData(type, null) : null);
+
+  // Crossover: flip direction on each tap
+  if (type === 'crossover') {
+    GM.physics.facingRight = !GM.physics.facingRight;
+    const directedMd = md ? { ...md, velocityX: Math.abs(md.velocityX ?? 5) * (GM.physics.facingRight ? 1 : -1) } : md;
+    GM.player.triggerAction(type, directedMd);
+  } else {
+    GM.player.triggerAction(type, md);
+  }
+
+  // Flash button
+  const btn = document.querySelector(`.tv2-action[data-act="${type}"]`);
+  if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 150); }
+}
+
+function gmOnScreenDefense(active) {
+  GM._screenDefenseActive = active;
+  const btn = document.getElementById('tv2DefBtn');
+  if (btn) btn.classList.toggle('def-held', active);
+}
+
+// ── TV2 HUD update (replaces old gmHud hidden div) ───────────────────────────
+function tv2UpdateHud(state, animName, padConnected, defenseMode, sprint) {
+  const badge = document.getElementById('gmHudState');
+  const anim  = document.getElementById('gmHudAnim');
+  const pad   = document.getElementById('gmHudPad');
+  if (badge) {
+    if (defenseMode) { badge.textContent = 'DEF';    badge.className = 'tv2-state-badge def'; }
+    else if (sprint) { badge.textContent = 'SPRINT'; badge.className = 'tv2-state-badge spr'; }
+    else              { badge.innerHTML  = state;     badge.className = 'tv2-state-badge'; }
+  }
+  if (anim) anim.textContent = animName ?? '—';
+  if (pad) {
+    pad.textContent = padConnected ? '🎮 connected' : 'no gamepad';
+    pad.className   = 'tv2-pad-pill' + (padConnected ? ' connected' : '');
   }
 }
 
@@ -7022,15 +7207,7 @@ function startGameMode() {
     GM.input.start();
   });
 
-  // ── UI updates ──────────────────────────────────────────────────────────
-  document.getElementById('gameModeBtn').textContent = '◼ GAME MODE ON';
-  document.getElementById('gameModeBtn').classList.add('active');
-  document.getElementById('gmHud').style.display = 'block';
-  document.getElementById('gmControlsRef').style.display = 'block';
-  document.getElementById('testingCourtHint').style.display = 'none';
-
-  // Override the court hint text
-  toast('Game Mode ON — use WASD + I/J/K/U or controller', false);
+  toast('Game Mode ON — WASD/stick to move, I/J/L/Q/E for moves', false);
 }
 
 function stopGameMode() {
@@ -7041,10 +7218,6 @@ function stopGameMode() {
   GM.player  = null;
   GM.charAnims = [];
 
-  document.getElementById('gameModeBtn').textContent = '▶ GAME MODE OFF';
-  document.getElementById('gameModeBtn').classList.remove('active');
-  document.getElementById('gmHud').style.display = 'none';
-  document.getElementById('gmControlsRef').style.display = 'none';
   toast('Game Mode OFF', false);
 }
 
@@ -7079,7 +7252,7 @@ function gmTick(timestamp) {
 
   // Poll input (pass timestamp for flick timing)
   const input = GM.input.poll(timestamp);
-  const inDefense = input.defenseMode;
+  const inDefense = input.defenseMode || (GM._screenDefenseActive ?? false);
 
   // ── Action button handling ────────────────────────────────────────────────
   if (GM.player.state !== 'ACTION') {
@@ -7150,24 +7323,8 @@ function gmTick(timestamp) {
   GM._facingRight = GM.physics.facingRight;
 
   // ── HUD update ─────────────────────────────────────────────────────────────
-  const tierColor = { idle: '#888', walk: '#aad4ff', run: '#00ff88', sprint: '#ffcc00' };
   const tier = phys.speedTier ?? 'idle';
-  let modeLabel;
-  if (inDefense) {
-    modeLabel = '<span style="color:#4488ff">DEF</span>';
-  } else if (animState.sprint) {
-    modeLabel = '<span style="color:#ffcc00">SPRINT</span>';
-  } else {
-    modeLabel = `<span style="color:${tierColor[tier] ?? '#888'}">${tier.toUpperCase()}</span>`;
-  }
-  document.getElementById('gmHudState').innerHTML = modeLabel;
-  document.getElementById('gmHudAnim').textContent  = animState.animName ?? '—';
-  document.getElementById('gmHudVx').textContent    = phys.vx.toFixed(2);
-  document.getElementById('gmHudVy').textContent    = phys.vy.toFixed(2);
-  document.getElementById('gmHudPos').textContent   = `${Math.round(phys.x)}, ${Math.round(phys.y)}`;
-  document.getElementById('gmHudFacing').textContent = GM._facingRight ? '→' : '←';
-  document.getElementById('gmHudPad').textContent   = input.gamepadConnected ? '✓ connected' : 'none';
-  document.getElementById('gmHudPad').style.color   = input.gamepadConnected ? '#00ff88' : '#30305a';
+  tv2UpdateHud(tier.toUpperCase(), animState.animName, input.gamepadConnected, inDefense, animState.sprint);
 
   // Defensive stance visual tint (subtle blue on canvas when L2 held)
   GM._defenseMode = inDefense;
