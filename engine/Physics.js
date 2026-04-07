@@ -1,18 +1,30 @@
 /**
  * Physics.js — Lightweight 2D physics for the Game Tester
  * Handles: gravity, momentum, friction, bounds, ground collision
+ *
+ * Speed tiers (matching Soul Jam):
+ *   walk   — stick < walkThreshold → maxSpeed * walkMult
+ *   run    — full stick, no sprint  → maxSpeed
+ *   sprint — L1/R1 held             → maxSpeed * sprintMult
+ *   defense — L2 held               → maxSpeed * defenseMult
  */
 'use strict';
 
 class PhysicsEngine {
   constructor(opts = {}) {
-    this.gravity     = opts.gravity     ?? 0.45;
-    this.friction    = opts.friction    ?? 0.82;   // ground friction per frame
-    this.airFriction = opts.airFriction ?? 0.96;   // air resistance
+    this.gravity     = opts.gravity     ?? 0.5;
+    this.friction    = opts.friction    ?? 0.78;   // ground friction per frame (snappier stops)
+    this.airFriction = opts.airFriction ?? 0.97;   // air resistance
     this.maxSpeed    = opts.maxSpeed    ?? 5;
     this.groundY     = opts.groundY     ?? 520;
     this.boundsX     = opts.boundsX     ?? [60, 900];
     this.boundsY     = opts.boundsY     ?? [80, 580];
+
+    // Speed tier multipliers
+    this.sprintMult  = opts.sprintMult  ?? 1.6;    // L1/R1 sprint boost
+    this.walkMult    = opts.walkMult    ?? 0.52;    // slow stick = walk speed
+    this.walkThresh  = opts.walkThresh  ?? 0.4;     // stick magnitude below this = walk
+    this.defenseMult = opts.defenseMult ?? 0.55;    // L2 defense speed cap
 
     this.x = opts.x ?? 480;
     this.y = opts.y ?? this.groundY;
@@ -21,6 +33,9 @@ class PhysicsEngine {
     this.grounded = true;
     this.facingRight = true;
     this._locked = false; // locked during action animations (crossover, stepback)
+
+    // Track current speed tier for AnimationPlayer
+    this.speedTier = 'idle'; // 'idle' | 'walk' | 'run' | 'sprint'
   }
 
   /** Apply a movement burst from AnimationMovementData */
@@ -39,29 +54,56 @@ class PhysicsEngine {
 
   /**
    * Update physics state. Call once per render frame.
-   * @param {number}  inputX      -1..1
-   * @param {number}  inputY      -1..1
+   * @param {number}  inputX       -1..1
+   * @param {number}  inputY       -1..1
    * @param {boolean} defenseMode  L2 held — slower speed, no jumping, shuffle stance
-   * Returns {x, y, vx, vy, grounded}
+   * @param {boolean} sprint       L1/R1 held — faster speed
+   * Returns {x, y, vx, vy, grounded, speedTier}
    */
-  update(inputX, inputY, defenseMode) {
-    const effectiveMax = defenseMode ? this.maxSpeed * 0.55 : this.maxSpeed;
-    const accel        = defenseMode ? 0.45 : 0.75;
+  update(inputX, inputY, defenseMode, sprint) {
+    // Determine effective max speed and acceleration based on speed tier
+    const stickMag = Math.sqrt(inputX * inputX + inputY * inputY);
+    const isWalking = !defenseMode && !sprint && stickMag > 0 && stickMag < this.walkThresh;
+
+    let effectiveMax, accel;
+    if (defenseMode) {
+      effectiveMax = this.maxSpeed * this.defenseMult;
+      accel        = 0.45;
+      this.speedTier = stickMag > 0.1 ? 'walk' : 'idle';
+    } else if (sprint) {
+      effectiveMax = this.maxSpeed * this.sprintMult;
+      accel        = 1.0;
+      this.speedTier = stickMag > 0.1 ? 'sprint' : 'idle';
+    } else if (isWalking) {
+      effectiveMax = this.maxSpeed * this.walkMult;
+      accel        = 0.55;
+      this.speedTier = 'walk';
+    } else {
+      effectiveMax = this.maxSpeed;
+      accel        = 0.82;
+      this.speedTier = stickMag > 0.1 ? 'run' : 'idle';
+    }
 
     // Horizontal input (only when not locked by action anim)
     if (!this._locked && inputX !== 0) {
       this.vx += inputX * accel;
-      if (inputX !== 0) this.facingRight = inputX > 0;
+      this.facingRight = inputX > 0;
     }
 
     // Clamp speed
     this.vx = Math.max(-effectiveMax, Math.min(effectiveMax, this.vx));
 
-    // Friction
+    // Friction — apply when locked, no input, or decelerating
     const fric = this.grounded ? this.friction : this.airFriction;
     if (this._locked || inputX === 0 || Math.sign(this.vx) !== Math.sign(inputX)) {
       this.vx *= fric;
       if (Math.abs(this.vx) < 0.08) this.vx = 0;
+    }
+
+    // Vertical input (only for non-defense movement on Y axis)
+    if (!this._locked && !defenseMode && inputY !== 0) {
+      // Y-axis movement: up/down on court
+      this.y += inputY * (effectiveMax * 0.6);
     }
 
     // Gravity
@@ -69,11 +111,11 @@ class PhysicsEngine {
       this.vy += this.gravity;
     }
 
-    // Integrate
+    // Integrate position
     this.x += this.vx;
     this.y += this.vy;
 
-    // Ground
+    // Ground collision
     if (this.y >= this.groundY) {
       this.y = this.groundY;
       this.vy = 0;
@@ -84,7 +126,7 @@ class PhysicsEngine {
     this.x = Math.max(this.boundsX[0], Math.min(this.boundsX[1], this.x));
     this.y = Math.max(this.boundsY[0], Math.min(this.boundsY[1], this.y));
 
-    return { x: this.x, y: this.y, vx: this.vx, vy: this.vy, grounded: this.grounded };
+    return { x: this.x, y: this.y, vx: this.vx, vy: this.vy, grounded: this.grounded, speedTier: this.speedTier };
   }
 
   lock()   { this._locked = true;  }
@@ -97,6 +139,7 @@ class PhysicsEngine {
     this.vy = 0;
     this.grounded = true;
     this._locked = false;
+    this.speedTier = 'idle';
   }
 }
 

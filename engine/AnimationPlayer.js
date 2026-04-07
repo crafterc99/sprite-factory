@@ -7,6 +7,12 @@
  *   ACTION       → one-shot action animation (jumpshot, crossover, stepback)
  *                  returns to IDLE/MOVING when done
  *
+ * Speed tiers (from PhysicsEngine.speedTier):
+ *   idle   → static-dribble / idle
+ *   walk   → walk / dribble (slower)
+ *   run    → dribble (normal speed)
+ *   sprint → dribble (1.4x fps boost)
+ *
  * On entering an ACTION state, the player's movement burst is applied
  * via physics.applyBurst() using the animation's movement data.
  */
@@ -28,10 +34,16 @@ const ACTION_ANIMS = {
   defense:   ['defense-shuffle', 'defense-backpedal'],
 };
 
-const IDLE_ANIMS         = ['static-dribble', 'dribble'];
+// Animation candidates by movement state (Soul Jam priority order)
+const IDLE_ANIMS         = ['static-dribble', 'idle_ball', 'dribble', 'idle'];
+const WALK_ANIMS         = ['dribble', 'walk', 'static-dribble'];
 const MOVING_ANIMS       = ['dribble', 'static-dribble'];
+const SPRINT_ANIMS       = ['dribble'];  // same anim, faster fps
 const DEFENSE_IDLE_ANIMS = ['defense-shuffle', 'defense-backpedal'];
 const DEFENSE_MOVE_ANIMS = ['defense-shuffle', 'defense-backpedal'];
+
+// Sprint fps multiplier applied on top of the animation's base fps
+const SPRINT_FPS_MULT = 1.4;
 
 class AnimationPlayer {
   /**
@@ -51,6 +63,7 @@ class AnimationPlayer {
     this.lastFrameTime  = 0;
     this.actionTimer    = 0;      // ms remaining in current action
     this._pendingAction = null;   // queued action name
+    this._sprintActive  = false;  // sprint fps boost flag
   }
 
   /** Update available animations (call when character changes) */
@@ -63,7 +76,7 @@ class AnimationPlayer {
     }
   }
 
-  /** Trigger an action animation by key: 'jumpshot' | 'crossover' | 'stepback' | 'dribble' */
+  /** Trigger an action animation by key: 'jumpshot' | 'crossover' | 'stepback' | 'dribble' | 'steal' */
   triggerAction(actionKey, movementData) {
     if (this.state === PLAYER_STATES.ACTION) return; // busy — ignore
     const candidates = ACTION_ANIMS[actionKey] ?? [];
@@ -87,9 +100,12 @@ class AnimationPlayer {
    * @param {object}  input        from ControllerInput.poll()
    * @param {number}  dt           ms since last frame
    * @param {boolean} defenseMode  L2 held
-   * @returns {object} { animName, frame, facingRight, state }
+   * @returns {object} { animName, frame, facingRight, state, speedTier }
    */
   update(timestamp, input, dt, defenseMode) {
+    const sprint    = input?.sprint ?? false;
+    const speedTier = this.physics?.speedTier ?? (sprint ? 'sprint' : 'idle');
+
     // ── Action timer ────────────────────────────────────────────────────────
     if (this.state === PLAYER_STATES.ACTION) {
       this.actionTimer -= dt;
@@ -104,11 +120,22 @@ class AnimationPlayer {
     if (this.state !== PLAYER_STATES.ACTION) {
       const moving = Math.abs(input?.moveX ?? 0) > 0.1 || Math.abs(input?.moveY ?? 0) > 0.1;
       this.state = moving ? PLAYER_STATES.MOVING : PLAYER_STATES.IDLE;
+      this._sprintActive = sprint && moving;
 
-      // Pick animation pool based on defense mode
+      // Pick animation pool based on defense mode and speed tier
       let candidates;
       if (defenseMode) {
-        candidates = moving ? DEFENSE_MOVE_ANIMS : DEFENSE_IDLE_ANIMS;
+        // Defense: choose based on movement direction
+        // Moving backward (up on Y) → backpedal; lateral → shuffle
+        const moveY = input?.moveY ?? 0;
+        if (moving && moveY < -0.3) {
+          candidates = ['defense-backpedal', 'defense-shuffle'];
+        } else {
+          candidates = DEFENSE_MOVE_ANIMS;
+        }
+        if (!moving) candidates = DEFENSE_IDLE_ANIMS;
+      } else if (speedTier === 'walk') {
+        candidates = moving ? WALK_ANIMS : IDLE_ANIMS;
       } else {
         candidates = moving ? MOVING_ANIMS : IDLE_ANIMS;
       }
@@ -121,7 +148,11 @@ class AnimationPlayer {
     // ── Frame advance ────────────────────────────────────────────────────────
     const anim = this._findAnim(this.currentAnim);
     if (anim && timestamp) {
-      const fps  = anim.fps ?? 8;
+      let fps  = anim.fps ?? 8;
+      // Sprint fps boost for locomotion animations
+      if (this._sprintActive && (anim.name === 'dribble' || anim.name === 'walk')) {
+        fps = fps * SPRINT_FPS_MULT;
+      }
       const loop = this.state !== PLAYER_STATES.ACTION ? true : (anim.loop ?? false);
       const frameDuration = 1000 / fps;
       if (!this.lastFrameTime) this.lastFrameTime = timestamp;
@@ -143,6 +174,8 @@ class AnimationPlayer {
       fps:         anim?.fps ?? 8,
       facingRight: this.physics?.facingRight ?? true,
       state:       this.state,
+      speedTier,
+      sprint:      this._sprintActive,
     };
   }
 

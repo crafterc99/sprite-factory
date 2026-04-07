@@ -1398,18 +1398,20 @@
             <!-- Game Mode Controller Reference (hidden until active) -->
             <div id="gmControlsRef" class="gm-controls-ref" style="display:none">
               <div style="color:#a0a0c0;margin-bottom:6px;letter-spacing:1px">CONTROLLER</div>
-              <div class="gm-row"><span class="gm-key">L-Stick</span> Move</div>
+              <div class="gm-row"><span class="gm-key">L-Stick</span> Move (analog)</div>
               <div class="gm-row"><span class="gm-key">L-Stick flick</span> Crossover</div>
+              <div class="gm-row"><span class="gm-key">L1 / R1</span> Sprint</div>
+              <div class="gm-row"><span class="gm-key">L2</span> Defense (hold)</div>
               <div class="gm-row"><span class="gm-key">□ Square</span> Jumpshot</div>
-              <div class="gm-row"><span class="gm-key">L2</span> Defense slide</div>
               <div class="gm-row"><span style="color:#888;font-size:8px">L2 + □</span> Steal</div>
               <div class="gm-row"><span class="gm-key">✕ Cross</span> Dribble</div>
               <div class="gm-row"><span class="gm-key">○ Circle</span> Stepback</div>
               <div style="margin-top:8px;color:#a0a0c0;letter-spacing:1px">KEYBOARD</div>
               <div class="gm-row"><span class="gm-key">WASD</span> Move</div>
               <div class="gm-row"><span class="gm-key">Q</span><span class="gm-key">E</span> Crossover ←→</div>
-              <div class="gm-row"><span class="gm-key">I</span><span class="gm-key">⇧</span> Jumpshot</div>
+              <div class="gm-row"><span class="gm-key">⇧ Shift</span> Sprint (hold)</div>
               <div class="gm-row"><span class="gm-key">F</span> Defense (hold)</div>
+              <div class="gm-row"><span class="gm-key">I</span> Jumpshot</div>
               <div class="gm-row"><span style="color:#888;font-size:8px">F + I</span> Steal</div>
               <div class="gm-row"><span class="gm-key">J</span><span class="gm-key">SPC</span> Dribble</div>
               <div class="gm-row"><span class="gm-key">L</span> Stepback</div>
@@ -1475,6 +1477,7 @@
             <div id="gmHud" class="gm-hud" style="display:none">
               <div class="gm-hud-row"><span>STATE</span><span class="gm-hud-val" id="gmHudState">IDLE</span></div>
               <div class="gm-hud-row"><span>ANIM</span><span class="gm-hud-val" id="gmHudAnim">—</span></div>
+              <div class="gm-hud-row"><span>FACE</span><span class="gm-hud-val" id="gmHudFacing">→</span></div>
               <div class="gm-hud-row"><span>vX</span><span class="gm-hud-val" id="gmHudVx">0.0</span></div>
               <div class="gm-hud-row"><span>vY</span><span class="gm-hud-val" id="gmHudVy">0.0</span></div>
               <div class="gm-hud-row"><span>POS</span><span class="gm-hud-val" id="gmHudPos">480, 520</span></div>
@@ -6706,10 +6709,11 @@ function testingRenderLoop(timestamp) {
     ctx.stroke();
   }
 
-  // ── Defense mode tint (subtle blue overlay when L2 held) ────────────────
+  // ── Mode tint overlays ───────────────────────────────────────────────────
   if (GM.active && GM._defenseMode) {
+    // Defense: blue tint
     ctx.save();
-    ctx.globalAlpha = 0.12;
+    ctx.globalAlpha = 0.10;
     ctx.fillStyle = '#2244ff';
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
@@ -6718,7 +6722,22 @@ function testingRenderLoop(timestamp) {
     ctx.fillStyle = '#4488ff';
     ctx.globalAlpha = 0.9;
     ctx.textAlign = 'center';
-    ctx.fillText('DEF', W / 2, 22);
+    ctx.fillText('◆ DEF ◆', W / 2, 22);
+    ctx.textAlign = 'start';
+    ctx.restore();
+  } else if (GM.active && GM._sprintMode) {
+    // Sprint: orange tint at edges (vignette effect)
+    ctx.save();
+    const spGrad = ctx.createRadialGradient(W/2, H/2, H*0.25, W/2, H/2, H*0.7);
+    spGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    spGrad.addColorStop(1, 'rgba(255,160,0,0.12)');
+    ctx.fillStyle = spGrad;
+    ctx.fillRect(0, 0, W, H);
+    ctx.font = 'bold 10px "Space Mono", monospace';
+    ctx.fillStyle = '#ffcc00';
+    ctx.globalAlpha = 0.8;
+    ctx.textAlign = 'center';
+    ctx.fillText('▶▶ SPRINT', W / 2, 22);
     ctx.textAlign = 'start';
     ctx.restore();
   }
@@ -6845,12 +6864,15 @@ function testingRenderLoop(timestamp) {
     const drawY = TESTING.charY - drawH + (TESTING.frameSize - TESTING.pixelHeight) * drawScale / 2;
 
     ctx.imageSmoothingEnabled = false;
+    // Apply facing flip in Game Mode
+    const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, drawW);
     ctx.drawImage(
       activeImg,
       TESTING.currentFrame * TESTING.frameSize, 0,
       TESTING.frameSize, TESTING.frameSize,
       drawX, drawY, drawW, drawH
     );
+    gmRestoreFlip(ctx, _flipped);
 
     // Shadow
     ctx.save();
@@ -6942,6 +6964,9 @@ const GM = {
   animCache: {},       // { animName: { img, frameCount, fps, loop, movementData } }
   charAnims: [],       // current character's anim list (from anim-lib)
   selectedChar: null,
+  _facingRight: true,
+  _defenseMode: false,
+  _sprintMode: false,
 };
 
 // ── Toggle Game Mode ────────────────────────────────────────────────────────
@@ -6962,10 +6987,17 @@ function startGameMode() {
 
   // ── Initialise physics ──────────────────────────────────────────────────
   GM.physics = new PhysicsEngine({
-    groundY: 520,
-    boundsX: [80, 880],
-    boundsY: [80, 520],
-    maxSpeed: 5,
+    groundY:     520,
+    boundsX:     [80, 880],
+    boundsY:     [80, 520],
+    maxSpeed:    5,       // run speed (px/frame at full stick)
+    sprintMult:  1.6,     // L1/R1: 8px/frame max
+    walkMult:    0.52,    // walk: ~2.6px/frame
+    walkThresh:  0.4,     // stick mag below this = walk
+    defenseMult: 0.55,    // L2 defense: ~2.75px/frame
+    gravity:     0.5,
+    friction:    0.78,    // snappy stops
+    airFriction: 0.97,
   });
   GM.physics.reset(TESTING.charX, 520);
 
@@ -7098,12 +7130,12 @@ function gmTick(timestamp) {
   const dt = GM.lastTimestamp ? Math.min(timestamp - GM.lastTimestamp, 50) : 16;
   GM.lastTimestamp = timestamp;
 
-  // Update physics — pass defense mode (slower speed, lower friction)
-  const phys = GM.physics.update(input.moveX, input.moveY, inDefense);
+  // Update physics — pass defense mode + sprint
+  const phys = GM.physics.update(input.moveX, input.moveY, inDefense, input.sprint);
   TESTING.charX = phys.x;
   TESTING.charY = phys.y;
 
-  // Update animation player
+  // Update animation player (sprint available via input.sprint + physics.speedTier)
   const animState = GM.player.update(timestamp, input, dt, inDefense);
   TESTING.currentFrame = animState.frame;
 
@@ -7114,21 +7146,32 @@ function gmTick(timestamp) {
     TESTING.loop = animState.state !== 'ACTION';
   }
 
-  // Track facing direction for sprite flip
-  if (Math.abs(phys.vx) > 0.05) GM._facingRight = phys.vx > 0;
+  // Track facing direction for sprite flip — physics is authoritative
+  GM._facingRight = GM.physics.facingRight;
 
   // ── HUD update ─────────────────────────────────────────────────────────────
-  const modeLabel = inDefense ? '<span style="color:#ff9900">DEF</span>' : animState.state;
+  const tierColor = { idle: '#888', walk: '#aad4ff', run: '#00ff88', sprint: '#ffcc00' };
+  const tier = phys.speedTier ?? 'idle';
+  let modeLabel;
+  if (inDefense) {
+    modeLabel = '<span style="color:#4488ff">DEF</span>';
+  } else if (animState.sprint) {
+    modeLabel = '<span style="color:#ffcc00">SPRINT</span>';
+  } else {
+    modeLabel = `<span style="color:${tierColor[tier] ?? '#888'}">${tier.toUpperCase()}</span>`;
+  }
   document.getElementById('gmHudState').innerHTML = modeLabel;
-  document.getElementById('gmHudAnim').textContent = animState.animName ?? '—';
-  document.getElementById('gmHudVx').textContent   = phys.vx.toFixed(2);
-  document.getElementById('gmHudVy').textContent   = phys.vy.toFixed(2);
-  document.getElementById('gmHudPos').textContent  = `${Math.round(phys.x)}, ${Math.round(phys.y)}`;
-  document.getElementById('gmHudPad').textContent  = input.gamepadConnected ? '✓ connected' : 'none';
-  document.getElementById('gmHudPad').style.color  = input.gamepadConnected ? '#00ff88' : '#30305a';
+  document.getElementById('gmHudAnim').textContent  = animState.animName ?? '—';
+  document.getElementById('gmHudVx').textContent    = phys.vx.toFixed(2);
+  document.getElementById('gmHudVy').textContent    = phys.vy.toFixed(2);
+  document.getElementById('gmHudPos').textContent   = `${Math.round(phys.x)}, ${Math.round(phys.y)}`;
+  document.getElementById('gmHudFacing').textContent = GM._facingRight ? '→' : '←';
+  document.getElementById('gmHudPad').textContent   = input.gamepadConnected ? '✓ connected' : 'none';
+  document.getElementById('gmHudPad').style.color   = input.gamepadConnected ? '#00ff88' : '#30305a';
 
   // Defensive stance visual tint (subtle blue on canvas when L2 held)
   GM._defenseMode = inDefense;
+  GM._sprintMode  = animState.sprint;
 }
 
 // ── Show movement editor when animation selected in testing ────────────────

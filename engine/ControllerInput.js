@@ -118,12 +118,12 @@ class ControllerInput {
     s.stickLY = s.moveY;
 
     // ── Keyboard action buttons ──────────────────────────────────────────
-    s.btnSquare   = k.has('KeyI') || k.has('ShiftLeft') || k.has('ShiftRight'); // Jumpshot / Steal
+    s.btnSquare   = k.has('KeyI');                                               // Jumpshot / Steal (I key)
     s.btnCross    = k.has('KeyJ') || k.has('Space');                             // Dribble
     s.btnCircle   = k.has('KeyL');                                               // Stepback
-    s.l2          = k.has('KeyF');                                               // Defense mode
+    s.l2          = k.has('KeyF');                                               // Defense mode (hold)
     s.l2Value     = s.l2 ? 1 : 0;
-    s.sprint      = k.has('ShiftLeft') || k.has('ShiftRight');
+    s.sprint      = k.has('ShiftLeft') || k.has('ShiftRight');                   // Sprint (hold)
 
     // Keyboard crossover flick: Q = left, E = right
     s.crossoverLeft  = k.has('KeyQ');
