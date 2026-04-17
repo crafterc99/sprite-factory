@@ -910,16 +910,18 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const stripHeight = stripMeta.height;
 
       const newFrameBuf = await sharp(processedTmpPath)
-        .resize(180, 180, { fit: 'fill' })
+        .resize(180, 180, { fit: 'fill', kernel: 'nearest' })
+        .png({ compressionLevel: 0, effort: 1 })
         .toBuffer();
 
+      // composite only — no second resize; strip dimensions are preserved by sharp
       await sharp(stripPath)
         .composite([{
           input: newFrameBuf,
           left: fi * 180,
           top: 0,
         }])
-        .resize(stripWidth, stripHeight, { fit: 'fill', kernel: 'nearest' })
+        .png({ compressionLevel: 0, effort: 1 })
         .toFile(stripPath + '.tmp.png');
 
       fs.renameSync(stripPath + '.tmp.png', stripPath);

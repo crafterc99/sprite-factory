@@ -160,6 +160,7 @@ require('./routes/wardrobe').register(router);
 require('./routes/anim-lib').register(router, ctx);
 require('./routes/studio-gen').register(router, ctx);
 require('./routes/apply-anim').register(router, ctx);
+require('./routes/quality-check').register(router);
 
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
 const TESTING_CONFIG_FILE = path.join(__dirname, 'data/.testing-config.json');

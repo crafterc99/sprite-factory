@@ -3712,7 +3712,9 @@ function cpHandlePhoto(file) {
     // Full resolution — no resize. Photo is uploaded in chunks to bypass Railway body-size limit.
     const canvas = document.createElement('canvas');
     canvas.width = img.width; canvas.height = img.height;
-    canvas.getContext('2d').drawImage(img, 0, 0);
+    const _ctx = canvas.getContext('2d');
+    _ctx.imageSmoothingEnabled = false;
+    _ctx.drawImage(img, 0, 0);
     CP.photo = canvas.toDataURL('image/jpeg', 0.92);
     const thumb = document.getElementById('cpPhotoThumb');
     thumb.src = CP.photo;
@@ -4702,6 +4704,7 @@ function openDetailPanel(character, animName, stripUrl, fps, frames, qcScore, qc
       fc.title = `Frame ${i + 1}`;
       fc.style.cursor = 'pointer';
       const ctx = fc.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, i * frameW, 0, frameW, frameH, 0, 0, frameW, frameH);
       const frameIdx = i;
       fc.addEventListener('click', () => openFramePromptEditor(character, animName, frameIdx));
@@ -4711,9 +4714,11 @@ function openDetailPanel(character, animName, stripUrl, fps, frames, qcScore, qc
     let frame = 0;
     const canvas = document.getElementById('detailCanvas');
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
     if (detailInterval) clearInterval(detailInterval);
     detailInterval = setInterval(() => {
       ctx.clearRect(0, 0, 180, 180);
+      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, frame * frameW, 0, frameW, frameH, 0, 0, 180, 180);
       frame = (frame + 1) % frames;
     }, 1000 / (fps || 8));

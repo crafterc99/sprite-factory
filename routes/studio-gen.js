@@ -104,7 +104,7 @@ async function buildStrip(framePaths, outputPath) {
     create: { width: w * framePaths.length, height: h, channels: 4, background: { r:0, g:0, b:0, alpha:0 } }
   });
   const composites = framePaths.map((p, i) => ({ input: p, left: i * w, top: 0 }));
-  await strip.composite(composites).png().toFile(outputPath);
+  await strip.composite(composites).png({ compressionLevel: 0, effort: 1 }).toFile(outputPath);
 }
 
 async function processFrame(srcPath, outPath) {

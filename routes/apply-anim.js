@@ -89,7 +89,7 @@ async function buildSpriteSheet(framePaths, outputPath, { frameWidth, frameHeigh
   // Resize each frame to exact dimensions before compositing
   const resizedPaths = await Promise.all(framePaths.map(async (p, i) => {
     const tmp = p.replace('.png', '-resized.png');
-    await sharp(p).resize(frameWidth, frameHeight, { fit: 'contain', background: { r:0,g:0,b:0,alpha:0 } }).png().toFile(tmp);
+    await sharp(p).resize(frameWidth, frameHeight, { fit: 'contain', kernel: 'nearest', background: { r:0,g:0,b:0,alpha:0 } }).png({ compressionLevel: 0, effort: 1 }).toFile(tmp);
     return tmp;
   }));
 
@@ -101,7 +101,7 @@ async function buildSpriteSheet(framePaths, outputPath, { frameWidth, frameHeigh
 
   await sharp({
     create: { width: sheetW, height: sheetH, channels: 4, background: { r:0,g:0,b:0,alpha:0 } },
-  }).composite(composites).png().toFile(outputPath);
+  }).composite(composites).png({ compressionLevel: 0, effort: 1 }).toFile(outputPath);
 
   // Clean up resized temps
   resizedPaths.forEach(p => { try { fs.unlinkSync(p); } catch {} });
