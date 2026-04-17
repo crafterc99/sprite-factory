@@ -1,0 +1,144 @@
+{
+  "double-cross": {
+    "id": "double-cross",
+    "label": "Double Crossover",
+    "description": "Two quick side-to-side dribble switches, ending in a drive",
+    "category": "dribble-move",
+    "keyframes": [
+      { "t": 0,    "dx": 0,   "dy": 0 },
+      { "t": 0.25, "dx": -18, "dy": 0 },
+      { "t": 0.55, "dx": 20,  "dy": 0 },
+      { "t": 1,    "dx": 6,   "dy": -4 }
+    ],
+    "curve": "ease-out",
+    "totalDx": 6,
+    "totalDy": -4,
+    "lockFacing": false,
+    "lockMovement": true,
+    "duration": 480
+  },
+  "stepback": {
+    "id": "stepback",
+    "label": "Step Back",
+    "description": "Quick gather + jump backward for mid-range pull-up",
+    "category": "shot",
+    "keyframes": [
+      { "t": 0,    "dx": 0,   "dy": 0 },
+      { "t": 0.3,  "dx": -8,  "dy": 8 },
+      { "t": 0.6,  "dx": -14, "dy": 16 },
+      { "t": 1,    "dx": -14, "dy": 16 }
+    ],
+    "curve": "ease-in",
+    "totalDx": -14,
+    "totalDy": 16,
+    "lockFacing": true,
+    "lockMovement": true,
+    "duration": 380
+  },
+  "euro-step": {
+    "id": "euro-step",
+    "label": "Euro Step",
+    "description": "Two-step sidestep layup approach",
+    "category": "layup",
+    "keyframes": [
+      { "t": 0,    "dx": 0,   "dy": 0 },
+      { "t": 0.4,  "dx": 22,  "dy": -10 },
+      { "t": 0.7,  "dx": -10, "dy": -20 },
+      { "t": 1,    "dx": -10, "dy": -28 }
+    ],
+    "curve": "linear",
+    "totalDx": -10,
+    "totalDy": -28,
+    "lockFacing": false,
+    "lockMovement": true,
+    "duration": 520
+  },
+  "spin-move": {
+    "id": "spin-move",
+    "label": "Spin Move",
+    "description": "360-degree pivot drive past defender",
+    "category": "dribble-move",
+    "keyframes": [
+      { "t": 0,    "dx": 0,  "dy": 0 },
+      { "t": 0.5,  "dx": 10, "dy": -5 },
+      { "t": 1,    "dx": 20, "dy": -10 }
+    ],
+    "curve": "linear",
+    "totalDx": 20,
+    "totalDy": -10,
+    "lockFacing": false,
+    "lockMovement": true,
+    "duration": 420
+  },
+  "hop-jumper": {
+    "id": "hop-jumper",
+    "label": "Hop Jumper",
+    "description": "Quick gather hop into floater/jumper",
+    "category": "shot",
+    "keyframes": [
+      { "t": 0,    "dx": 0,  "dy": 0 },
+      { "t": 0.35, "dx": 6,  "dy": -8 },
+      { "t": 0.65, "dx": 8,  "dy": -16 },
+      { "t": 1,    "dx": 8,  "dy": -16 }
+    ],
+    "curve": "arc",
+    "totalDx": 8,
+    "totalDy": -16,
+    "lockFacing": true,
+    "lockMovement": true,
+    "duration": 600
+  },
+  "snatch-back": {
+    "id": "snatch-back",
+    "label": "Snatch Back",
+    "description": "Hard pull-back hesitation to reset drive",
+    "category": "dribble-move",
+    "keyframes": [
+      { "t": 0,    "dx": 0,   "dy": 0 },
+      { "t": 0.4,  "dx": -20, "dy": 5 },
+      { "t": 0.7,  "dx": -20, "dy": 5 },
+      { "t": 1,    "dx": -12, "dy": 2 }
+    ],
+    "curve": "ease-out",
+    "totalDx": -12,
+    "totalDy": 2,
+    "lockFacing": false,
+    "lockMovement": true,
+    "duration": 340
+  },
+  "crossover": {
+    "id": "crossover",
+    "label": "Crossover",
+    "description": "Standard side-to-side dribble transfer",
+    "category": "dribble-move",
+    "keyframes": [
+      { "t": 0,  "dx": 0,  "dy": 0 },
+      { "t": 0.5,"dx": 12, "dy": 0 },
+      { "t": 1,  "dx": 12, "dy": 0 }
+    ],
+    "curve": "ease-out",
+    "totalDx": 12,
+    "totalDy": 0,
+    "lockFacing": false,
+    "lockMovement": true,
+    "duration": 380
+  },
+  "jumpshot": {
+    "id": "jumpshot",
+    "label": "Jump Shot",
+    "description": "Standard catch-and-shoot jump shot",
+    "category": "shot",
+    "keyframes": [
+      { "t": 0,    "dx": 0, "dy": 0 },
+      { "t": 0.4,  "dx": 0, "dy": -12 },
+      { "t": 0.75, "dx": 0, "dy": -18 },
+      { "t": 1,    "dx": 0, "dy": -18 }
+    ],
+    "curve": "arc",
+    "totalDx": 0,
+    "totalDy": -18,
+    "lockFacing": true,
+    "lockMovement": true,
+    "duration": 750
+  }
+}

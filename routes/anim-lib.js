@@ -90,6 +90,16 @@ function register(router, ctx) {
       frameCount: a.frameCount,
       createdAt: a.createdAt,
       movementData: a.movementData ?? null,
+      movementProfileId: a.movementProfileId ?? null,
+      facingAngle: a.facingAngle ?? null,
+      validZones: a.validZones ?? [],
+      preferredZones: a.preferredZones ?? [],
+      blockedZones: a.blockedZones ?? [],
+      fallbackAnimationId: a.fallbackAnimationId ?? null,
+      tags: a.tags ?? [],
+      category: a.category ?? null,
+      notes: a.notes ?? null,
+      legacy: a.legacy ?? false,
       thumbUrl: `/api/anim-lib/frame/${a.name}/0`,
     }));
     json(res, { animations });
@@ -205,6 +215,26 @@ function register(router, ctx) {
       saveIndex(index);
       scheduleSync();
       json(res, { success: true, movementData: body });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+  });
+
+  // PATCH /api/anim-lib/:name/meta — update zone/angle/category/tags/notes metadata
+  router.patch('/api/anim-lib/:name/meta', async (req, res, params) => {
+    try {
+      const body = await parseBody(req);
+      const { name } = params;
+      const index = loadIndex();
+      if (!index[name]) return json(res, { error: 'not found' }, 404);
+      const a = index[name];
+      const META_FIELDS = ['validZones','preferredZones','blockedZones','fallbackAnimationId','facingAngle','movementProfileId','tags','category','notes','legacy','displayName','fps','loop','angleIndex','angle'];
+      for (const f of META_FIELDS) {
+        if (body[f] !== undefined) a[f] = body[f];
+      }
+      saveIndex(index);
+      scheduleSync();
+      json(res, { success: true });
     } catch (err) {
       json(res, { error: err.message }, 500);
     }

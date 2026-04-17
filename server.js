@@ -42,6 +42,7 @@ class Router {
 
   get(pattern, handler) { this._add('GET', pattern, handler); }
   post(pattern, handler) { this._add('POST', pattern, handler); }
+  put(pattern, handler) { this._add('PUT', pattern, handler); }
   patch(pattern, handler) { this._add('PATCH', pattern, handler); }
   delete(pattern, handler) { this._add('DELETE', pattern, handler); }
 
@@ -161,6 +162,7 @@ require('./routes/anim-lib').register(router, ctx);
 require('./routes/studio-gen').register(router, ctx);
 require('./routes/apply-anim').register(router, ctx);
 require('./routes/quality-check').register(router);
+require('./routes/movement-profiles').register(router);
 
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
 const TESTING_CONFIG_FILE = path.join(__dirname, 'data/.testing-config.json');

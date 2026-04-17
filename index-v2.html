@@ -1534,6 +1534,49 @@
                   </div>
                   <div id="gmMoveSaveStatus" style="font-size:9px;color:#50507a;margin-top:4px;font-family:var(--mono)"></div>
                 </div>
+
+                <!-- Zone / Angle metadata editor -->
+                <div id="gmZoneEditor" style="display:none;margin-top:10px;border-top:1px solid #1e1e30;padding-top:10px">
+                  <div class="gm-move-label">Zone &amp; Angle</div>
+                  <!-- Category -->
+                  <div class="gm-move-row">
+                    <span>Category</span>
+                    <input type="text" id="gmZoneCategory" placeholder="e.g. shot, dribble-move…"
+                      style="font-size:9px;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#ccc;padding:2px 6px;flex:1;height:22px" />
+                  </div>
+                  <!-- Tags -->
+                  <div class="gm-move-row">
+                    <span>Tags</span>
+                    <input type="text" id="gmZoneTags" placeholder="comma-separated"
+                      style="font-size:9px;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#ccc;padding:2px 6px;flex:1;height:22px" />
+                  </div>
+                  <!-- 3×3 zone picker -->
+                  <div style="font-size:9px;color:#50507a;margin:6px 0 4px">Valid Zones <span style="color:#30305a">(click=valid, shift=preferred, alt=blocked)</span></div>
+                  <div id="gmZoneGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-bottom:6px"></div>
+                  <!-- Zone legend -->
+                  <div style="display:flex;gap:8px;margin-bottom:8px;font-size:8px;font-family:var(--mono)">
+                    <span style="color:#00ff88">● valid</span>
+                    <span style="color:#ffcc00">★ preferred</span>
+                    <span style="color:#ff4444">✗ blocked</span>
+                  </div>
+                  <!-- Fallback anim -->
+                  <div class="gm-move-row">
+                    <span>Fallback</span>
+                    <input type="text" id="gmZoneFallback" placeholder="anim-id"
+                      style="font-size:9px;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#ccc;padding:2px 6px;flex:1;height:22px" />
+                  </div>
+                  <!-- Notes -->
+                  <div class="gm-move-row">
+                    <span>Notes</span>
+                    <input type="text" id="gmZoneNotes" placeholder="optional"
+                      style="font-size:9px;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#ccc;padding:2px 6px;flex:1;height:22px" />
+                  </div>
+                  <div style="display:flex;gap:4px;margin-top:6px">
+                    <button class="btn btn-secondary btn-sm" style="font-size:9px;flex:1" onclick="gmClearZoneMeta()">Clear</button>
+                    <button class="btn btn-primary btn-sm" style="font-size:9px;flex:1" onclick="gmSaveZoneMeta()">Save</button>
+                  </div>
+                  <div id="gmZoneSaveStatus" style="font-size:9px;color:#50507a;margin-top:4px;font-family:var(--mono)"></div>
+                </div>
               </div>
             </div>
 
@@ -6733,8 +6776,9 @@ function testingSelectAnim(animName) {
   const hint = document.getElementById('testingCourtHint');
   if (hint) hint.style.display = 'none';
 
-  // Show movement editor for this animation
+  // Show movement editor + zone editor for this animation
   if (typeof gmShowMoveEditor === 'function') gmShowMoveEditor(animName);
+  if (typeof gmShowZoneEditor === 'function') gmShowZoneEditor(animName);
 }
 
 function loadAngleStrips(charName, animName, fallbackUrl) {
@@ -6818,8 +6862,9 @@ function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps, angleIndex) 
   const hint = document.getElementById('testingCourtHint');
   if (hint) hint.style.display = 'none';
 
-  // Show movement editor
+  // Show movement editor + zone editor
   if (typeof gmShowMoveEditor === 'function') gmShowMoveEditor(animId);
+  if (typeof gmShowZoneEditor === 'function') gmShowZoneEditor(animId);
 }
 
 function updateTestingInfo() {
@@ -7019,6 +7064,42 @@ function testingRenderLoop(timestamp) {
     ctx.restore();
   }
 
+  // ── 9-zone spatial grid overlay (when GM active + zone data present) ─────
+  if (GM.active && TESTING.showZones && typeof getZoneBounds === 'function') {
+    const curPosZone = GM._positionZone ?? getPositionZone(TESTING.charX, TESTING.charY);
+    const animEntry = GM.charAnims?.find(a => a.name === TESTING.selectedAnim);
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    for (const zid of ZONE_GRID_IDS) {
+      const bounds = getZoneBounds(zid, W, H);
+      if (!bounds) continue;
+      const blocked   = (animEntry?.blockedZones   ?? []).includes(zid);
+      const preferred = (animEntry?.preferredZones ?? []).includes(zid);
+      const valid     = (animEntry?.validZones     ?? []).length > 0 && (animEntry?.validZones ?? []).includes(zid);
+      const isActive  = zid === curPosZone;
+      ctx.strokeStyle = blocked ? '#ff4444' : preferred ? '#ffcc00' : valid ? '#00ff88' : '#ffffff22';
+      ctx.lineWidth = isActive ? 2.5 : 1;
+      ctx.setLineDash(isActive ? [] : [6, 5]);
+      if (blocked || preferred || valid) {
+        ctx.fillStyle = blocked ? 'rgba(255,68,68,0.08)' : preferred ? 'rgba(255,204,0,0.08)' : 'rgba(0,255,136,0.06)';
+        ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
+      }
+      ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+      ctx.setLineDash([]);
+    }
+    // Label for active pos zone
+    const ab = getZoneBounds(curPosZone, W, H);
+    if (ab) {
+      ctx.globalAlpha = 0.9;
+      ctx.font = 'bold 9px "Space Mono", monospace';
+      ctx.fillStyle = '#00ff88';
+      ctx.textAlign = 'center';
+      ctx.fillText(ZONE_GRID_LABELS[curPosZone] ?? curPosZone, ab.x + ab.w / 2, ab.y + ab.h / 2 + 4);
+      ctx.textAlign = 'start';
+    }
+    ctx.restore();
+  }
+
   // ── Edit mode handles ─────────────────────────────────────────────────────
   if (TESTING.editMode) drawEditHandles(ctx);
 
@@ -7102,6 +7183,29 @@ function testingRenderLoop(timestamp) {
       hasAngleStrip ? `✓ angle strip loaded` : `↳ using default strip (no angle-${currentZone.angleIdx} found)`,
       14, H - 16
     );
+
+    // Zone validity badge for selected anim (uses new 9-zone spatial system)
+    if (GM.active && TESTING.selectedAnim && typeof getPositionZone === 'function') {
+      const posZone = GM._positionZone ?? getPositionZone(TESTING.charX, TESTING.charY);
+      const animEntry = GM.charAnims.find(a => a.name === TESTING.selectedAnim);
+      if (animEntry) {
+        const blocked   = (animEntry.blockedZones   ?? []).includes(posZone);
+        const preferred = (animEntry.preferredZones ?? []).includes(posZone);
+        const valid     = (animEntry.validZones     ?? []).length === 0 || (animEntry.validZones ?? []).includes(posZone);
+        const badgeColor = blocked ? '#ff4444' : preferred ? '#ffcc00' : valid ? '#00ff88' : '#888888';
+        const badgeText  = blocked ? '✗ BLOCKED' : preferred ? '★ PREFERRED' : valid ? '✓ VALID' : '· generic';
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.fillRect(270, H - 48, 130, 40);
+        ctx.fillStyle = badgeColor;
+        ctx.font = 'bold 10px "Space Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(badgeText, 335, H - 30);
+        ctx.font = '9px "Space Mono", monospace';
+        ctx.fillStyle = '#60607a';
+        ctx.fillText(posZone, 335, H - 15);
+        ctx.textAlign = 'start';
+      }
+    }
     // Frame counter
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(W - 130, H - 28, 122, 20);
@@ -7138,6 +7242,8 @@ function testingRenderLoop(timestamp) {
 <script src="/engine/MovementEngine.js"></script>
 <script src="/engine/ControllerInput.js"></script>
 <script src="/engine/AnimationPlayer.js"></script>
+<script src="/engine/CourtZones.js"></script>
+<script src="/engine/AnimResolver.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
@@ -7242,6 +7348,15 @@ async function loadGMAnims() {
         loop: anim.loop ?? true,
         frameCount: anim.frameCount ?? 1,
         movementData: anim.movementData ?? null,
+        movementProfileId: anim.movementProfileId ?? null,
+        facingAngle: anim.facingAngle ?? null,
+        validZones: anim.validZones ?? [],
+        preferredZones: anim.preferredZones ?? [],
+        blockedZones: anim.blockedZones ?? [],
+        fallbackAnimationId: anim.fallbackAnimationId ?? null,
+        tags: anim.tags ?? [],
+        category: anim.category ?? null,
+        legacy: anim.legacy ?? false,
         stripUrl,
       });
     }
@@ -7262,16 +7377,25 @@ function gmTick(timestamp) {
   // ── Action button handling ────────────────────────────────────────────────
   if (GM.player.state !== 'ACTION') {
 
+    // Helper: resolve best anim for action using zone+angle awareness
+    const _gmResolve = (action, fallbackNames) => {
+      const posZone = GM._positionZone ?? 'arc';
+      const perspAngle = getZoneForPos(TESTING.charX, TESTING.charY)?.angleIdx ?? 0;
+      if (typeof resolveAnimation === 'function') {
+        const best = resolveAnimation(action, GM.charAnims, posZone, perspAngle);
+        if (best) return best;
+      }
+      return GM.charAnims.find(a => fallbackNames.includes(a.name)) ?? null;
+    };
+
     // SQUARE — Jumpshot (offense) OR Steal (while L2/defense held)
     if (input.justSquare) {
       if (inDefense) {
-        // Defense mode + Square = Steal
-        const anim = GM.charAnims.find(a => a.name === 'steal');
+        const anim = _gmResolve('steal', ['steal']);
         const md = anim?.movementData ?? resolveMovementData('steal', null);
         GM.player.triggerAction('steal', md);
       } else {
-        // Offense = Jumpshot
-        const anim = GM.charAnims.find(a => ['jumpshot','ac-jumpshot','tween-tween'].includes(a.name));
+        const anim = _gmResolve('jumpshot', ['jumpshot','ac-jumpshot','tween-tween']);
         const md = anim?.movementData ?? resolveMovementData(anim?.name ?? 'jumpshot', null);
         GM.player.triggerAction('jumpshot', md);
       }
@@ -7279,26 +7403,24 @@ function gmTick(timestamp) {
 
     // CROSS — Dribble action
     else if (input.justCross) {
-      const anim = GM.charAnims.find(a => ['static-dribble','dribble'].includes(a.name));
+      const anim = _gmResolve('dribble', ['static-dribble','dribble']);
       const md = anim?.movementData ?? resolveMovementData(anim?.name ?? 'dribble', null);
       GM.player.triggerAction('dribble', md);
     }
 
     // CIRCLE — Stepback
     else if (input.justCircle) {
-      const anim = GM.charAnims.find(a => a.name === 'stepback');
+      const anim = _gmResolve('stepback', ['stepback']);
       const md = anim?.movementData ?? resolveMovementData('stepback', null);
       GM.player.triggerAction('stepback', md);
     }
 
     // LEFT STICK FLICK — Crossover (direction from stick)
     else if (input.justCrossoverLeft || input.justCrossoverRight) {
-      // Set crossover direction via physics facing before triggering
       if (input.justCrossoverLeft)  GM.physics.facingRight = false;
       if (input.justCrossoverRight) GM.physics.facingRight = true;
-      const anim = GM.charAnims.find(a => ['crossover','tween-cross','ac-cgs'].includes(a.name));
+      const anim = _gmResolve('crossover', ['crossover','tween-cross','ac-cgs']);
       const md = anim?.movementData ?? resolveMovementData(anim?.name ?? 'crossover', null);
-      // Apply directional burst
       const directedMd = { ...md, velocityX: Math.abs(md?.velocityX ?? 5) * (input.justCrossoverRight ? 1 : -1) };
       GM.player.triggerAction('crossover', directedMd);
     }
@@ -7312,6 +7434,11 @@ function gmTick(timestamp) {
   const phys = GM.physics.update(input.moveX, input.moveY, inDefense, input.sprint);
   TESTING.charX = phys.x;
   TESTING.charY = phys.y;
+
+  // Track current spatial position zone for zone-aware anim resolution
+  GM._positionZone = (typeof getPositionZone === 'function')
+    ? getPositionZone(TESTING.charX, TESTING.charY)
+    : 'arc';
 
   // Update animation player (sprint available via input.sprint + physics.speedTier)
   const animState = GM.player.update(timestamp, input, dt, inDefense);
@@ -7407,6 +7534,116 @@ async function gmResetMovement() {
   } catch (e) {
     toast('Reset failed: ' + e.message, true);
   }
+}
+
+// ── Zone metadata editor ────────────────────────────────────────────────────
+// Zone ids in 3×3 grid order (row-major: upper-left → lower-right)
+const ZONE_GRID_IDS = [
+  'upper-left',  'top-key',   'upper-right',
+  'left-wing',   'arc',       'right-wing',
+  'lower-left',  'paint',     'lower-right',
+];
+const ZONE_GRID_LABELS = {
+  'upper-left':'UL', 'top-key':'KEY', 'upper-right':'UR',
+  'left-wing':'LW',  'arc':'ARC',     'right-wing':'RW',
+  'lower-left':'LL', 'paint':'PAINT', 'lower-right':'LR',
+};
+
+// Per-anim: which zones are valid/preferred/blocked
+const _gmZoneState = {}; // animName → { zoneId: 'valid'|'preferred'|'blocked'|'' }
+
+function gmBuildZoneGrid(animName) {
+  const grid = document.getElementById('gmZoneGrid');
+  if (!grid) return;
+  const state = _gmZoneState[animName] || {};
+  grid.innerHTML = ZONE_GRID_IDS.map(zid => {
+    const s = state[zid] ?? '';
+    const bg = s === 'valid' ? '#003318' : s === 'preferred' ? '#332200' : s === 'blocked' ? '#330000' : '#0a0a14';
+    const border = s === 'valid' ? '#00ff88' : s === 'preferred' ? '#ffcc00' : s === 'blocked' ? '#ff4444' : '#1e1e30';
+    const icon = s === 'valid' ? '●' : s === 'preferred' ? '★' : s === 'blocked' ? '✗' : '·';
+    return `<button onclick="gmCycleZone('${animName}','${zid}',event)" style="background:${bg};border:1px solid ${border};border-radius:4px;color:${border};font-size:8px;padding:3px 0;cursor:pointer;font-family:var(--mono);line-height:1.3">${icon}<br>${ZONE_GRID_LABELS[zid]}</button>`;
+  }).join('');
+}
+
+function gmCycleZone(animName, zoneId, event) {
+  if (!_gmZoneState[animName]) _gmZoneState[animName] = {};
+  const cur = _gmZoneState[animName][zoneId] ?? '';
+  let next;
+  if (event.shiftKey) {
+    next = cur === 'preferred' ? '' : 'preferred';
+  } else if (event.altKey) {
+    next = cur === 'blocked' ? '' : 'blocked';
+  } else {
+    next = cur === 'valid' ? '' : 'valid';
+  }
+  _gmZoneState[animName][zoneId] = next;
+  gmBuildZoneGrid(animName);
+}
+
+function gmShowZoneEditor(animName) {
+  if (!animName) {
+    document.getElementById('gmZoneEditor').style.display = 'none';
+    return;
+  }
+  const anim = GM.charAnims?.find(a => a.name === animName);
+  // Populate state from existing data
+  _gmZoneState[animName] = {};
+  (anim?.validZones ?? []).forEach(z => { _gmZoneState[animName][z] = 'valid'; });
+  (anim?.preferredZones ?? []).forEach(z => { _gmZoneState[animName][z] = 'preferred'; });
+  (anim?.blockedZones ?? []).forEach(z => { _gmZoneState[animName][z] = 'blocked'; });
+
+  document.getElementById('gmZoneEditor').style.display = 'block';
+  document.getElementById('gmZoneEditor').dataset.anim = animName;
+  document.getElementById('gmZoneCategory').value = anim?.category ?? '';
+  document.getElementById('gmZoneTags').value = (anim?.tags ?? []).join(', ');
+  document.getElementById('gmZoneFallback').value = anim?.fallbackAnimationId ?? '';
+  document.getElementById('gmZoneNotes').value = anim?.notes ?? '';
+  document.getElementById('gmZoneSaveStatus').textContent = '';
+  gmBuildZoneGrid(animName);
+}
+
+async function gmSaveZoneMeta() {
+  const animName = document.getElementById('gmZoneEditor').dataset.anim;
+  if (!animName) return;
+  const state = _gmZoneState[animName] ?? {};
+  const validZones     = Object.entries(state).filter(([,v]) => v === 'valid').map(([k]) => k);
+  const preferredZones = Object.entries(state).filter(([,v]) => v === 'preferred').map(([k]) => k);
+  const blockedZones   = Object.entries(state).filter(([,v]) => v === 'blocked').map(([k]) => k);
+  const tagsRaw = document.getElementById('gmZoneTags').value;
+  const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+  const payload = {
+    validZones, preferredZones, blockedZones,
+    category: document.getElementById('gmZoneCategory').value.trim() || null,
+    tags,
+    fallbackAnimationId: document.getElementById('gmZoneFallback').value.trim() || null,
+    notes: document.getElementById('gmZoneNotes').value.trim() || null,
+  };
+  try {
+    const r = await fetch(`${API}/api/anim-lib/${animName}/meta`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    // Update local cache
+    const entry = GM.charAnims?.find(a => a.name === animName);
+    if (entry) Object.assign(entry, payload);
+    document.getElementById('gmZoneSaveStatus').textContent = '✓ saved';
+    document.getElementById('gmZoneSaveStatus').style.color = '#00cc44';
+    setTimeout(() => { document.getElementById('gmZoneSaveStatus').style.color = '#50507a'; }, 2000);
+  } catch (e) {
+    document.getElementById('gmZoneSaveStatus').textContent = '✗ ' + e.message;
+    document.getElementById('gmZoneSaveStatus').style.color = '#cc3333';
+  }
+}
+
+function gmClearZoneMeta() {
+  const animName = document.getElementById('gmZoneEditor').dataset.anim;
+  if (!animName) return;
+  _gmZoneState[animName] = {};
+  gmBuildZoneGrid(animName);
+  document.getElementById('gmZoneSaveStatus').textContent = '(cleared — save to apply)';
 }
 
 // ── Draw facing flip helper (called from within testingRenderLoop when GM active)
