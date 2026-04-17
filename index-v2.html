@@ -1476,6 +1476,15 @@
                   <span id="testingSpeedLabel" style="font-family:var(--mono);min-width:24px;text-align:right">1x</span>
                 </div>
                 <!-- Debug toggles -->
+                <!-- Resize mode toggle -->
+                <div class="tv2-set-row">
+                  <span style="flex:1">Resize</span>
+                  <button id="resizeModeBtn" class="btn btn-secondary btn-sm" onclick="toggleResizeMode()"
+                    style="font-size:9px;padding:2px 8px;color:#00ff88"
+                    title="High Quality — progressive lanczos3 (default)">
+                    <span id="resizeModeLbl">HQ ▾</span>
+                  </button>
+                </div>
                 <div class="tv2-set-row"><label><input type="checkbox" id="testingShowHitbox" /> Hitbox</label></div>
                 <div class="tv2-set-row"><label><input type="checkbox" id="testingShowZones" checked /> Zones</label></div>
                 <div class="tv2-set-row"><label><input type="checkbox" id="testingShowOob" checked /> OOB</label></div>
@@ -1977,6 +1986,11 @@
 <script>
 const API = '';
 const TOTAL_ANIMS = 63;
+
+// ─── RESIZE MODE ──────────────────────────────────────────────────────────────
+// 'high-quality'  → progressive lanczos3 downscale (Photoshop Bicubic Sharper)
+// 'pixel-perfect' → nearest-neighbor (no interpolation, for hand-drawn pixel art)
+let SPRITE_RESIZE_MODE = localStorage.getItem('spriteResizeMode') || 'high-quality';
 
 // ─── ANIMATION DEFINITIONS ───────────────────────────────────────────────
 const ANIM_CATEGORIES = {
@@ -2568,6 +2582,86 @@ function showPage2(name) {
 
 // ── TV2 panel toggle ─────────────────────────────────────────────────────────
 let _tv2OpenPanel = null;
+// ─── Resize Mode Toggle ───────────────────────────────────────────────────────
+function toggleResizeMode() {
+  SPRITE_RESIZE_MODE = SPRITE_RESIZE_MODE === 'high-quality' ? 'pixel-perfect' : 'high-quality';
+  localStorage.setItem('spriteResizeMode', SPRITE_RESIZE_MODE);
+  const lbl = document.getElementById('resizeModeLbl');
+  const btn = document.getElementById('resizeModeBtn');
+  if (lbl) lbl.textContent = SPRITE_RESIZE_MODE === 'high-quality' ? 'HQ ▾' : 'Pixel ▾';
+  if (btn) {
+    btn.title = SPRITE_RESIZE_MODE === 'high-quality'
+      ? 'High Quality — progressive lanczos3 (default)'
+      : 'Pixel Perfect — nearest-neighbor (no interpolation)';
+    btn.style.color = SPRITE_RESIZE_MODE === 'high-quality' ? '#00ff88' : '#ffcc00';
+  }
+}
+
+/**
+ * Progressive canvas resize for client-side operations.
+ * Halves dimensions in steps using imageSmoothingQuality:'high' until within 2× of target,
+ * then performs final step. Returns a new canvas at targetW×targetH.
+ * In pixel-perfect mode: single nearest-neighbor pass (imageSmoothingEnabled=false).
+ *
+ * @param {HTMLImageElement|HTMLCanvasElement} src
+ * @param {number} srcX  - source crop x
+ * @param {number} srcY  - source crop y
+ * @param {number} srcW  - source crop width
+ * @param {number} srcH  - source crop height
+ * @param {number} targetW
+ * @param {number} targetH
+ * @param {string} [mode] - 'high-quality' | 'pixel-perfect' (default: SPRITE_RESIZE_MODE)
+ * @returns {HTMLCanvasElement}
+ */
+function progressiveResizeCanvas(src, srcX, srcY, srcW, srcH, targetW, targetH, mode) {
+  mode = mode || SPRITE_RESIZE_MODE;
+
+  // Seed canvas: copy source region at native resolution
+  const seed = document.createElement('canvas');
+  seed.width = srcW; seed.height = srcH;
+  const seedCtx = seed.getContext('2d');
+  seedCtx.imageSmoothingEnabled = false;
+  seedCtx.drawImage(src, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+
+  if (mode === 'pixel-perfect' || (srcW <= targetW * 2 && srcH <= targetH * 2)) {
+    const out = document.createElement('canvas');
+    out.width = targetW; out.height = targetH;
+    const ctx = out.getContext('2d');
+    ctx.imageSmoothingEnabled = (mode !== 'pixel-perfect');
+    if (ctx.imageSmoothingEnabled) ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(seed, 0, 0, targetW, targetH);
+    return out;
+  }
+
+  // Progressive halving
+  let cur = seed;
+  let curW = srcW, curH = srcH;
+
+  while (curW > targetW * 2 || curH > targetH * 2) {
+    const nextW = Math.max(targetW, Math.round(curW * 0.5));
+    const nextH = Math.max(targetH, Math.round(curH * (nextW / curW)));
+    if (nextW >= curW && nextH >= curH) break;
+
+    const tmp = document.createElement('canvas');
+    tmp.width = nextW; tmp.height = nextH;
+    const tmpCtx = tmp.getContext('2d');
+    tmpCtx.imageSmoothingEnabled = true;
+    tmpCtx.imageSmoothingQuality = 'high';
+    tmpCtx.drawImage(cur, 0, 0, nextW, nextH);
+    cur = tmp;
+    curW = nextW; curH = nextH;
+  }
+
+  // Final step
+  const final = document.createElement('canvas');
+  final.width = targetW; final.height = targetH;
+  const finalCtx = final.getContext('2d');
+  finalCtx.imageSmoothingEnabled = true;
+  finalCtx.imageSmoothingQuality = 'high';
+  finalCtx.drawImage(cur, 0, 0, targetW, targetH);
+  return final;
+}
+
 function tv2TogglePanel(which) {
   const panels = { ctrl: 'tv2CtrlPanel', set: 'tv2SetPanel' };
   const btns   = { ctrl: 'tv2CtrlBtn',   set: 'tv2SetBtn'   };
@@ -2805,7 +2899,7 @@ async function studioGenerateSprite() {
     const res = await fetch(`${API}/api/studio/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ charName: char.name, animName, model: document.getElementById('globalModel')?.value }),
+      body: JSON.stringify({ charName: char.name, animName, model: document.getElementById('globalModel')?.value, resizeMode: SPRITE_RESIZE_MODE }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to start job');
@@ -3758,7 +3852,7 @@ function cpHandlePhoto(file) {
     const _ctx = canvas.getContext('2d');
     _ctx.imageSmoothingEnabled = false;
     _ctx.drawImage(img, 0, 0);
-    CP.photo = canvas.toDataURL('image/jpeg', 0.92);
+    CP.photo = canvas.toDataURL('image/png'); // lossless — JPEG would degrade character reference
     const thumb = document.getElementById('cpPhotoThumb');
     thumb.src = CP.photo;
     thumb.style.display = 'block';
@@ -5042,6 +5136,12 @@ function handleVideoFile(file) {
 
 // Drag and drop
 document.addEventListener('DOMContentLoaded', () => {
+  // Restore resize mode label from localStorage
+  const _rmlbl = document.getElementById('resizeModeLbl');
+  const _rmbtn = document.getElementById('resizeModeBtn');
+  if (_rmlbl) _rmlbl.textContent = SPRITE_RESIZE_MODE === 'high-quality' ? 'HQ ▾' : 'Pixel ▾';
+  if (_rmbtn) _rmbtn.style.color = SPRITE_RESIZE_MODE === 'high-quality' ? '#00ff88' : '#ffcc00';
+
   const dz = document.getElementById('videoDropZone');
   if (dz) {
     dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });

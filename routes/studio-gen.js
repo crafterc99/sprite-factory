@@ -107,11 +107,11 @@ async function buildStrip(framePaths, outputPath) {
   await strip.composite(composites).png({ compressionLevel: 0, effort: 1 }).toFile(outputPath);
 }
 
-async function processFrame(srcPath, outPath) {
+async function processFrame(srcPath, outPath, opts = {}) {
   // Remove green (#00FF00) chroma-key background → transparent → crop tight to 180×180
   const transparentPath = srcPath + '-transparent.png';
-  await removeGreenBackground(srcPath, transparentPath, { feather: 4 });
-  await cropToContent(transparentPath, outPath, { width: 180, height: 180, padding: 6 });
+  await removeGreenBackground(srcPath, transparentPath, { feather: 0 });
+  await cropToContent(transparentPath, outPath, { width: 180, height: 180, padding: 6, resizeMode: opts.resizeMode });
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -130,8 +130,9 @@ function register(router, ctx) {
   // Body: { charName, animName, model? }
   router.post('/api/studio/generate', async (req, res) => {
     const body = await parseBody(req);
-    const { charName, animName, model } = body;
+    const { charName, animName, model, resizeMode } = body;
     if (!charName || !animName) return json(res, { error: 'charName and animName required' }, 400);
+    const pipelineOpts = { resizeMode: resizeMode || process.env.SPRITE_RESIZE_MODE || 'high-quality' };
 
     const lib = loadAnimLib();
     const anim = lib[animName];
@@ -209,7 +210,7 @@ function register(router, ctx) {
         const pixelHeight = loadCharPixelHeight(charName);
         const { processedPaths, meta: genMeta } = await processFrameSetConsistently(
           rawPaths, outPaths,
-          { frameSize: 180, padding: 8, fillFactor: 0.85, targetContentHeight: pixelHeight || undefined }
+          { frameSize: 180, padding: 8, fillFactor: 0.85, targetContentHeight: pixelHeight || undefined, resizeMode: pipelineOpts.resizeMode }
         );
 
         // Persist scale metadata so regen uses same scale
@@ -253,7 +254,8 @@ function register(router, ctx) {
   // Body: { charName, animName, frameIndex, model?, customPrompt?, identityFix?: { headshotIndex } }
   router.post('/api/studio/regen-frame', async (req, res) => {
     const body = await parseBody(req);
-    const { charName, animName, frameIndex, model, customPrompt, identityFix } = body;
+    const { charName, animName, frameIndex, model, customPrompt, identityFix, resizeMode } = body;
+    const regenPipelineOpts = { resizeMode: resizeMode || process.env.SPRITE_RESIZE_MODE || 'high-quality' };
     if (!charName || !animName || frameIndex == null) {
       return json(res, { error: 'charName, animName, and frameIndex required' }, 400);
     }
@@ -349,12 +351,10 @@ function register(router, ctx) {
 
       const processedPath = path.join(genDir, `regen-${fi}-${attemptNum}.png`);
       if (regenScale) {
-        // Use the same scale as original generation so regen frames match
         const bounds = await getContentBounds(transparentPath);
-        await placeContentInFrame(transparentPath, bounds, regenScale, regenFrameSize, regenPadding, processedPath);
+        await placeContentInFrame(transparentPath, bounds, regenScale, regenFrameSize, regenPadding, processedPath, regenPipelineOpts);
       } else {
-        // Fallback: no stored meta, use default processing
-        await cropToContent(transparentPath, processedPath, { width: 180, height: 180, padding: 8 });
+        await cropToContent(transparentPath, processedPath, { width: 180, height: 180, padding: 8, resizeMode: regenPipelineOpts.resizeMode });
       }
       try { fs.unlinkSync(transparentPath); } catch {}
 
