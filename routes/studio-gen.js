@@ -126,6 +126,55 @@ function register(router, ctx) {
     json(res, { status: job.status, result: job.result, error: job.error, progress: job.progress });
   });
 
+  // GET /api/studio/frame-info/:charName/:animName/:frameIndex
+  // Returns master frame info, detected content bounds, heights, and scale for a single frame.
+  router.get('/api/studio/frame-info/:charName/:animName/:frameIndex', async (req, res, params) => {
+    const { charName, animName, frameIndex } = params;
+    const fi = parseInt(frameIndex, 10);
+    try {
+      const masterPath = path.join(ASSETS_DIR, `${charName}-${animName}-masters`, `frame-${fi}.png`);
+      const finalPath  = path.join(ASSETS_DIR, `${charName}-${animName}-frames`, `frame-${fi}.png`);
+      const metaPath   = path.join(ASSETS_DIR, `${charName}-${animName}-genmeta.json`);
+
+      const hasMaster = fs.existsSync(masterPath);
+      const hasFinal  = fs.existsSync(finalPath);
+
+      let bounds = null;
+      let masterSize = null;
+      if (hasMaster) {
+        bounds = await getContentBounds(masterPath);
+        const meta = await require('sharp')(masterPath).metadata();
+        masterSize = { width: meta.width, height: meta.height };
+      }
+
+      let genMeta = null;
+      if (fs.existsSync(metaPath)) {
+        try { genMeta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch {}
+      }
+
+      const targetHeight = loadCharPixelHeight(charName);
+      const frameBounds = genMeta?.allBounds?.[fi] || bounds;
+
+      json(res, {
+        charName,
+        animName,
+        frameIndex: fi,
+        masterUrl:  hasMaster ? `/assets/${charName}-${animName}-masters/frame-${fi}.png` : null,
+        finalUrl:   hasFinal  ? `/assets/${charName}-${animName}-frames/frame-${fi}.png`  : null,
+        masterSize,
+        bounds: frameBounds,
+        visibleHeight: frameBounds?.h || null,
+        targetHeight,
+        scale: genMeta?.scale || null,
+        globalMaxH: genMeta?.globalMaxH || null,
+        frameSize: genMeta?.frameSize || 180,
+        padding: genMeta?.padding || 8,
+      });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+  });
+
   // POST /api/studio/generate — generate sprite for character + animation
   // Body: { charName, animName, model? }
   router.post('/api/studio/generate', async (req, res) => {
@@ -208,10 +257,17 @@ function register(router, ctx) {
         updateJob(jobId, { frame: frameCount, total: frameCount, msg: 'Normalizing frame scales…' });
         const outPaths = rawPaths.map((_, i) => path.join(genDir, `frame-${i}.png`));
         const pixelHeight = loadCharPixelHeight(charName);
+        const mastersDir = path.join(ASSETS_DIR, `${charName}-${animName}-masters`);
         const { processedPaths, meta: genMeta } = await processFrameSetConsistently(
           rawPaths, outPaths,
-          { frameSize: 180, padding: 8, fillFactor: 0.85, targetContentHeight: pixelHeight || undefined, resizeMode: pipelineOpts.resizeMode }
+          { frameSize: 180, padding: 8, fillFactor: 0.85, targetContentHeight: pixelHeight || undefined, resizeMode: pipelineOpts.resizeMode, mastersDir }
         );
+
+        // Upload master frames to Supabase
+        for (let i = 0; i < frameCount; i++) {
+          const mf = path.join(mastersDir, `frame-${i}.png`);
+          if (fs.existsSync(mf)) sbUpload(`${charName}-${animName}-masters/frame-${i}.png`, mf);
+        }
 
         // Persist scale metadata so regen uses same scale
         const metaPath = path.join(ASSETS_DIR, `${charName}-${animName}-genmeta.json`);
@@ -337,7 +393,7 @@ function register(router, ctx) {
 
       // Remove green background from regen raw
       const transparentPath = rawPath + '-transparent.png';
-      await removeGreenBackground(rawPath, transparentPath, { feather: 4 });
+      await removeGreenBackground(rawPath, transparentPath, { feather: 0 });
 
       // Load stored scale metadata from initial generation for consistency
       const metaPath = path.join(ASSETS_DIR, `${charName}-${animName}-genmeta.json`);

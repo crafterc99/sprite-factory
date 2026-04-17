@@ -3018,14 +3018,107 @@ function studioMakeFrameCell(charName, animName, frameIndex, totalFrames) {
   fixIdBtn.textContent = '⚡';
   fixIdBtn.onclick = () => openIdFix(charName, animName, frameIndex, totalFrames, cell, img, actionRow);
 
+  const inspectBtn = document.createElement('button');
+  inspectBtn.className = 'frame-action-btn';
+  inspectBtn.title = 'Inspect frame bounds & height';
+  inspectBtn.textContent = '⧉';
+  inspectBtn.onclick = () => studioToggleInspect(cell, charName, animName, frameIndex, inspectBtn);
+
   actionRow.appendChild(remakeBtn);
   actionRow.appendChild(editBtn);
   actionRow.appendChild(fixIdBtn);
+  actionRow.appendChild(inspectBtn);
 
   cell.appendChild(img);
   cell.appendChild(label);
   cell.appendChild(actionRow);
   return cell;
+}
+
+async function studioToggleInspect(cell, charName, animName, frameIndex, btn) {
+  const existing = cell.querySelector('.frame-inspect-panel');
+  if (existing) { existing.remove(); btn.classList.remove('active'); return; }
+  btn.classList.add('active');
+
+  const panel = document.createElement('div');
+  panel.className = 'frame-inspect-panel';
+  panel.style.cssText = 'margin-top:4px;padding:6px;background:#0a0a1a;border:1px solid #1e1e35;border-radius:4px;font-family:var(--mono);font-size:9px;color:#8080b0;min-width:160px;';
+  panel.textContent = 'Loading…';
+  cell.appendChild(panel);
+
+  try {
+    const r = await fetch(`${API}/api/studio/frame-info/${encodeURIComponent(charName)}/${encodeURIComponent(animName)}/${frameIndex}`);
+    const info = await r.json();
+    if (!r.ok) { panel.textContent = info.error || 'Error'; return; }
+
+    panel.innerHTML = '';
+
+    // Two thumbnails side by side: master vs final
+    const thumbRow = document.createElement('div');
+    thumbRow.style.cssText = 'display:flex;gap:4px;margin-bottom:5px;';
+
+    const makeThumb = (url, label, extraStyle) => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;';
+      if (url) {
+        const img = document.createElement('img');
+        img.src = url + '?t=' + Date.now();
+        img.style.cssText = `width:60px;height:60px;object-fit:contain;image-rendering:pixelated;background:#050510;border:1px solid #1e1e30;border-radius:3px;${extraStyle||''}`;
+        wrap.appendChild(img);
+      } else {
+        const ph = document.createElement('div');
+        ph.style.cssText = 'width:60px;height:60px;background:#050510;border:1px solid #1e1e30;border-radius:3px;display:flex;align-items:center;justify-content:center;color:#30305a;font-size:8px;';
+        ph.textContent = 'none';
+        wrap.appendChild(ph);
+      }
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'font-size:8px;color:#50507a;';
+      lbl.textContent = label;
+      wrap.appendChild(lbl);
+      return wrap;
+    };
+
+    thumbRow.appendChild(makeThumb(info.masterUrl, 'master'));
+    thumbRow.appendChild(makeThumb(info.finalUrl, 'final'));
+    panel.appendChild(thumbRow);
+
+    // Stats table
+    const stats = [
+      ['visible H', info.visibleHeight != null ? `${info.visibleHeight}px` : '—'],
+      ['target H',  info.targetHeight  != null ? `${info.targetHeight}px`  : 'auto'],
+      ['globalMax', info.globalMaxH    != null ? `${info.globalMaxH}px`    : '—'],
+      ['scale',     info.scale         != null ? info.scale.toFixed(4)     : '—'],
+      ['frame',     info.frameSize     != null ? `${info.frameSize}px`     : '—'],
+      ['master W',  info.masterSize?.width  != null ? `${info.masterSize.width}px`  : '—'],
+      ['master H',  info.masterSize?.height != null ? `${info.masterSize.height}px` : '—'],
+    ];
+
+    const tbl = document.createElement('table');
+    tbl.style.cssText = 'width:100%;border-collapse:collapse;';
+    for (const [k, v] of stats) {
+      const tr = document.createElement('tr');
+      const td1 = document.createElement('td');
+      td1.style.cssText = 'color:#50507a;padding:1px 4px 1px 0;white-space:nowrap;';
+      td1.textContent = k;
+      const td2 = document.createElement('td');
+      td2.style.cssText = 'color:#c0c0e0;padding:1px 0;text-align:right;';
+      td2.textContent = v;
+      tr.appendChild(td1); tr.appendChild(td2);
+      tbl.appendChild(tr);
+    }
+    panel.appendChild(tbl);
+
+    // Bounds if available
+    if (info.bounds) {
+      const b = info.bounds;
+      const bDiv = document.createElement('div');
+      bDiv.style.cssText = 'margin-top:4px;color:#50507a;font-size:8px;line-height:1.6;';
+      bDiv.textContent = `bounds: x${b.minX} y${b.minY} → ${b.w}×${b.h}`;
+      panel.appendChild(bDiv);
+    }
+  } catch (e) {
+    panel.textContent = 'Error: ' + e.message;
+  }
 }
 
 function studioToggleEditPanel(cell, charName, animName, frameIndex, totalFrames, img, actionRow, editBtn) {
