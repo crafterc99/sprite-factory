@@ -98,20 +98,31 @@ function failJob(jobId, errMsg) {
 
 async function buildStrip(framePaths, outputPath) {
   const frames = await Promise.all(framePaths.map(p => sharp(p).metadata()));
-  const w = frames[0].width;
-  const h = frames[0].height;
+  // Frames may have different dimensions — use max and bottom-align (consistent feet baseline)
+  const frameW = Math.max(...frames.map(f => f.width));
+  const frameH = Math.max(...frames.map(f => f.height));
   const strip = sharp({
-    create: { width: w * framePaths.length, height: h, channels: 4, background: { r:0, g:0, b:0, alpha:0 } }
+    create: { width: frameW * framePaths.length, height: frameH, channels: 4, background: { r:0, g:0, b:0, alpha:0 } }
   });
-  const composites = framePaths.map((p, i) => ({ input: p, left: i * w, top: 0 }));
+  const composites = framePaths.map((p, i) => ({
+    input: p,
+    left: i * frameW + Math.round((frameW - frames[i].width) / 2),
+    top: frameH - frames[i].height,  // bottom-align: feet at same baseline
+  }));
   await strip.composite(composites).png({ compressionLevel: 0, effort: 1 }).toFile(outputPath);
 }
 
-async function processFrame(srcPath, outPath, opts = {}) {
-  // Remove green (#00FF00) chroma-key background → transparent → crop tight to 180×180
+async function processFrame(srcPath, outPath) {
+  // Remove green BG, then exact-crop to content bounds — zero resize, all original pixels preserved
   const transparentPath = srcPath + '-transparent.png';
   await removeGreenBackground(srcPath, transparentPath, { feather: 0 });
-  await cropToContent(transparentPath, outPath, { width: 180, height: 180, padding: 6, resizeMode: opts.resizeMode });
+
+  const bounds = await getContentBounds(transparentPath);
+  await sharp(transparentPath)
+    .extract({ left: bounds.minX, top: bounds.minY, width: bounds.w, height: bounds.h })
+    .png({ compressionLevel: 0, effort: 1 })
+    .toFile(outPath);
+
   try { fs.unlinkSync(transparentPath); } catch {}
 }
 
@@ -259,7 +270,7 @@ function register(router, ctx) {
         const processedPaths = await Promise.all(
           rawPaths.map(async (rawPath, i) => {
             const outPath = path.join(genDir, `frame-${i}.png`);
-            await processFrame(rawPath, outPath, { resizeMode: pipelineOpts.resizeMode });
+            await processFrame(rawPath, outPath);
             return outPath;
           })
         );
@@ -382,7 +393,7 @@ function register(router, ctx) {
       recordCost(modelId, 'studio_regen', '1K', 2, { charName, animName, frame: fi });
 
       const processedPath = path.join(genDir, `regen-${fi}-${attemptNum}.png`);
-      await processFrame(rawPath, processedPath, { resizeMode: regenPipelineOpts.resizeMode });
+      await processFrame(rawPath, processedPath);
 
       // Update the frame in assets dir
       const framesOutDir = path.join(ASSETS_DIR, `${charName}-${animName}-frames`);
