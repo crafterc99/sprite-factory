@@ -924,21 +924,8 @@
                   <!-- Right: character angle + generate -->
                   <div>
                     <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Character Reference</div>
-                    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px">
-                      <div id="studioCharAngle" style="width:80px;height:80px;border-radius:6px;overflow:hidden;background:#0a0a14;flex-shrink:0">
-                        <img id="studioCharAngleImg" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" src="" />
-                      </div>
-                      <div id="studioNormPreview" style="display:none">
-                        <div style="font-family:var(--mono);font-size:8px;color:#50507a;margin-bottom:3px">normalized</div>
-                        <div style="width:52px;height:52px;border-radius:4px;overflow:hidden;background:#0a0a14;border:1px solid #1e1e30">
-                          <img id="studioNormPreviewImg" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" src="" />
-                        </div>
-                      </div>
-                    </div>
-                    <div id="studioHeightInfo" style="font-family:var(--mono);font-size:8px;color:#50507a;margin-bottom:6px"></div>
-                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;font-family:var(--mono);font-size:9px;color:#8080b0">
-                      <input type="checkbox" id="studioNormEnabled" checked style="accent-color:#00ff88;cursor:pointer;width:12px;height:12px" />
-                      <label for="studioNormEnabled" style="cursor:pointer">Lock character height</label>
+                    <div id="studioCharAngle" style="width:80px;height:80px;border-radius:6px;overflow:hidden;background:#0a0a14;margin-bottom:12px">
+                      <img id="studioCharAngleImg" style="width:100%;height:100%;object-fit:contain;image-rendering:pixelated" src="" />
                     </div>
                     <button class="btn btn-primary" id="studioGenBtn" onclick="studioGenerateSprite()" style="width:100%">
                       <span class="spinner" id="studioGenSpinner"></span>
@@ -2869,17 +2856,6 @@ async function studioSelectAnim(animName) {
     const angleImg = document.getElementById('studioCharAngleImg');
     angleImg.src = `/assets/${char.name}-angle-${anim.angleIndex}.png`;
     angleImg.onerror = () => { angleImg.src = `/assets/${char.name}-angle-0.png`; };
-
-    const infoEl = document.getElementById('studioHeightInfo');
-    if (infoEl) infoEl.textContent = char.heightInches ? `${char.heightInches}" → ${char.pixelHeight || '?'}px target` : '';
-
-    const normPreview = document.getElementById('studioNormPreview');
-    const normImg = document.getElementById('studioNormPreviewImg');
-    if (normPreview && normImg) {
-      normImg.src = `/assets/${char.name}-${animName}-ref-norm.png?t=${Date.now()}`;
-      normImg.onload = () => { normPreview.style.display = 'block'; };
-      normImg.onerror = () => { normPreview.style.display = 'none'; };
-    }
   }
 
   document.getElementById('studioProgress').style.display = 'none';
@@ -2923,7 +2899,7 @@ async function studioGenerateSprite() {
     const res = await fetch(`${API}/api/studio/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ charName: char.name, animName, model: document.getElementById('globalModel')?.value, resizeMode: SPRITE_RESIZE_MODE, normEnabled: document.getElementById('studioNormEnabled')?.checked ?? true }),
+      body: JSON.stringify({ charName: char.name, animName, model: document.getElementById('globalModel')?.value, resizeMode: SPRITE_RESIZE_MODE }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to start job');
@@ -3005,18 +2981,6 @@ function showStudioResult(result) {
   if (saveBtn) { saveBtn.textContent = 'Save Animation'; saveBtn.disabled = false; }
   card.style.display = 'block';
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-  // Refresh normalized reference preview now that generation is done
-  const char = STATE.selectedChar;
-  if (char) {
-    const normImg = document.getElementById('studioNormPreviewImg');
-    const normPreview = document.getElementById('studioNormPreview');
-    if (normImg) {
-      normImg.src = `/assets/${char.name}-${result.animName}-ref-norm.png?t=${Date.now()}`;
-      normImg.onload = () => { if (normPreview) normPreview.style.display = 'block'; };
-      normImg.onerror = () => {};
-    }
-  }
 }
 
 function studioMakeFrameCell(charName, animName, frameIndex, totalFrames) {
@@ -3234,7 +3198,7 @@ async function studioRegenFrame(charName, animName, frameIndex, totalFrames, cel
   actionRow.querySelectorAll('button').forEach(b => { b.disabled = true; });
   img.style.opacity = '0.4';
 
-  const body = { charName, animName, frameIndex, normEnabled: document.getElementById('studioNormEnabled')?.checked ?? true };
+  const body = { charName, animName, frameIndex };
   if (opts?.customPrompt) body.customPrompt = opts.customPrompt;
   if (opts?.identityFix) body.identityFix = opts.identityFix;
 
