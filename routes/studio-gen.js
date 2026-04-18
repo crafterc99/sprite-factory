@@ -115,15 +115,24 @@ async function buildStrip(framePaths, outputPath) {
 async function processFrame(srcPath, outPath) {
   // Remove green BG, then exact-crop to content bounds — zero resize, all original pixels preserved
   const transparentPath = srcPath + '-transparent.png';
-  await removeGreenBackground(srcPath, transparentPath, { feather: 0 });
-
-  const bounds = await getContentBounds(transparentPath);
-  await sharp(transparentPath)
-    .extract({ left: bounds.minX, top: bounds.minY, width: bounds.w, height: bounds.h })
-    .png({ compressionLevel: 0, effort: 1 })
-    .toFile(outPath);
-
-  try { fs.unlinkSync(transparentPath); } catch {}
+  try {
+    await removeGreenBackground(srcPath, transparentPath, { feather: 0 });
+    const bounds = await getContentBounds(transparentPath);
+    if (bounds.w > 0 && bounds.h > 0) {
+      await sharp(transparentPath)
+        .extract({ left: bounds.minX, top: bounds.minY, width: bounds.w, height: bounds.h })
+        .png({ compressionLevel: 0, effort: 1 })
+        .toFile(outPath);
+    } else {
+      await sharp(transparentPath).png({ compressionLevel: 0, effort: 1 }).toFile(outPath);
+    }
+  } catch (err) {
+    console.warn(`[studio-gen] processFrame fallback (${srcPath}):`, err.message);
+    // Fallback: use raw AI image to ensure frame always exists
+    await sharp(srcPath).png({ compressionLevel: 0, effort: 1 }).toFile(outPath);
+  } finally {
+    try { fs.unlinkSync(transparentPath); } catch {}
+  }
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -265,12 +274,17 @@ function register(router, ctx) {
           })
         );
 
-        // Phase 2: Remove green BG and crop each frame to 180×180
+        // Phase 2: Remove green BG and crop each frame — per-frame fallback so one bad frame doesn't fail the job
         updateJob(jobId, { frame: frameCount, total: frameCount, msg: 'Processing frames…' });
         const processedPaths = await Promise.all(
           rawPaths.map(async (rawPath, i) => {
             const outPath = path.join(genDir, `frame-${i}.png`);
-            await processFrame(rawPath, outPath);
+            try {
+              await processFrame(rawPath, outPath);
+            } catch (err) {
+              console.warn(`[studio-gen] frame ${i} processing failed, using raw:`, err.message);
+              await sharp(rawPath).png({ compressionLevel: 0, effort: 1 }).toFile(outPath);
+            }
             return outPath;
           })
         );
