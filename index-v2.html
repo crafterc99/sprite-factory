@@ -7333,33 +7333,37 @@ function testingRenderLoop(timestamp) {
     }
     TESTING.currentFrame = Math.min(TESTING.currentFrame, activeFCount - 1);
 
-    // Compute actual frame dimensions from strip (AI native resolution)
+    // Frame dimensions from strip
     const frameW = activeFCount > 0 ? Math.round(activeImg.width / activeFCount) : activeImg.width;
     const frameH = activeImg.height;
 
-    // Display: scale pixelHeight by user zoom — pure canvas scale, no pixel resampling
-    const displayH = TESTING.pixelHeight * TESTING.scale;
-    const displayW = frameH > 0 ? displayH * (frameW / frameH) : displayH;
-    const drawX = TESTING.charX - displayW / 2;
-    const drawY = TESTING.charY - displayH; // bottom-aligned: feet at charY
+    // Scale the full frame by user zoom. Strips are 180×180 with feet at Y=170 (94.4%).
+    // For legacy native-res strips (frameH > 250) fall back to pixelHeight-based scaling.
+    const isStandardFrame = frameH <= 250;
+    const drawH = isStandardFrame ? frameH * TESTING.scale : TESTING.pixelHeight * TESTING.scale;
+    const drawW = isStandardFrame ? frameW * TESTING.scale : drawH * (frameW / frameH);
+    // Baseline: feet at Y=170 in standard 180px frame; feet at bottom in native-res
+    const baselineFrac = isStandardFrame ? (170 / frameH) : 1.0;
+    const drawX = TESTING.charX - drawW / 2;
+    const drawY = TESTING.charY - baselineFrac * drawH;
 
     ctx.imageSmoothingEnabled = false;
     // Apply facing flip in Game Mode
-    const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, displayW);
+    const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, drawW);
     ctx.drawImage(
       activeImg,
       TESTING.currentFrame * frameW, 0,
       frameW, frameH,
-      drawX, drawY, displayW, displayH
+      drawX, drawY, drawW, drawH
     );
     gmRestoreFlip(ctx, _flipped);
 
-    // Shadow
+    // Shadow at feet position
     ctx.save();
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = '#000';
     ctx.beginPath();
-    ctx.ellipse(TESTING.charX, TESTING.charY, displayW * 0.25, displayW * 0.08, 0, 0, Math.PI * 2);
+    ctx.ellipse(TESTING.charX, TESTING.charY, drawW * 0.25, drawW * 0.08, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -7367,10 +7371,12 @@ function testingRenderLoop(timestamp) {
     if (TESTING.showHitbox) {
       ctx.strokeStyle = '#ff440088';
       ctx.lineWidth = 1;
-      ctx.strokeRect(drawX, drawY, displayW, displayH);
+      ctx.strokeRect(drawX, drawY, drawW, drawH);
+      // Character body box: pixelHeight tall, centered
+      const charH = TESTING.pixelHeight * TESTING.scale;
       ctx.strokeStyle = '#00ff8888';
       ctx.setLineDash([4, 4]);
-      ctx.strokeRect(TESTING.charX - displayW * 0.3, TESTING.charY - displayH, displayW * 0.6, displayH);
+      ctx.strokeRect(TESTING.charX - drawW * 0.3, TESTING.charY - charH, drawW * 0.6, charH);
       ctx.setLineDash([]);
       ctx.fillStyle = '#ff4400';
       ctx.beginPath();

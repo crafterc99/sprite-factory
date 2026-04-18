@@ -18,7 +18,8 @@ const { recordCost } = require('../middleware/cost-tracker');
 const { removeGreenBackground, cropToContent, getContentBounds, placeContentInFrame, processFrameSetConsistently } = require('../lib/sprite-processor/index');
 const { uploadFile: sbUpload } = require('../lib/supabase-storage');
 
-const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
+const { scaleToHeight, BASELINE_Y, DEFAULT_FRAME_SIZE } = require('../lib/sprite-processor/height-scaler');
+const ANIM_LIB_DIR  = path.resolve(__dirname, '../data/anim-lib');
 const ANIM_LIB_INDEX = path.join(ANIM_LIB_DIR, 'index.json');
 
 const DEFAULT_STUDIO_PROMPT =
@@ -96,20 +97,35 @@ function failJob(jobId, errMsg) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function buildStrip(framePaths, outputPath) {
-  const frames = await Promise.all(framePaths.map(p => sharp(p).metadata()));
-  // Frames may have different dimensions — use max and bottom-align (consistent feet baseline)
-  const frameW = Math.max(...frames.map(f => f.width));
-  const frameH = Math.max(...frames.map(f => f.height));
-  const strip = sharp({
-    create: { width: frameW * framePaths.length, height: frameH, channels: 4, background: { r:0, g:0, b:0, alpha:0 } }
-  });
-  const composites = framePaths.map((p, i) => ({
-    input: p,
-    left: i * frameW + Math.round((frameW - frames[i].width) / 2),
-    top: frameH - frames[i].height,  // bottom-align: feet at same baseline
+async function buildStrip(framePaths, outputPath, opts = {}) {
+  // Scale each native-res content frame to standard 180×180 using height-scaler.
+  // This keeps strips browser-safe (<4096px wide for iOS canvas) and game-engine
+  // compatible (PlayerRenderer expects 180×180 with baseline at Y=170).
+  const targetPixelHeight = opts.pixelHeight || 112;
+  const frameSize = DEFAULT_FRAME_SIZE; // 180
+
+  const scaledBufs = await Promise.all(framePaths.map(async (p, i) => {
+    const tmpPath = p + '-strip-scaled.png';
+    try {
+      await scaleToHeight(p, tmpPath, targetPixelHeight, BASELINE_Y, frameSize);
+      const buf = fs.readFileSync(tmpPath);
+      try { fs.unlinkSync(tmpPath); } catch {}
+      return buf;
+    } catch (err) {
+      console.warn(`[studio-gen] buildStrip scale failed for frame ${i}, using simple resize:`, err.message);
+      return sharp(p)
+        .resize(frameSize, frameSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 }, kernel: 'lanczos3' })
+        .png({ compressionLevel: 0, effort: 1 })
+        .toBuffer();
+    }
   }));
-  await strip.composite(composites).png({ compressionLevel: 0, effort: 1 }).toFile(outputPath);
+
+  await sharp({
+    create: { width: frameSize * framePaths.length, height: frameSize, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+  })
+    .composite(scaledBufs.map((buf, i) => ({ input: buf, left: i * frameSize, top: 0 })))
+    .png({ compressionLevel: 0, effort: 1 })
+    .toFile(outputPath);
 }
 
 async function processFrame(srcPath, outPath) {
@@ -289,9 +305,10 @@ function register(router, ctx) {
           })
         );
 
-        // Assemble sprite strip
+        // Assemble sprite strip — 180×180 per frame, game-engine compatible
         const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);
-        await buildStrip(processedPaths, stripPath);
+        const charPixelHeight = loadCharPixelHeight(charName);
+        await buildStrip(processedPaths, stripPath, { pixelHeight: charPixelHeight });
         sbUpload(`${charName}-${animName}.png`, stripPath);
 
         // Copy individual frames to assets dir so the result grid can load them
@@ -423,7 +440,8 @@ function register(router, ctx) {
       ).filter(p => fs.existsSync(p));
       if (allFramePaths.length > 0) {
         const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);
-        await buildStrip(allFramePaths, stripPath);
+        const charPixelHeight = loadCharPixelHeight(charName);
+        await buildStrip(allFramePaths, stripPath, { pixelHeight: charPixelHeight });
         sbUpload(`${charName}-${animName}.png`, stripPath);
       }
 
