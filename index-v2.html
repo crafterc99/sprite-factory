@@ -6956,7 +6956,7 @@ function testingSelectAnim(animName) {
   TESTING.stripImg = new Image();
   TESTING.stripImg.onload = () => {
     TESTING.stripLoaded = true;
-    const inferredFrames = Math.round(TESTING.stripImg.width / TESTING.frameSize);
+    const inferredFrames = TESTING.frameCount > 0 ? TESTING.frameCount : Math.round(TESTING.stripImg.width / Math.max(1, TESTING.stripImg.height));
     if (inferredFrames > 0) TESTING.frameCount = inferredFrames;
   };
   TESTING.stripImg.src = defaultUrl;
@@ -6982,7 +6982,7 @@ function loadAngleStrips(charName, animName, fallbackUrl) {
     const entry = { img: new Image(), loaded: false, frameCount: TESTING.frameCount, fallback: false };
     entry.img.onload = () => {
       entry.loaded = true;
-      const inf = Math.round(entry.img.width / TESTING.frameSize);
+      const inf = TESTING.frameCount > 0 ? TESTING.frameCount : Math.round(entry.img.width / Math.max(1, entry.img.height));
       if (inf > 0) entry.frameCount = inf;
     };
     entry.img.onerror = () => {
@@ -7027,7 +7027,7 @@ function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps, angleIndex) 
   TESTING.stripImg = new Image();
   TESTING.stripImg.onload = () => {
     TESTING.stripLoaded = true;
-    const inferred = Math.round(TESTING.stripImg.width / TESTING.frameSize);
+    const inferred = TESTING.frameCount > 0 ? TESTING.frameCount : Math.round(TESTING.stripImg.width / Math.max(1, TESTING.stripImg.height));
     if (inferred > 0) TESTING.frameCount = inferred;
   };
   TESTING.stripImg.src = spriteUrl;
@@ -7044,7 +7044,7 @@ function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps, angleIndex) 
     const entry = { img, loaded: false, frameCount: frameCount || 4, fallback: !isSameAngle };
     img.onload = () => {
       entry.loaded = true;
-      const inf = Math.round(img.width / TESTING.frameSize);
+      const inf = frameCount > 0 ? frameCount : Math.round(img.width / Math.max(1, img.height));
       if (inf > 0) entry.frameCount = inf;
     };
     TESTING.angleStrips[ai] = entry;
@@ -7321,20 +7321,24 @@ function testingRenderLoop(timestamp) {
     }
     TESTING.currentFrame = Math.min(TESTING.currentFrame, activeFCount - 1);
 
-    const drawScale = TESTING.scale * TESTING.scaleMultiplier;
-    const drawW = TESTING.frameSize * drawScale;
-    const drawH = TESTING.frameSize * drawScale;
-    const drawX = TESTING.charX - drawW / 2;
-    const drawY = TESTING.charY - drawH + (TESTING.frameSize - TESTING.pixelHeight) * drawScale / 2;
+    // Compute actual frame dimensions from strip (AI native resolution)
+    const frameW = activeFCount > 0 ? Math.round(activeImg.width / activeFCount) : activeImg.width;
+    const frameH = activeImg.height;
+
+    // Display: scale pixelHeight by user zoom — pure canvas scale, no pixel resampling
+    const displayH = TESTING.pixelHeight * TESTING.scale;
+    const displayW = frameH > 0 ? displayH * (frameW / frameH) : displayH;
+    const drawX = TESTING.charX - displayW / 2;
+    const drawY = TESTING.charY - displayH; // bottom-aligned: feet at charY
 
     ctx.imageSmoothingEnabled = false;
     // Apply facing flip in Game Mode
-    const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, drawW);
+    const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, displayW);
     ctx.drawImage(
       activeImg,
-      TESTING.currentFrame * TESTING.frameSize, 0,
-      TESTING.frameSize, TESTING.frameSize,
-      drawX, drawY, drawW, drawH
+      TESTING.currentFrame * frameW, 0,
+      frameW, frameH,
+      drawX, drawY, displayW, displayH
     );
     gmRestoreFlip(ctx, _flipped);
 
@@ -7343,7 +7347,7 @@ function testingRenderLoop(timestamp) {
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = '#000';
     ctx.beginPath();
-    ctx.ellipse(TESTING.charX, TESTING.charY, drawW * 0.25, drawW * 0.08, 0, 0, Math.PI * 2);
+    ctx.ellipse(TESTING.charX, TESTING.charY, displayW * 0.25, displayW * 0.08, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -7351,11 +7355,10 @@ function testingRenderLoop(timestamp) {
     if (TESTING.showHitbox) {
       ctx.strokeStyle = '#ff440088';
       ctx.lineWidth = 1;
-      ctx.strokeRect(drawX, drawY, drawW, drawH);
-      const phH = TESTING.pixelHeight * drawScale;
+      ctx.strokeRect(drawX, drawY, displayW, displayH);
       ctx.strokeStyle = '#00ff8888';
       ctx.setLineDash([4, 4]);
-      ctx.strokeRect(TESTING.charX - drawW * 0.3, TESTING.charY - phH, drawW * 0.6, phH);
+      ctx.strokeRect(TESTING.charX - displayW * 0.3, TESTING.charY - displayH, displayW * 0.6, displayH);
       ctx.setLineDash([]);
       ctx.fillStyle = '#ff4400';
       ctx.beginPath();
