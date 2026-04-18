@@ -16,6 +16,7 @@ const sharp = require('sharp');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
 const { removeGreenBackground, cropToContent, getContentBounds, placeContentInFrame, processFrameSetConsistently } = require('../lib/sprite-processor/index');
+const { normalizeReferenceForGeneration } = require('../lib/sprite-processor/height-scaler');
 const { uploadFile: sbUpload } = require('../lib/supabase-storage');
 
 const ANIM_LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
@@ -179,7 +180,7 @@ function register(router, ctx) {
   // Body: { charName, animName, model? }
   router.post('/api/studio/generate', async (req, res) => {
     const body = await parseBody(req);
-    const { charName, animName, model, resizeMode } = body;
+    const { charName, animName, model, resizeMode, normEnabled = true } = body;
     if (!charName || !animName) return json(res, { error: 'charName and animName required' }, 400);
     const pipelineOpts = { resizeMode: resizeMode || process.env.SPRITE_RESIZE_MODE || 'high-quality' };
 
@@ -226,6 +227,27 @@ function register(router, ctx) {
         }
 
         const frameCount = anim.frameCount;
+
+        // Normalize character reference once — reused for all frames in this session
+        const normalizedRefPath = path.join(ASSETS_DIR, `${charName}-${animName}-ref-norm.png`);
+        let effectiveRef = resolvedAnglePath;
+        let normMeta = null;
+        const pixelHeight = loadCharPixelHeight(charName);
+
+        if (normEnabled && pixelHeight) {
+          try {
+            updateJob(jobId, { frame: 0, total: frameCount, msg: 'Normalizing character reference…' });
+            normMeta = await normalizeReferenceForGeneration(resolvedAnglePath, normalizedRefPath, pixelHeight, {
+              resizeMode: pipelineOpts.resizeMode,
+            });
+            effectiveRef = normalizedRefPath;
+            sbUpload(`${charName}-${animName}-ref-norm.png`, normalizedRefPath);
+            console.log(`[studio-gen] Normalized ref: visible ${normMeta.visibleHeight}px → ${normMeta.normalizedHeight}px (scale ${normMeta.scale.toFixed(3)})`);
+          } catch (err) {
+            console.warn('[studio-gen] Reference normalization failed, using original:', err.message);
+          }
+        }
+
         updateJob(jobId, { frame: 0, total: frameCount, msg: `Generating all ${frameCount} frames in parallel…` });
 
         // Phase 1: Generate all raw frames in parallel
@@ -237,7 +259,7 @@ function register(router, ctx) {
             }
 
             const result = await client.generate(loadStudioPrompt(), {
-              referenceImages: [posePath, resolvedAnglePath],
+              referenceImages: [posePath, effectiveRef],
               aspectRatio: '3:4',
               resolution: '1K',
               model: modelId,
@@ -256,7 +278,6 @@ function register(router, ctx) {
         // Phase 2: Process all frames together with consistent scale (no shrinking on jump/extend)
         updateJob(jobId, { frame: frameCount, total: frameCount, msg: 'Normalizing frame scales…' });
         const outPaths = rawPaths.map((_, i) => path.join(genDir, `frame-${i}.png`));
-        const pixelHeight = loadCharPixelHeight(charName);
         const mastersDir = path.join(ASSETS_DIR, `${charName}-${animName}-masters`);
         const { processedPaths, meta: genMeta } = await processFrameSetConsistently(
           rawPaths, outPaths,
@@ -271,7 +292,7 @@ function register(router, ctx) {
 
         // Persist scale metadata so regen uses same scale
         const metaPath = path.join(ASSETS_DIR, `${charName}-${animName}-genmeta.json`);
-        fs.writeFileSync(metaPath, JSON.stringify(genMeta, null, 2));
+        fs.writeFileSync(metaPath, JSON.stringify({ ...genMeta, normMeta, refNormEnabled: normEnabled }, null, 2));
         sbUpload(`${charName}-${animName}-genmeta.json`, metaPath);
 
         // Assemble sprite strip
@@ -310,7 +331,7 @@ function register(router, ctx) {
   // Body: { charName, animName, frameIndex, model?, customPrompt?, identityFix?: { headshotIndex } }
   router.post('/api/studio/regen-frame', async (req, res) => {
     const body = await parseBody(req);
-    const { charName, animName, frameIndex, model, customPrompt, identityFix, resizeMode } = body;
+    const { charName, animName, frameIndex, model, customPrompt, identityFix, resizeMode, normEnabled = true } = body;
     const regenPipelineOpts = { resizeMode: resizeMode || process.env.SPRITE_RESIZE_MODE || 'high-quality' };
     if (!charName || !animName || frameIndex == null) {
       return json(res, { error: 'charName, animName, and frameIndex required' }, 400);
@@ -333,6 +354,26 @@ function register(router, ctx) {
     const portraitPath = path.join(ASSETS_DIR, `${charName}full.png`);
     if (!resolvedAnglePath && fs.existsSync(portraitPath)) resolvedAnglePath = portraitPath;
     if (!resolvedAnglePath) return json(res, { error: `No body angle or portrait found for "${charName}"` }, 400);
+
+    // Prefer the stored normalized reference — ensures consistency with initial generation
+    const normalizedRefPath = path.join(ASSETS_DIR, `${charName}-${animName}-ref-norm.png`);
+    let effectiveRef = resolvedAnglePath;
+    if (fs.existsSync(normalizedRefPath)) {
+      effectiveRef = normalizedRefPath;
+    } else if (normEnabled) {
+      const regenPixelHeight = loadCharPixelHeight(charName);
+      if (regenPixelHeight) {
+        try {
+          const nm = await normalizeReferenceForGeneration(resolvedAnglePath, normalizedRefPath, regenPixelHeight, {
+            resizeMode: regenPipelineOpts.resizeMode,
+          });
+          if (nm.normalizedHeight > 0) {
+            effectiveRef = normalizedRefPath;
+            sbUpload(`${charName}-${animName}-ref-norm.png`, normalizedRefPath);
+          }
+        } catch {}
+      }
+    }
 
     try {
       const modelId = model || 'gemini-3-pro-image-preview';
@@ -370,11 +411,11 @@ function register(router, ctx) {
       } else if (customPrompt) {
         // Edit mode: keep character but apply user modification
         prompt = `Keep all details about the character exactly the same but: ${customPrompt}. The background is pure green (#00FF00).`;
-        referenceImages = [posePath, resolvedAnglePath];
+        referenceImages = [posePath, effectiveRef];
       } else {
         // Standard regen
         prompt = loadStudioPrompt();
-        referenceImages = [posePath, resolvedAnglePath];
+        referenceImages = [posePath, effectiveRef];
       }
 
       const result = await client.generate(prompt, {

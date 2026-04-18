@@ -348,6 +348,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       originalPhotoPath: body.originalPhotoPath || existing.originalPhotoPath || null,
       scaleMultiplier,
       pixelHeight,
+      scaleGroup:     body.scaleGroup     ?? existing.scaleGroup     ?? null,
+      refNormEnabled: body.refNormEnabled ?? existing.refNormEnabled ?? true,
       completedAnims: existing.completedAnims || [],
       status: existing.status || 'new',
     };
