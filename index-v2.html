@@ -6856,10 +6856,13 @@ async function loadTestingRoster() {
 
     renderTestingCharGrid();
 
-    // Auto-select first character that has animations
     if (!TESTING.selectedChar && TESTING.roster.length > 0) {
+      // First load: auto-select first character that has animations
       const charWithAnims = TESTING.roster.find(c => c.completedAnims > 0) || TESTING.roster[0];
       testingSelectChar(charWithAnims.name);
+    } else if (TESTING.selectedChar) {
+      // Returning to tab: re-render anim list so newly saved animations appear
+      renderTestingAnimList(TESTING.selectedChar);
     }
   } catch (e) {
     console.error('Testing: failed to load roster', e);
@@ -6947,11 +6950,16 @@ function testingSelectAnim(animName) {
   TESTING.angleStrips = {};
 
   const animDef = TESTING.animations[animName];
-  TESTING.frameCount = animDef?.frames || 4;
-  TESTING.fps = animDef?.fps || DEFAULT_FPS_ANIM[animName] || 8;
+  // Prefer saved animation's frameCount — studio-generated native-res strips may
+  // differ from the predefined library frame count
+  const char = TESTING.roster.find(c => c.name === TESTING.selectedChar);
+  const savedAnim = char?.savedAnimations?.[animName];
+  TESTING.frameCount = savedAnim?.frameCount || animDef?.frames || 4;
+  TESTING.fps = savedAnim?.fps || animDef?.fps || DEFAULT_FPS_ANIM[animName] || 8;
   TESTING.loop = animDef?.loop !== false;
 
-  // Load the default (angle 0 / front) strip
+  // Cache-bust so regenned strips always load fresh
+  const cacheBust = Date.now();
   const defaultUrl = `/assets/${TESTING.selectedChar}-${animName}.png`;
   TESTING.stripImg = new Image();
   TESTING.stripImg.onload = () => {
@@ -6959,10 +6967,10 @@ function testingSelectAnim(animName) {
     const inferredFrames = TESTING.frameCount > 0 ? TESTING.frameCount : Math.round(TESTING.stripImg.width / Math.max(1, TESTING.stripImg.height));
     if (inferredFrames > 0) TESTING.frameCount = inferredFrames;
   };
-  TESTING.stripImg.src = defaultUrl;
+  TESTING.stripImg.src = defaultUrl + '?t=' + cacheBust;
 
   // Preload angle-specific strips for each zone
-  loadAngleStrips(TESTING.selectedChar, animName, defaultUrl);
+  loadAngleStrips(TESTING.selectedChar, animName, defaultUrl, cacheBust);
 
   renderTestingAnimList(TESTING.selectedChar);
   updateTestingInfo();
@@ -6974,7 +6982,8 @@ function testingSelectAnim(animName) {
   if (typeof gmShowZoneEditor === 'function') gmShowZoneEditor(animName);
 }
 
-function loadAngleStrips(charName, animName, fallbackUrl) {
+function loadAngleStrips(charName, animName, fallbackUrl, cacheBust) {
+  const t = cacheBust || Date.now();
   TESTING.angleStrips = {};
   for (const zone of COURT_ZONES) {
     const ai = zone.angleIdx;
@@ -6986,11 +6995,10 @@ function loadAngleStrips(charName, animName, fallbackUrl) {
       if (inf > 0) entry.frameCount = inf;
     };
     entry.img.onerror = () => {
-      // Fall back to the default strip
-      entry.img.src = fallbackUrl;
+      entry.img.src = fallbackUrl + '?t=' + t;
       entry.fallback = true;
     };
-    entry.img.src = `/assets/${charName}-${animName}-angle-${ai}.png`;
+    entry.img.src = `/assets/${charName}-${animName}-angle-${ai}.png?t=${t}`;
     TESTING.angleStrips[ai] = entry;
   }
 }
@@ -7024,22 +7032,26 @@ function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps, angleIndex) 
   TESTING.fps = fps || 8;
   TESTING.loop = true;
 
+  // Cache-bust so regen'd strips always load fresh
+  const cacheBust = Date.now();
+  const bustUrl = spriteUrl + '?t=' + cacheBust;
+
   TESTING.stripImg = new Image();
   TESTING.stripImg.onload = () => {
     TESTING.stripLoaded = true;
     const inferred = TESTING.frameCount > 0 ? TESTING.frameCount : Math.round(TESTING.stripImg.width / Math.max(1, TESTING.stripImg.height));
     if (inferred > 0) TESTING.frameCount = inferred;
   };
-  TESTING.stripImg.src = spriteUrl;
+  TESTING.stripImg.src = bustUrl;
 
   // Build angleStrips: this anim was recorded at a specific angle.
-  // Mark the matching zone's angleIdx as non-fallback so the HUD correctly reports it.
+  // All zones load the same strip (only the correct angle is non-fallback for HUD display).
   TESTING.angleStrips = {};
   const recordedAngleIdx = (angleIndex !== null && angleIndex !== undefined) ? angleIndex : null;
   for (const zone of COURT_ZONES) {
     const ai = zone.angleIdx;
     const img = new Image();
-    img.src = spriteUrl;
+    img.src = bustUrl;
     const isSameAngle = recordedAngleIdx !== null && ai === recordedAngleIdx;
     const entry = { img, loaded: false, frameCount: frameCount || 4, fallback: !isSameAngle };
     img.onload = () => {
