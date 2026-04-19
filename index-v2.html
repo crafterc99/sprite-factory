@@ -6969,6 +6969,14 @@ function testingSelectAnim(animName) {
   };
   TESTING.stripImg.src = defaultUrl + '?t=' + cacheBust;
 
+  // Load native-res individual frames for HD tester rendering
+  TESTING.hdFrames = [];
+  for (let i = 0; i < TESTING.frameCount; i++) {
+    const img = new Image();
+    img.src = `/assets/${TESTING.selectedChar}-${animName}-frames/frame-${i}.png?t=${cacheBust}`;
+    TESTING.hdFrames.push(img);
+  }
+
   // Preload angle-specific strips for each zone
   loadAngleStrips(TESTING.selectedChar, animName, defaultUrl, cacheBust);
 
@@ -7043,6 +7051,16 @@ function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps, angleIndex) 
     if (inferred > 0) TESTING.frameCount = inferred;
   };
   TESTING.stripImg.src = bustUrl;
+
+  // Load native-res individual frames for HD tester rendering
+  // Derive charName/animName from the saved animId (animId is the animName for studio-generated)
+  const _savedCharName = TESTING.selectedChar;
+  TESTING.hdFrames = [];
+  for (let i = 0; i < (frameCount || 4); i++) {
+    const img = new Image();
+    img.src = `/assets/${_savedCharName}-${animId}-frames/frame-${i}.png?t=${cacheBust}`;
+    TESTING.hdFrames.push(img);
+  }
 
   // Build angleStrips: this anim was recorded at a specific angle.
   // All zones load the same strip (only the correct angle is non-fallback for HUD display).
@@ -7333,30 +7351,36 @@ function testingRenderLoop(timestamp) {
     }
     TESTING.currentFrame = Math.min(TESTING.currentFrame, activeFCount - 1);
 
-    // Frame dimensions from strip
-    const frameW = activeFCount > 0 ? Math.round(activeImg.width / activeFCount) : activeImg.width;
-    const frameH = activeImg.height;
-
-    // Scale the full frame by user zoom. Strips are 180×180 with feet at Y=170 (94.4%).
-    // For legacy native-res strips (frameH > 250) fall back to pixelHeight-based scaling.
-    const isStandardFrame = frameH <= 250;
-    const drawH = isStandardFrame ? frameH * TESTING.scale : TESTING.pixelHeight * TESTING.scale;
-    const drawW = isStandardFrame ? frameW * TESTING.scale : drawH * (frameW / frameH);
-    // Baseline: feet at Y=170 in standard 180px frame; feet at bottom in native-res
-    const baselineFrac = isStandardFrame ? (170 / frameH) : 1.0;
-    const drawX = TESTING.charX - drawW / 2;
-    const drawY = TESTING.charY - baselineFrac * drawH;
-
     ctx.imageSmoothingEnabled = false;
-    // Apply facing flip in Game Mode
-    const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, drawW);
-    ctx.drawImage(
-      activeImg,
-      TESTING.currentFrame * frameW, 0,
-      frameW, frameH,
-      drawX, drawY, drawW, drawH
-    );
-    gmRestoreFlip(ctx, _flipped);
+
+    // Prefer native-res individual frames (HD) when available; fall back to strip
+    const hdImg = TESTING.hdFrames?.[TESTING.currentFrame];
+    const useHD = hdImg?.complete && hdImg?.naturalWidth > 0;
+
+    let drawX, drawY, drawW, drawH;
+    if (useHD) {
+      // Native-res tight-cropped frame: feet at bottom of image, scale to pixelHeight
+      drawH = TESTING.pixelHeight * TESTING.scale;
+      drawW = drawH * (hdImg.naturalWidth / hdImg.naturalHeight);
+      drawX = TESTING.charX - drawW / 2;
+      drawY = TESTING.charY - drawH;
+      const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, drawW);
+      ctx.drawImage(hdImg, 0, 0, hdImg.naturalWidth, hdImg.naturalHeight, drawX, drawY, drawW, drawH);
+      gmRestoreFlip(ctx, _flipped);
+    } else {
+      // Strip fallback
+      const frameW = activeFCount > 0 ? Math.round(activeImg.width / activeFCount) : activeImg.width;
+      const frameH = activeImg.height;
+      const isStandardFrame = frameH <= 250;
+      drawH = isStandardFrame ? frameH * TESTING.scale : TESTING.pixelHeight * TESTING.scale;
+      drawW = isStandardFrame ? frameW * TESTING.scale : drawH * (frameW / frameH);
+      const baselineFrac = isStandardFrame ? (170 / frameH) : 1.0;
+      drawX = TESTING.charX - drawW / 2;
+      drawY = TESTING.charY - baselineFrac * drawH;
+      const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, drawW);
+      ctx.drawImage(activeImg, TESTING.currentFrame * frameW, 0, frameW, frameH, drawX, drawY, drawW, drawH);
+      gmRestoreFlip(ctx, _flipped);
+    }
 
     // Shadow at feet position
     ctx.save();
