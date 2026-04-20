@@ -216,7 +216,7 @@ function register(router, ctx) {
   // Body: { charName, animName, model? }
   router.post('/api/studio/generate', async (req, res) => {
     const body = await parseBody(req);
-    const { charName, animName, model, resizeMode } = body;
+    const { charName, animName, model, resizeMode, angleIndex } = body;
     if (!charName || !animName) return json(res, { error: 'charName and animName required' }, 400);
     const pipelineOpts = { resizeMode: resizeMode || process.env.SPRITE_RESIZE_MODE || 'high-quality' };
 
@@ -224,10 +224,11 @@ function register(router, ctx) {
     const anim = lib[animName];
     if (!anim) return json(res, { error: `Animation "${animName}" not found in library` }, 400);
 
-    // Find the best available angle: exact match → front → any available
+    // Find the best available angle: client-selected → anim default → front → any available
     const ANGLE_NAMES = ['Front','Front Right','Right','Back Right','Back','Back Left','Left','Front Left'];
+    const requestedAngle = angleIndex != null ? parseInt(angleIndex) : anim.angleIndex;
     let resolvedAnglePath = null;
-    const tryIndices = [anim.angleIndex, 0, 1, 2, 3, 4, 5, 6, 7];
+    const tryIndices = [requestedAngle, anim.angleIndex, 0, 1, 2, 3, 4, 5, 6, 7];
     for (const idx of tryIndices) {
       const p = path.join(ASSETS_DIR, `${charName}-angle-${idx}.png`);
       if (fs.existsSync(p)) { resolvedAnglePath = p; break; }
