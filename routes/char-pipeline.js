@@ -47,7 +47,19 @@ function saveCharacters(data) {
 function loadCharPrompts() {
   try {
     if (fs.existsSync(CHAR_PROMPTS_FILE)) {
-      return { ...getDefaultPrompts(), ...JSON.parse(fs.readFileSync(CHAR_PROMPTS_FILE, 'utf8')) };
+      const saved = JSON.parse(fs.readFileSync(CHAR_PROMPTS_FILE, 'utf8'));
+      const defaults = getDefaultPrompts();
+      // Migrate: if saved prompts still contain pixel art wording, reset to new anime defaults
+      const merged = { ...defaults, ...saved };
+      let dirty = false;
+      for (const key of Object.keys(merged)) {
+        if (typeof merged[key] === 'string' && /16-bit|pixel art|GBA style/i.test(merged[key])) {
+          merged[key] = defaults[key];
+          dirty = true;
+        }
+      }
+      if (dirty) saveCharPrompts(merged);
+      return merged;
     }
   } catch {}
   return getDefaultPrompts();
@@ -503,8 +515,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
-        // Step 1: photo → pixel art
-        updateJob(jobId, { step: 1, total: 2, msg: 'Step 1/2 — Converting photo to pixel art…' });
+        // Step 1: photo → anime style
+        updateJob(jobId, { step: 1, total: 2, msg: 'Step 1/2 — Converting photo to anime style…' });
         const step1 = await client.generate(loadCharPrompts().step1, {
           referenceImages: [originalPath],
           aspectRatio: '3:4',
