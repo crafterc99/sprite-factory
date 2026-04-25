@@ -73,20 +73,20 @@ const ANGLE_LABELS_8 = ['Front', 'Front Right', 'Right', 'Back Right', 'Back', '
 
 function getDefaultPortraitPrompt() {
   return [
-    'Convert this photo into a 16-bit arcade pixel art character portrait.',
+    'Convert this photo into an anime style character portrait.',
     'The character must be standing upright, facing forward, full body visible.',
     'RULES:',
     'Preserve exact face, skin tone, hairstyle, and clothing from the photo.',
     'Pure white background (#FFFFFF). No environment, no shadows, no extra elements.',
-    '16-bit pixel art style: bold black outlines, flat color fills, high-contrast shading.',
-    'No anti-aliasing. No blur. No gradients.',
+    'Anime style: clean linework, vibrant flat colors, cel shading.',
+    'No blur. No gradients.',
     'Character centered, feet at bottom, head near top of frame.',
   ].join('\n');
 }
 
 function getDefaultStep1Prompt() {
   return [
-    'Transform the uploaded image into 16-bit arcade pixel art.',
+    'Transform the uploaded image into anime style.',
     'IMPORTANT RULES:',
     'Do NOT change the pose.',
     'Do NOT change facial features.',
@@ -96,11 +96,11 @@ function getDefaultStep1Prompt() {
     'Do NOT add accessories.',
     'Do NOT change proportions.',
     'Do NOT add background elements.',
-    'Only convert the image into clean 16-bit arcade pixel style with:',
-    'Sharp pixel edges',
-    'Limited color palette',
-    'black outlines',
-    'High contrast arcade shading',
+    'Only convert the image into clean anime style with:',
+    'Clean smooth linework',
+    'Vibrant flat colors',
+    'Clean black outlines',
+    'Cel shading',
     'No anti-aliasing',
     'No blur',
     'Keep the character exactly as shown.',
@@ -127,12 +127,12 @@ function buildBodySheetPrompt() {
   return [
     'Use the uploaded character as the EXACT base reference.',
     '',
-    'Generate a pixel-perfect character turnaround sheet with no stylistic changes.',
+    'Generate a perfect character turnaround sheet with no stylistic changes.',
     '',
     '',
     'STYLE',
     '',
-    'Match the exact pixel art style of the reference',
+    'Match the exact anime style of the reference',
     'No lighting changes',
     'No shading changes',
     'No reinterpretation or added detail',
@@ -142,7 +142,7 @@ function buildBodySheetPrompt() {
     '',
     'Keep the exact same face, proportions, and body shape',
     'Keep identical outfit: same clothing as shown in the reference',
-    'Maintain consistent pixel scale',
+    'Maintain consistent scale',
     'Do not modify height, structure, or features in any way',
     '',
     '',
@@ -189,7 +189,7 @@ function buildBodySheetPrompt() {
 
 function buildHeadSheetPrompt() {
   return [
-    'Create ONLY the following headshot angles of this pixelated character, only the head and neck not their shirt, maintaining pixel style and character detail:',
+    'Create ONLY the following headshot angles of this anime style character, only the head and neck not their shirt, maintaining anime style and character detail:',
     '',
     '1. Front view',
     '2. 3/4 front right (45°)',
@@ -208,13 +208,13 @@ function buildHeadSheetPrompt() {
 
 function buildFinalFramePrompt(angleLabel) {
   return [
-    `Image 1 is the character's body at the ${angleLabel} angle in 16-bit pixel art.`,
+    `Image 1 is the character's body at the ${angleLabel} angle in anime style.`,
     `Image 2 is the character portrait showing exact face, hair, and clothing details.`,
     '',
-    `Generate a clean, finished 16-bit pixel art sprite of the character at the ${angleLabel} angle.`,
+    `Generate a clean, finished anime style sprite of the character at the ${angleLabel} angle.`,
     'FULL BODY from head to toe. Neutral standing pose, arms relaxed.',
     'Match EXACT face, hair, skin tone, outfit, and proportions from both reference images.',
-    '16-bit pixel art, GBA style. Bold black outlines. No anti-aliasing.',
+    'Anime style. Bold black outlines. Clean linework. Cel shading.',
     'Pure green (#00FF00) background for chroma keying.',
     'Square frame, 1:1 aspect ratio.',
   ].join('\n');
@@ -411,7 +411,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     // Include studio default if not saved yet
     if (!p.studio) {
       const DEFAULT_STUDIO = [
-        'Keep the exact pixelated character from Image 1. Copy only the exact pose and limb/body position from Image 2.',
+        'Keep the exact anime style character from Image 1. Copy only the exact pose and limb/body position from Image 2.',
         'Do not mix faces or identities. make sure the characters face does not change at all.',
         'Do not change body shape, skin tone, hairstyle, or facial structure.',
         'Match Image 2\'s full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.',
@@ -649,7 +649,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
       CHARACTERS[name] = {
         description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
-        style: '16-bit pixel art, GBA style',
+        style: 'anime style',
       };
 
       const registry = loadCharacters();
@@ -877,11 +877,11 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           const anglePrompt = [
             'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
             '',
-            `Generate ONE single full-body pixel art sprite of this character viewed from the ${angleLabel} angle (${i * 45}°).`,
+            `Generate ONE single full-body anime style sprite of this character viewed from the ${angleLabel} angle (${i * 45}°).`,
             '',
             'CRITICAL: ONE character only. Do NOT show multiple copies or duplicates of the character.',
             'CRITICAL: Do NOT tile, repeat, or show the character more than once.',
-            'STYLE: Match the exact pixel art style of the reference. 16-bit GBA style. Bold black outlines. No anti-aliasing.',
+            'STYLE: Match the exact anime style of the reference. Bold black outlines. Clean linework. No anti-aliasing.',
             'BODY: Full body visible from head to toe. Neutral standing pose. Arms relaxed at sides.',
             'FRAMING: Single character centered in frame. Feet at bottom. Head near top. No cropping.',
             'BACKGROUND: Solid bright green (#00FF00). Nothing else.',
@@ -918,7 +918,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           registry[name] = {
             name, id: name,
             description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
-            style: '16-bit pixel art, GBA style',
+            style: 'anime style',
             heightInches: 72, weightLbs: 185, build: 'athletic',
             jerseyNumber: '', teamColors: { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
             portraitPath: `${name}full.png`,
@@ -970,7 +970,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
             `Generate a single headshot of this character at the ${angleLabel} angle (${i * 45}°).`,
             '',
             'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
-            'STYLE: Match the exact pixel art style of the reference. 16-bit GBA style. Bold black outlines.',
+            'STYLE: Match the exact anime style of the reference. Bold black outlines. Clean linework.',
             'FRAMING: Head centered. Clean white background.',
             'OUTPUT: Single headshot only. Square 1:1 frame. No text, no labels.',
           ].join('\n');
@@ -998,7 +998,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           registry[name] = {
             name, id: name,
             description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
-            style: '16-bit pixel art, GBA style',
+            style: 'anime style',
             heightInches: 72, weightLbs: 185, build: 'athletic',
             jerseyNumber: '', teamColors: { primary: '#FF4400', secondary: '#FFFFFF', accent: '#000000' },
             portraitPath: `${name}full.png`,
@@ -1204,7 +1204,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (!CHARACTERS[name]) {
       CHARACTERS[name] = {
         description: 'the character shown in Image 2 — keep their exact appearance, outfit, hairstyle, skin tone, and proportions',
-        style: '16-bit pixel art, GBA style',
+        style: 'anime style',
       };
     }
 
@@ -1277,7 +1277,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           '',
           `Redraw the character at the ${angleLabel} angle wearing the clothing from Image 3.`,
           'Keep all other features identical — face, hair, skin tone, proportions, pose.',
-          '16-bit pixel art, GBA style. Bold black outlines. Green (#00FF00) background.',
+          'Anime style. Bold black outlines. Clean linework. Green (#00FF00) background.',
         ].join('\n');
 
         const result = await client.generate(prompt, {
@@ -1354,7 +1354,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         if (topId) {
           const topPath = wardrobeItemPath(topId);
           const result = await client.generate(
-            `Keep everything about this pixelated character exactly the same. Replace only their ${topLabel} with the one shown in the second image. Match the style, color and fit exactly.`,
+            `Keep everything about this anime style character exactly the same. Replace only their ${topLabel} with the one shown in the second image. Match the style, color and fit exactly.`,
             { referenceImages: [currentPortraitPath, topPath], ...genOpts }
           );
           const outPath = path.join(tmpDir, `after-top-${tmpId}.png`);
@@ -1366,7 +1366,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         if (bottomId) {
           const bottomPath = wardrobeItemPath(bottomId);
           const result = await client.generate(
-            `Keep everything about this pixelated character exactly the same. Replace only their ${bottomLabel} with the one shown in the second image. Match the style, color and fit exactly.`,
+            `Keep everything about this anime style character exactly the same. Replace only their ${bottomLabel} with the one shown in the second image. Match the style, color and fit exactly.`,
             { referenceImages: [currentPortraitPath, bottomPath], ...genOpts }
           );
           const outPath = path.join(tmpDir, `after-bottom-${tmpId}.png`);
