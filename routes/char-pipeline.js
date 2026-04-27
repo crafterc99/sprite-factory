@@ -53,7 +53,7 @@ function loadCharPrompts() {
       const merged = { ...defaults, ...saved };
       let dirty = false;
       for (const key of Object.keys(merged)) {
-        if (typeof merged[key] === 'string' && /16-bit|pixel art|GBA style/i.test(merged[key])) {
+        if (typeof merged[key] === 'string' && /16-bit|pixel.?art|pixelated|pixel style|GBA style/i.test(merged[key])) {
           merged[key] = defaults[key];
           dirty = true;
         }
