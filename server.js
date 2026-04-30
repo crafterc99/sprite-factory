@@ -200,6 +200,45 @@ router.post('/api/testing-config', async (req, res) => {
   }
 });
 
+// ─── Court Presets Endpoints ─────────────────────────────────────────────
+const COURT_PRESETS_FILE = path.join(__dirname, 'data/court-presets.json');
+
+function readCourtPresets() {
+  try {
+    if (fs.existsSync(COURT_PRESETS_FILE)) return JSON.parse(fs.readFileSync(COURT_PRESETS_FILE, 'utf8'));
+  } catch {}
+  return {};
+}
+
+router.get('/api/court-presets', (req, res) => {
+  const stored = readCourtPresets();
+  const presets = Object.values(stored);
+  if (!presets.find(p => p.id === 'default')) {
+    presets.unshift({ id: 'default', name: 'Main Court', courtImage: '/assets/court.webp', foregroundImage: null });
+  }
+  json(res, { presets });
+});
+
+router.get('/api/court-presets/:id', (req, res, params) => {
+  const stored = readCourtPresets();
+  const preset = stored[params.id];
+  if (preset) return json(res, preset);
+  json(res, { error: 'Not found' }, 404);
+});
+
+router.put('/api/court-presets/:id', async (req, res, params) => {
+  try {
+    const body = await parseBody(req);
+    const stored = readCourtPresets();
+    stored[params.id] = { ...body, id: params.id };
+    fs.mkdirSync(path.dirname(COURT_PRESETS_FILE), { recursive: true });
+    fs.writeFileSync(COURT_PRESETS_FILE, JSON.stringify(stored, null, 2));
+    json(res, { success: true });
+  } catch (e) {
+    json(res, { error: e.message }, 500);
+  }
+});
+
 // ─── Sync Status Endpoint ────────────────────────────────────────────────
 router.get('/api/sync-status', (req, res) => {
   try {

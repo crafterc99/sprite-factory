@@ -1473,6 +1473,54 @@
                   </div>
                   <div id="gmZoneSaveStatus" style="font-size:9px;color:#50507a;margin-top:4px;font-family:var(--mono)"></div>
                 </div>
+
+                <!-- ── Sandbox Mode ─────────────────────────────────────────────── -->
+                <div style="border-top:1px solid #1e1e30;padding-top:10px;margin-top:10px">
+                  <div class="gm-move-label" style="display:flex;justify-content:space-between;align-items:center">
+                    Sandbox
+                    <button id="sandboxToggleBtn" onclick="toggleSandboxMode()"
+                      style="font-size:8px;padding:2px 8px;background:#1a1a2e;border:1px solid #2e2e50;border-radius:4px;color:#60608a;cursor:pointer;font-family:var(--mono)">
+                      OFF
+                    </button>
+                  </div>
+
+                  <div id="sandboxPanel" style="display:none">
+                    <!-- Court preset selector -->
+                    <div class="gm-move-row" style="margin-top:6px">
+                      <span>Court</span>
+                      <select id="sandboxCourtSelect" onchange="sandboxLoadPreset(this.value)"
+                        style="font-size:9px;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#ccc;padding:2px 4px;flex:1;height:22px">
+                        <option value="default">Main Court</option>
+                      </select>
+                    </div>
+                    <!-- Calibration toggle -->
+                    <div class="gm-move-row">
+                      <button id="sandboxCalibBtn" onclick="toggleCalibration()"
+                        style="font-size:9px;flex:1;padding:3px 0;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#888;cursor:pointer">
+                        Calibrate Zones
+                      </button>
+                    </div>
+                    <!-- Overlays -->
+                    <div style="font-size:9px;color:#50507a;margin:6px 0 3px">Overlays</div>
+                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvPolyZones" checked onchange="toggleSandboxOverlay('polygonZones')"> Polygon Zones</label></div>
+                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvFacingCone" onchange="toggleSandboxOverlay('facingCone')"> Facing Cone</label></div>
+                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvMoveVec" onchange="toggleSandboxOverlay('movementVector')"> Move Vector</label></div>
+                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvValidAngles" onchange="toggleSandboxOverlay('validAngles')"> Valid Angles</label></div>
+                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvGhost" onchange="toggleSandboxOverlay('ghostFrames')"> Ghost Frames</label></div>
+                    <!-- Live debug readout -->
+                    <div style="font-size:9px;color:#50507a;margin:6px 0 3px">Live State</div>
+                    <div id="sbDebugPos"    style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">pos: —</div>
+                    <div id="sbDebugZone"   style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">zone: —</div>
+                    <div id="sbDebugArea"   style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">area: —</div>
+                    <div id="sbDebugAnim"   style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">anim: —</div>
+                    <div id="sbDebugReason" style="font-size:8px;font-family:var(--mono);line-height:1.8;color:#888;margin-top:2px;word-break:break-word">—</div>
+                    <!-- Actions -->
+                    <div style="display:flex;gap:4px;margin-top:8px">
+                      <button class="btn btn-secondary btn-sm" style="font-size:9px;flex:1" onclick="sandboxTeleport()">Teleport</button>
+                      <button class="btn btn-secondary btn-sm" style="font-size:9px;flex:1" onclick="exportDebugSnapshot()">Snapshot</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -6431,6 +6479,23 @@ const TESTING = {
   angleStrips: {},
   keysDown: new Set(),
   moveSpeed: 2,
+  // ── Sandbox Mode ─────────────────────────────────────────────────────────
+  sandboxMode: false,
+  courtPreset: null,
+  hoopImg: null,
+  hoopLoaded: false,
+  sandboxOverlays: {
+    polygonZones: true,
+    facingCone: false,
+    movementVector: false,
+    validAngles: false,
+    ghostFrames: false,
+  },
+  calibrationMode: false,
+  calibrationDrag: null,
+  ghostFrameBuffer: [],
+  sandboxCourtArea: 'unknown',
+  sandboxLastResolve: null,
 };
 
 function initTestingPage() {
@@ -6473,6 +6538,11 @@ function initTestingPage() {
   const SNAP = 12; // px snap radius for corner handles
 
   canvas.addEventListener('mousedown', (e) => {
+    if (TESTING.calibrationMode) {
+      const { x, y } = getCanvasXY(e);
+      if (_sandboxCalibHitTest(x, y)) { e.preventDefault(); return; }
+      return;
+    }
     if (!TESTING.editMode) return;
     const { x, y } = getCanvasXY(e);
 
@@ -6501,6 +6571,26 @@ function initTestingPage() {
   });
 
   canvas.addEventListener('mousemove', (e) => {
+    if (TESTING.calibrationMode) {
+      const { x, y } = getCanvasXY(e);
+      if (TESTING.calibrationDrag) _sandboxCalibMove(x, y);
+      // Cursor: show grab when near a handle
+      const preset = TESTING.courtPreset;
+      if (preset) {
+        const SNAP = 12;
+        let nearAny = false;
+        if (preset.rimAnchor && Math.hypot(x - preset.rimAnchor.x, y - preset.rimAnchor.y) < SNAP) nearAny = true;
+        if (!nearAny && preset.polygonZones) {
+          outer: for (const poly of Object.values(preset.polygonZones)) {
+            for (const pt of (poly ?? [])) {
+              if (Math.hypot(x - pt.x, y - pt.y) < SNAP) { nearAny = true; break outer; }
+            }
+          }
+        }
+        canvas.style.cursor = nearAny ? 'grab' : 'crosshair';
+      }
+      return;
+    }
     if (!TESTING.editMode) return;
     const { x, y } = getCanvasXY(e);
     if (TESTING.editDragCorner) {
@@ -6519,6 +6609,11 @@ function initTestingPage() {
   });
 
   const stopDrag = () => {
+    if (TESTING.calibrationMode && TESTING.calibrationDrag) {
+      TESTING.calibrationDrag = null;
+      sandboxSavePreset();
+      return;
+    }
     if (TESTING.editMode && (TESTING.editDragCorner || TESTING.editDragDivider)) {
       TESTING.editDragCorner = TESTING.editDragDivider = null;
       saveTestingConfig(); // persist to Supabase
@@ -7031,8 +7126,23 @@ function testingRenderLoop(timestamp) {
     ctx.restore();
   }
 
+  // ── Sandbox: polygon zone overlay ────────────────────────────────────────
+  if (TESTING.sandboxMode && TESTING.sandboxOverlays.polygonZones && TESTING.courtPreset) {
+    drawPolygonZoneOverlay(ctx, TESTING.courtPreset, TESTING.sandboxCourtArea);
+  }
+
   // ── Edit mode handles ─────────────────────────────────────────────────────
   if (TESTING.editMode) drawEditHandles(ctx);
+
+  // ── Sandbox: calibration handles ─────────────────────────────────────────
+  if (TESTING.sandboxMode && TESTING.calibrationMode && TESTING.courtPreset) {
+    drawCalibrationHandles(ctx, TESTING.courtPreset);
+  }
+
+  // ── Sandbox: ghost frames (drawn before character so they appear behind) ──
+  if (TESTING.sandboxMode && TESTING.sandboxOverlays.ghostFrames && TESTING.ghostFrameBuffer.length) {
+    drawGhostFrames(ctx, TESTING.ghostFrameBuffer);
+  }
 
   // ── Draw character sprite ─────────────────────────────────────────────────
   const activeStrip = TESTING.selectedAnim ? getActiveStrip() : null;
@@ -7116,6 +7226,37 @@ function testingRenderLoop(timestamp) {
       ctx.fill();
     }
 
+    // ── Sandbox: character overlays (drawn on top of character) ──────────────
+    if (TESTING.sandboxMode) {
+      const facingRight = GM.active ? (GM._facingRight ?? true) : true;
+      if (TESTING.sandboxOverlays.facingCone) {
+        drawFacingCone(ctx, TESTING.charX, TESTING.charY, facingRight);
+      }
+      if (TESTING.sandboxOverlays.movementVector && GM.active && GM.physics) {
+        drawMovementVector(ctx, TESTING.charX, TESTING.charY, GM.physics.vx ?? 0, GM.physics.vy ?? 0);
+      }
+      if (TESTING.sandboxOverlays.validAngles) {
+        drawValidAngleIcons(ctx, TESTING.charX, TESTING.charY, TESTING.selectedAnim, GM.charAnims ?? []);
+      }
+      // Push current frame to ghost buffer (capped at 5, every 3rd frame)
+      if (TESTING.sandboxOverlays.ghostFrames && TESTING.currentFrame % 3 === 0) {
+        const ghostEntry = { img: useHD ? hdImg : activeImg, alpha: 0.35, dx: drawX, dy: drawY, dw: drawW, dh: drawH };
+        if (!useHD) {
+          const _fw = activeFCount > 0 ? Math.round(activeImg.width / activeFCount) : activeImg.width;
+          ghostEntry.sx = TESTING.currentFrame * _fw; ghostEntry.sy = 0;
+          ghostEntry.srcW = _fw; ghostEntry.srcH = activeImg.height;
+        }
+        // Decay existing alphas, then push
+        for (const g of TESTING.ghostFrameBuffer) g.alpha *= 0.72;
+        TESTING.ghostFrameBuffer.push(ghostEntry);
+        if (TESTING.ghostFrameBuffer.length > 5) TESTING.ghostFrameBuffer.shift();
+      }
+      // Draw hoop foreground over character (if preset has one)
+      if (TESTING.courtPreset?.foregroundImage && TESTING.hoopLoaded && TESTING.hoopImg) {
+        ctx.drawImage(TESTING.hoopImg, 0, 0, W, H);
+      }
+    }
+
     // HUD: zone + angle info
     const angleEntry = TESTING.angleStrips[currentZone.angleIdx];
     const hasAngleStrip = angleEntry && angleEntry.loaded && !angleEntry.fallback;
@@ -7178,6 +7319,14 @@ function testingRenderLoop(timestamp) {
     }
   }
 
+  // ── Sandbox: update debug panel (throttled via rAF — every frame is fine) ──
+  if (TESTING.sandboxMode) {
+    if (typeof getCourtArea === 'function' && TESTING.courtPreset) {
+      TESTING.sandboxCourtArea = getCourtArea(TESTING.charX, TESTING.charY, TESTING.courtPreset);
+    }
+    updateSandboxDebugPanel();
+  }
+
   TESTING.animId = requestAnimationFrame(testingRenderLoop);
 }
 
@@ -7190,6 +7339,8 @@ function testingRenderLoop(timestamp) {
 <script src="/engine/AnimationPlayer.js"></script>
 <script src="/engine/CourtZones.js"></script>
 <script src="/engine/AnimResolver.js"></script>
+<script src="/engine/CourtPreset.js"></script>
+<script src="/engine/CourtGeometry.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
@@ -7590,6 +7741,327 @@ function gmClearZoneMeta() {
   _gmZoneState[animName] = {};
   gmBuildZoneGrid(animName);
   document.getElementById('gmZoneSaveStatus').textContent = '(cleared — save to apply)';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SANDBOX MODE
+// ═══════════════════════════════════════════════════════════════════════════
+
+function toggleSandboxMode() {
+  TESTING.sandboxMode = !TESTING.sandboxMode;
+  const btn   = document.getElementById('sandboxToggleBtn');
+  const panel = document.getElementById('sandboxPanel');
+  if (btn) {
+    btn.textContent    = TESTING.sandboxMode ? 'ON' : 'OFF';
+    btn.style.color       = TESTING.sandboxMode ? '#00ff88' : '#60608a';
+    btn.style.borderColor = TESTING.sandboxMode ? '#00ff88' : '#2e2e50';
+  }
+  if (panel) panel.style.display = TESTING.sandboxMode ? '' : 'none';
+  if (!TESTING.sandboxMode) {
+    TESTING.calibrationMode = false;
+    TESTING.calibrationDrag = null;
+    TESTING.ghostFrameBuffer = [];
+    TESTING.sandboxCourtArea = 'unknown';
+  } else if (!TESTING.courtPreset) {
+    sandboxLoadPreset('default');
+  }
+}
+
+async function sandboxLoadPreset(presetId) {
+  let preset;
+  if (typeof loadCourtPreset === 'function') {
+    preset = await loadCourtPreset(presetId);
+  } else {
+    preset = JSON.parse(JSON.stringify(window.COURT_PRESET_DEFAULT ?? {
+      id: 'default', name: 'Main Court', courtImage: '/assets/court.webp', polygonZones: {}
+    }));
+  }
+  if (typeof applyPresetToTESTING === 'function') {
+    applyPresetToTESTING(preset, TESTING);
+  } else {
+    TESTING.courtPreset = preset;
+  }
+}
+
+function toggleCalibration() {
+  TESTING.calibrationMode = !TESTING.calibrationMode;
+  TESTING.calibrationDrag = null;
+  const btn = document.getElementById('sandboxCalibBtn');
+  if (btn) {
+    btn.textContent  = TESTING.calibrationMode ? 'Exit Calibration' : 'Calibrate Zones';
+    btn.style.color  = TESTING.calibrationMode ? '#ffcc00' : '#888';
+    btn.style.borderColor = TESTING.calibrationMode ? '#ffcc00' : '#1e1e30';
+  }
+  const canvas = document.getElementById('testingCourt');
+  if (canvas) canvas.style.cursor = TESTING.calibrationMode ? 'crosshair' : '';
+  if (!TESTING.calibrationMode && TESTING.courtPreset) sandboxSavePreset();
+}
+
+async function sandboxSavePreset() {
+  if (!TESTING.courtPreset) return;
+  if (typeof saveCourtPreset === 'function') {
+    await saveCourtPreset(TESTING.courtPreset);
+    toast('Court preset saved', false);
+  }
+}
+
+function toggleSandboxOverlay(name) {
+  if (!TESTING.sandboxOverlays) return;
+  TESTING.sandboxOverlays[name] = !TESTING.sandboxOverlays[name];
+}
+
+function updateSandboxDebugPanel() {
+  const x = Math.round(TESTING.charX), y = Math.round(TESTING.charY);
+  const zone = getZoneForPos(x, y);
+
+  let resolveResult = null;
+  if (GM.active && GM.charAnims?.length && TESTING.selectedAnim) {
+    const posZone   = GM._positionZone ?? (typeof getPositionZone === 'function' ? getPositionZone(x, y) : 'arc');
+    const perspAngle = zone?.angleIdx ?? 0;
+    if (typeof resolveWithDebug === 'function') {
+      resolveResult = resolveWithDebug('jumpshot', GM.charAnims, posZone, perspAngle);
+    }
+  }
+  TESTING.sandboxLastResolve = resolveResult;
+
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set('sbDebugPos',  `pos: ${x}, ${y}`);
+  set('sbDebugZone', `zone: ${zone?.id ?? '?'} (${zone?.label ?? ''})`);
+  set('sbDebugArea', `area: ${TESTING.sandboxCourtArea}`);
+  set('sbDebugAnim', `anim: ${TESTING.selectedAnim ?? '—'}`);
+  const reasonEl = document.getElementById('sbDebugReason');
+  if (reasonEl) {
+    if (resolveResult) {
+      reasonEl.textContent = resolveResult.reason;
+      reasonEl.style.color = resolveResult.anim ? '#00ff88' : '#ff4444';
+    } else {
+      reasonEl.textContent = '—';
+      reasonEl.style.color = '#888';
+    }
+  }
+}
+
+function sandboxTeleport() {
+  const preset = TESTING.courtPreset;
+  if (!preset?.polygonZones || !Object.keys(preset.polygonZones).length) {
+    toast('No polygon zones — calibrate first', true);
+    return;
+  }
+  const zones  = Object.keys(preset.polygonZones);
+  const zoneId = prompt(`Teleport to zone:\n${zones.join(', ')}`, zones[0]);
+  if (!zoneId || !preset.polygonZones[zoneId]) return;
+  const poly = preset.polygonZones[zoneId];
+  const cx = poly.reduce((s, p) => s + p.x, 0) / poly.length;
+  const cy = poly.reduce((s, p) => s + p.y, 0) / poly.length;
+  TESTING.charX = cx;
+  TESTING.charY = cy;
+  if (GM.physics) GM.physics.reset(cx, cy);
+  toast(`Teleported to ${zoneId}`, false);
+}
+
+function exportDebugSnapshot() {
+  const canvas = document.getElementById('testingCourt');
+  if (!canvas) return;
+  const link = document.createElement('a');
+  link.download = `sandbox-debug-${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  toast('Debug snapshot downloaded', false);
+}
+
+// ── Sandbox overlay draw helpers ────────────────────────────────────────────
+
+const COURT_AREA_COLORS = {
+  'paint':           'rgba(255,140,0,',
+  '3pt-left':        'rgba(170,80,255,',
+  '3pt-right':       'rgba(170,80,255,',
+  '3pt-top':         'rgba(100,120,255,',
+  'mid-range':       'rgba(255,220,0,',
+  'mid-range-left':  'rgba(255,220,0,',
+  'mid-range-right': 'rgba(255,220,0,',
+  'backcourt':       'rgba(100,100,130,',
+};
+
+function drawPolygonZoneOverlay(ctx, preset, activeArea) {
+  if (!preset?.polygonZones) return;
+  ctx.save();
+  for (const [zoneId, poly] of Object.entries(preset.polygonZones)) {
+    if (!poly || poly.length < 3) continue;
+    const isActive = zoneId === activeArea;
+    const base     = COURT_AREA_COLORS[zoneId] ?? 'rgba(200,200,200,';
+    ctx.beginPath();
+    ctx.moveTo(poly[0].x, poly[0].y);
+    for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
+    ctx.closePath();
+    ctx.fillStyle   = base + (isActive ? '0.28)' : '0.10)');
+    ctx.fill();
+    ctx.strokeStyle = base + (isActive ? '0.9)' : '0.45)');
+    ctx.lineWidth   = isActive ? 2.5 : 1;
+    ctx.setLineDash(isActive ? [] : [6, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Zone label at centroid
+    const midX = poly.reduce((s, p) => s + p.x, 0) / poly.length;
+    const midY = poly.reduce((s, p) => s + p.y, 0) / poly.length;
+    ctx.fillStyle = base + (isActive ? '1)' : '0.65)');
+    ctx.font      = `${isActive ? 'bold ' : ''}${isActive ? 10 : 9}px "Space Mono", monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(zoneId.toUpperCase(), midX, midY + 4);
+    ctx.textAlign = 'start';
+  }
+  ctx.restore();
+}
+
+function drawCalibrationHandles(ctx, preset) {
+  if (!preset) return;
+  ctx.save();
+  // Rim anchor
+  if (preset.rimAnchor) {
+    const { x, y } = preset.rimAnchor;
+    ctx.fillStyle   = 'rgba(255,204,0,0.3)';
+    ctx.strokeStyle = '#ffcc00';
+    ctx.lineWidth   = 2;
+    ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 16, y); ctx.lineTo(x + 16, y);
+    ctx.moveTo(x, y - 16); ctx.lineTo(x, y + 16);
+    ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#ffcc00'; ctx.font = '8px "Space Mono",monospace';
+    ctx.textAlign = 'center'; ctx.fillText('RIM', x, y - 16); ctx.textAlign = 'start';
+  }
+  // Polygon vertex handles
+  if (preset.polygonZones) {
+    for (const [zoneId, poly] of Object.entries(preset.polygonZones)) {
+      if (!poly) continue;
+      const base = COURT_AREA_COLORS[zoneId] ?? 'rgba(255,255,255,';
+      for (const pt of poly) {
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = base + '0.85)'; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawFacingCone(ctx, charX, charY, facingRight) {
+  const dir        = facingRight ? 0 : Math.PI;
+  const coneHalfAngle = Math.PI * 0.33;
+  const radius     = 75;
+  ctx.save();
+  ctx.globalAlpha  = 0.14;
+  ctx.fillStyle    = '#00ff88';
+  ctx.beginPath();
+  ctx.moveTo(charX, charY);
+  ctx.arc(charX, charY, radius, dir - coneHalfAngle, dir + coneHalfAngle);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha  = 0.45;
+  ctx.strokeStyle  = '#00ff88';
+  ctx.lineWidth    = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMovementVector(ctx, charX, charY, vx, vy) {
+  const mag = Math.hypot(vx, vy);
+  if (mag < 0.15) return;
+  const scale = 14;
+  const ex = charX + vx * scale;
+  const ey = charY + vy * scale;
+  ctx.save();
+  ctx.strokeStyle  = '#ffcc00';
+  ctx.lineWidth    = 2;
+  ctx.globalAlpha  = 0.85;
+  ctx.beginPath(); ctx.moveTo(charX, charY); ctx.lineTo(ex, ey); ctx.stroke();
+  const angle = Math.atan2(ey - charY, ex - charX);
+  ctx.beginPath();
+  ctx.moveTo(ex, ey);
+  ctx.lineTo(ex - 9 * Math.cos(angle - 0.42), ey - 9 * Math.sin(angle - 0.42));
+  ctx.lineTo(ex - 9 * Math.cos(angle + 0.42), ey - 9 * Math.sin(angle + 0.42));
+  ctx.closePath(); ctx.fillStyle = '#ffcc00'; ctx.fill();
+  ctx.restore();
+}
+
+function drawValidAngleIcons(ctx, charX, charY, selectedAnimName, charAnims) {
+  const anim = (charAnims ?? []).find(a => a.name === selectedAnimName);
+  const SHORT = ['F','FR','R','BR','B','BL','L','FL'];
+  const ringR = 58;
+  ctx.save();
+  for (let i = 0; i < 8; i++) {
+    const a  = (i / 8) * Math.PI * 2 - Math.PI / 2;
+    const ix = charX + ringR * Math.cos(a);
+    const iy = charY - 38 + ringR * Math.sin(a) * 0.45;
+    let color = '#33334a';
+    if (anim) {
+      if (anim.allowedAngles) {
+        color = anim.allowedAngles.includes(i) ? '#00ff88' : '#ff4444';
+      } else if (anim.angleIndex != null) {
+        const d = Math.min(Math.abs((i - anim.angleIndex + 8) % 8), Math.abs((anim.angleIndex - i + 8) % 8));
+        color = d === 0 ? '#00ff88' : d === 1 ? '#88ff44' : d === 2 ? '#ffcc00' : '#ff4444';
+      }
+    }
+    ctx.fillStyle   = color;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath(); ctx.arc(ix, iy, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle   = '#fff';
+    ctx.font        = '5px "Space Mono",monospace';
+    ctx.textAlign   = 'center';
+    ctx.fillText(SHORT[i], ix, iy + 2);
+  }
+  ctx.textAlign = 'start';
+  ctx.restore();
+}
+
+function drawGhostFrames(ctx, ghostBuffer) {
+  if (!ghostBuffer?.length) return;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  for (const g of ghostBuffer) {
+    if (!g.img?.complete) continue;
+    ctx.globalAlpha = Math.max(0, g.alpha);
+    if (g.srcW) {
+      ctx.drawImage(g.img, g.sx, g.sy, g.srcW, g.srcH, g.dx, g.dy, g.dw, g.dh);
+    } else {
+      ctx.drawImage(g.img, 0, 0, g.img.naturalWidth, g.img.naturalHeight, g.dx, g.dy, g.dw, g.dh);
+    }
+  }
+  ctx.restore();
+}
+
+// ── Calibration hit-test + drag helpers ─────────────────────────────────────
+
+function _sandboxCalibHitTest(x, y) {
+  const preset = TESTING.courtPreset;
+  if (!preset) return false;
+  const SNAP = 12;
+  if (preset.rimAnchor && Math.hypot(x - preset.rimAnchor.x, y - preset.rimAnchor.y) < SNAP) {
+    TESTING.calibrationDrag = { type: 'rimAnchor' };
+    return true;
+  }
+  if (preset.polygonZones) {
+    for (const [zoneId, poly] of Object.entries(preset.polygonZones)) {
+      for (let i = 0; i < (poly ?? []).length; i++) {
+        if (Math.hypot(x - poly[i].x, y - poly[i].y) < SNAP) {
+          TESTING.calibrationDrag = { type: 'polygon', zoneId, ptIdx: i };
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function _sandboxCalibMove(x, y) {
+  const drag = TESTING.calibrationDrag;
+  if (!drag || !TESTING.courtPreset) return;
+  const pt = { x: Math.round(x), y: Math.round(y) };
+  if (drag.type === 'rimAnchor') {
+    TESTING.courtPreset.rimAnchor = pt;
+  } else if (drag.type === 'polygon') {
+    const poly = TESTING.courtPreset.polygonZones?.[drag.zoneId];
+    if (poly) poly[drag.ptIdx] = pt;
+  }
 }
 
 // ── Draw facing flip helper (called from within testingRenderLoop when GM active)
