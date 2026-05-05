@@ -800,6 +800,7 @@
       <button class="nav-btn" onclick="showPage('wardrobe')">Wardrobe</button>
       <button class="nav-btn" onclick="showPage('prompts')">Prompts</button>
       <button class="nav-btn" onclick="showPage('testing')">Testing</button>
+      <button class="nav-btn" onclick="showPage('quiz')">Quiz</button>
     </nav>
     <div class="header-right">
       <div class="cost-pill" id="costPill">spend: <span>$0.00</span></div>
@@ -1571,6 +1572,61 @@
         </div><!-- /tv2-layout -->
       </div><!-- /page-testing -->
 
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <!-- QUIZ ANSWERER                                                        -->
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="page" id="page-quiz">
+        <div style="max-width:860px;margin:0 auto;padding:24px 16px">
+
+          <!-- Header -->
+          <div style="margin-bottom:20px">
+            <div style="font-family:var(--mono);font-size:13px;color:var(--text);letter-spacing:2px;margin-bottom:4px">QUIZ ANSWERER</div>
+            <div style="font-size:10px;color:#50507a">Upload a screen recording of any survey or quiz — AI extracts every question and gives you the correct answer.</div>
+          </div>
+
+          <!-- Upload card -->
+          <div id="quizUploadCard" style="border:2px dashed #2e2e50;border-radius:12px;padding:36px 24px;text-align:center;cursor:pointer;transition:border-color 0.2s;margin-bottom:20px"
+            onclick="document.getElementById('quizFileInput').click()"
+            ondragover="event.preventDefault();this.style.borderColor='#00ff88'"
+            ondragleave="this.style.borderColor='#2e2e50'"
+            ondrop="event.preventDefault();this.style.borderColor='#2e2e50';quizHandleFile(event.dataTransfer.files[0])">
+            <input type="file" id="quizFileInput" accept="video/*,.mov,.mp4,.webm,.mkv" style="display:none" onchange="quizHandleFile(this.files[0])">
+            <div id="quizUploadIcon" style="font-size:32px;margin-bottom:10px">🎬</div>
+            <div id="quizUploadLabel" style="font-size:11px;color:#888;font-family:var(--mono)">Drop screen recording here or tap to pick</div>
+            <div id="quizFileName" style="font-size:10px;color:#00ff88;margin-top:6px;font-family:var(--mono)"></div>
+          </div>
+
+          <!-- Analyze button -->
+          <div id="quizActionRow" style="display:none;margin-bottom:20px">
+            <button id="quizAnalyzeBtn" onclick="quizAnalyze()"
+              style="width:100%;padding:12px;background:#00ff88;color:#000;font-family:var(--mono);font-size:11px;font-weight:bold;letter-spacing:1px;border:none;border-radius:8px;cursor:pointer">
+              SCAN SURVEY &amp; ANSWER ALL QUESTIONS
+            </button>
+          </div>
+
+          <!-- Progress -->
+          <div id="quizProgress" style="display:none;margin-bottom:20px">
+            <div style="background:#0a0a14;border:1px solid #1e1e30;border-radius:8px;padding:16px;font-family:var(--mono);font-size:10px">
+              <div id="quizProgressStep" style="color:#00ff88;margin-bottom:8px">Uploading video...</div>
+              <div style="background:#1e1e30;border-radius:4px;height:4px;overflow:hidden">
+                <div id="quizProgressBar" style="background:#00ff88;height:100%;width:0%;transition:width 0.4s"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Summary -->
+          <div id="quizSummary" style="display:none;margin-bottom:16px">
+            <div style="font-family:var(--mono);font-size:10px;color:#60608a">
+              <span id="quizSummaryText"></span>
+            </div>
+          </div>
+
+          <!-- Results -->
+          <div id="quizResults"></div>
+
+        </div>
+      </div><!-- /page-quiz -->
+
     </div>
   </main>
 
@@ -2039,6 +2095,7 @@ function showPage(name) {
   if (name === 'prompts') { ptInitSelects().then(() => { ptLoadLibrary(); ptLoad(); }); }
   if (name === 'wardrobe') loadWardrobePage();
   if (name === 'testing') initTestingPage();
+  if (name === 'quiz') quizInit();
   if (name === 'studio') {
     if (STATE.selectedChar) {
       selectChar(STATE.selectedChar.name);
@@ -7328,6 +7385,134 @@ function testingRenderLoop(timestamp) {
   }
 
   TESTING.animId = requestAnimationFrame(testingRenderLoop);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QUIZ ANSWERER
+// ═══════════════════════════════════════════════════════════════════════════
+
+const QUIZ = {
+  file: null,
+  running: false,
+};
+
+function quizInit() {
+  // nothing to init — state is reset each time a new file is picked
+}
+
+function quizHandleFile(file) {
+  if (!file) return;
+  QUIZ.file = file;
+  document.getElementById('quizUploadIcon').textContent = '✅';
+  document.getElementById('quizUploadLabel').textContent = 'Video ready';
+  document.getElementById('quizFileName').textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
+  document.getElementById('quizActionRow').style.display = '';
+  document.getElementById('quizResults').innerHTML = '';
+  document.getElementById('quizSummary').style.display = 'none';
+}
+
+async function quizAnalyze() {
+  if (!QUIZ.file || QUIZ.running) return;
+  QUIZ.running = true;
+
+  const btn = document.getElementById('quizAnalyzeBtn');
+  btn.disabled = true;
+  btn.textContent = 'WORKING…';
+
+  document.getElementById('quizProgress').style.display = '';
+  document.getElementById('quizResults').innerHTML = '';
+  document.getElementById('quizSummary').style.display = 'none';
+
+  const setStep = (text, pct) => {
+    document.getElementById('quizProgressStep').textContent = text;
+    document.getElementById('quizProgressBar').style.width = pct + '%';
+  };
+
+  try {
+    setStep('Uploading video…', 10);
+
+    const resp = await fetch(`${API}/api/quiz/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': QUIZ.file.type || 'video/mp4' },
+      body: QUIZ.file,
+    });
+
+    setStep('AI is reading the questions…', 60);
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: resp.statusText }));
+      throw new Error(err.error || 'Server error');
+    }
+
+    setStep('Building answer cards…', 90);
+
+    const data = await resp.json();
+    setStep('Done!', 100);
+
+    quizRenderResults(data);
+
+  } catch (e) {
+    document.getElementById('quizProgressStep').textContent = '❌ ' + e.message;
+    document.getElementById('quizProgressBar').style.background = '#ff4444';
+    toast('Quiz analysis failed: ' + e.message, true);
+  } finally {
+    QUIZ.running = false;
+    btn.disabled = false;
+    btn.textContent = 'SCAN SURVEY & ANSWER ALL QUESTIONS';
+    setTimeout(() => { document.getElementById('quizProgress').style.display = 'none'; }, 2000);
+  }
+}
+
+function quizRenderResults(data) {
+  const { totalFrames, questionCount, questions } = data;
+
+  const summary = document.getElementById('quizSummary');
+  summary.style.display = '';
+  document.getElementById('quizSummaryText').textContent =
+    `Scanned ${totalFrames} frames · Found ${questionCount} question${questionCount !== 1 ? 's' : ''}`;
+
+  const container = document.getElementById('quizResults');
+  if (!questions?.length) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:#50507a;font-family:var(--mono);font-size:10px">No quiz questions detected.<br>Try a video where you can clearly see the question text and answer options.</div>';
+    return;
+  }
+
+  container.innerHTML = questions.map((q, i) => {
+    const optionsHtml = (q.options ?? []).map(opt => {
+      const label   = opt.split(':')[0].trim();
+      const isRight = label === q.correct;
+      return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border-radius:6px;margin-bottom:4px;
+        background:${isRight ? 'rgba(0,255,136,0.1)' : '#0a0a14'};
+        border:1px solid ${isRight ? '#00ff88' : '#1e1e30'}">
+        <span style="font-family:var(--mono);font-size:9px;font-weight:bold;color:${isRight ? '#00ff88' : '#50507a'};min-width:16px;margin-top:1px">${label}</span>
+        <span style="font-size:10px;color:${isRight ? '#fff' : '#888'};flex:1">${opt.slice(opt.indexOf(':') + 1).trim()}</span>
+        ${isRight ? '<span style="font-size:12px">✓</span>' : ''}
+      </div>`;
+    }).join('');
+
+    return `<div style="background:#0d0d1a;border:1px solid #1e1e30;border-radius:10px;margin-bottom:14px;overflow:hidden">
+      <!-- Question header -->
+      <div style="padding:12px 14px;border-bottom:1px solid #1e1e30;display:flex;align-items:center;gap:10px">
+        <span style="font-family:var(--mono);font-size:9px;color:#50507a;min-width:28px">Q${i + 1}</span>
+        <span style="font-size:11px;color:#e0e0e0;flex:1;line-height:1.5">${escHtml(q.question ?? '(question not detected)')}</span>
+        <span style="font-family:var(--mono);font-size:10px;font-weight:bold;color:#00ff88;background:rgba(0,255,136,0.12);padding:3px 8px;border-radius:4px;white-space:nowrap">ANS: ${escHtml(q.correct ?? '?')}</span>
+      </div>
+      <!-- Options -->
+      <div style="padding:10px 14px">
+        ${optionsHtml}
+        ${q.explanation ? `<div style="margin-top:8px;font-size:9px;color:#60608a;font-family:var(--mono);line-height:1.6;padding:6px 8px;background:#050510;border-radius:4px">${escHtml(q.explanation)}</div>` : ''}
+      </div>
+      <!-- Screenshot thumbnail (collapsible) -->
+      ${q.thumb ? `<details style="border-top:1px solid #1e1e30">
+        <summary style="padding:6px 14px;font-family:var(--mono);font-size:8px;color:#30305a;cursor:pointer;list-style:none">▸ show screenshot</summary>
+        <img src="${q.thumb}" style="width:100%;display:block;max-height:300px;object-fit:contain;background:#000">
+      </details>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 </script>

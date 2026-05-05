@@ -162,6 +162,7 @@ require('./routes/anim-lib').register(router, ctx);
 require('./routes/studio-gen').register(router, ctx);
 require('./routes/apply-anim').register(router, ctx);
 require('./routes/quality-check').register(router);
+require('./routes/quiz').register(router, ctx);
 require('./routes/movement-profiles').register(router);
 
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
