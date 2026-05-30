@@ -7029,16 +7029,7 @@ function testingRenderLoop(timestamp) {
   if (TESTING.courtLoaded && TESTING.courtImg) {
     ctx.drawImage(TESTING.courtImg, 0, 0, W, H);
   } else {
-    // Fallback: dark court floor
-    ctx.fillStyle = '#1a1208';
-    ctx.fillRect(0, 0, W, H);
-    // Court lines
-    ctx.strokeStyle = '#3a2a10';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(60, 40, W - 120, H - 80);
-    ctx.beginPath();
-    ctx.arc(W / 2, H / 2, 80, 0, Math.PI * 2);
-    ctx.stroke();
+    _drawFallbackCourt(ctx, W, H);
   }
 
   // ── Mode tint overlays ───────────────────────────────────────────────────
@@ -8365,6 +8356,115 @@ function _sandboxCalibMove(x, y) {
     const poly = TESTING.courtPreset.polygonZones?.[drag.zoneId];
     if (poly) poly[drag.ptIdx] = pt;
   }
+}
+
+// ── Canvas fallback court (drawn when court.webp is unavailable) ────────────
+function _drawFallbackCourt(ctx, W, H) {
+  ctx.save();
+
+  // ── Arena background (stands / dark outer area) ─────────────────────────
+  ctx.fillStyle = '#1a0e06';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Court floor: wood planks (perspective trapezoid) ────────────────────
+  // Court area runs from ~y=158 at top to ~y=628 at bottom, x=88 to x=955
+  const floorGrad = ctx.createLinearGradient(0, 158, 0, 628);
+  floorGrad.addColorStop(0, '#a0540a');
+  floorGrad.addColorStop(0.5, '#c06818');
+  floorGrad.addColorStop(1, '#8a4510');
+  ctx.fillStyle = floorGrad;
+  ctx.beginPath();
+  ctx.moveTo(88, 158);  ctx.lineTo(955, 158);
+  ctx.lineTo(955, 628); ctx.lineTo(88, 628);
+  ctx.closePath();
+  ctx.fill();
+
+  // Wood plank lines (horizontal)
+  ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+  ctx.lineWidth = 1;
+  for (let y = 165; y < 628; y += 22) {
+    ctx.beginPath(); ctx.moveTo(88, y); ctx.lineTo(955, y); ctx.stroke();
+  }
+
+  // ── Court lines (white) ──────────────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(255,255,255,0.80)';
+  ctx.lineWidth = 2;
+
+  // Baseline (top)
+  ctx.beginPath(); ctx.moveTo(88, 178); ctx.lineTo(955, 178); ctx.stroke();
+  // Sidelines
+  ctx.beginPath(); ctx.moveTo(88, 178); ctx.lineTo(88, 628); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(955, 178); ctx.lineTo(955, 628); ctx.stroke();
+  // Half-court line (bottom edge of playing area)
+  ctx.beginPath(); ctx.moveTo(88, 628); ctx.lineTo(955, 628); ctx.stroke();
+
+  // Paint area (lane lines) — from CourtPreset DEFAULT_PRESET polygon
+  ctx.strokeStyle = 'rgba(255,255,255,0.70)';
+  ctx.lineWidth = 2;
+  // Paint: {380,178},{580,178},{600,400},{360,400}
+  ctx.beginPath();
+  ctx.moveTo(380, 178); ctx.lineTo(580, 178);
+  ctx.lineTo(600, 400); ctx.lineTo(360, 400);
+  ctx.closePath();
+  ctx.stroke();
+  // Paint fill tint
+  ctx.fillStyle = 'rgba(180,80,20,0.20)';
+  ctx.fill();
+
+  // Free throw line
+  ctx.beginPath(); ctx.moveTo(360, 400); ctx.lineTo(600, 400); ctx.stroke();
+
+  // Free throw circle (ellipse due to perspective)
+  ctx.beginPath();
+  ctx.ellipse(480, 400, 100, 36, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Three-point arc (approximated as ellipse in perspective)
+  ctx.strokeStyle = 'rgba(255,255,255,0.60)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(480, 240, 310, 200, 0, 0.08, Math.PI - 0.08);
+  ctx.stroke();
+  // 3pt corner lines (connect arc to baseline)
+  ctx.beginPath(); ctx.moveTo(88, 178); ctx.lineTo(160, 440); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(955, 178); ctx.lineTo(878, 440); ctx.stroke();
+
+  // Mid-range arc (closer)
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(480, 260, 180, 90, 0, 0, Math.PI);
+  ctx.stroke();
+
+  // ── Backboard + Hoop (near top center) ──────────────────────────────────
+  const rimX = 480, rimY = 185;
+  // Backboard (rectangle above rim)
+  ctx.fillStyle = 'rgba(200,200,220,0.85)';
+  ctx.fillRect(rimX - 50, 148, 100, 18);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(rimX - 50, 148, 100, 18);
+  // Target square on backboard
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+  ctx.strokeRect(rimX - 18, 151, 36, 12);
+  // Rim circle
+  ctx.strokeStyle = '#ff6a00'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.ellipse(rimX, rimY, 26, 10, 0, 0, Math.PI * 2); ctx.stroke();
+  // Support pole
+  ctx.strokeStyle = '#888'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(rimX - 62, 155); ctx.lineTo(rimX - 62, 200); ctx.stroke();
+  // Net (simple lines)
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1;
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 5) {
+    ctx.beginPath();
+    ctx.moveTo(rimX + 26 * Math.cos(a), rimY + 10 * Math.sin(a));
+    ctx.lineTo(rimX + 14 * Math.cos(a) * 0.6, rimY + 28 + 8 * Math.sin(a) * 0.3);
+    ctx.stroke();
+  }
+  // Net bottom
+  ctx.beginPath(); ctx.ellipse(rimX, rimY + 28, 14, 5, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.stroke();
+
+  ctx.restore();
 }
 
 // ── Draw facing flip helper (called from within testingRenderLoop when GM active)
