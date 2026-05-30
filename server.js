@@ -443,6 +443,7 @@ if (require.main === module) {
           console.log(`  [startup] restored ${label} from Supabase`);
         };
         await Promise.all([
+          restoreJson('_meta/characters-full.json',    path.join(__dirname, 'data/.characters.json'),          'characters'),
           restoreJson('_meta/custom-animations.json',  path.join(__dirname, 'data/.custom-animations.json'),  'custom-animations'),
           restoreJson('_meta/char-prompts.json',        path.join(__dirname, 'data/.char-prompts.json'),        'char-prompts'),
           restoreJson('_meta/frame-prompts.json',       path.join(__dirname, 'data/frame-prompts.json'),        'frame-prompts'),
@@ -467,6 +468,41 @@ if (require.main === module) {
       }
     } catch (e) {
       console.warn('  [startup] metadata restore failed (non-fatal):', e.message);
+    }
+
+    // ── STEP 7: Proactively seed Supabase from local state (first-run or gap fill)
+    // If a file exists locally but the Supabase backup is stale/missing, upload now.
+    // This ensures the next cold deploy will always have the latest data to restore.
+    try {
+      const { isAvailable: sbOk, uploadJson: sbPushJson, uploadFile: sbPushFile, downloadFile: sbPeek } = require('./lib/supabase-storage');
+      if (sbOk()) {
+        const seedIfMissing = async (sbKey, localPath) => {
+          if (!fs.existsSync(localPath)) return;
+          const existing = await sbPeek(sbKey).catch(() => null);
+          if (existing) return; // already backed up — don't overwrite with stale local copy
+          const content = fs.readFileSync(localPath);
+          await sbPushJson(sbKey, JSON.parse(content.toString('utf8')));
+          console.log(`  [startup] seeded ${sbKey} → Supabase (first backup)`);
+        };
+        const seedFileIfMissing = async (sbKey, localPath) => {
+          if (!fs.existsSync(localPath)) return;
+          const existing = await sbPeek(sbKey).catch(() => null);
+          if (existing) return;
+          await sbPushFile(sbKey, localPath);
+          console.log(`  [startup] seeded ${sbKey} → Supabase (first backup)`);
+        };
+        // Always push latest characters — this is our source of truth
+        const charsPath = path.join(__dirname, 'data/.characters.json');
+        if (fs.existsSync(charsPath)) {
+          const chars = JSON.parse(fs.readFileSync(charsPath, 'utf8'));
+          await sbPushJson('_meta/characters-full.json', chars).catch(() => {});
+          console.log('  [startup] characters synced to Supabase');
+        }
+        // Seed court.webp to Supabase if not already there (restoreAssetsToDir picks it up next deploy)
+        await seedFileIfMissing('court.webp', path.join(__dirname, 'data/assets/court.webp'));
+      }
+    } catch (e) {
+      console.warn('  [startup] Supabase seed failed (non-fatal):', e.message);
     }
 
     const server = http.createServer(handler);
