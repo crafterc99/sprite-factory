@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "config": {
+    "apex": { "x": 480, "y": 165 },
+    "startAngle": 0,
+    "endAngle": 3.141593,
+    "count": 5,
+    "numberingFrom": "end",
+    "labels": ["Far Right", "Right", "Center", "Left", "Far Left"]
+  },
+  "wedges": [
+    { "id": 5, "index": 0, "label": "Far Right", "startAngle": 0,        "endAngle": 0.628319 },
+    { "id": 4, "index": 1, "label": "Right",     "startAngle": 0.628319, "endAngle": 1.256637 },
+    { "id": 3, "index": 2, "label": "Center",    "startAngle": 1.256637, "endAngle": 1.884956 },
+    { "id": 2, "index": 3, "label": "Left",      "startAngle": 1.884956, "endAngle": 2.513274 },
+    { "id": 1, "index": 4, "label": "Far Left",  "startAngle": 2.513274, "endAngle": 3.141593 }
+  ]
+}

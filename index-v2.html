@@ -1504,15 +1504,26 @@
                     <!-- Overlays -->
                     <div style="font-size:9px;color:#50507a;margin:6px 0 3px">Overlays</div>
                     <div class="tv2-set-row"><label><input type="checkbox" id="sbOvPolyZones" checked onchange="toggleSandboxOverlay('polygonZones')"> Polygon Zones</label></div>
+                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvWedges" checked onchange="toggleSandboxOverlay('wedges')"> Wedge Angles</label></div>
                     <div class="tv2-set-row"><label><input type="checkbox" id="sbOvFacingCone" onchange="toggleSandboxOverlay('facingCone')"> Facing Cone</label></div>
                     <div class="tv2-set-row"><label><input type="checkbox" id="sbOvMoveVec" onchange="toggleSandboxOverlay('movementVector')"> Move Vector</label></div>
                     <div class="tv2-set-row"><label><input type="checkbox" id="sbOvValidAngles" onchange="toggleSandboxOverlay('validAngles')"> Valid Angles</label></div>
                     <div class="tv2-set-row"><label><input type="checkbox" id="sbOvGhost" onchange="toggleSandboxOverlay('ghostFrames')"> Ghost Frames</label></div>
+                    <!-- Wedge config -->
+                    <div style="font-size:9px;color:#50507a;margin:6px 0 3px">Wedge Config</div>
+                    <div class="gm-move-row">
+                      <span>Count</span>
+                      <input type="number" id="sbWedgeCount" min="1" max="8" value="5"
+                        style="width:38px;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#ccc;padding:2px 4px;font-size:9px;text-align:center;font-family:var(--mono)"
+                        onchange="setSandboxWedgeCount(parseInt(this.value)||5)">
+                    </div>
                     <!-- Live debug readout -->
                     <div style="font-size:9px;color:#50507a;margin:6px 0 3px">Live State</div>
                     <div id="sbDebugPos"    style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">pos: —</div>
                     <div id="sbDebugZone"   style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">zone: —</div>
                     <div id="sbDebugArea"   style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">area: —</div>
+                    <div id="sbDebugWedge"  style="font-size:8px;color:#a78bfa;font-family:var(--mono);line-height:1.8">wedge: —</div>
+                    <div id="sbDebugSprite" style="font-size:8px;color:#60a5fa;font-family:var(--mono);line-height:1.8;word-break:break-all">sprite: —</div>
                     <div id="sbDebugAnim"   style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">anim: —</div>
                     <div id="sbDebugReason" style="font-size:8px;font-family:var(--mono);line-height:1.8;color:#888;margin-top:2px;word-break:break-word">—</div>
                     <!-- Actions -->
@@ -6543,6 +6554,7 @@ const TESTING = {
   hoopLoaded: false,
   sandboxOverlays: {
     polygonZones: true,
+    wedges: true,
     facingCone: false,
     movementVector: false,
     validAngles: false,
@@ -6553,6 +6565,8 @@ const TESTING = {
   ghostFrameBuffer: [],
   sandboxCourtArea: 'unknown',
   sandboxLastResolve: null,
+  wedgeConfig: null,
+  activeWedgeId: null,
 };
 
 function initTestingPage() {
@@ -7188,6 +7202,11 @@ function testingRenderLoop(timestamp) {
     drawPolygonZoneOverlay(ctx, TESTING.courtPreset, TESTING.sandboxCourtArea);
   }
 
+  // ── Sandbox: wedge overlay ────────────────────────────────────────────────
+  if (TESTING.sandboxMode && TESTING.sandboxOverlays.wedges && TESTING.wedgeConfig) {
+    drawWedgeOverlay(ctx, TESTING.wedgeConfig, TESTING.activeWedgeId);
+  }
+
   // ── Edit mode handles ─────────────────────────────────────────────────────
   if (TESTING.editMode) drawEditHandles(ctx);
 
@@ -7381,6 +7400,9 @@ function testingRenderLoop(timestamp) {
     if (typeof getCourtArea === 'function' && TESTING.courtPreset) {
       TESTING.sandboxCourtArea = getCourtArea(TESTING.charX, TESTING.charY, TESTING.courtPreset);
     }
+    if (typeof getAnimationAngle === 'function' && TESTING.wedgeConfig) {
+      TESTING.activeWedgeId = getAnimationAngle(TESTING.charX, TESTING.charY, TESTING.wedgeConfig);
+    }
     updateSandboxDebugPanel();
   }
 
@@ -7526,6 +7548,7 @@ function escHtml(s) {
 <script src="/engine/AnimResolver.js"></script>
 <script src="/engine/CourtPreset.js"></script>
 <script src="/engine/CourtGeometry.js"></script>
+<script src="/engine/SoulJamWedges.js"></script>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
@@ -7947,8 +7970,12 @@ function toggleSandboxMode() {
     TESTING.calibrationDrag = null;
     TESTING.ghostFrameBuffer = [];
     TESTING.sandboxCourtArea = 'unknown';
-  } else if (!TESTING.courtPreset) {
-    sandboxLoadPreset('default');
+    TESTING.activeWedgeId = null;
+  } else {
+    if (!TESTING.courtPreset) sandboxLoadPreset('default');
+    if (!TESTING.wedgeConfig && typeof buildWedgeConfig === 'function') {
+      TESTING.wedgeConfig = buildWedgeConfig({});
+    }
   }
 }
 
@@ -7995,6 +8022,14 @@ function toggleSandboxOverlay(name) {
   TESTING.sandboxOverlays[name] = !TESTING.sandboxOverlays[name];
 }
 
+function setSandboxWedgeCount(count) {
+  const n = Math.max(1, Math.min(8, count || 5));
+  if (typeof buildWedgeConfig === 'function') {
+    const existing = TESTING.wedgeConfig ?? {};
+    TESTING.wedgeConfig = buildWedgeConfig({ ...existing, count: n, labels: null });
+  }
+}
+
 function updateSandboxDebugPanel() {
   const x = Math.round(TESTING.charX), y = Math.round(TESTING.charY);
   const zone = getZoneForPos(x, y);
@@ -8013,6 +8048,21 @@ function updateSandboxDebugPanel() {
   set('sbDebugPos',  `pos: ${x}, ${y}`);
   set('sbDebugZone', `zone: ${zone?.id ?? '?'} (${zone?.label ?? ''})`);
   set('sbDebugArea', `area: ${TESTING.sandboxCourtArea}`);
+
+  // Wedge readout
+  const wid = TESTING.activeWedgeId;
+  const wcfg = TESTING.wedgeConfig;
+  if (wid != null && wcfg) {
+    const wlabel = typeof getWedgeLabel === 'function' ? getWedgeLabel(wid, wcfg) : null;
+    set('sbDebugWedge', `wedge: a${wid}${wlabel ? ' (' + wlabel + ')' : ''}`);
+    const char = TESTING.selectedChar ?? '—';
+    const animKey = TESTING.selectedAnim ?? '—';
+    set('sbDebugSprite', `sprite: ${char}_${animKey}_a${wid}`);
+  } else {
+    set('sbDebugWedge',  'wedge: —');
+    set('sbDebugSprite', 'sprite: —');
+  }
+
   set('sbDebugAnim', `anim: ${TESTING.selectedAnim ?? '—'}`);
   const reasonEl = document.getElementById('sbDebugReason');
   if (reasonEl) {
@@ -8066,6 +8116,74 @@ const COURT_AREA_COLORS = {
   'mid-range-right': 'rgba(255,220,0,',
   'backcourt':       'rgba(100,100,130,',
 };
+
+// Wedge overlay: one color per wedge id slot (cycled if count > 5)
+const _WEDGE_PALETTE = [
+  [155,89,182],   // id=1  Far Left  — purple
+  [52,152,219],   // id=2  Left      — blue
+  [46,204,113],   // id=3  Center    — green
+  [230,126,34],   // id=4  Right     — orange
+  [231,76,60],    // id=5  Far Right — red
+  [241,196,15],   // id=6+
+  [26,188,156],
+  [52,73,94],
+];
+
+function drawWedgeOverlay(ctx, config, activeId) {
+  if (!config) return;
+  const wedges = typeof buildWedgePolygons === 'function' ? buildWedgePolygons(config) : null;
+  if (!wedges) return;
+  const { apex } = config;
+  const R = 780; // large enough to extend past canvas edge; browser clips
+  ctx.save();
+
+  for (const w of wedges) {
+    const [r, g, b] = _WEDGE_PALETTE[(w.id - 1) % _WEDGE_PALETTE.length];
+    const isActive = w.id === activeId;
+    const fillA  = isActive ? 0.20 : 0.06;
+    const strokeA = isActive ? 0.85 : 0.28;
+
+    ctx.beginPath();
+    ctx.moveTo(apex.x, apex.y);
+    ctx.arc(apex.x, apex.y, R, w.startAngle, w.endAngle);
+    ctx.closePath();
+
+    ctx.fillStyle   = `rgba(${r},${g},${b},${fillA})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${r},${g},${b},${strokeA})`;
+    ctx.lineWidth   = isActive ? 2 : 1;
+    ctx.setLineDash(isActive ? [] : [10, 7]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Label: placed 140px from apex at midpoint angle
+    const midA = (w.startAngle + w.endAngle) / 2;
+    const lx = apex.x + 140 * Math.cos(midA);
+    const ly = apex.y + 140 * Math.sin(midA);
+    ctx.globalAlpha = isActive ? 1 : 0.65;
+    ctx.font        = `${isActive ? 'bold ' : ''}${isActive ? 11 : 9}px "Space Mono",monospace`;
+    ctx.fillStyle   = `rgba(${r},${g},${b},1)`;
+    ctx.textAlign   = 'center';
+    ctx.fillText(`a${w.id}`, lx, ly + 4);
+    if (isActive && w.label !== `a${w.id}`) {
+      ctx.font = '8px "Space Mono",monospace';
+      ctx.fillText(w.label, lx, ly + 15);
+    }
+    ctx.textAlign = 'start';
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw apex marker
+  ctx.beginPath();
+  ctx.arc(apex.x, apex.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.restore();
+}
 
 function drawPolygonZoneOverlay(ctx, preset, activeArea) {
   if (!preset?.polygonZones) return;
