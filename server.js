@@ -164,6 +164,7 @@ require('./routes/apply-anim').register(router, ctx);
 require('./routes/quality-check').register(router);
 require('./routes/quiz').register(router, ctx);
 require('./routes/movement-profiles').register(router);
+require('./routes/pose-import').register(router, ctx);
 
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
 const TESTING_CONFIG_FILE = path.join(__dirname, 'data/.testing-config.json');
