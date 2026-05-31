@@ -97,6 +97,11 @@ async function saveCourtPreset(preset) {
 function applyPresetToTESTING(preset, TESTING) {
   TESTING.courtPreset = preset;
 
+  // Keep direction overlay net synced to rim anchor
+  if (preset.rimAnchor && TESTING.dirConfig) {
+    TESTING.dirConfig.net = { x: preset.rimAnchor.x, y: preset.rimAnchor.y };
+  }
+
   if (preset.courtImage) {
     TESTING.courtImg = new Image();
     TESTING.courtLoaded = false;

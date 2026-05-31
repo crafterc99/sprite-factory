@@ -7193,10 +7193,13 @@ function testingRenderLoop(timestamp) {
     drawPolygonZoneOverlay(ctx, TESTING.courtPreset, TESTING.sandboxCourtArea);
   }
 
-  // ── Sandbox: direction overlay ─────────────────────────────────────────────
+  // ── Sandbox: direction overlay (clipped to OOB court boundary) ───────────
   if (TESTING.sandboxMode && TESTING.sandboxOverlays.directions && TESTING.dirConfig) {
     const _dnet = TESTING.dirConfig.net ?? { x: 480, y: 185 };
-    drawDirectionOverlay(ctx, _dnet.x, _dnet.y, TESTING.dirConfig.count ?? 8, TESTING.activeDirectionId);
+    const _oobPoly = typeof OOB_BOUNDS !== 'undefined'
+      ? [OOB_BOUNDS.topLeft, OOB_BOUNDS.topRight, OOB_BOUNDS.bottomRight, OOB_BOUNDS.bottomLeft]
+      : null;
+    drawDirectionOverlay(ctx, _dnet.x, _dnet.y, TESTING.dirConfig.count ?? 8, TESTING.activeDirectionId, _oobPoly);
   }
 
   // ── Edit mode handles ─────────────────────────────────────────────────────
@@ -7967,7 +7970,8 @@ function toggleSandboxMode() {
   } else {
     if (!TESTING.courtPreset) sandboxLoadPreset('default');
     if (!TESTING.dirConfig) {
-      TESTING.dirConfig = { net: { x: 480, y: 185 }, count: 8 };
+      const rim = TESTING.courtPreset?.rimAnchor ?? { x: 480, y: 185 };
+      TESTING.dirConfig = { net: { x: rim.x, y: rim.y }, count: 8 };
     }
   }
 }
@@ -8119,11 +8123,20 @@ const _DIR_PALETTE = [
   [236,112,99],   // d8 Front-Left  — salmon
 ];
 
-function drawDirectionOverlay(ctx, netX, netY, dirCount, activeId) {
+function drawDirectionOverlay(ctx, netX, netY, dirCount, activeId, boundary) {
   if (typeof buildDirectionSectors !== 'function') return;
   const sectors = buildDirectionSectors(dirCount ?? 8);
-  const R = 780; // large enough to extend past canvas edge; browser clips
+  const R = 780;
   ctx.save();
+
+  // Clip sectors to court boundary so lines don't extend outside the court
+  if (boundary && boundary.length >= 3) {
+    ctx.beginPath();
+    ctx.moveTo(boundary[0].x, boundary[0].y);
+    for (let i = 1; i < boundary.length; i++) ctx.lineTo(boundary[i].x, boundary[i].y);
+    ctx.closePath();
+    ctx.clip();
+  }
 
   for (const s of sectors) {
     const [r, g, b] = _DIR_PALETTE[(s.id - 1) % _DIR_PALETTE.length];
@@ -8359,107 +8372,119 @@ function _sandboxCalibMove(x, y) {
 function _drawFallbackCourt(ctx, W, H) {
   ctx.save();
 
-  // ── Arena background (stands / dark outer area) ─────────────────────────
-  ctx.fillStyle = '#1a0e06';
+  // ── Stands / area outside court ───────────────────────────────────────────
+  ctx.fillStyle = '#d0ccc6';
   ctx.fillRect(0, 0, W, H);
 
-  // ── Court floor: wood planks (perspective trapezoid) ────────────────────
-  // Court area runs from ~y=158 at top to ~y=628 at bottom, x=88 to x=955
-  const floorGrad = ctx.createLinearGradient(0, 158, 0, 628);
-  floorGrad.addColorStop(0, '#a0540a');
-  floorGrad.addColorStop(0.5, '#c06818');
-  floorGrad.addColorStop(1, '#8a4510');
-  ctx.fillStyle = floorGrad;
+  // ── Court surface (light hardwood) ────────────────────────────────────────
+  ctx.fillStyle = '#f7f3ec';
   ctx.beginPath();
-  ctx.moveTo(88, 158);  ctx.lineTo(955, 158);
+  ctx.moveTo(88, 175); ctx.lineTo(955, 175);
   ctx.lineTo(955, 628); ctx.lineTo(88, 628);
   ctx.closePath();
   ctx.fill();
 
-  // Wood plank lines (horizontal)
-  ctx.strokeStyle = 'rgba(0,0,0,0.10)';
+  // Subtle wood grain (very faint horizontal lines)
+  ctx.strokeStyle = 'rgba(170,130,70,0.10)';
   ctx.lineWidth = 1;
-  for (let y = 165; y < 628; y += 22) {
+  for (let y = 182; y < 628; y += 20) {
     ctx.beginPath(); ctx.moveTo(88, y); ctx.lineTo(955, y); ctx.stroke();
   }
 
-  // ── Court lines (white) ──────────────────────────────────────────────────
-  ctx.strokeStyle = 'rgba(255,255,255,0.80)';
-  ctx.lineWidth = 2;
+  // ── All court markings ────────────────────────────────────────────────────
+  const CL = '#1a1a1a'; // court line color
+  ctx.strokeStyle = CL;
 
-  // Baseline (top)
-  ctx.beginPath(); ctx.moveTo(88, 178); ctx.lineTo(955, 178); ctx.stroke();
-  // Sidelines
-  ctx.beginPath(); ctx.moveTo(88, 178); ctx.lineTo(88, 628); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(955, 178); ctx.lineTo(955, 628); ctx.stroke();
-  // Half-court line (bottom edge of playing area)
-  ctx.beginPath(); ctx.moveTo(88, 628); ctx.lineTo(955, 628); ctx.stroke();
+  // Outer court boundary
+  ctx.lineWidth = 3;
+  ctx.strokeRect(88, 175, 867, 453);
 
-  // Paint area (lane lines) — from CourtPreset DEFAULT_PRESET polygon
-  ctx.strokeStyle = 'rgba(255,255,255,0.70)';
-  ctx.lineWidth = 2;
-  // Paint: {380,178},{580,178},{600,400},{360,400}
+  // Paint (trapezoid — wider at free throw, narrower at baseline for perspective)
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(380, 178); ctx.lineTo(580, 178);
+  ctx.moveTo(380, 175); ctx.lineTo(580, 175);
   ctx.lineTo(600, 400); ctx.lineTo(360, 400);
   ctx.closePath();
-  ctx.stroke();
-  // Paint fill tint
-  ctx.fillStyle = 'rgba(180,80,20,0.20)';
+  ctx.fillStyle = 'rgba(110,130,220,0.09)';
   ctx.fill();
+  ctx.strokeStyle = CL;
+  ctx.stroke();
 
   // Free throw line
   ctx.beginPath(); ctx.moveTo(360, 400); ctx.lineTo(600, 400); ctx.stroke();
 
-  // Free throw circle (ellipse due to perspective)
+  // Free throw circle — toward-basket half solid, toward-halfcourt dashed
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.ellipse(480, 400, 100, 36, 0, 0, Math.PI * 2);
+  ctx.ellipse(480, 400, 100, 36, 0, Math.PI, Math.PI * 2);
   ctx.stroke();
+  ctx.setLineDash([6, 5]);
+  ctx.beginPath();
+  ctx.ellipse(480, 400, 100, 36, 0, 0, Math.PI);
+  ctx.stroke();
+  ctx.setLineDash([]);
 
-  // Three-point arc (approximated as ellipse in perspective)
-  ctx.strokeStyle = 'rgba(255,255,255,0.60)';
+  // Restricted area arc (near basket)
   ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.ellipse(480, 210, 35, 13, 0, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Lane space marks (tick marks on paint sides, perspective-adjusted)
+  ctx.lineWidth = 2;
+  for (const t of [0.25, 0.50, 0.72, 0.88]) {
+    const y  = 175 + (400 - 175) * t;
+    const lx = 380 - (380 - 360) * t; // left paint edge at this t
+    const rx = 580 + (600 - 580) * t; // right paint edge
+    ctx.beginPath(); ctx.moveTo(lx, y); ctx.lineTo(lx - 12, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + 12, y); ctx.stroke();
+  }
+
+  // 3-point arc
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.ellipse(480, 240, 310, 200, 0, 0.08, Math.PI - 0.08);
   ctx.stroke();
-  // 3pt corner lines (connect arc to baseline)
-  ctx.beginPath(); ctx.moveTo(88, 178); ctx.lineTo(160, 440); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(955, 178); ctx.lineTo(878, 440); ctx.stroke();
+  // 3pt straight corner sections
+  ctx.beginPath(); ctx.moveTo(88, 175); ctx.lineTo(160, 440); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(955, 175); ctx.lineTo(878, 440); ctx.stroke();
 
-  // Mid-range arc (closer)
-  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.ellipse(480, 260, 180, 90, 0, 0, Math.PI);
-  ctx.stroke();
-
-  // ── Backboard + Hoop (near top center) ──────────────────────────────────
+  // ── Backboard + Hoop ──────────────────────────────────────────────────────
   const rimX = 480, rimY = 185;
-  // Backboard (rectangle above rim)
-  ctx.fillStyle = 'rgba(200,200,220,0.85)';
-  ctx.fillRect(rimX - 50, 148, 100, 18);
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-  ctx.strokeRect(rimX - 50, 148, 100, 18);
-  // Target square on backboard
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
-  ctx.strokeRect(rimX - 18, 151, 36, 12);
-  // Rim circle
-  ctx.strokeStyle = '#ff6a00'; ctx.lineWidth = 3;
+
+  // Support arm
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(rimX - 62, 152); ctx.lineTo(rimX - 62, 198); ctx.stroke();
+
+  // Backboard
+  ctx.fillStyle = '#c8c8c8';
+  ctx.fillRect(rimX - 50, 145, 100, 16);
+  ctx.strokeStyle = CL;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(rimX - 50, 145, 100, 16);
+  ctx.strokeRect(rimX - 18, 148, 36, 10); // target square
+
+  // Rim
+  ctx.strokeStyle = '#dd5500';
+  ctx.lineWidth = 3;
   ctx.beginPath(); ctx.ellipse(rimX, rimY, 26, 10, 0, 0, Math.PI * 2); ctx.stroke();
-  // Support pole
-  ctx.strokeStyle = '#888'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(rimX - 62, 155); ctx.lineTo(rimX - 62, 200); ctx.stroke();
-  // Net (simple lines)
-  ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1;
+
+  // Net (simple lines from rim)
+  ctx.strokeStyle = 'rgba(50,50,50,0.40)';
+  ctx.lineWidth = 1;
   for (let a = 0; a < Math.PI * 2; a += Math.PI / 5) {
     ctx.beginPath();
-    ctx.moveTo(rimX + 26 * Math.cos(a), rimY + 10 * Math.sin(a));
-    ctx.lineTo(rimX + 14 * Math.cos(a) * 0.6, rimY + 28 + 8 * Math.sin(a) * 0.3);
+    ctx.moveTo(rimX + 25 * Math.cos(a), rimY + 9 * Math.sin(a));
+    ctx.lineTo(rimX + 13 * Math.cos(a) * 0.6, rimY + 26 + 6 * Math.sin(a) * 0.3);
     ctx.stroke();
   }
-  // Net bottom
-  ctx.beginPath(); ctx.ellipse(rimX, rimY + 28, 14, 5, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(rimX, rimY + 26, 13, 4, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(50,50,50,0.25)';
+  ctx.stroke();
 
   ctx.restore();
 }
