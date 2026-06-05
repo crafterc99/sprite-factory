@@ -1290,6 +1290,11 @@
           <!-- ② Court canvas -->
           <div class="tv2-court-wrap" id="tv2CourtWrap">
             <canvas id="testingCourt" width="960" height="640"></canvas>
+            <!-- Loading screen video overlay -->
+            <div id="loadingScreenOverlay" style="display:none;position:absolute;inset:0;background:#000;z-index:50;align-items:center;justify-content:center;cursor:pointer" onclick="loadingScreenDismiss()">
+              <video id="loadingScreenVideo" style="width:100%;height:100%;object-fit:cover" playsinline muted></video>
+              <div id="loadingScreenSkip" style="position:absolute;bottom:12px;right:14px;font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.4)">tap to skip</div>
+            </div>
 
             <!-- Live status pill (top-left) -->
             <div class="tv2-live-hud">
@@ -1406,6 +1411,16 @@
                     <button class="btn btn-secondary btn-sm" id="hoopBgDownloadBtn" onclick="hoopBgDownload()" style="font-size:9px;width:100%;margin-top:3px;display:none">↓ Download PNG</button>
                   </div>
                   <div id="hoopBgStatus" style="font-family:var(--mono);font-size:8px;color:#404060;text-align:center;margin-top:2px"></div>
+                </div>
+                <!-- Loading Screen Video -->
+                <div class="tv2-set-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:10px;border-top:1px solid #1a1a30;padding-top:10px">
+                  <span class="tv2-set-label" style="margin:0 0 4px">Loading Screen Video</span>
+                  <label style="cursor:pointer;display:block">
+                    <div class="btn btn-secondary btn-sm" style="font-size:9px;width:100%;text-align:center;box-sizing:border-box;pointer-events:none">Upload Video (.mov, .mp4)</div>
+                    <input type="file" id="loadingVideoUpload" accept="video/*,.mov" style="display:none" onchange="loadingVideoHandleUpload(this)" />
+                  </label>
+                  <div id="loadingVideoStatus" style="font-family:var(--mono);font-size:8px;color:#404060;text-align:center;margin-top:2px"></div>
+                  <button id="loadingVideoPreviewBtn" class="btn btn-secondary btn-sm" onclick="loadingScreenPlay()" style="font-size:9px;width:100%;display:none">▶ Preview</button>
                 </div>
                 <!-- Movement data editor (revealed when anim selected in game mode) -->
                 <div id="gmMoveEditor" class="gm-move-section" style="display:none">
@@ -7151,6 +7166,66 @@ function hoopBgDownload() {
   a.href = canvas.toDataURL('image/png');
   a.click();
 }
+
+// ── Loading Screen Video ──────────────────────────────────────────────────
+async function loadingVideoHandleUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('loadingVideoStatus');
+  const previewBtn = document.getElementById('loadingVideoPreviewBtn');
+  if (statusEl) statusEl.textContent = 'Uploading…';
+  try {
+    const res = await fetch(`${API}/api/upload-loading-video`, {
+      method: 'POST',
+      body: file,
+      headers: { 'Content-Type': file.type || 'video/mp4' },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    if (statusEl) statusEl.textContent = file.name + ' · ready';
+    if (previewBtn) previewBtn.style.display = '';
+    // Cache-bust the video src
+    const vid = document.getElementById('loadingScreenVideo');
+    if (vid) { vid.src = data.url + '?t=' + Date.now(); vid.load(); }
+    toast('Loading screen video saved');
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    toast('Upload failed: ' + e.message, true);
+  }
+}
+
+function loadingScreenPlay() {
+  const overlay = document.getElementById('loadingScreenOverlay');
+  const vid = document.getElementById('loadingScreenVideo');
+  if (!overlay || !vid || !vid.src) return;
+  overlay.style.display = 'flex';
+  vid.currentTime = 0;
+  vid.play().catch(() => {});
+  vid.onended = () => loadingScreenDismiss();
+}
+
+function loadingScreenDismiss() {
+  const overlay = document.getElementById('loadingScreenOverlay');
+  const vid = document.getElementById('loadingScreenVideo');
+  if (overlay) overlay.style.display = 'none';
+  if (vid) vid.pause();
+}
+
+// Check if a loading video exists on page load
+(async function initLoadingVideo() {
+  try {
+    const r = await fetch(`${API}/api/loading-video-status`);
+    const d = await r.json();
+    if (r.ok && d.exists) {
+      const vid = document.getElementById('loadingScreenVideo');
+      const previewBtn = document.getElementById('loadingVideoPreviewBtn');
+      const statusEl = document.getElementById('loadingVideoStatus');
+      if (vid) { vid.src = '/assets/loading-screen.mp4'; vid.load(); }
+      if (previewBtn) previewBtn.style.display = '';
+      if (statusEl) statusEl.textContent = 'loading-screen.mp4 · ready';
+    }
+  } catch {}
+})();
 
 function toggleEditMode() {
   TESTING.editMode = !TESTING.editMode;

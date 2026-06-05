@@ -107,7 +107,8 @@ function serveImage(res, imagePath) {
   try {
     const stat = fs.statSync(imagePath);
     const ext = path.extname(imagePath).toLowerCase();
-    const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : 'image/png';
+    const mimeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime' };
+    const mime = mimeMap[ext] || 'image/png';
     const etag = `"${stat.mtimeMs.toString(36)}-${stat.size.toString(36)}"`;
     res.writeHead(200, {
       'Content-Type': mime,
@@ -230,6 +231,44 @@ router.post('/api/testing-config', async (req, res) => {
   } catch (e) {
     json(res, { error: e.message }, 500);
   }
+});
+
+// ─── Loading Screen Video Upload ─────────────────────────────────────────
+router.post('/api/upload-loading-video', async (req, res) => {
+  try {
+    const contentType = req.headers['content-type'] || '';
+    const ext = contentType.includes('quicktime') || contentType.includes('mov') ? '.mov' : '.mp4';
+    const tmpPath = path.join(ASSETS_DIR, `loading-screen-tmp${ext}`);
+    const outPath = path.join(ASSETS_DIR, 'loading-screen.mp4');
+    fs.mkdirSync(ASSETS_DIR, { recursive: true });
+    await new Promise((resolve, reject) => {
+      const ws = fs.createWriteStream(tmpPath);
+      req.pipe(ws);
+      ws.on('finish', resolve);
+      ws.on('error', reject);
+    });
+    // Convert to mp4 via ffmpeg if needed
+    const { spawnSync } = require('child_process');
+    const { execSync: es } = require('child_process');
+    let ffmpeg = 'ffmpeg';
+    try { es('which ffmpeg', { stdio: 'pipe' }); } catch { try { ffmpeg = require('ffmpeg-static'); } catch { ffmpeg = null; } }
+    if (ffmpeg && ext === '.mov') {
+      const result = spawnSync(ffmpeg, ['-y', '-i', tmpPath, '-c:v', 'libx264', '-preset', 'fast', '-crf', '23', '-movflags', '+faststart', '-an', outPath], { timeout: 120000 });
+      fs.unlinkSync(tmpPath);
+      if (result.status !== 0) throw new Error('ffmpeg conversion failed: ' + (result.stderr?.toString() || ''));
+    } else {
+      fs.renameSync(tmpPath, outPath);
+    }
+    const stats = fs.statSync(outPath);
+    return json(res, { success: true, url: '/assets/loading-screen.mp4', size: stats.size });
+  } catch (e) {
+    json(res, { error: e.message }, 500);
+  }
+});
+
+router.get('/api/loading-video-status', (req, res) => {
+  const p = path.join(ASSETS_DIR, 'loading-screen.mp4');
+  json(res, { exists: fs.existsSync(p), url: '/assets/loading-screen.mp4' });
 });
 
 // ─── Court Presets Endpoints ─────────────────────────────────────────────
