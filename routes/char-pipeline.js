@@ -1067,7 +1067,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           const result = await client.generate(anglePrompt, {
             referenceImages,
             aspectRatio: '1:1',
-            resolution: '1K',
+            resolution: '2K',
             model: modelId,
             maxRetries: 2,
             timeoutMs: 150000,
@@ -1075,13 +1075,12 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
           const framePath = path.join(ASSETS_DIR, `${name}-angle-${i}.png`);
           fs.writeFileSync(framePath, result.imageBuffer);
-          sbUpload(`${name}-angle-${i}.png`, framePath);
-          recordCost(modelId, 'char_pipeline', '1K', referenceImages.length, { character: name, step: `body-angle-${i}` });
+          recordCost(modelId, 'char_pipeline', '2K', referenceImages.length, { character: name, step: `body-angle-${i}` });
 
+          // Remove green background only — do NOT resize/crop. These are reference images
+          // used by studio-gen as AI input; preserving full 2K resolution gives better sprite output.
           await removeBackground(framePath, framePath);
-          const tmpPath = framePath + '.crop.tmp.png';
-          await cropToContent(framePath, tmpPath, { width: 180, height: 180, padding: 10 });
-          fs.renameSync(tmpPath, framePath);
+          sbUpload(`${name}-angle-${i}.png`, framePath);
 
           return { index: i, label: angleLabel, url: `/assets/${name}-angle-${i}.png` };
         }));
@@ -1145,7 +1144,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           const result = await client.generate(anglePrompt, {
             referenceImages: [portraitPath],
             aspectRatio: '1:1',
-            resolution: '1K',
+            resolution: '2K',
             model: modelId,
             maxRetries: 2,
             timeoutMs: 150000,
@@ -1154,7 +1153,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           const framePath = path.join(ASSETS_DIR, `${name}-headshot-${i}.png`);
           fs.writeFileSync(framePath, result.imageBuffer);
           sbUpload(`${name}-headshot-${i}.png`, framePath);
-          recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: `head-angle-${i}` });
+          recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: `head-angle-${i}` });
 
           return { index: i, label: angleLabel, url: `/assets/${name}-headshot-${i}.png` };
         }));
@@ -1331,25 +1330,23 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const result = await client.generate(prompt, {
           referenceImages,
           aspectRatio: '1:1',
-          resolution: '1K',
+          resolution: '2K',
           model: modelId,
           maxRetries: 3,
           timeoutMs: 150000,
         });
 
-        // Save raw, then process exactly like initial generation: remove BG → crop → upload
+        // Save raw, then process: remove BG for body angles, center for headshots.
+        // Do NOT resize to 180×180 — these are reference images, not final game sprites.
         fs.writeFileSync(framePath, result.imageBuffer);
 
         if (isHead) {
-          // Headshots: just center (white BG, no chroma key needed)
+          // Headshots: center on white BG at full resolution
           const centered = await centerFrame(result.imageBuffer);
           fs.writeFileSync(framePath, centered);
         } else {
-          // Body angles: remove green BG, crop to content
+          // Body angles: remove green BG only — preserve full 2K resolution for reference quality
           await removeBackground(framePath, framePath);
-          const tmpPath = framePath + '.crop.tmp.png';
-          await cropToContent(framePath, tmpPath, { width: 180, height: 180, padding: 10 });
-          fs.renameSync(tmpPath, framePath);
         }
 
         // Upload to Supabase so it survives Railway redeploys
