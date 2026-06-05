@@ -232,7 +232,59 @@ router.post('/api/testing-config', async (req, res) => {
   }
 });
 
-// ─── Loading Screen Video Upload ─────────────────────────────────────────
+// ─── Testing Image Endpoints (court + hoop) ──────────────────────────────
+// Saves uploaded images to data/assets/ + Supabase so any device can load them.
+// Client reads back via /assets/court-uploaded.png and /assets/hoop-processed.png
+// which already have Supabase fallback built into the /assets/ handler.
+
+const COURT_IMG_PATH = path.join(ASSETS_DIR, 'court-uploaded.png');
+const HOOP_IMG_PATH  = path.join(ASSETS_DIR, 'hoop-processed.png');
+
+router.post('/api/testing-images/court', async (req, res) => {
+  try {
+    const body = await parseBody(req);
+    if (!body.dataUrl) return json(res, { error: 'dataUrl required' }, 400);
+    const b64 = body.dataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const buf = Buffer.from(b64, 'base64');
+    fs.mkdirSync(ASSETS_DIR, { recursive: true });
+    fs.writeFileSync(COURT_IMG_PATH, buf);
+    const { uploadFile, isAvailable } = require('./lib/supabase-storage');
+    if (isAvailable()) {
+      await uploadFile('court-uploaded.png', COURT_IMG_PATH).catch(e => console.warn('[testing-images] court upload failed:', e.message));
+    }
+    return json(res, { success: true, url: '/assets/court-uploaded.png' });
+  } catch (e) {
+    json(res, { error: e.message }, 500);
+  }
+});
+
+router.post('/api/testing-images/hoop', async (req, res) => {
+  try {
+    const body = await parseBody(req);
+    if (!body.dataUrl) return json(res, { error: 'dataUrl required' }, 400);
+    const b64 = body.dataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const buf = Buffer.from(b64, 'base64');
+    fs.mkdirSync(ASSETS_DIR, { recursive: true });
+    fs.writeFileSync(HOOP_IMG_PATH, buf);
+    const { uploadFile, isAvailable } = require('./lib/supabase-storage');
+    if (isAvailable()) {
+      await uploadFile('hoop-processed.png', HOOP_IMG_PATH).catch(e => console.warn('[testing-images] hoop upload failed:', e.message));
+    }
+    return json(res, { success: true, url: '/assets/hoop-processed.png' });
+  } catch (e) {
+    json(res, { error: e.message }, 500);
+  }
+});
+
+router.get('/api/testing-images/status', (req, res) => {
+  json(res, {
+    hasCourt: fs.existsSync(COURT_IMG_PATH),
+    hasHoop:  fs.existsSync(HOOP_IMG_PATH),
+    courtUrl: fs.existsSync(COURT_IMG_PATH) ? '/assets/court-uploaded.png' : null,
+    hoopUrl:  fs.existsSync(HOOP_IMG_PATH)  ? '/assets/hoop-processed.png'  : null,
+  });
+});
+
 // ─── Court Presets Endpoints ─────────────────────────────────────────────
 const COURT_PRESETS_FILE = path.join(__dirname, 'data/court-presets.json');
 

@@ -6651,35 +6651,38 @@ function initTestingPage() {
   TESTING.ctx = canvas.getContext('2d');
   TESTING.ctx.imageSmoothingEnabled = false;
 
-  // Restore uploaded court image from IndexedDB, fall back to default
-  _loadCourtIDB().then(({ dataUrl, name }) => {
-    if (dataUrl) {
-      const img = new Image();
-      img.onload = () => { TESTING.courtImg = img; TESTING.courtLoaded = true; };
-      img.src = dataUrl;
-      const nameEl = document.getElementById('testingCourtName');
-      if (nameEl && name) nameEl.textContent = name;
-    } else if (!TESTING.courtLoaded) {
-      TESTING.courtImg = new Image();
-      TESTING.courtImg.onload = () => { TESTING.courtLoaded = true; };
-      TESTING.courtImg.src = '/assets/court.webp';
+  // Restore court and hoop images from server (Supabase-backed) — works on any device
+  fetch('/api/testing-images/status').then(r => r.json()).then(status => {
+    // Court image: use uploaded version if it exists, else fall back to default
+    const courtSrc = status.hasCourt
+      ? '/assets/court-uploaded.png?t=' + Date.now()
+      : '/assets/court.webp';
+    const cImg = new Image();
+    cImg.onload = () => { TESTING.courtImg = cImg; TESTING.courtLoaded = true; };
+    cImg.onerror = () => {
+      // Fallback to default if uploaded version fails to load
+      const fb = new Image();
+      fb.onload = () => { TESTING.courtImg = fb; TESTING.courtLoaded = true; };
+      fb.src = '/assets/court.webp';
+    };
+    cImg.src = courtSrc;
+    const nameEl = document.getElementById('testingCourtName');
+    if (nameEl && status.hasCourt) nameEl.textContent = 'court-uploaded.png';
+
+    // Hoop image: load from server if available
+    if (status.hasHoop) {
+      const hImg = new Image();
+      hImg.onload = () => { TESTING.hoopImg = hImg; TESTING.hoopLoaded = true; };
+      hImg.src = '/assets/hoop-processed.png?t=' + Date.now();
     }
   }).catch(() => {
+    // Network error — fall back to default court
     if (!TESTING.courtLoaded) {
       TESTING.courtImg = new Image();
       TESTING.courtImg.onload = () => { TESTING.courtLoaded = true; };
       TESTING.courtImg.src = '/assets/court.webp';
     }
   });
-
-  // Restore processed hoop image from IndexedDB
-  _loadHoopIDB().then(dataUrl => {
-    if (dataUrl) {
-      const img = new Image();
-      img.onload = () => { TESTING.hoopImg = img; TESTING.hoopLoaded = true; };
-      img.src = dataUrl;
-    }
-  }).catch(() => {});
 
   loadTestingRoster();
   loadTestingConfig(); // restore OOB corners + zone dividers from Supabase
@@ -7083,67 +7086,45 @@ function loadAngleStrips(charName, animName, fallbackUrl, cacheBust) {
   }
 }
 
-// IndexedDB helpers for persisting the uploaded court image across refreshes
-function _courtDB() {
-  return new Promise((res, rej) => {
-    const req = indexedDB.open('sf-testing', 1);
-    req.onupgradeneeded = e => e.target.result.createObjectStore('assets');
-    req.onsuccess = e => res(e.target.result);
-    req.onerror = rej;
-  });
+// Cloud image persistence — saves court + hoop images to the server (→ Supabase)
+// so any device loading the app sees the same images.
+
+async function _saveCourtCloud(dataUrl, name) {
+  try {
+    const res = await fetch('/api/testing-images/court', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl, name }),
+    });
+    return res.ok;
+  } catch { return false; }
 }
-async function _saveCourtIDB(dataUrl, name) {
-  const db = await _courtDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('assets', 'readwrite');
-    tx.objectStore('assets').put(dataUrl, 'courtImage');
-    tx.objectStore('assets').put(name,    'courtName');
-    tx.oncomplete = res; tx.onerror = rej;
-  });
-}
-async function _loadCourtIDB() {
-  const db = await _courtDB();
-  return new Promise(res => {
-    const tx = db.transaction('assets', 'readonly');
-    const store = tx.objectStore('assets');
-    let dataUrl = null, name = null;
-    store.get('courtImage').onsuccess = e => { dataUrl = e.target.result; };
-    store.get('courtName').onsuccess  = e => { name    = e.target.result; };
-    tx.oncomplete = () => res({ dataUrl, name });
-    tx.onerror = () => res({ dataUrl: null, name: null });
-  });
-}
-async function _saveHoopIDB(dataUrl) {
-  const db = await _courtDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction('assets', 'readwrite');
-    tx.objectStore('assets').put(dataUrl, 'hoopImage');
-    tx.oncomplete = res; tx.onerror = rej;
-  });
-}
-async function _loadHoopIDB() {
-  const db = await _courtDB();
-  return new Promise(res => {
-    const tx = db.transaction('assets', 'readonly');
-    let dataUrl = null;
-    tx.objectStore('assets').get('hoopImage').onsuccess = e => { dataUrl = e.target.result; };
-    tx.oncomplete = () => res(dataUrl);
-    tx.onerror = () => res(null);
-  });
+
+async function _saveHoopCloud(dataUrl) {
+  try {
+    const res = await fetch('/api/testing-images/hoop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl }),
+    });
+    return res.ok;
+  } catch { return false; }
 }
 
 function testingLoadCourtImage(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     const dataUrl = e.target.result;
     const img = new Image();
     img.onload = () => { TESTING.courtImg = img; TESTING.courtLoaded = true; };
     img.src = dataUrl;
     const nameEl = document.getElementById('testingCourtName');
     if (nameEl) nameEl.textContent = file.name;
-    _saveCourtIDB(dataUrl, file.name).catch(() => {});
+    // Save to server → Supabase so all devices see the same court image
+    const ok = await _saveCourtCloud(dataUrl, file.name);
+    if (!ok) console.warn('[testing] court image cloud save failed');
   };
   reader.readAsDataURL(file);
 }
@@ -7202,9 +7183,9 @@ function hoopBgProcess() {
   if (dlBtn) dlBtn.style.display = '';
   const status = document.getElementById('hoopBgStatus');
   if (status) status.textContent = 'Done — background + glass removed';
-  // Save to IndexedDB and load onto court
+  // Save to server → Supabase and load onto court
   const resultDataUrl = canvas.toDataURL('image/png');
-  _saveHoopIDB(resultDataUrl).catch(() => {});
+  _saveHoopCloud(resultDataUrl).catch(() => {});
   const hImg = new Image();
   hImg.onload = () => { TESTING.hoopImg = hImg; TESTING.hoopLoaded = true; };
   hImg.src = resultDataUrl;
