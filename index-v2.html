@@ -644,6 +644,8 @@
   #cpRegenPreview { width:100%; height:160px; object-fit:contain; image-rendering:pixelated; border-radius:8px; background:var(--surface2); border:1px solid var(--border); }
   #cpRegenModifier { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:9px 11px; font-family:var(--mono); font-size:11px; color:#ccc; width:100%; box-sizing:border-box; resize:none; height:72px; outline:none; }
   #cpRegenModifier:focus { border-color:#7c6aff; }
+  .cp-head-ref-thumb { width:52px; height:52px; object-fit:contain; image-rendering:pixelated; border-radius:6px; background:var(--surface2); border:2px solid var(--border); cursor:pointer; }
+  .cp-head-ref-thumb.selected { border-color:#00ff88; box-shadow:0 0 0 2px rgba(0,255,136,0.3); }
 
   /* ─── OUTFIT PICKER (in new char modal) ─── */
   .cp-outfit-panel { border:1px solid var(--border); border-radius:8px; padding:8px; min-height:80px; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; max-height:160px; overflow-y:auto; background:var(--surface2); }
@@ -1764,6 +1766,11 @@
   <div id="cpRegenBox">
     <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px">REGENERATE ANGLE</div>
     <img id="cpRegenPreview" src="" alt="" />
+    <!-- Headshot reference picker — only shown when regenerating a head angle -->
+    <div id="cpRegenHeadRefSection" style="display:none">
+      <div style="font-family:var(--mono);font-size:9px;color:#50507a;margin-bottom:6px">REFERENCE HEADSHOT — select one to use as identity anchor:</div>
+      <div id="cpRegenHeadRefGrid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+    </div>
     <div style="font-family:var(--mono);font-size:10px;color:#8888aa">Keep everything the exact same but:</div>
     <textarea id="cpRegenModifier" placeholder="e.g. make the jersey blue, add a hat, etc."></textarea>
     <div style="display:flex;gap:8px">
@@ -4166,10 +4173,40 @@ async function cpConfirmAndGenerateAngles() {
 let _cpRegen = {};
 
 function cpOpenRegen(name, type, index, imgSrc, label, imgId) {
-  _cpRegen = { name, type, index, imgId: imgId || (type === 'head' ? `cpHeadFrame${index}` : `cpBodyFrame${index}`) };
+  _cpRegen = {
+    name, type, index,
+    imgId: imgId || (type === 'head' ? `cpHeadFrame${index}` : `cpBodyFrame${index}`),
+    referenceHeadshotIndex: null,
+  };
   document.getElementById('cpRegenPreview').src = imgSrc;
   document.getElementById('cpRegenModifier').value = '';
   document.getElementById('cpRegenStatus').style.display = 'none';
+
+  // For head regen: show headshot reference picker
+  const headRefSection = document.getElementById('cpRegenHeadRefSection');
+  const headRefGrid = document.getElementById('cpRegenHeadRefGrid');
+  if (type === 'head') {
+    headRefGrid.innerHTML = '';
+    // Populate with all existing headshots for this character
+    for (let i = 0; i < 8; i++) {
+      const src = `/assets/${name}-headshot-${i}.png`;
+      const img = document.createElement('img');
+      img.className = 'cp-head-ref-thumb';
+      img.src = src + '?t=' + Date.now();
+      img.title = `Use headshot ${i} as reference`;
+      img.onerror = () => img.style.display = 'none';
+      img.onclick = () => {
+        headRefGrid.querySelectorAll('.cp-head-ref-thumb').forEach(t => t.classList.remove('selected'));
+        img.classList.add('selected');
+        _cpRegen.referenceHeadshotIndex = i;
+      };
+      headRefGrid.appendChild(img);
+    }
+    headRefSection.style.display = '';
+  } else {
+    headRefSection.style.display = 'none';
+  }
+
   document.getElementById('cpRegenModal').classList.add('open');
   setTimeout(() => document.getElementById('cpRegenModifier').focus(), 80);
 }
@@ -4179,15 +4216,19 @@ function cpCloseRegen() {
 }
 
 async function cpDoRegenAngle() {
-  const { name, type, index, imgId } = _cpRegen;
+  const { name, type, index, imgId, referenceHeadshotIndex } = _cpRegen;
   const modifier = document.getElementById('cpRegenModifier').value.trim();
   if (!modifier) return toast('Enter what to change', true);
 
   // Start job then close immediately — generation continues in background
   try {
+    const payload = { name, type, index, modifier };
+    if (type === 'head' && referenceHeadshotIndex !== null) {
+      payload.referenceHeadshotIndex = referenceHeadshotIndex;
+    }
     const r = await fetch(`${API}/api/char-pipeline/regen-angle`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, type, index, modifier }),
+      body: JSON.stringify(payload),
     });
     const d = await r.json();
     if (d.error) throw new Error(d.error);

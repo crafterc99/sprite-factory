@@ -81,6 +81,182 @@ function computeScale(heightInches) {
 
 const ANGLE_LABELS_8 = ['Front', 'Front Right', 'Right', 'Back Right', 'Back', 'Back Left', 'Left', 'Front Left'];
 
+// Per-angle body prompts — each describes exactly what is visible/hidden for that rotation
+const BODY_ANGLE_PROMPTS = [
+  // 0: Front (0°)
+  [
+    'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
+    'Generate ONE single full-body anime style sprite of this character from the FRONT (0°) — facing directly toward the viewer.',
+    'VISIBLE: Full face, both eyes, nose, mouth, chin. Front of chest and outfit. Both arms at sides. Both legs and tops of shoes.',
+    'POSE: Neutral standing, arms relaxed at sides, feet slightly apart.',
+    'CRITICAL: ONE character only. No duplicates. No tiling.',
+    'STYLE: Exact anime style of reference. Bold black outlines. Clean linework. No anti-aliasing.',
+    'BACKGROUND: Solid bright green (#00FF00). OUTPUT: Square 1:1 frame, feet at bottom, head near top.',
+  ].join('\n'),
+  // 1: Front Right (45°)
+  [
+    'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
+    'Generate ONE single full-body anime style sprite from a FRONT-RIGHT 3/4 VIEW (45°).',
+    'VISIBLE: Right cheek and right eye prominent, partial left face, right side of body dominant, left arm partially visible.',
+    'The character body is rotated 45° — their right shoulder is closer to the viewer than their left.',
+    'POSE: Neutral standing, arms relaxed.',
+    'CRITICAL: ONE character only. No duplicates. No tiling.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'BACKGROUND: Solid bright green (#00FF00). OUTPUT: Square 1:1 frame.',
+  ].join('\n'),
+  // 2: Right Side (90°)
+  [
+    'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
+    'Generate ONE single full-body anime style sprite from the PURE RIGHT SIDE — strict profile (90°).',
+    'VISIBLE: Right side of face ONLY — right eye, right ear, nose profile, right jaw. Right side of outfit. Left arm hangs in front of body.',
+    'NOT VISIBLE: Left eye is completely hidden. Left side of outfit is behind the body.',
+    'This is a perfect side profile — only half the face is shown.',
+    'POSE: Neutral standing.',
+    'CRITICAL: ONE character only. No duplicates. No tiling.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'BACKGROUND: Solid bright green (#00FF00). OUTPUT: Square 1:1 frame.',
+  ].join('\n'),
+  // 3: Back Right (135°)
+  [
+    'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
+    'Generate ONE single full-body anime style sprite from the BACK-RIGHT 3/4 VIEW (135°).',
+    'VISIBLE: Back-right of head (back of skull and hair), back of outfit, right side of back. No face visible at all.',
+    'NOT VISIBLE: Face is completely hidden — viewer is behind and to the right of the character.',
+    'POSE: Neutral standing.',
+    'CRITICAL: ONE character only. No duplicates. No tiling.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'BACKGROUND: Solid bright green (#00FF00). OUTPUT: Square 1:1 frame.',
+  ].join('\n'),
+  // 4: Back (180°)
+  [
+    'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
+    'Generate ONE single full-body anime style sprite from the BACK — looking directly at the character\'s back (180°).',
+    'VISIBLE: Back of head, back of hair, full back of outfit, backs of both arms, backs of legs, backs of shoes.',
+    'NOT VISIBLE: Face is completely hidden — zero facial features. Pure back view.',
+    'POSE: Neutral standing, arms relaxed at sides, back facing viewer.',
+    'CRITICAL: ONE character only. No duplicates. No tiling.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'BACKGROUND: Solid bright green (#00FF00). OUTPUT: Square 1:1 frame.',
+  ].join('\n'),
+  // 5: Back Left (225°)
+  [
+    'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
+    'Generate ONE single full-body anime style sprite from the BACK-LEFT 3/4 VIEW (225°).',
+    'VISIBLE: Back-left of head, back of hair, back-left of outfit, left side of back. No face visible.',
+    'NOT VISIBLE: Face is completely hidden — viewer is behind and to the left of the character.',
+    'POSE: Neutral standing.',
+    'CRITICAL: ONE character only. No duplicates. No tiling.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'BACKGROUND: Solid bright green (#00FF00). OUTPUT: Square 1:1 frame.',
+  ].join('\n'),
+  // 6: Left Side (270°)
+  [
+    'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
+    'Generate ONE single full-body anime style sprite from the PURE LEFT SIDE — strict profile (270°).',
+    'VISIBLE: Left side of face ONLY — left eye, left ear, nose profile, left jaw. Left side of outfit. Right arm hangs in front of body.',
+    'NOT VISIBLE: Right eye is completely hidden. Right side of outfit is behind the body.',
+    'This is a perfect side profile — only the left half of the face is shown.',
+    'POSE: Neutral standing.',
+    'CRITICAL: ONE character only. No duplicates. No tiling.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'BACKGROUND: Solid bright green (#00FF00). OUTPUT: Square 1:1 frame.',
+  ].join('\n'),
+  // 7: Front Left (315°)
+  [
+    'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
+    'Generate ONE single full-body anime style sprite from a FRONT-LEFT 3/4 VIEW (315°).',
+    'VISIBLE: Left cheek and left eye prominent, partial right face, left side of body dominant, right arm partially visible.',
+    'The character body is rotated 315° — their left shoulder is closer to the viewer than their right.',
+    'POSE: Neutral standing, arms relaxed.',
+    'CRITICAL: ONE character only. No duplicates. No tiling.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'BACKGROUND: Solid bright green (#00FF00). OUTPUT: Square 1:1 frame.',
+  ].join('\n'),
+];
+
+// Per-angle headshot prompts — head and neck only, specific visibility per rotation
+const HEAD_ANGLE_PROMPTS = [
+  // 0: Front (0°)
+  [
+    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+    'Generate a single HEADSHOT from the FRONT (0°) — facing directly toward the viewer.',
+    'VISIBLE: Full face — both eyes, nose, mouth, chin. Hair as seen from the front.',
+    'HEAD AND NECK ONLY — no shoulders, no shirt or collar visible.',
+    'STYLE: Exact anime style. Bold black outlines. Clean linework.',
+    'FRAMING: Head centered with slight padding. White background. Square 1:1 frame.',
+  ].join('\n'),
+  // 1: Front Right (45°)
+  [
+    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+    'Generate a single HEADSHOT from the FRONT-RIGHT 3/4 VIEW (45°).',
+    'VISIBLE: Right eye prominent, right cheek, partial left face visible, right side of hair dominant.',
+    'Head is turned so the right side faces the viewer at 45°.',
+    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'FRAMING: Head centered. White background. Square 1:1 frame.',
+  ].join('\n'),
+  // 2: Right (90°)
+  [
+    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+    'Generate a single HEADSHOT from the PURE RIGHT SIDE — strict profile (90°).',
+    'VISIBLE: Right side of face ONLY — right eye, right ear, nose in profile, right jaw line. Right side of hair.',
+    'NOT VISIBLE: Left eye is completely hidden. This is a strict profile with exactly one eye showing.',
+    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'FRAMING: Head centered. White background. Square 1:1 frame.',
+  ].join('\n'),
+  // 3: Back Right (135°)
+  [
+    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+    'Generate a single HEADSHOT from the BACK-RIGHT 3/4 VIEW (135°).',
+    'VISIBLE: Back-right of skull, back and right side of hair. Character is mostly facing away.',
+    'NOT VISIBLE: Face is completely hidden — zero facial features.',
+    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'FRAMING: Head centered. White background. Square 1:1 frame.',
+  ].join('\n'),
+  // 4: Back (180°)
+  [
+    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+    'Generate a single HEADSHOT from the BACK — directly behind the character (180°).',
+    'VISIBLE: Back of head, back of hair only.',
+    'NOT VISIBLE: Zero facial features. No face at all — purely the back of the head and hairstyle.',
+    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'FRAMING: Head centered. White background. Square 1:1 frame.',
+  ].join('\n'),
+  // 5: Back Left (225°)
+  [
+    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+    'Generate a single HEADSHOT from the BACK-LEFT 3/4 VIEW (225°).',
+    'VISIBLE: Back-left of skull, back and left side of hair.',
+    'NOT VISIBLE: Face is completely hidden — zero facial features.',
+    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'FRAMING: Head centered. White background. Square 1:1 frame.',
+  ].join('\n'),
+  // 6: Left (270°)
+  [
+    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+    'Generate a single HEADSHOT from the PURE LEFT SIDE — strict profile (270°).',
+    'VISIBLE: Left side of face ONLY — left eye, left ear, nose in profile, left jaw line. Left side of hair.',
+    'NOT VISIBLE: Right eye is completely hidden. This is a strict profile with exactly one eye showing.',
+    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'FRAMING: Head centered. White background. Square 1:1 frame.',
+  ].join('\n'),
+  // 7: Front Left (315°)
+  [
+    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+    'Generate a single HEADSHOT from the FRONT-LEFT 3/4 VIEW (315°).',
+    'VISIBLE: Left eye prominent, left cheek, partial right face visible, left side of hair dominant.',
+    'Head is turned so the left side faces the viewer at 315°.',
+    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
+    'STYLE: Exact anime style. Bold black outlines.',
+    'FRAMING: Head centered. White background. Square 1:1 frame.',
+  ].join('\n'),
+];
+
 // ── Prompt builders ─────────────────────────────────────────────────────────
 
 function getDefaultPortraitPrompt() {
@@ -884,21 +1060,9 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const client = new NanaBananaClient({ model: modelId });
         const referenceImages = [portraitPath, ...clothingPaths];
 
-        // Generate all 8 body angles in parallel — fastest possible
+        // Generate all 8 body angles in parallel — each with a specific per-angle prompt
         const frames = await Promise.all(ANGLE_LABELS_8.map(async (angleLabel, i) => {
-          const anglePrompt = [
-            'Use the uploaded character as the EXACT base reference. Do not change face, skin tone, hairstyle, body shape, or outfit.',
-            '',
-            `Generate ONE single full-body anime style sprite of this character viewed from the ${angleLabel} angle (${i * 45}°).`,
-            '',
-            'CRITICAL: ONE character only. Do NOT show multiple copies or duplicates of the character.',
-            'CRITICAL: Do NOT tile, repeat, or show the character more than once.',
-            'STYLE: Match the exact anime style of the reference. Bold black outlines. Clean linework. No anti-aliasing.',
-            'BODY: Full body visible from head to toe. Neutral standing pose. Arms relaxed at sides.',
-            'FRAMING: Single character centered in frame. Feet at bottom. Head near top. No cropping.',
-            'BACKGROUND: Solid bright green (#00FF00). Nothing else.',
-            'OUTPUT: Exactly one character. Square 1:1 frame. No text, no labels, no borders.',
-          ].join('\n');
+          const anglePrompt = BODY_ANGLE_PROMPTS[i];
 
           const result = await client.generate(anglePrompt, {
             referenceImages,
@@ -976,16 +1140,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         fs.mkdirSync(charDir, { recursive: true });
 
         const frames = await Promise.all(ANGLE_LABELS_8.map(async (angleLabel, i) => {
-          const anglePrompt = [
-            'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
-            '',
-            `Generate a single headshot of this character at the ${angleLabel} angle (${i * 45}°).`,
-            '',
-            'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
-            'STYLE: Match the exact anime style of the reference. Bold black outlines. Clean linework.',
-            'FRAMING: Head centered. Clean white background.',
-            'OUTPUT: Single headshot only. Square 1:1 frame. No text, no labels.',
-          ].join('\n');
+          const anglePrompt = HEAD_ANGLE_PROMPTS[i];
 
           const result = await client.generate(anglePrompt, {
             referenceImages: [portraitPath],
@@ -1130,9 +1285,11 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
   });
 
   // POST /api/char-pipeline/regen-angle — Async: regenerate a single angle frame with a modifier
+  // Body params: { name, type, index, modifier, referenceHeadshotIndex? }
+  // referenceHeadshotIndex: for head regen — use this headshot as the primary reference
   router.post('/api/char-pipeline/regen-angle', async (req, res) => {
     const body = await parseBody(req);
-    const { name, type, index, modifier } = body;
+    const { name, type, index, modifier, referenceHeadshotIndex } = body;
     if (!name || !modifier || index === undefined) return json(res, { error: 'name, type, index, modifier required' }, 400);
 
     const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
@@ -1148,16 +1305,32 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       try {
         const angleLabel = ANGLE_LABELS_8[index] || `angle_${index}`;
         const isHead = type === 'head';
-        const basePrompt = isHead
-          ? loadCharPrompts().headSheet
-          : loadCharPrompts().bodySheet;
-        const prompt = basePrompt + `\n\nKeep everything the exact same but: ${modifier.trim()}\nGenerate only the ${angleLabel} angle view.`;
+
+        // Use angle-specific prompts (not the sheet prompts which ask for a grid layout)
+        const basePrompt = isHead ? HEAD_ANGLE_PROMPTS[index] : BODY_ANGLE_PROMPTS[index];
+        const prompt = basePrompt + `\n\nKeep everything the exact same but apply this change: ${modifier.trim()}`;
+
+        // For headshots: use the selected reference headshot (if provided) instead of the portrait.
+        // This lets the user pick their best headshot as the identity anchor for regen.
+        let referenceImages;
+        if (isHead && referenceHeadshotIndex !== undefined && referenceHeadshotIndex !== null) {
+          const refHeadPath = path.join(ASSETS_DIR, `${name}-headshot-${referenceHeadshotIndex}.png`);
+          if (fs.existsSync(refHeadPath)) {
+            referenceImages = [refHeadPath]; // selected headshot is the only reference
+          } else {
+            referenceImages = [portraitPath]; // fallback to portrait if selected headshot missing
+          }
+        } else if (isHead) {
+          referenceImages = [portraitPath]; // default: portrait as reference for head regen
+        } else {
+          referenceImages = [portraitPath, framePath]; // body: portrait + existing frame
+        }
 
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
         const result = await client.generate(prompt, {
-          referenceImages: [portraitPath, framePath],
-          aspectRatio: isHead ? '1:1' : '1:1',
+          referenceImages,
+          aspectRatio: '1:1',
           resolution: '1K',
           model: modelId,
           maxRetries: 3,
