@@ -304,6 +304,23 @@ router.get('/api/debug/db', async (req, res) => {
       fix: 'Go to Railway dashboard → your service → Variables, add SUPABASE_URL and SUPABASE_SERVICE_KEY (service role key, not anon key)',
     });
   }
+  // Raw DNS/connectivity check first — faster than full Supabase client init
+  try {
+    const sbUrl = process.env.SUPABASE_URL;
+    const urlObj = new URL(sbUrl);
+    await new Promise((resolve, reject) => {
+      const dns = require('dns');
+      dns.lookup(urlObj.hostname, (err) => err ? reject(err) : resolve());
+    });
+  } catch (dnsErr) {
+    return json(res, {
+      ok: false, configured: true, urlPreview, keyPreview,
+      error: `DNS lookup FAILED for "${process.env.SUPABASE_URL}" — the Supabase project does not exist or was deleted`,
+      fix: 'The Supabase project URL in your Railway env vars is unreachable. Steps to fix: 1) Go to https://supabase.com/dashboard, 2) Create a new project, 3) Create a "sprite-assets" storage bucket (set to Public), 4) Copy the project URL and service-role key, 5) Update SUPABASE_URL and SUPABASE_SERVICE_KEY in Railway → Variables → Redeploy',
+      dnsError: dnsErr.message,
+    });
+  }
+
   try {
     const health = await verifyConnection();
     const result = {

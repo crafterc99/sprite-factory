@@ -2005,6 +2005,20 @@ const STATE = {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
+  // Check Supabase health — warn loudly if data won't persist
+  fetch('/api/debug/db').then(r => r.json()).then(db => {
+    if (!db.ok) {
+      const banner = document.createElement('div');
+      banner.id = 'sb-warning-banner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;padding:10px 16px;font:bold 13px monospace;text-align:center;cursor:pointer;';
+      banner.innerHTML = '⚠ DATA PERSISTENCE BROKEN — Supabase not connected. All data will be lost on next deploy. Click for fix instructions.';
+      banner.onclick = () => {
+        alert('Supabase is not connected. Your data is not being saved.\n\nTo fix:\n1. Go to https://supabase.com/dashboard\n2. Create a new project (or restore paused one)\n3. Create a storage bucket named "sprite-assets" (set to Public)\n4. Copy: Settings → API → Project URL and service_role key\n5. In Railway dashboard → your service → Variables:\n   SUPABASE_URL = your project URL\n   SUPABASE_SERVICE_KEY = your service_role key\n6. Redeploy\n\nError: ' + (db.error || db.fix || 'unknown'));
+      };
+      document.body.prepend(banner);
+    }
+  }).catch(() => {});
+
   // Restore any in-progress generation jobs from last session
   Object.assign(CPJobs, cpLoadJobs());
 
