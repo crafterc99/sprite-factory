@@ -6319,16 +6319,25 @@ function ptCopy() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Court zone dividers (diagonal, perspective-aware) ─────────────────────
-// Each divider is defined by two points (left edge → right edge of canvas).
-// Zones are the regions BETWEEN consecutive dividers, from top to bottom.
-// p1.x is always 0 (left edge), p2.x is always 960 (right edge).
-// Adjust p1.y / p2.y to tilt the lines to match the court perspective.
+// Each divider is defined by two handle points. Handles can be placed freely
+// on the canvas; zone fills and divider lines are extrapolated to canvas edges.
+// p1 = left handle (~x=40), p2 = right handle (~x=920). Adjust y to tilt lines.
 let ZONE_DIVIDERS = [
-  { p1: { x: 0, y: 248 }, p2: { x: 960, y: 185 } }, // zone 1 / zone 2 boundary
-  { p1: { x: 0, y: 365 }, p2: { x: 960, y: 318 } }, // zone 2 / zone 3 boundary
-  { p1: { x: 0, y: 462 }, p2: { x: 960, y: 428 } }, // zone 3 / zone 4 boundary
-  { p1: { x: 0, y: 552 }, p2: { x: 960, y: 524 } }, // zone 4 / zone 5 boundary
+  { p1: { x: 40, y: 248 }, p2: { x: 920, y: 185 } }, // zone 1 / zone 2 boundary
+  { p1: { x: 40, y: 365 }, p2: { x: 920, y: 318 } }, // zone 2 / zone 3 boundary
+  { p1: { x: 40, y: 462 }, p2: { x: 920, y: 428 } }, // zone 3 / zone 4 boundary
+  { p1: { x: 40, y: 552 }, p2: { x: 920, y: 524 } }, // zone 4 / zone 5 boundary
 ];
+
+// Returns y-value of divider line at a given x, extrapolating beyond p1→p2
+function divLineYAt(d, x) {
+  if (d.p2.x === d.p1.x) return d.p1.y;
+  return d.p1.y + (d.p2.y - d.p1.y) * (x - d.p1.x) / (d.p2.x - d.p1.x);
+}
+// Returns { left, right } — the divider line projected to canvas edges x=0 and x=W
+function divEdgePoints(d) {
+  return { left: { x: 0, y: divLineYAt(d, 0) }, right: { x: 960, y: divLineYAt(d, 960) } };
+}
 
 const COURT_ZONES = [
   { id: 1, label: 'Front',      angleIdx: 0, angleName: 'front',      color: 'rgba(255,80,80,'   },
@@ -6380,11 +6389,15 @@ async function loadTestingConfig() {
     }
     if (d.zoneDividers) {
       const W = 960, H = 640;
-      // p1.x is always 0 (left edge), p2.x is always W (right edge) — only y varies
-      ZONE_DIVIDERS = d.zoneDividers.map(dv => ({
-        p1: { x: 0, y: Math.max(0, Math.min(H, dv.p1.y)) },
-        p2: { x: W, y: Math.max(0, Math.min(H, dv.p2.y)) },
-      }));
+      ZONE_DIVIDERS = d.zoneDividers.map(dv => {
+        // Migrate old stored handles that were stuck at canvas edges → inset them
+        const p1x = dv.p1.x <= 2 ? 40 : Math.max(0, Math.min(W, dv.p1.x));
+        const p2x = dv.p2.x >= W - 2 ? W - 40 : Math.max(0, Math.min(W, dv.p2.x));
+        return {
+          p1: { x: p1x, y: Math.max(0, Math.min(H, dv.p1.y)) },
+          p2: { x: p2x, y: Math.max(0, Math.min(H, dv.p2.y)) },
+        };
+      });
     }
   } catch {}
 }
@@ -6454,15 +6467,12 @@ function drawEditHandles(ctx) {
     ctx.restore();
   }
 
-  // Zone divider handles — inset 40px from each edge so they stay visible/clickable
-  const HINSET = 40;
+  // Zone divider handles — drawn at their actual positions (p1/p2)
   for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
     const d = ZONE_DIVIDERS[i];
     const isActiveL = TESTING.editDragDivider === `${i}-L`;
     const isActiveR = TESTING.editDragDivider === `${i}-R`;
-    const hL = { x: d.p1.x + HINSET, y: d.p1.y };
-    const hR = { x: d.p2.x - HINSET, y: d.p2.y };
-    for (const [pt, isAct] of [[hL, isActiveL], [hR, isActiveR]]) {
+    for (const [pt, isAct] of [[d.p1, isActiveL], [d.p2, isActiveR]]) {
       ctx.save();
       ctx.strokeStyle = isAct ? '#fff' : COURT_ZONES[i].color + '1)';
       ctx.fillStyle   = isAct ? 'rgba(255,255,255,0.9)' : COURT_ZONES[i].color + '0.7)';
@@ -6472,14 +6482,15 @@ function drawEditHandles(ctx) {
       ctx.fill(); ctx.stroke();
       ctx.restore();
     }
-    // Draw the divider line (always full canvas width)
+    // Draw divider line extrapolated to full canvas width
+    const { left, right } = divEdgePoints(d);
     ctx.save();
     ctx.strokeStyle = COURT_ZONES[i].color + '0.8)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
-    ctx.moveTo(d.p1.x, d.p1.y);
-    ctx.lineTo(d.p2.x, d.p2.y);
+    ctx.moveTo(left.x, left.y);
+    ctx.lineTo(right.x, right.y);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
@@ -6615,18 +6626,15 @@ function initTestingPage() {
         e.preventDefault(); return;
       }
     }
-    // Check zone divider endpoints — test against inset handle positions (40px from edge)
-    const HINSET = 40;
+    // Check zone divider endpoints
     for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
       const d = ZONE_DIVIDERS[i];
-      const hL = { x: d.p1.x + HINSET, y: d.p1.y };
-      const hR = { x: d.p2.x - HINSET, y: d.p2.y };
-      if (Math.hypot(x - hL.x, y - hL.y) < SNAP) {
+      if (Math.hypot(x - d.p1.x, y - d.p1.y) < SNAP) {
         TESTING.editDragDivider = `${i}-L`;
         TESTING.editDragCorner  = null;
         e.preventDefault(); return;
       }
-      if (Math.hypot(x - hR.x, y - hR.y) < SNAP) {
+      if (Math.hypot(x - d.p2.x, y - d.p2.y) < SNAP) {
         TESTING.editDragDivider = `${i}-R`;
         TESTING.editDragCorner  = null;
         e.preventDefault(); return;
@@ -6664,18 +6672,13 @@ function initTestingPage() {
     } else if (TESTING.editDragDivider) {
       const [idxStr, side] = TESTING.editDragDivider.split('-');
       const d = ZONE_DIVIDERS[parseInt(idxStr)];
-      // Only update Y — X is always locked to canvas edges (0 for left, 960 for right)
-      if (side === 'L') d.p1 = { x: 0,            y: cy };
-      else              d.p2 = { x: canvas.width,  y: cy };
+      if (side === 'L') d.p1 = { x: cx, y: cy };
+      else              d.p2 = { x: cx, y: cy };
     }
-    // Cursor feedback — use inset handle positions for dividers
-    const HINSET = 40;
+    // Cursor feedback
     const corners = Object.values(OOB_BOUNDS);
-    const divHandles = ZONE_DIVIDERS.flatMap(d => [
-      { x: d.p1.x + HINSET, y: d.p1.y },
-      { x: d.p2.x - HINSET, y: d.p2.y },
-    ]);
-    const nearAny = [...corners, ...divHandles].some(pt => Math.hypot(x - pt.x, y - pt.y) < SNAP);
+    const divPts  = ZONE_DIVIDERS.flatMap(d => [d.p1, d.p2]);
+    const nearAny = [...corners, ...divPts].some(pt => Math.hypot(x - pt.x, y - pt.y) < SNAP);
     canvas.style.cursor = nearAny ? 'grab' : 'crosshair';
   });
 
@@ -7137,27 +7140,21 @@ function testingRenderLoop(timestamp) {
   const currentZone = getZoneForPos(TESTING.charX, TESTING.charY);
   if (TESTING.showZones) {
     ctx.save();
-    // Draw each zone as a polygon defined by the divider lines
-    // Zones: 0=above div[0], 1=between div[0] and div[1], ..., 4=below div[3]
-    const divPts = ZONE_DIVIDERS.map(d => ({ p1: d.p1, p2: d.p2 }));
+    // Draw each zone as a polygon defined by the divider lines.
+    // Use divEdgePoints() so polygons always span full canvas width regardless
+    // of where the drag handles are positioned.
+    const divEdges = ZONE_DIVIDERS.map(divEdgePoints);
     const zonePolygons = COURT_ZONES.map((zone, zi) => {
-      // Build polygon for zone zi
-      // Top boundary: dividers[zi-1] line (or top of canvas for zone 0)
-      // Bottom boundary: dividers[zi] line (or bottom of canvas for last zone)
       const pts = [];
       if (zi === 0) {
         pts.push({ x: 0, y: 0 }, { x: W, y: 0 });
-        pts.push({ x: divPts[0].p2.x, y: divPts[0].p2.y });
-        pts.push({ x: divPts[0].p1.x, y: divPts[0].p1.y });
+        pts.push(divEdges[0].right, divEdges[0].left);
       } else if (zi === COURT_ZONES.length - 1) {
-        pts.push({ x: divPts[zi-1].p1.x, y: divPts[zi-1].p1.y });
-        pts.push({ x: divPts[zi-1].p2.x, y: divPts[zi-1].p2.y });
+        pts.push(divEdges[zi-1].left, divEdges[zi-1].right);
         pts.push({ x: W, y: H }, { x: 0, y: H });
       } else {
-        pts.push({ x: divPts[zi-1].p1.x, y: divPts[zi-1].p1.y });
-        pts.push({ x: divPts[zi-1].p2.x, y: divPts[zi-1].p2.y });
-        pts.push({ x: divPts[zi].p2.x, y: divPts[zi].p2.y });
-        pts.push({ x: divPts[zi].p1.x, y: divPts[zi].p1.y });
+        pts.push(divEdges[zi-1].left, divEdges[zi-1].right);
+        pts.push(divEdges[zi].right, divEdges[zi].left);
       }
       return { zone, pts };
     });
@@ -7172,16 +7169,16 @@ function testingRenderLoop(timestamp) {
       ctx.fill();
     }
 
-    // Draw divider lines
-    for (let i = 0; i < divPts.length; i++) {
-      const d = divPts[i];
+    // Draw divider lines (full canvas width via extrapolation)
+    for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
+      const { left, right } = divEdges[i];
       const isActiveZone = COURT_ZONES[i].id === currentZone.id || COURT_ZONES[i + 1]?.id === currentZone.id;
       ctx.strokeStyle = COURT_ZONES[i].color + '0.9)';
       ctx.lineWidth = isActiveZone ? 2.5 : 1.5;
       ctx.setLineDash(isActiveZone ? [] : [8, 6]);
       ctx.beginPath();
-      ctx.moveTo(d.p1.x, d.p1.y);
-      ctx.lineTo(d.p2.x, d.p2.y);
+      ctx.moveTo(left.x, left.y);
+      ctx.lineTo(right.x, right.y);
       ctx.stroke();
       ctx.setLineDash([]);
     }
