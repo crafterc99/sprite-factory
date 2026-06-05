@@ -1384,6 +1384,15 @@
                 <div class="tv2-set-row">
                   <button id="testingEditBtn" class="btn btn-secondary btn-sm" style="width:100%;font-size:9px">✏ Edit Zones / OOB</button>
                 </div>
+                <!-- Court image upload -->
+                <div class="tv2-set-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:10px;border-top:1px solid #1a1a30;padding-top:10px">
+                  <span class="tv2-set-label" style="margin:0 0 4px">Court Image</span>
+                  <label style="cursor:pointer;display:block">
+                    <div class="btn btn-secondary btn-sm" style="font-size:9px;width:100%;text-align:center;box-sizing:border-box;pointer-events:none">Upload Court Image</div>
+                    <input type="file" id="testingCourtUpload" accept="image/*" style="display:none" onchange="testingLoadCourtImage(this)" />
+                  </label>
+                  <div id="testingCourtName" style="font-family:var(--mono);font-size:8px;color:#404060;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">court.webp</div>
+                </div>
                 <!-- Movement data editor (revealed when anim selected in game mode) -->
                 <div id="gmMoveEditor" class="gm-move-section" style="display:none">
                   <div class="gm-move-label">Movement data</div>
@@ -6883,6 +6892,20 @@ function loadAngleStrips(charName, animName, fallbackUrl, cacheBust) {
     entry.img.src = `/assets/${charName}-${animName}-angle-${ai}.png?t=${t}`;
     TESTING.angleStrips[ai] = entry;
   }
+}
+
+function testingLoadCourtImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => { TESTING.courtImg = img; TESTING.courtLoaded = true; };
+    img.src = e.target.result;
+    const nameEl = document.getElementById('testingCourtName');
+    if (nameEl) nameEl.textContent = file.name;
+  };
+  reader.readAsDataURL(file);
 }
 
 function toggleEditMode() {
