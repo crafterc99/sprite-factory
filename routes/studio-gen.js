@@ -310,7 +310,7 @@ function register(router, ctx) {
         const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);
         const charPixelHeight = loadCharPixelHeight(charName);
         await buildStrip(processedPaths, stripPath, { pixelHeight: charPixelHeight });
-        sbUpload(`${charName}-${animName}.png`, stripPath);
+        sbUpload(`${charName}-${animName}.png`, stripPath).catch(e => console.warn(`[studio-gen] strip upload failed for ${charName}-${animName}:`, e.message));
 
         // Copy individual frames to assets dir so the result grid can load them
         const framesOutDir = path.join(ASSETS_DIR, `${charName}-${animName}-frames`);
@@ -318,7 +318,7 @@ function register(router, ctx) {
         processedPaths.forEach((p, i) => {
           const dest = path.join(framesOutDir, `frame-${i}.png`);
           fs.copyFileSync(p, dest);
-          sbUpload(`${charName}-${animName}-frames/frame-${i}.png`, dest);
+          sbUpload(`${charName}-${animName}-frames/frame-${i}.png`, dest).catch(e => console.warn(`[studio-gen] frame ${i} upload failed:`, e.message));
         });
 
         finishJob(jobId, {

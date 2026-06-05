@@ -266,6 +266,10 @@ router.put('/api/court-presets/:id', async (req, res, params) => {
     stored[params.id] = { ...body, id: params.id };
     fs.mkdirSync(path.dirname(COURT_PRESETS_FILE), { recursive: true });
     fs.writeFileSync(COURT_PRESETS_FILE, JSON.stringify(stored, null, 2));
+    const { uploadJson, isAvailable } = require('./lib/supabase-storage');
+    if (isAvailable()) {
+      await uploadJson('_meta/court-presets.json', stored).catch(e => console.warn('[court-presets] Supabase backup failed:', e.message));
+    }
     json(res, { success: true });
   } catch (e) {
     json(res, { error: e.message }, 500);
@@ -477,12 +481,14 @@ if (require.main === module) {
           console.log(`  [startup] restored ${label} from Supabase`);
         };
         await Promise.all([
-          restoreJson('_meta/characters-full.json',    path.join(__dirname, 'data/.characters.json'),          'characters'),
-          restoreJson('_meta/custom-animations.json',  path.join(__dirname, 'data/.custom-animations.json'),  'custom-animations'),
+          restoreJson('_meta/characters-full.json',    path.join(__dirname, 'data/.characters.json'),          'characters',        true), // always refresh — Supabase is source of truth, not git
+          restoreJson('_meta/custom-animations.json',  path.join(__dirname, 'data/.custom-animations.json'),  'custom-animations', true),
           restoreJson('_meta/char-prompts.json',        path.join(__dirname, 'data/.char-prompts.json'),        'char-prompts'),
           restoreJson('_meta/frame-prompts.json',       path.join(__dirname, 'data/frame-prompts.json'),        'frame-prompts'),
           restoreJson('_meta/cost-tracking.json',       path.join(__dirname, 'data/.cost-tracking.json'),       'cost-tracking'),
-          restoreJson('_meta/testing-config.json',      path.join(__dirname, 'data/.testing-config.json'),      'testing-config', true), // always refresh
+          restoreJson('_meta/testing-config.json',      path.join(__dirname, 'data/.testing-config.json'),      'testing-config',    true), // always refresh
+          restoreJson('_meta/court-presets.json',       path.join(__dirname, 'data/court-presets.json'),        'court-presets',     true),
+          restoreJson('_meta/clothing-registry.json',   path.join(__dirname, 'data/.clothing-registry.json'),  'clothing-registry', true),
         ]);
         // Restore apply-anim metadata files
         const { listFiles } = require('./lib/supabase-storage');
@@ -525,13 +531,11 @@ if (require.main === module) {
           await sbPushFile(sbKey, localPath);
           console.log(`  [startup] seeded ${sbKey} → Supabase (first backup)`);
         };
-        // Always push latest characters — this is our source of truth
-        const charsPath = path.join(__dirname, 'data/.characters.json');
-        if (fs.existsSync(charsPath)) {
-          const chars = JSON.parse(fs.readFileSync(charsPath, 'utf8'));
-          await sbPushJson('_meta/characters-full.json', chars).catch(() => {});
-          console.log('  [startup] characters synced to Supabase');
-        }
+        // Seed characters only if Supabase has NO backup yet (first-ever deploy)
+        // NEVER overwrite Supabase with git data — Supabase is the source of truth, not git
+        await seedIfMissing('_meta/characters-full.json',   path.join(__dirname, 'data/.characters.json'));
+        await seedIfMissing('_meta/court-presets.json',      path.join(__dirname, 'data/court-presets.json'));
+        await seedIfMissing('_meta/clothing-registry.json',  path.join(__dirname, 'data/.clothing-registry.json'));
         // Seed court.webp to Supabase if not already there (restoreAssetsToDir picks it up next deploy)
         await seedFileIfMissing('court.webp', path.join(__dirname, 'data/assets/court.webp'));
       }

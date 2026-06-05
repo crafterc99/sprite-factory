@@ -34,10 +34,9 @@ function saveIndex(items) {
 async function restoreFromSupabase() {
   if (!sbAvailable()) return;
   try {
-    const local = loadIndex();
-    if (local.length > 0) return;
+    // Always prefer Supabase — it is the source of truth, not the local file.
     const buf = await sbDownload(SB_META_KEY);
-    if (!buf) return;
+    if (!buf) return; // Supabase has no backup yet — keep whatever is local
     const remote = JSON.parse(buf.toString('utf8'));
     if (!Array.isArray(remote) || remote.length === 0) return;
     fs.mkdirSync(path.dirname(WARDROBE_INDEX), { recursive: true });

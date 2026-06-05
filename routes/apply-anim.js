@@ -282,11 +282,13 @@ function register(router, ctx) {
           })),
         };
 
-        // Persist metadata to data/apply-anim/ and Supabase
+        // Persist metadata to data/apply-anim/ and Supabase (awaited so it's confirmed before job completes)
         const metaDir = path.resolve(__dirname, '../data/apply-anim');
         fs.mkdirSync(metaDir, { recursive: true });
         fs.writeFileSync(path.join(metaDir, `${animId}.json`), JSON.stringify(metadata, null, 2));
-        if (sbAvailable()) sbUploadJson(`_meta/apply-anim/${animId}.json`, metadata);
+        if (sbAvailable()) {
+          await sbUploadJson(`_meta/apply-anim/${animId}.json`, metadata).catch(e => console.warn('[apply-anim] metadata upload failed:', e.message));
+        }
         scheduleSync();
 
         updateJob(jobId, {

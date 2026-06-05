@@ -158,8 +158,9 @@ async function syncDeletedFromSupabase() {
       if (Array.isArray(remoteRegistry._deleted)) {
         for (const n of remoteRegistry._deleted) remoteDeleted.add(n);
       }
-      // Always restore registry to disk if local file is missing
-      if (!fs.existsSync(CHARACTERS_FILE) && Object.keys(remoteRegistry).filter(k => k !== '_deleted').length > 0) {
+      // Always restore registry from Supabase — it is the source of truth, not git.
+      // This overwrites any stale git-cloned .characters.json on every deploy.
+      if (Object.keys(remoteRegistry).filter(k => k !== '_deleted').length > 0) {
         const dir = path.dirname(CHARACTERS_FILE);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(remoteRegistry, null, 2));
@@ -230,7 +231,9 @@ function loadClothingRegistry() {
 }
 
 function saveClothingRegistry(registry) {
+  fs.mkdirSync(path.dirname(CLOTHING_REGISTRY_FILE), { recursive: true });
   fs.writeFileSync(CLOTHING_REGISTRY_FILE, JSON.stringify(registry, null, 2));
+  if (sbAvailable()) sbUploadJson('_meta/clothing-registry.json', registry).catch(e => console.warn('[clothing-registry] Supabase backup failed:', e.message));
 }
 
 /**
@@ -568,7 +571,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   });
 
   // DELETE /api/character/:name — Remove a character
-  router.delete('/api/character/:name', (req, res, params) => {
+  router.delete('/api/character/:name', async (req, res, params) => {
     const name = params.name;
 
     // Delete portrait and all angle/headshot assets from disk
@@ -587,17 +590,20 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     if (!registry._deleted.includes(name)) registry._deleted.push(name);
     saveCharacters(registry);  // also backs up _deleted to Supabase
 
-    // Delete from Supabase Storage so restoreAssetsToDir doesn't bring files back
+    // Delete from Supabase Storage — awaited so files don't come back on next redeploy
     if (sbAvailable()) {
-      const { listFiles } = require('../lib/supabase-storage');
-      listFiles().then(async files => {
+      try {
+        const { listFiles } = require('../lib/supabase-storage');
+        const files = await listFiles();
         const toRemove = files.filter(f =>
           f === `${name}full.png` ||
           f.startsWith(`${name}-`) ||
           f.startsWith(`applyf-${name}`)
         );
         if (toRemove.length > 0) await sbDeleteFiles(toRemove);
-      }).catch(() => {});
+      } catch (e) {
+        console.warn(`[characters] Supabase deletion failed for "${name}" (files may reappear on redeploy):`, e.message);
+      }
     }
 
     // git rm the deleted asset files so they don't come back on next redeploy
