@@ -288,16 +288,30 @@ router.get('/api/testing-images/status', (req, res) => {
 // ─── Database Health / Debug Endpoint ───────────────────────────────────────
 router.get('/api/debug/db', async (req, res) => {
   const { verifyConnection, isAvailable, downloadFile } = require('./lib/supabase-storage');
+  const urlSet = !!process.env.SUPABASE_URL;
+  const keySet = !!process.env.SUPABASE_SERVICE_KEY;
+  const urlPreview = process.env.SUPABASE_URL ? process.env.SUPABASE_URL.slice(0, 40) + '...' : 'NOT SET';
+  const keyPreview = process.env.SUPABASE_SERVICE_KEY
+    ? (process.env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? 'eyJ...(JWT ok)' : 'SET but not JWT format — check key type')
+    : 'NOT SET';
+
   if (!isAvailable()) {
     return json(res, {
       ok: false,
-      error: 'Supabase env vars not set (SUPABASE_URL, SUPABASE_SERVICE_KEY)',
       configured: false,
+      urlSet, keySet, urlPreview, keyPreview,
+      error: 'SUPABASE_URL or SUPABASE_SERVICE_KEY not set in Railway env vars',
+      fix: 'Go to Railway dashboard → your service → Variables, add SUPABASE_URL and SUPABASE_SERVICE_KEY (service role key, not anon key)',
     });
   }
   try {
     const health = await verifyConnection();
-    const result = { ok: health.ok, configured: true, keyCount: health.keyCount, metaKeys: health.metaKeys, error: health.error };
+    const result = {
+      ok: health.ok, configured: true,
+      urlPreview, keyPreview,
+      keyCount: health.keyCount, metaKeys: health.metaKeys, error: health.error,
+      hint: health.ok ? null : 'Connection failed — check: 1) Supabase project not paused (free tier pauses after 1 week), 2) bucket "sprite-assets" exists and is public, 3) using service-role key not anon key',
+    };
 
     // Peek at character count
     try {
