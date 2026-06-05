@@ -129,15 +129,13 @@ function saveCharacters(data) {
   const dir = path.dirname(CHARACTERS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(data, null, 2));
-  // Back up FULL registry + deleted list to Supabase — survives Railway redeploys
-  // even if git push fails (Supabase is the source of truth for deletions)
   if (sbAvailable()) {
     const deleted = Array.isArray(data._deleted) ? data._deleted : [];
-    // Full registry backup (source of truth)
-    sbUploadJson(SB_REGISTRY_KEY, data);
-    // Deleted-only backup for fast startup sync
+    sbUploadJson(SB_REGISTRY_KEY, data)
+      .then(() => console.log(`[characters] ✓ Supabase backup saved (${Object.keys(data).filter(k=>k!=='_deleted').length} chars)`))
+      .catch(e => console.error('[characters] ✗ CRITICAL — Supabase backup FAILED, data will be lost on redeploy:', e.message));
     if (deleted.length > 0) {
-      sbUploadJson(SB_DELETED_KEY, { deleted });
+      sbUploadJson(SB_DELETED_KEY, { deleted }).catch(e => console.warn('[characters] deleted-list backup failed:', e.message));
     }
   }
 }
@@ -214,7 +212,8 @@ function saveCustomAnimations(data) {
   const dir = path.dirname(CUSTOM_ANIMS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CUSTOM_ANIMS_FILE, JSON.stringify(data, null, 2));
-  if (sbAvailable()) sbUploadJson('_meta/custom-animations.json', data);
+  if (sbAvailable()) sbUploadJson('_meta/custom-animations.json', data)
+    .catch(e => console.error('[characters] custom-animations Supabase backup FAILED:', e.message));
 }
 
 // ─── Clothing Registry ─────────────────────────────────────────────────

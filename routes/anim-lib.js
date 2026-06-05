@@ -36,7 +36,9 @@ function saveIndex(data) {
   const json = JSON.stringify(data, null, 2);
   fs.writeFileSync(INDEX_FILE, json);
   // Back up to Supabase so it survives Railway redeploys (fresh git clone wipes local file)
-  if (sbAvailable()) sbUploadJson(SB_META_KEY, data);
+  if (sbAvailable()) sbUploadJson(SB_META_KEY, data)
+    .then(() => console.log(`[anim-lib] ✓ Supabase backup saved (${Object.keys(data).length} anims)`))
+    .catch(e => console.error('[anim-lib] ✗ CRITICAL — Supabase backup FAILED, anim-lib will be lost on redeploy:', e.message));
 }
 
 /**

@@ -27,32 +27,9 @@ const { cutFrames, removeBackground, cropToContent } = require('../lib/sprite-pr
 const { CHARACTERS } = require('../lib/sprite-generator/prompts');
 const { scheduleSync } = require('../lib/auto-git-sync');
 const { uploadFile: sbUpload, uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { loadCharacters, saveCharacters } = require('./characters');
 
-const CHARACTERS_FILE = path.resolve(__dirname, '../data/.characters.json');
 const CHAR_PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
-
-function loadCharacters() {
-  try {
-    if (fs.existsSync(CHARACTERS_FILE)) return JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
-  } catch {}
-  return {};
-}
-
-function saveCharacters(data) {
-  const dir = path.dirname(CHARACTERS_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(data, null, 2));
-  // Back up to Supabase so characters survive Railway redeploys
-  if (sbAvailable()) {
-    sbUploadJson('_meta/characters-full.json', data).catch(e =>
-      console.warn('[char-pipeline] Supabase character backup failed:', e.message)
-    );
-    const deleted = Array.isArray(data._deleted) ? data._deleted : [];
-    if (deleted.length > 0) {
-      sbUploadJson('_meta/deleted-chars.json', { deleted }).catch(() => {});
-    }
-  }
-}
 
 function loadCharPrompts() {
   try {
@@ -706,28 +683,28 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const step1 = await client.generate(loadCharPrompts().step1, {
           referenceImages: [originalPath],
           aspectRatio: '3:4',
-          resolution: '1K',
+          resolution: '2K',
           model: modelId,
           maxRetries: 2,
-          timeoutMs: 120000,
+          timeoutMs: 150000,
         });
         if (!step1.imageBuffer) throw new Error('Step 1 returned no image');
         const step1Path = path.join(charDir, 'step1-pixel.png');
         fs.writeFileSync(step1Path, step1.imageBuffer);
-        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step1' });
+        recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'portrait-step1' });
 
         // Step 2: pixel art → clean standing portrait
         updateJob(jobId, { step: 2, total: 2, msg: 'Step 2/2 — Building standing portrait…' });
         const step2 = await client.generate(loadCharPrompts().step2, {
           referenceImages: [step1Path],
           aspectRatio: '3:4',
-          resolution: '1K',
+          resolution: '2K',
           model: modelId,
           maxRetries: 2,
-          timeoutMs: 120000,
+          timeoutMs: 150000,
         });
         if (!step2.imageBuffer) throw new Error('Step 2 returned no image');
-        recordCost(modelId, 'char_pipeline', '1K', 1, { character: name, step: 'portrait-step2' });
+        recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'portrait-step2' });
 
         const previewPath = path.join(charDir, 'step2-preview.png');
         fs.writeFileSync(previewPath, step2.imageBuffer);
@@ -841,8 +818,9 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       fs.writeFileSync(portraitPath, Buffer.from(data, 'base64'));
       sbUpload(`${name}full.png`, portraitPath);
 
-      // Store a small thumbnail (240×320) so portrait survives Railway redeploys
-      const thumbBuf = await sharp(portraitPath).resize(240, 320, { fit: 'inside' }).png().toBuffer();
+      // Store a high-res copy (1024×1365) in registry so portrait survives Railway redeploys
+      // and serves as a quality reference if Supabase is unavailable.
+      const thumbBuf = await sharp(portraitPath).resize(1024, 1365, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
       const portraitThumb = thumbBuf.toString('base64');
 
       CHARACTERS[name] = {

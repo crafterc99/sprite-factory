@@ -285,6 +285,114 @@ router.get('/api/testing-images/status', (req, res) => {
   });
 });
 
+// ─── Database Health / Debug Endpoint ───────────────────────────────────────
+router.get('/api/debug/db', async (req, res) => {
+  const { verifyConnection, isAvailable, downloadFile } = require('./lib/supabase-storage');
+  if (!isAvailable()) {
+    return json(res, {
+      ok: false,
+      error: 'Supabase env vars not set (SUPABASE_URL, SUPABASE_SERVICE_KEY)',
+      configured: false,
+    });
+  }
+  try {
+    const health = await verifyConnection();
+    const result = { ok: health.ok, configured: true, keyCount: health.keyCount, metaKeys: health.metaKeys, error: health.error };
+
+    // Peek at character count
+    try {
+      const charBuf = await downloadFile('_meta/characters-full.json');
+      if (charBuf) {
+        const chars = JSON.parse(charBuf.toString('utf8'));
+        result.characters = Object.keys(chars).filter(k => k !== '_deleted').length;
+        result.deletedChars = (chars._deleted || []).length;
+      } else {
+        result.characters = 0;
+        result.charactersMissing = true;
+      }
+    } catch { result.characters = 'parse-error'; }
+
+    // Peek at anim-lib count
+    try {
+      const animBuf = await downloadFile('_meta/anim-lib-index.json');
+      if (animBuf) {
+        const anims = JSON.parse(animBuf.toString('utf8'));
+        result.animations = Object.keys(anims).length;
+      } else {
+        result.animations = 0;
+        result.animsMissing = true;
+      }
+    } catch { result.animations = 'parse-error'; }
+
+    // Peek at wardrobe count
+    try {
+      const wardBuf = await downloadFile('_meta/wardrobe.json');
+      if (wardBuf) {
+        const ward = JSON.parse(wardBuf.toString('utf8'));
+        result.wardrobe = ward.length;
+      } else {
+        result.wardrobe = 0;
+        result.wardrobeMissing = true;
+      }
+    } catch { result.wardrobe = 'parse-error'; }
+
+    json(res, result);
+  } catch (e) {
+    json(res, { ok: false, configured: true, error: e.message });
+  }
+});
+
+// ─── Force backup endpoint — immediately flushes all data to Supabase ────────
+router.post('/api/debug/backup-now', async (req, res) => {
+  const { isAvailable: sbOk, uploadJson: sbPush } = require('./lib/supabase-storage');
+  if (!sbOk()) return json(res, { ok: false, error: 'Supabase not configured' });
+  const results = {};
+  try {
+    const { loadCharacters } = require('./routes/characters');
+    const chars = loadCharacters();
+    const count = Object.keys(chars).filter(k => k !== '_deleted').length;
+    await sbPush('_meta/characters-full.json', chars);
+    results.characters = `saved (${count})`;
+  } catch (e) { results.characters = `FAILED: ${e.message}`; }
+
+  try {
+    const animFile = path.join(__dirname, 'data/anim-lib/index.json');
+    if (fs.existsSync(animFile)) {
+      const anims = JSON.parse(fs.readFileSync(animFile, 'utf8'));
+      await sbPush('_meta/anim-lib-index.json', anims);
+      results.animations = `saved (${Object.keys(anims).length})`;
+    } else { results.animations = 'no local file'; }
+  } catch (e) { results.animations = `FAILED: ${e.message}`; }
+
+  try {
+    const wardFile = path.join(__dirname, 'data/wardrobe.json');
+    if (fs.existsSync(wardFile)) {
+      const ward = JSON.parse(fs.readFileSync(wardFile, 'utf8'));
+      await sbPush('_meta/wardrobe.json', ward);
+      results.wardrobe = `saved (${ward.length})`;
+    } else { results.wardrobe = 'no local file'; }
+  } catch (e) { results.wardrobe = `FAILED: ${e.message}`; }
+
+  try {
+    const testFile = path.join(__dirname, 'data/.testing-config.json');
+    if (fs.existsSync(testFile)) {
+      await sbPush('_meta/testing-config.json', JSON.parse(fs.readFileSync(testFile, 'utf8')));
+      results.testingConfig = 'saved';
+    }
+  } catch (e) { results.testingConfig = `FAILED: ${e.message}`; }
+
+  try {
+    const presetsFile = path.join(__dirname, 'data/court-presets.json');
+    if (fs.existsSync(presetsFile)) {
+      await sbPush('_meta/court-presets.json', JSON.parse(fs.readFileSync(presetsFile, 'utf8')));
+      results.courtPresets = 'saved';
+    }
+  } catch (e) { results.courtPresets = `FAILED: ${e.message}`; }
+
+  console.log('[backup-now] forced backup results:', results);
+  json(res, { ok: true, results });
+});
+
 // ─── Court Presets Endpoints ─────────────────────────────────────────────
 const COURT_PRESETS_FILE = path.join(__dirname, 'data/court-presets.json');
 
@@ -436,12 +544,22 @@ async function handler(req, res) {
 
 if (require.main === module) {
   (async () => {
-    // Pull latest committed data on startup (e.g. from another machine or manual git push)
-    try {
-      execSync('git pull origin main --no-rebase --ff-only', { cwd: __dirname, timeout: 15000, stdio: 'ignore' });
-      console.log('  [startup] git pull ok');
-    } catch {
-      // Not fatal — offline or no remote, just start with local data
+      // ── Supabase connectivity check — must pass before restoring any data
+    const { verifyConnection: sbVerify, isAvailable: sbIsAvailable } = require('./lib/supabase-storage');
+    if (!sbIsAvailable()) {
+      console.error('\n  ╔══════════════════════════════════════════════════════════════╗');
+      console.error('  ║  CRITICAL: SUPABASE_URL or SUPABASE_SERVICE_KEY not set      ║');
+      console.error('  ║  All data (characters, anims, wardrobe) will be LOST on       ║');
+      console.error('  ║  every Railway redeploy. Set env vars in Railway dashboard.   ║');
+      console.error('  ╚══════════════════════════════════════════════════════════════╝\n');
+    } else {
+      const sbHealth = await sbVerify();
+      if (!sbHealth.ok) {
+        console.error(`  [startup] ✗ Supabase connection FAILED: ${sbHealth.error}`);
+        console.error('  [startup] Data will not persist across redeploys until this is fixed.');
+      } else {
+        console.log(`  [startup] ✓ Supabase connected — ${sbHealth.keyCount} asset(s) in bucket`);
+      }
     }
 
     // ── STEP 1: Sync deletions from Supabase FIRST — before any asset restore
@@ -620,8 +738,72 @@ if (require.main === module) {
       console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
       console.log(`  Animations: 8`);
       console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}`);
-      console.log(`  GitHub Sync: ${process.env.GITHUB_TOKEN ? 'enabled' : 'DISABLED — set GITHUB_TOKEN for persistence'}\n`);
+      console.log(`  Supabase: ${process.env.SUPABASE_URL ? 'configured' : 'NOT SET — data will not persist'}\n`);
     });
+
+    // ── Periodic Supabase backup (safety net) ──────────────────────────────
+    // Every 5 minutes, flush all current data to Supabase even if individual
+    // fire-and-forget saves failed. Ensures data is never more than 5 min stale.
+    setInterval(async () => {
+      const { isAvailable: sbOk, uploadJson: sbPush } = require('./lib/supabase-storage');
+      if (!sbOk()) return;
+      const now = new Date().toISOString().slice(0,19);
+      try {
+        const { loadCharacters } = require('./routes/characters');
+        const chars = loadCharacters();
+        const count = Object.keys(chars).filter(k => k !== '_deleted').length;
+        if (count > 0) {
+          await sbPush('_meta/characters-full.json', chars);
+          console.log(`  [backup ${now}] ✓ characters (${count})`);
+        }
+      } catch (e) { console.warn(`  [backup] characters failed:`, e.message); }
+
+      try {
+        const animFile = path.join(__dirname, 'data/anim-lib/index.json');
+        if (fs.existsSync(animFile)) {
+          const anims = JSON.parse(fs.readFileSync(animFile, 'utf8'));
+          if (Object.keys(anims).length > 0) {
+            await sbPush('_meta/anim-lib-index.json', anims);
+            console.log(`  [backup ${now}] ✓ anim-lib (${Object.keys(anims).length})`);
+          }
+        }
+      } catch (e) { console.warn(`  [backup] anim-lib failed:`, e.message); }
+
+      try {
+        const wardrobeFile = path.join(__dirname, 'data/wardrobe.json');
+        if (fs.existsSync(wardrobeFile)) {
+          const wardrobe = JSON.parse(fs.readFileSync(wardrobeFile, 'utf8'));
+          if (wardrobe.length > 0) {
+            await sbPush('_meta/wardrobe.json', wardrobe);
+            console.log(`  [backup ${now}] ✓ wardrobe (${wardrobe.length})`);
+          }
+        }
+      } catch (e) { console.warn(`  [backup] wardrobe failed:`, e.message); }
+
+      try {
+        const clothingFile = path.join(__dirname, 'data/.clothing-registry.json');
+        if (fs.existsSync(clothingFile)) {
+          const clothing = JSON.parse(fs.readFileSync(clothingFile, 'utf8'));
+          await sbPush('_meta/clothing-registry.json', clothing);
+        }
+      } catch (e) { /* clothing registry is optional */ }
+
+      try {
+        const presetsFile = path.join(__dirname, 'data/court-presets.json');
+        if (fs.existsSync(presetsFile)) {
+          const presets = JSON.parse(fs.readFileSync(presetsFile, 'utf8'));
+          await sbPush('_meta/court-presets.json', presets);
+        }
+      } catch (e) { /* court presets optional */ }
+
+      try {
+        const testingFile = path.join(__dirname, 'data/.testing-config.json');
+        if (fs.existsSync(testingFile)) {
+          const config = JSON.parse(fs.readFileSync(testingFile, 'utf8'));
+          await sbPush('_meta/testing-config.json', config);
+        }
+      } catch (e) { /* testing config optional */ }
+    }, 5 * 60 * 1000);
   })();
 }
 
