@@ -28,7 +28,11 @@ function loadIndex() {
 function saveIndex(items) {
   fs.mkdirSync(path.dirname(WARDROBE_INDEX), { recursive: true });
   fs.writeFileSync(WARDROBE_INDEX, JSON.stringify(items, null, 2));
-  if (sbAvailable()) sbUploadJson(SB_META_KEY, items);
+  if (sbAvailable()) {
+    sbUploadJson(SB_META_KEY, items).catch(e =>
+      console.warn('[wardrobe] Supabase backup failed:', e.message)
+    );
+  }
 }
 
 async function restoreFromSupabase() {

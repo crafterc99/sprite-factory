@@ -42,6 +42,16 @@ function saveCharacters(data) {
   const dir = path.dirname(CHARACTERS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(data, null, 2));
+  // Back up to Supabase so characters survive Railway redeploys
+  if (sbAvailable()) {
+    sbUploadJson('_meta/characters-full.json', data).catch(e =>
+      console.warn('[char-pipeline] Supabase character backup failed:', e.message)
+    );
+    const deleted = Array.isArray(data._deleted) ? data._deleted : [];
+    if (deleted.length > 0) {
+      sbUploadJson('_meta/deleted-chars.json', { deleted }).catch(() => {});
+    }
+  }
 }
 
 function loadCharPrompts() {

@@ -496,8 +496,20 @@ if (require.main === module) {
 
     // ── STEP 3: Restore missing assets from Supabase — skipping deleted chars
     try {
-      const { restoreAssetsToDir } = require('./lib/supabase-storage');
+      const { restoreAssetsToDir, downloadFile: dlFile, isAvailable: sbReady } = require('./lib/supabase-storage');
       await restoreAssetsToDir(path.join(__dirname, 'data/assets'), deletedCharSet);
+      // Always force-refresh the court and hoop images — they change frequently and
+      // the "skip if exists" logic in restoreAssetsToDir would keep stale versions.
+      if (sbReady()) {
+        const assetsDir = path.join(__dirname, 'data/assets');
+        fs.mkdirSync(assetsDir, { recursive: true });
+        for (const fname of ['court-uploaded.png', 'hoop-processed.png']) {
+          try {
+            const buf = await dlFile(fname);
+            if (buf) { fs.writeFileSync(path.join(assetsDir, fname), buf); }
+          } catch {}
+        }
+      }
     } catch (e) {
       console.warn('  [startup] Supabase restore failed (non-fatal):', e.message);
     }
