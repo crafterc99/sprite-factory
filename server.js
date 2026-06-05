@@ -458,43 +458,10 @@ if (require.main === module) {
       console.warn('  [startup] character deletion sync failed (non-fatal):', e.message);
     }
 
-    // ── STEP 2: Restore character body angle images from .characters.json base64
-    try {
-      const CHARACTERS_FILE = path.join(__dirname, 'data/.characters.json');
-      const ASSETS_DIR_RESTORE = path.join(__dirname, 'data/assets');
-      if (fs.existsSync(CHARACTERS_FILE)) {
-        const chars = JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
-        // Merge disk deletedSet with Supabase deletedSet for full coverage
-        const localDeleted = Array.isArray(chars._deleted) ? chars._deleted : [];
-        const fullDeletedSet = new Set([...deletedCharSet, ...localDeleted]);
-        fs.mkdirSync(ASSETS_DIR_RESTORE, { recursive: true });
-        for (const [name, char] of Object.entries(chars)) {
-          if (name === '_deleted') continue;
-          if (fullDeletedSet.has(name)) continue; // don't restore assets for deleted chars
-          if (char.bodyAngles) {
-            for (const [idx, b64] of Object.entries(char.bodyAngles)) {
-              const p = path.join(ASSETS_DIR_RESTORE, `${name}-angle-${idx}.png`);
-              if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(b64, 'base64'));
-            }
-          }
-          if (char.headshots) {
-            for (const [idx, b64] of Object.entries(char.headshots)) {
-              const p = path.join(ASSETS_DIR_RESTORE, `${name}-headshot-${idx}.png`);
-              if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(b64, 'base64'));
-            }
-          }
-          if (char.portraitBase64) {
-            const p = path.join(ASSETS_DIR_RESTORE, `${name}full.png`);
-            if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(char.portraitBase64.replace(/^data:image\/\w+;base64,/,''), 'base64'));
-          }
-        }
-        console.log('  [startup] character assets restored from .characters.json');
-      }
-    } catch (e) {
-      console.warn('  [startup] asset restore failed (non-fatal):', e.message);
-    }
-
-    // ── STEP 3: Restore missing assets from Supabase — skipping deleted chars
+    // ── STEP 2: Restore assets from Supabase FIRST — full resolution files take priority
+    // Base64 thumbnails in .characters.json are only used as a last-resort fallback
+    // if Supabase is unreachable. Doing this before base64 restore means Supabase files
+    // win and portrait/angle quality is preserved at full resolution.
     try {
       const { restoreAssetsToDir, downloadFile: dlFile, isAvailable: sbReady } = require('./lib/supabase-storage');
       await restoreAssetsToDir(path.join(__dirname, 'data/assets'), deletedCharSet);
@@ -512,6 +479,45 @@ if (require.main === module) {
       }
     } catch (e) {
       console.warn('  [startup] Supabase restore failed (non-fatal):', e.message);
+    }
+
+    // ── STEP 3: Fallback — restore any STILL-MISSING assets from .characters.json base64
+    // Only runs for files that Supabase couldn't provide (network issue or file never uploaded).
+    // This is intentionally AFTER the Supabase restore so full-res Supabase files always win.
+    try {
+      const CHARACTERS_FILE = path.join(__dirname, 'data/.characters.json');
+      const ASSETS_DIR_RESTORE = path.join(__dirname, 'data/assets');
+      if (fs.existsSync(CHARACTERS_FILE)) {
+        const chars = JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
+        const localDeleted = Array.isArray(chars._deleted) ? chars._deleted : [];
+        const fullDeletedSet = new Set([...deletedCharSet, ...localDeleted]);
+        fs.mkdirSync(ASSETS_DIR_RESTORE, { recursive: true });
+        for (const [name, char] of Object.entries(chars)) {
+          if (name === '_deleted') continue;
+          if (fullDeletedSet.has(name)) continue;
+          if (char.bodyAngles) {
+            for (const [idx, b64] of Object.entries(char.bodyAngles)) {
+              const p = path.join(ASSETS_DIR_RESTORE, `${name}-angle-${idx}.png`);
+              if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(b64, 'base64'));
+            }
+          }
+          if (char.headshots) {
+            for (const [idx, b64] of Object.entries(char.headshots)) {
+              const p = path.join(ASSETS_DIR_RESTORE, `${name}-headshot-${idx}.png`);
+              if (!fs.existsSync(p)) fs.writeFileSync(p, Buffer.from(b64, 'base64'));
+            }
+          }
+          if (char.portraitBase64) {
+            const p = path.join(ASSETS_DIR_RESTORE, `${name}full.png`);
+            if (!fs.existsSync(p)) {
+              fs.writeFileSync(p, Buffer.from(char.portraitBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64'));
+            }
+          }
+        }
+        console.log('  [startup] base64 fallback restore complete (only missing files)');
+      }
+    } catch (e) {
+      console.warn('  [startup] base64 fallback restore failed (non-fatal):', e.message);
     }
 
     // ── STEP 4: Restore animation library from Supabase if local index is empty
