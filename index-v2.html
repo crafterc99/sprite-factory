@@ -686,21 +686,40 @@
   .wardrobe-empty { font-family:var(--mono); font-size:10px; color:#30304a; padding:16px 0; }
 
   /* ─── TESTING PAGE ─── */
-  /* ── Testing V2 — simplified full-canvas layout ─────────────────────── */
-  .tv2-layout { display:flex; flex-direction:column; height:calc(100vh - 52px); overflow:hidden; background:#07070f; }
+  /* ── Testing V2 — left panel + court canvas ─────────────────────────── */
+  .tv2-layout { display:flex; flex-direction:row; height:calc(100vh - 52px); overflow:hidden; background:#07070f; }
 
-  /* Character strip */
-  .tv2-char-strip { display:flex; align-items:center; gap:0; padding:0 10px; background:#0b0b18; border-bottom:1px solid #151528; flex-shrink:0; height:58px; overflow-x:auto; scrollbar-width:none; }
-  .tv2-char-strip::-webkit-scrollbar { display:none; }
-  .testing-char-grid { display:flex; gap:6px; align-items:center; }
-  .testing-char-card { display:flex; flex-direction:column; align-items:center; gap:2px; padding:5px 8px; border-radius:8px; border:1.5px solid #1a1a2a; cursor:pointer; transition:all .12s; background:#10101c; min-width:52px; }
+  /* Left panel */
+  .tv2-left-panel { width:210px; flex-shrink:0; display:flex; flex-direction:column; background:#0b0b18; border-right:1px solid #151528; overflow:hidden; }
+  .tv2-left-header { flex-shrink:0; padding:8px 8px 0; border-bottom:1px solid #151528; }
+  .tv2-left-header-title { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:#252540; text-transform:uppercase; padding-bottom:6px; }
+  .testing-char-grid { display:flex; gap:4px; align-items:center; overflow-x:auto; scrollbar-width:none; padding-bottom:8px; }
+  .testing-char-grid::-webkit-scrollbar { display:none; }
+  .testing-char-card { display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 6px; border-radius:6px; border:1.5px solid #1a1a2a; cursor:pointer; transition:all .12s; background:#10101c; min-width:44px; flex-shrink:0; }
   .testing-char-card:hover { border-color:#35355a; background:#14142a; }
   .testing-char-card.active { border-color:#00cc44; background:#091909; }
-  .testing-char-card img { width:32px; height:32px; image-rendering:pixelated; object-fit:contain; display:block; }
-  .testing-char-card .testing-char-name { font-family:var(--mono); font-size:7px; letter-spacing:0.5px; color:#50507a; text-transform:uppercase; white-space:nowrap; }
+  .testing-char-card img { width:28px; height:28px; image-rendering:pixelated; object-fit:contain; display:block; }
+  .testing-char-card .testing-char-name { font-family:var(--mono); font-size:6px; letter-spacing:0.5px; color:#50507a; text-transform:uppercase; white-space:nowrap; }
   .testing-char-card.active .testing-char-name { color:#00cc44; }
-  .tv2-strip-sep { width:1px; background:#151528; height:36px; margin:0 8px; flex-shrink:0; }
-  .tv2-strip-actions { display:flex; gap:6px; margin-left:auto; flex-shrink:0; align-items:center; }
+  /* Moves list */
+  .tv2-moves-list { flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1a30 transparent; }
+  .tv2-section-hdr { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:#252540; text-transform:uppercase; padding:8px 10px 3px; }
+  .tv2-move-item { display:flex; flex-direction:column; padding:6px 10px; cursor:pointer; border-left:2px solid transparent; transition:background .1s; }
+  .tv2-move-item:hover { background:#0e0e1a; }
+  .tv2-move-item.active { background:#0a0a16; border-left-color:var(--mclr,#5050aa); }
+  .tv2-move-item.disabled { opacity:0.4; cursor:default; }
+  .tv2-move-row { display:flex; align-items:center; gap:5px; }
+  .tv2-zone-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .tv2-move-name { font-family:var(--mono); font-size:10px; color:#60608a; flex:1; }
+  .tv2-move-name.live { color:#c0c0e0; }
+  .tv2-move-key { font-family:var(--mono); font-size:7px; background:#0e0e1c; border:1px solid #222240; border-radius:3px; padding:1px 5px; color:#50509a; white-space:nowrap; }
+  .tv2-move-sub { font-size:8px; color:#353558; margin-top:1px; padding-left:11px; }
+  /* Left footer */
+  .tv2-left-footer { flex-shrink:0; display:flex; gap:6px; padding:8px; justify-content:flex-end; border-top:1px solid #151528; align-items:center; }
+  /* Compat stubs */
+  .tv2-char-strip { display:none; }
+  .tv2-strip-sep { display:none; }
+  .tv2-strip-actions { display:none; }
 
   /* Court area */
   .tv2-court-wrap { flex:1; position:relative; display:flex; align-items:center; justify-content:center; background:#0a0a14; overflow:hidden; }
@@ -1277,11 +1296,16 @@
       <div class="page" id="page-testing">
         <div class="tv2-layout">
 
-          <!-- ① Character strip -->
-          <div class="tv2-char-strip">
-            <div id="testingCharGrid" class="testing-char-grid"></div>
-            <div class="tv2-strip-sep"></div>
-            <div class="tv2-strip-actions">
+          <!-- ① Left panel — character selector + moves/controls list -->
+          <div class="tv2-left-panel">
+            <div class="tv2-left-header">
+              <div class="tv2-left-header-title">Characters</div>
+              <div id="testingCharGrid" class="testing-char-grid"></div>
+            </div>
+            <div class="tv2-moves-list" id="tvMovesPanel">
+              <div style="color:#252540;font-size:10px;padding:14px 10px;font-family:var(--mono)">Select a character<br>to see moves</div>
+            </div>
+            <div class="tv2-left-footer">
               <button class="tv2-icon-btn" id="tv2CtrlBtn" onclick="tv2TogglePanel('ctrl')" title="Controls">?</button>
               <button class="tv2-icon-btn" id="tv2SetBtn"  onclick="tv2TogglePanel('set')"  title="Settings">⚙</button>
             </div>
@@ -1498,64 +1522,7 @@
                   <div id="gmZoneSaveStatus" style="font-size:9px;color:#50507a;margin-top:4px;font-family:var(--mono)"></div>
                 </div>
 
-                <!-- ── Sandbox Mode ─────────────────────────────────────────────── -->
-                <div style="border-top:1px solid #1e1e30;padding-top:10px;margin-top:10px">
-                  <div class="gm-move-label" style="display:flex;justify-content:space-between;align-items:center">
-                    Sandbox
-                    <button id="sandboxToggleBtn" onclick="toggleSandboxMode()"
-                      style="font-size:8px;padding:2px 8px;background:#1a1a2e;border:1px solid #2e2e50;border-radius:4px;color:#60608a;cursor:pointer;font-family:var(--mono)">
-                      OFF
-                    </button>
-                  </div>
-
-                  <div id="sandboxPanel" style="display:none">
-                    <!-- Court preset selector -->
-                    <div class="gm-move-row" style="margin-top:6px">
-                      <span>Court</span>
-                      <select id="sandboxCourtSelect" onchange="sandboxLoadPreset(this.value)"
-                        style="font-size:9px;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#ccc;padding:2px 4px;flex:1;height:22px">
-                        <option value="default">Main Court</option>
-                      </select>
-                    </div>
-                    <!-- Calibration toggle -->
-                    <div class="gm-move-row">
-                      <button id="sandboxCalibBtn" onclick="toggleCalibration()"
-                        style="font-size:9px;flex:1;padding:3px 0;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#888;cursor:pointer">
-                        Calibrate Zones
-                      </button>
-                    </div>
-                    <!-- Overlays -->
-                    <div style="font-size:9px;color:#50507a;margin:6px 0 3px">Overlays</div>
-                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvPolyZones" checked onchange="toggleSandboxOverlay('polygonZones')"> Polygon Zones</label></div>
-                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvDirections" checked onchange="toggleSandboxOverlay('directions')"> Directions</label></div>
-                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvFacingCone" onchange="toggleSandboxOverlay('facingCone')"> Facing Cone</label></div>
-                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvMoveVec" onchange="toggleSandboxOverlay('movementVector')"> Move Vector</label></div>
-                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvValidAngles" onchange="toggleSandboxOverlay('validAngles')"> Valid Angles</label></div>
-                    <div class="tv2-set-row"><label><input type="checkbox" id="sbOvGhost" onchange="toggleSandboxOverlay('ghostFrames')"> Ghost Frames</label></div>
-                    <!-- Direction config -->
-                    <div style="font-size:9px;color:#50507a;margin:6px 0 3px">Direction Config</div>
-                    <div class="gm-move-row">
-                      <span>Count</span>
-                      <input type="number" id="sbDirCount" min="1" max="8" value="8"
-                        style="width:38px;background:#0a0a14;border:1px solid #1e1e30;border-radius:4px;color:#ccc;padding:2px 4px;font-size:9px;text-align:center;font-family:var(--mono)"
-                        onchange="setSandboxDirCount(parseInt(this.value)||8)">
-                    </div>
-                    <!-- Live debug readout -->
-                    <div style="font-size:9px;color:#50507a;margin:6px 0 3px">Live State</div>
-                    <div id="sbDebugPos"    style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">pos: —</div>
-                    <div id="sbDebugZone"   style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">zone: —</div>
-                    <div id="sbDebugArea"   style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">area: —</div>
-                    <div id="sbDebugDir"  style="font-size:8px;color:#a78bfa;font-family:var(--mono);line-height:1.8">dir: —</div>
-                    <div id="sbDebugSprite" style="font-size:8px;color:#60a5fa;font-family:var(--mono);line-height:1.8;word-break:break-all">sprite: —</div>
-                    <div id="sbDebugAnim"   style="font-size:8px;color:#60608a;font-family:var(--mono);line-height:1.8">anim: —</div>
-                    <div id="sbDebugReason" style="font-size:8px;font-family:var(--mono);line-height:1.8;color:#888;margin-top:2px;word-break:break-word">—</div>
-                    <!-- Actions -->
-                    <div style="display:flex;gap:4px;margin-top:8px">
-                      <button class="btn btn-secondary btn-sm" style="font-size:9px;flex:1" onclick="sandboxTeleport()">Teleport</button>
-                      <button class="btn btn-secondary btn-sm" style="font-size:9px;flex:1" onclick="exportDebugSnapshot()">Snapshot</button>
-                    </div>
-                  </div>
-                </div>
+                <!-- Sandbox mode removed — use Edit Zones/OOB for zone calibration -->
               </div>
             </div>
 
@@ -6705,6 +6672,15 @@ function initTestingPage() {
     }
   });
 
+  // Restore processed hoop image from IndexedDB
+  _loadHoopIDB().then(dataUrl => {
+    if (dataUrl) {
+      const img = new Image();
+      img.onload = () => { TESTING.hoopImg = img; TESTING.hoopLoaded = true; };
+      img.src = dataUrl;
+    }
+  }).catch(() => {});
+
   loadTestingRoster();
   loadTestingConfig(); // restore OOB corners + zone dividers from Supabase
   checkTcPersistence();
@@ -6909,20 +6885,87 @@ function renderTestingCharGrid() {
   `).join('');
 }
 
+// ── Move definitions — game controls for the left panel ─────────────────────
+const MOVE_DEFS = [
+  { id: 'idle',      label: 'Idle Dribble', key: 'auto',    desc: 'Standing still' },
+  { id: 'walk',      label: 'Walk',         key: 'WASD',    desc: 'Slow move' },
+  { id: 'run',       label: 'Run',          key: 'WASD+⇧',  desc: 'Sprint' },
+  { id: 'crossover', label: 'Crossover',    key: 'Q / E',   desc: 'Flick or Q/E' },
+  { id: 'stepback',  label: 'Step Back',    key: 'L',       desc: '○ button' },
+  { id: 'jumpshot',  label: 'Jump Shot',    key: 'I',       desc: '□ button' },
+  { id: 'dribble',   label: 'Dribble',      key: 'J/Spc',   desc: '✕ button' },
+  { id: 'steal',     label: 'Steal',        key: 'F+I',     desc: 'Defense+□' },
+];
+
+function _moveZoneInfo(animName) {
+  const lc = (animName || '').toLowerCase();
+  if (lc.includes('back') && !lc.includes('step') && !lc.includes('dribble')) return { label: 'Back zone', color: 'rgba(80,160,255,0.8)' };
+  if (lc.includes('left')) return { label: 'Left zone', color: 'rgba(180,255,0,0.7)' };
+  if (lc.includes('front')) return { label: 'Front zone', color: 'rgba(255,80,80,0.7)' };
+  return { label: 'All zones', color: 'rgba(140,100,255,0.6)' };
+}
+
+function renderMovesPanel(charName) {
+  const panel = document.getElementById('tvMovesPanel');
+  if (!panel) return;
+  const char = TESTING.roster.find(c => c.name === charName);
+  if (!char) { panel.innerHTML = '<div style="color:#252540;font-size:10px;padding:14px 10px;font-family:var(--mono)">No character</div>'; return; }
+  const curAnim = TESTING.selectedAnim || '';
+  let html = '<div class="tv2-section-hdr">Game Controls</div>';
+  for (const m of MOVE_DEFS) {
+    const hasSprite = !!(char.savedAnimations?.[m.id] || char.sprites?.[m.id]?.exists);
+    const isActive = curAnim === m.id || curAnim === `__saved__${m.id}`;
+    const zi = _moveZoneInfo(m.id);
+    const clickAttr = hasSprite ? `onclick="testingSelectAnim('${m.id}')"` : '';
+    html += `<div class="tv2-move-item${isActive?' active':''}${!hasSprite?' disabled':''}" ${clickAttr} style="--mclr:${zi.color}">
+      <div class="tv2-move-row">
+        <span class="tv2-zone-dot" style="background:${zi.color}"></span>
+        <span class="tv2-move-name${hasSprite?' live':''}">${m.label}</span>
+        <span class="tv2-move-key">${m.key}</span>
+      </div>
+      <div class="tv2-move-sub">${m.desc}</div>
+    </div>`;
+  }
+  const saved = char.savedAnimations ? Object.values(char.savedAnimations) : [];
+  if (saved.length) {
+    html += '<div class="tv2-section-hdr">Saved Animations</div>';
+    for (const a of saved) {
+      const isActive = curAnim === `__saved__${a.animId}`;
+      html += `<div class="tv2-move-item${isActive?' active':''}" onclick="testingSelectSavedAnim('${a.animId}','${a.spriteUrl}',${a.frameCount},${a.fps},${a.angleIndex ?? 'null'})" style="--mclr:#5050aa">
+        <div class="tv2-move-row">
+          <span class="tv2-zone-dot" style="background:#5050aa"></span>
+          <span class="tv2-move-name live">${a.animName || a.animId}</span>
+          <span class="tv2-move-key">${a.frameCount}f</span>
+        </div>
+        <div class="tv2-move-sub">${a.angle || 'custom'}</div>
+      </div>`;
+    }
+  }
+  panel.innerHTML = html;
+}
+
 function testingSelectChar(charName) {
   TESTING.selectedChar = charName;
   TESTING.selectedAnim = null;
   TESTING.stripLoaded = false;
   renderTestingCharGrid();
 
-  // Get character data for Soul Jam calibration
   const char = TESTING.roster.find(c => c.name === charName);
   if (char) {
     TESTING.pixelHeight = char.pixelHeight || 112;
     TESTING.scaleMultiplier = char.scaleMultiplier || 1;
   }
 
-  renderTestingAnimList(charName);
+  renderMovesPanel(charName);
+  renderTestingAnimList(charName); // keep settings panel in sync too
+
+  // Auto-start game mode so controls are always live
+  if (!GM.active) {
+    startGameMode(true); // silent = no toast
+  } else {
+    GM.selectedChar = charName;
+    loadGMAnims();
+  }
 }
 
 function renderTestingAnimList(charName) {
@@ -7070,6 +7113,24 @@ async function _loadCourtIDB() {
     tx.onerror = () => res({ dataUrl: null, name: null });
   });
 }
+async function _saveHoopIDB(dataUrl) {
+  const db = await _courtDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('assets', 'readwrite');
+    tx.objectStore('assets').put(dataUrl, 'hoopImage');
+    tx.oncomplete = res; tx.onerror = rej;
+  });
+}
+async function _loadHoopIDB() {
+  const db = await _courtDB();
+  return new Promise(res => {
+    const tx = db.transaction('assets', 'readonly');
+    let dataUrl = null;
+    tx.objectStore('assets').get('hoopImage').onsuccess = e => { dataUrl = e.target.result; };
+    tx.oncomplete = () => res(dataUrl);
+    tx.onerror = () => res(null);
+  });
+}
 
 function testingLoadCourtImage(input) {
   const file = input.files[0];
@@ -7141,6 +7202,12 @@ function hoopBgProcess() {
   if (dlBtn) dlBtn.style.display = '';
   const status = document.getElementById('hoopBgStatus');
   if (status) status.textContent = 'Done — background + glass removed';
+  // Save to IndexedDB and load onto court
+  const resultDataUrl = canvas.toDataURL('image/png');
+  _saveHoopIDB(resultDataUrl).catch(() => {});
+  const hImg = new Image();
+  hImg.onload = () => { TESTING.hoopImg = hImg; TESTING.hoopLoaded = true; };
+  hImg.src = resultDataUrl;
 }
 
 function hoopBgDownload() {
@@ -7563,35 +7630,13 @@ function testingRenderLoop(timestamp) {
       ctx.fill();
     }
 
-    // ── Sandbox: character overlays (drawn on top of character) ──────────────
-    if (TESTING.sandboxMode) {
-      const facingRight = GM.active ? (GM._facingRight ?? true) : true;
-      if (TESTING.sandboxOverlays.facingCone) {
-        drawFacingCone(ctx, TESTING.charX, TESTING.charY, facingRight);
-      }
-      if (TESTING.sandboxOverlays.movementVector && GM.active && GM.physics) {
-        drawMovementVector(ctx, TESTING.charX, TESTING.charY, GM.physics.vx ?? 0, GM.physics.vy ?? 0);
-      }
-      if (TESTING.sandboxOverlays.validAngles) {
-        drawValidAngleIcons(ctx, TESTING.charX, TESTING.charY, TESTING.selectedAnim, GM.charAnims ?? []);
-      }
-      // Push current frame to ghost buffer (capped at 5, every 3rd frame)
-      if (TESTING.sandboxOverlays.ghostFrames && TESTING.currentFrame % 3 === 0) {
-        const ghostEntry = { img: useHD ? hdImg : activeImg, alpha: 0.35, dx: drawX, dy: drawY, dw: drawW, dh: drawH };
-        if (!useHD) {
-          const _fw = activeFCount > 0 ? Math.round(activeImg.width / activeFCount) : activeImg.width;
-          ghostEntry.sx = TESTING.currentFrame * _fw; ghostEntry.sy = 0;
-          ghostEntry.srcW = _fw; ghostEntry.srcH = activeImg.height;
-        }
-        // Decay existing alphas, then push
-        for (const g of TESTING.ghostFrameBuffer) g.alpha *= 0.72;
-        TESTING.ghostFrameBuffer.push(ghostEntry);
-        if (TESTING.ghostFrameBuffer.length > 5) TESTING.ghostFrameBuffer.shift();
-      }
-      // Draw hoop foreground over character (if preset has one)
-      if (TESTING.courtPreset?.foregroundImage && TESTING.hoopLoaded && TESTING.hoopImg) {
-        ctx.drawImage(TESTING.hoopImg, 0, 0, W, H);
-      }
+    // ── Hoop image over character (front of net when player walks behind) ────
+    if (TESTING.hoopLoaded && TESTING.hoopImg) {
+      const { x: nx, y: ny, w: nw } = NET_ANCHOR;
+      const scale = nw / TESTING.hoopImg.naturalWidth;
+      const dw = TESTING.hoopImg.naturalWidth  * scale;
+      const dh = TESTING.hoopImg.naturalHeight * scale;
+      ctx.drawImage(TESTING.hoopImg, nx - dw / 2, ny - NET_ANCHOR.h / 4, dw, dh);
     }
 
     // HUD: zone + angle info
@@ -7714,9 +7759,9 @@ function toggleGameMode() {
   }
 }
 
-function startGameMode() {
-  if (!TESTING.ctx) { toast('Open the Testing page first', true); return; }
-  if (!TESTING.selectedChar) { toast('Select a character first', true); return; }
+function startGameMode(silent) {
+  if (!TESTING.ctx) { if (!silent) toast('Open the Testing page first', true); return; }
+  if (!TESTING.selectedChar) { if (!silent) toast('Select a character first', true); return; }
 
   GM.active = true;
   GM.selectedChar = TESTING.selectedChar;
@@ -7745,10 +7790,11 @@ function startGameMode() {
       physics: GM.physics,
       onAnimChange: (name) => {
         if (TESTING.selectedAnim !== name) {
-          // Reflect in TESTING state for strip lookup
           TESTING.selectedAnim = name;
           TESTING.currentFrame = 0;
           TESTING.lastFrameTime = 0;
+          // Reflect active move in left panel
+          if (TESTING.selectedChar) renderMovesPanel(TESTING.selectedChar);
         }
       },
     });
@@ -7758,7 +7804,7 @@ function startGameMode() {
     GM.input.start();
   });
 
-  toast('Game Mode ON — WASD/stick to move, I/J/L/Q/E for moves', false);
+  if (!silent) toast('Game Mode ON — WASD/stick to move, I/J/L/Q/E for moves', false);
 }
 
 function stopGameMode() {
