@@ -1392,6 +1392,20 @@
                   </label>
                   <div id="testingCourtName" style="font-family:var(--mono);font-size:8px;color:#404060;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">court.webp</div>
                 </div>
+                <!-- Hoop BG Remover -->
+                <div class="tv2-set-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:10px;border-top:1px solid #1a1a30;padding-top:10px">
+                  <span class="tv2-set-label" style="margin:0 0 4px">Hoop / Net Sprite</span>
+                  <label style="cursor:pointer;display:block">
+                    <div class="btn btn-secondary btn-sm" style="font-size:9px;width:100%;text-align:center;box-sizing:border-box;pointer-events:none">Upload Hoop Image</div>
+                    <input type="file" id="hoopBgUpload" accept="image/*" style="display:none" onchange="hoopBgLoadImage(this)" />
+                  </label>
+                  <div id="hoopBgPreview" style="display:none;margin-top:4px">
+                    <canvas id="hoopBgCanvas" style="width:100%;border:1px solid #1a1a30;border-radius:3px;background:repeating-conic-gradient(#111 0% 25%,#191928 0% 50%) 0 0/12px 12px"></canvas>
+                    <button class="btn btn-secondary btn-sm" onclick="hoopBgProcess()" style="font-size:9px;width:100%;margin-top:4px;color:#ffcc00">Remove BG + Transparent Glass</button>
+                    <button class="btn btn-secondary btn-sm" id="hoopBgDownloadBtn" onclick="hoopBgDownload()" style="font-size:9px;width:100%;margin-top:3px;display:none">↓ Download PNG</button>
+                  </div>
+                  <div id="hoopBgStatus" style="font-family:var(--mono);font-size:8px;color:#404060;text-align:center;margin-top:2px"></div>
+                </div>
                 <!-- Movement data editor (revealed when anim selected in game mode) -->
                 <div id="gmMoveEditor" class="gm-move-section" style="display:none">
                   <div class="gm-move-label">Movement data</div>
@@ -6361,6 +6375,43 @@ function getZoneForPos(x, y) {
   return COURT_ZONES[Math.min(idx, COURT_ZONES.length - 1)];
 }
 
+// ── Net / hoop anchor ─────────────────────────────────────────────────────
+// Marks where the net sprite will be rendered. x/y = center of rim.
+// w/h = bounding box of the full net sprite.
+let NET_ANCHOR = { x: 204, y: 140, w: 82, h: 72 };
+
+function drawNetMarker(ctx) {
+  const { x, y, w, h } = NET_ANCHOR;
+  const left = x - w / 2, top = y - h / 4, right = x + w / 2, bottom = top + h;
+  ctx.save();
+  // Net bounding box
+  ctx.strokeStyle = 'rgba(255,200,0,0.7)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  ctx.strokeRect(left, top, w, h);
+  ctx.setLineDash([]);
+  // Rim oval at top of box
+  ctx.strokeStyle = 'rgba(255,200,0,0.9)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(x, top + 6, w / 2, 7, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  // Crosshair at rim center
+  ctx.strokeStyle = '#ffcc00';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x - 10, y); ctx.lineTo(x + 10, y);
+  ctx.moveTo(x, y - 10); ctx.lineTo(x, y + 10);
+  ctx.stroke();
+  // Label
+  ctx.fillStyle = 'rgba(255,200,0,0.9)';
+  ctx.font = '8px "Space Mono",monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('NET', x, top - 4);
+  ctx.textAlign = 'start';
+  ctx.restore();
+}
+
 // ── Out-of-bounds boundary ──────────────────────────────────────────────────
 // Editable trapezoid (4 corners). Persisted to Supabase via /api/testing-config.
 let OOB_BOUNDS = {
@@ -6399,6 +6450,15 @@ async function loadTestingConfig() {
         };
       });
     }
+    if (d.netAnchor) {
+      const W = 960, H = 640;
+      NET_ANCHOR = {
+        x: Math.max(0, Math.min(W, d.netAnchor.x)),
+        y: Math.max(0, Math.min(H, d.netAnchor.y)),
+        w: Math.max(20, Math.min(300, d.netAnchor.w ?? 82)),
+        h: Math.max(20, Math.min(300, d.netAnchor.h ?? 72)),
+      };
+    }
   } catch {}
 }
 
@@ -6407,7 +6467,7 @@ async function saveTestingConfig() {
     await fetch(`${API}/api/testing-config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS }),
+      body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS, netAnchor: NET_ANCHOR }),
     });
   } catch {}
 }
@@ -6449,6 +6509,36 @@ function drawOobOverlay(ctx, W, H, isOob) {
 
 // Draw draggable corner handles in edit mode
 function drawEditHandles(ctx) {
+  // Net anchor — move handle at center, resize handle at bottom-right corner
+  const { x: nx, y: ny, w: nw, h: nh } = NET_ANCHOR;
+  const netTop = ny - nh / 4;
+  const nrx = nx + nw / 2, nry = netTop + nh;
+  // Move handle (crosshair center)
+  ctx.save();
+  const netMoving = TESTING.editDragNet === 'move';
+  ctx.strokeStyle = netMoving ? '#fff' : '#ffcc00';
+  ctx.fillStyle   = netMoving ? 'rgba(255,255,255,0.9)' : 'rgba(255,200,0,0.7)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(nx, ny, netMoving ? 10 : 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#000'; ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('NET', nx, ny + 3); ctx.textAlign = 'start';
+  ctx.restore();
+  // Resize handle (bottom-right)
+  const netResizing = TESTING.editDragNet === 'resize';
+  ctx.save();
+  ctx.strokeStyle = netResizing ? '#fff' : '#ffcc00';
+  ctx.fillStyle   = netResizing ? 'rgba(255,255,255,0.9)' : 'rgba(255,200,0,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(nrx, nry, netResizing ? 8 : 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  // Bounding box preview
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,200,0,0.5)';
+  ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+  ctx.strokeRect(nx - nw / 2, netTop, nw, nh);
+  ctx.setLineDash([]);
+  ctx.restore();
+
   const corners = Object.entries(OOB_BOUNDS);
   for (const [key, pt] of corners) {
     const isActive = TESTING.editDragCorner === key;
@@ -6528,6 +6618,8 @@ const TESTING = {
   editMode: false,         // OOB/zone corner edit mode
   editDragCorner: null,    // which OOB corner is being dragged (key name)
   editDragDivider: null,   // which zone divider point is being dragged ('i-L' or 'i-R')
+  editDragNet: null,       // 'move' | 'resize' for net anchor handle
+  editDragNetOff: null,    // drag offset for net move
   currentZone: null,
   currentAngleIdx: 0,
   angleStrips: {},
@@ -6618,11 +6710,29 @@ function initTestingPage() {
     if (!TESTING.editMode) return;
     const { x, y } = getCanvasXY(e);
 
+    // Check net anchor (drag center, resize corners)
+    if (Math.hypot(x - NET_ANCHOR.x, y - NET_ANCHOR.y) < SNAP + 4) {
+      TESTING.editDragCorner  = null;
+      TESTING.editDragDivider = null;
+      TESTING.editDragNet     = 'move';
+      TESTING.editDragNetOff  = { dx: x - NET_ANCHOR.x, dy: y - NET_ANCHOR.y };
+      e.preventDefault(); return;
+    }
+    // Net resize handle (bottom-right corner of box)
+    const _nrx = NET_ANCHOR.x + NET_ANCHOR.w / 2, _nry = NET_ANCHOR.y - NET_ANCHOR.h / 4 + NET_ANCHOR.h;
+    if (Math.hypot(x - _nrx, y - _nry) < SNAP) {
+      TESTING.editDragNet    = 'resize';
+      TESTING.editDragCorner = null;
+      TESTING.editDragDivider = null;
+      e.preventDefault(); return;
+    }
+
     // Check OOB corners first
     for (const [key, pt] of Object.entries(OOB_BOUNDS)) {
       if (Math.hypot(x - pt.x, y - pt.y) < SNAP) {
         TESTING.editDragCorner  = key;
         TESTING.editDragDivider = null;
+        TESTING.editDragNet     = null;
         e.preventDefault(); return;
       }
     }
@@ -6667,7 +6777,15 @@ function initTestingPage() {
     const { x, y } = getCanvasXY(e);
     const cx = Math.round(Math.max(0, Math.min(canvas.width,  x)));
     const cy = Math.round(Math.max(0, Math.min(canvas.height, y)));
-    if (TESTING.editDragCorner) {
+    if (TESTING.editDragNet === 'move') {
+      const off = TESTING.editDragNetOff ?? { dx: 0, dy: 0 };
+      NET_ANCHOR.x = Math.round(Math.max(0, Math.min(canvas.width,  cx - off.dx)));
+      NET_ANCHOR.y = Math.round(Math.max(0, Math.min(canvas.height, cy - off.dy)));
+    } else if (TESTING.editDragNet === 'resize') {
+      const newW = Math.round(Math.max(20, Math.abs(cx - NET_ANCHOR.x) * 2));
+      const newH = Math.round(Math.max(20, cy - (NET_ANCHOR.y - NET_ANCHOR.h / 4)));
+      NET_ANCHOR.w = newW; NET_ANCHOR.h = newH;
+    } else if (TESTING.editDragCorner) {
       OOB_BOUNDS[TESTING.editDragCorner] = { x: cx, y: cy };
     } else if (TESTING.editDragDivider) {
       const [idxStr, side] = TESTING.editDragDivider.split('-');
@@ -6678,7 +6796,9 @@ function initTestingPage() {
     // Cursor feedback
     const corners = Object.values(OOB_BOUNDS);
     const divPts  = ZONE_DIVIDERS.flatMap(d => [d.p1, d.p2]);
-    const nearAny = [...corners, ...divPts].some(pt => Math.hypot(x - pt.x, y - pt.y) < SNAP);
+    const netPts  = [{ x: NET_ANCHOR.x, y: NET_ANCHOR.y },
+                     { x: NET_ANCHOR.x + NET_ANCHOR.w / 2, y: NET_ANCHOR.y - NET_ANCHOR.h / 4 + NET_ANCHOR.h }];
+    const nearAny = [...corners, ...divPts, ...netPts].some(pt => Math.hypot(x - pt.x, y - pt.y) < SNAP + 4);
     canvas.style.cursor = nearAny ? 'grab' : 'crosshair';
   });
 
@@ -6688,8 +6808,8 @@ function initTestingPage() {
       sandboxSavePreset();
       return;
     }
-    if (TESTING.editMode && (TESTING.editDragCorner || TESTING.editDragDivider)) {
-      TESTING.editDragCorner = TESTING.editDragDivider = null;
+    if (TESTING.editMode && (TESTING.editDragCorner || TESTING.editDragDivider || TESTING.editDragNet)) {
+      TESTING.editDragCorner = TESTING.editDragDivider = TESTING.editDragNet = null;
       saveTestingConfig(); // persist to Supabase
     }
   };
@@ -6935,9 +7055,74 @@ function testingLoadCourtImage(input) {
   reader.readAsDataURL(file);
 }
 
+// ── Hoop BG Remover ──────────────────────────────────────────────────────────
+let _hoopBgSrcImg = null;
+
+function hoopBgLoadImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      _hoopBgSrcImg = img;
+      const preview = document.getElementById('hoopBgPreview');
+      const canvas  = document.getElementById('hoopBgCanvas');
+      const status  = document.getElementById('hoopBgStatus');
+      const dlBtn   = document.getElementById('hoopBgDownloadBtn');
+      if (preview) preview.style.display = '';
+      if (status) status.textContent = file.name;
+      if (dlBtn) dlBtn.style.display = 'none';
+      // Show original in canvas
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function hoopBgProcess() {
+  if (!_hoopBgSrcImg) return;
+  const canvas = document.getElementById('hoopBgCanvas');
+  canvas.width  = _hoopBgSrcImg.naturalWidth;
+  canvas.height = _hoopBgSrcImg.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(_hoopBgSrcImg, 0, 0);
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i+1], b = d[i+2];
+    // Near-white → transparent (background + glass backboard)
+    const brightness = (r + g + b) / 3;
+    if (brightness > 230 && Math.max(r,g,b) - Math.min(r,g,b) < 30) {
+      d[i+3] = 0;
+    }
+    // Anti-alias edge softening: near-white but not fully white → partial alpha
+    else if (brightness > 200 && Math.max(r,g,b) - Math.min(r,g,b) < 40) {
+      d[i+3] = Math.round((255 - brightness) * 2.5);
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+  const dlBtn = document.getElementById('hoopBgDownloadBtn');
+  if (dlBtn) dlBtn.style.display = '';
+  const status = document.getElementById('hoopBgStatus');
+  if (status) status.textContent = 'Done — background + glass removed';
+}
+
+function hoopBgDownload() {
+  const canvas = document.getElementById('hoopBgCanvas');
+  if (!canvas) return;
+  const a = document.createElement('a');
+  a.download = 'hoop-transparent.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
 function toggleEditMode() {
   TESTING.editMode = !TESTING.editMode;
-  TESTING.editDragCorner = TESTING.editDragDivider = null;
+  TESTING.editDragCorner = TESTING.editDragDivider = TESTING.editDragNet = null;
   const btn = document.getElementById('testingEditBtn');
   if (btn) {
     btn.textContent = TESTING.editMode ? '✓ Done Editing' : '✏ Edit Zones/OOB';
@@ -7119,6 +7304,11 @@ function testingRenderLoop(timestamp) {
   const isOob = isOutOfBounds(TESTING.charX, TESTING.charY);
   if (TESTING.showOob) {
     drawOobOverlay(ctx, W, H, isOob);
+  }
+
+  // ── Net / hoop marker ────────────────────────────────────────────────────
+  if (TESTING.showZones || TESTING.showOob || TESTING.editMode) {
+    drawNetMarker(ctx);
   }
   if (isOob) {
     // Flash red banner
