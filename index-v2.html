@@ -6380,9 +6380,10 @@ async function loadTestingConfig() {
     }
     if (d.zoneDividers) {
       const W = 960, H = 640;
-      ZONE_DIVIDERS = d.zoneDividers.map(d => ({
-        p1: _clampPt(d.p1, W, H),
-        p2: _clampPt(d.p2, W, H),
+      // p1.x is always 0 (left edge), p2.x is always W (right edge) — only y varies
+      ZONE_DIVIDERS = d.zoneDividers.map(dv => ({
+        p1: { x: 0, y: Math.max(0, Math.min(H, dv.p1.y)) },
+        p2: { x: W, y: Math.max(0, Math.min(H, dv.p2.y)) },
       }));
     }
   } catch {}
@@ -6453,12 +6454,15 @@ function drawEditHandles(ctx) {
     ctx.restore();
   }
 
-  // Zone divider handles — left endpoint of each divider line
+  // Zone divider handles — inset 40px from each edge so they stay visible/clickable
+  const HINSET = 40;
   for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
     const d = ZONE_DIVIDERS[i];
     const isActiveL = TESTING.editDragDivider === `${i}-L`;
     const isActiveR = TESTING.editDragDivider === `${i}-R`;
-    for (const [side, pt, isAct] of [['L', d.p1, isActiveL], ['R', d.p2, isActiveR]]) {
+    const hL = { x: d.p1.x + HINSET, y: d.p1.y };
+    const hR = { x: d.p2.x - HINSET, y: d.p2.y };
+    for (const [pt, isAct] of [[hL, isActiveL], [hR, isActiveR]]) {
       ctx.save();
       ctx.strokeStyle = isAct ? '#fff' : COURT_ZONES[i].color + '1)';
       ctx.fillStyle   = isAct ? 'rgba(255,255,255,0.9)' : COURT_ZONES[i].color + '0.7)';
@@ -6468,7 +6472,7 @@ function drawEditHandles(ctx) {
       ctx.fill(); ctx.stroke();
       ctx.restore();
     }
-    // Draw the divider line
+    // Draw the divider line (always full canvas width)
     ctx.save();
     ctx.strokeStyle = COURT_ZONES[i].color + '0.8)';
     ctx.lineWidth = 1.5;
@@ -6611,15 +6615,18 @@ function initTestingPage() {
         e.preventDefault(); return;
       }
     }
-    // Check zone divider endpoints
+    // Check zone divider endpoints — test against inset handle positions (40px from edge)
+    const HINSET = 40;
     for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
       const d = ZONE_DIVIDERS[i];
-      if (Math.hypot(x - d.p1.x, y - d.p1.y) < SNAP) {
+      const hL = { x: d.p1.x + HINSET, y: d.p1.y };
+      const hR = { x: d.p2.x - HINSET, y: d.p2.y };
+      if (Math.hypot(x - hL.x, y - hL.y) < SNAP) {
         TESTING.editDragDivider = `${i}-L`;
         TESTING.editDragCorner  = null;
         e.preventDefault(); return;
       }
-      if (Math.hypot(x - d.p2.x, y - d.p2.y) < SNAP) {
+      if (Math.hypot(x - hR.x, y - hR.y) < SNAP) {
         TESTING.editDragDivider = `${i}-R`;
         TESTING.editDragCorner  = null;
         e.preventDefault(); return;
@@ -6657,13 +6664,18 @@ function initTestingPage() {
     } else if (TESTING.editDragDivider) {
       const [idxStr, side] = TESTING.editDragDivider.split('-');
       const d = ZONE_DIVIDERS[parseInt(idxStr)];
-      if (side === 'L') d.p1 = { x: cx, y: cy };
-      else              d.p2 = { x: cx, y: cy };
+      // Only update Y — X is always locked to canvas edges (0 for left, 960 for right)
+      if (side === 'L') d.p1 = { x: 0,            y: cy };
+      else              d.p2 = { x: canvas.width,  y: cy };
     }
-    // Cursor feedback
+    // Cursor feedback — use inset handle positions for dividers
+    const HINSET = 40;
     const corners = Object.values(OOB_BOUNDS);
-    const divPts  = ZONE_DIVIDERS.flatMap(d => [d.p1, d.p2]);
-    const nearAny = [...corners, ...divPts].some(pt => Math.hypot(x - pt.x, y - pt.y) < SNAP);
+    const divHandles = ZONE_DIVIDERS.flatMap(d => [
+      { x: d.p1.x + HINSET, y: d.p1.y },
+      { x: d.p2.x - HINSET, y: d.p2.y },
+    ]);
+    const nearAny = [...corners, ...divHandles].some(pt => Math.hypot(x - pt.x, y - pt.y) < SNAP);
     canvas.style.cursor = nearAny ? 'grab' : 'crosshair';
   });
 
