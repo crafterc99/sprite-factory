@@ -168,35 +168,65 @@ require('./routes/pose-import').register(router, ctx);
 
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
 const TESTING_CONFIG_FILE = path.join(__dirname, 'data/.testing-config.json');
+
+// Health/status — lets the client confirm cloud persistence is working
+router.get('/api/testing-config/status', async (req, res) => {
+  const { isAvailable, downloadFile } = require('./lib/supabase-storage');
+  const sbOk = isAvailable();
+  let hasCloud = false;
+  if (sbOk) {
+    try { hasCloud = !!(await downloadFile('_meta/testing-config.json')); } catch {}
+  }
+  json(res, {
+    supabase: sbOk,
+    hasCloud,
+    hasLocal: fs.existsSync(TESTING_CONFIG_FILE),
+  });
+});
+
 router.get('/api/testing-config', async (req, res) => {
   try {
-    if (fs.existsSync(TESTING_CONFIG_FILE)) {
-      const data = JSON.parse(fs.readFileSync(TESTING_CONFIG_FILE, 'utf8'));
-      return json(res, data);
-    }
     const { downloadFile, isAvailable } = require('./lib/supabase-storage');
+    // Always prefer the live Supabase copy so zone edits from any session are reflected
     if (isAvailable()) {
       const buf = await downloadFile('_meta/testing-config.json');
       if (buf) {
         const data = JSON.parse(buf.toString('utf8'));
+        // Keep local file in sync for fast cold-start reads
+        fs.mkdirSync(path.dirname(TESTING_CONFIG_FILE), { recursive: true });
+        fs.writeFileSync(TESTING_CONFIG_FILE, JSON.stringify(data, null, 2));
         return json(res, data);
       }
     }
+    // Supabase unavailable — fall back to local disk
+    if (fs.existsSync(TESTING_CONFIG_FILE)) {
+      const data = JSON.parse(fs.readFileSync(TESTING_CONFIG_FILE, 'utf8'));
+      return json(res, data);
+    }
     return json(res, {});
   } catch (e) {
+    // Last-resort: try local disk
+    try {
+      if (fs.existsSync(TESTING_CONFIG_FILE)) {
+        return json(res, JSON.parse(fs.readFileSync(TESTING_CONFIG_FILE, 'utf8')));
+      }
+    } catch {}
     json(res, { error: e.message }, 500);
   }
 });
+
 router.post('/api/testing-config', async (req, res) => {
   try {
     const body = await parseBody(req);
     fs.mkdirSync(path.dirname(TESTING_CONFIG_FILE), { recursive: true });
     fs.writeFileSync(TESTING_CONFIG_FILE, JSON.stringify(body, null, 2));
     const { uploadJson, isAvailable } = require('./lib/supabase-storage');
+    let savedToCloud = false;
     if (isAvailable()) {
       await uploadJson('_meta/testing-config.json', body);
+      savedToCloud = true;
     }
-    return json(res, { success: true });
+    return json(res, { success: true, savedToCloud });
   } catch (e) {
     json(res, { error: e.message }, 500);
   }
@@ -431,12 +461,14 @@ if (require.main === module) {
       console.warn('  [startup] wardrobe restore failed (non-fatal):', e.message);
     }
 
-    // ── STEP 6: Restore remaining metadata from Supabase if missing locally
+    // ── STEP 6: Restore remaining metadata from Supabase
+    // testing-config is ALWAYS refreshed from Supabase (zone positions change frequently).
+    // Other metadata files are only restored if missing locally.
     try {
       const { downloadFile, isAvailable } = require('./lib/supabase-storage');
       if (isAvailable()) {
-        const restoreJson = async (sbKey, localPath, label) => {
-          if (fs.existsSync(localPath)) return; // already on disk
+        const restoreJson = async (sbKey, localPath, label, alwaysRefresh) => {
+          if (!alwaysRefresh && fs.existsSync(localPath)) return; // already on disk
           const buf = await downloadFile(sbKey);
           if (!buf) return;
           fs.mkdirSync(path.dirname(localPath), { recursive: true });
@@ -449,7 +481,7 @@ if (require.main === module) {
           restoreJson('_meta/char-prompts.json',        path.join(__dirname, 'data/.char-prompts.json'),        'char-prompts'),
           restoreJson('_meta/frame-prompts.json',       path.join(__dirname, 'data/frame-prompts.json'),        'frame-prompts'),
           restoreJson('_meta/cost-tracking.json',       path.join(__dirname, 'data/.cost-tracking.json'),       'cost-tracking'),
-          restoreJson('_meta/testing-config.json',      path.join(__dirname, 'data/.testing-config.json'),      'testing-config'),
+          restoreJson('_meta/testing-config.json',      path.join(__dirname, 'data/.testing-config.json'),      'testing-config', true), // always refresh
         ]);
         // Restore apply-anim metadata files
         const { listFiles } = require('./lib/supabase-storage');

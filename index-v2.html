@@ -1383,6 +1383,7 @@
                 <div class="tv2-set-row">
                   <button id="testingEditBtn" class="btn btn-secondary btn-sm" style="width:100%;font-size:9px">✏ Edit Zones / OOB</button>
                 </div>
+                <div id="tcSaveStatus" style="font-family:var(--mono);font-size:8px;text-align:center;padding:3px 0;color:#404060">checking persistence…</div>
                 <!-- Court image upload -->
                 <div class="tv2-set-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:10px;border-top:1px solid #1a1a30;padding-top:10px">
                   <span class="tv2-set-label" style="margin:0 0 4px">Court Image</span>
@@ -6462,14 +6463,44 @@ async function loadTestingConfig() {
   } catch {}
 }
 
+function _tcStatus(msg, color) {
+  const el = document.getElementById('tcSaveStatus');
+  if (el) { el.textContent = msg; el.style.color = color || '#404060'; }
+}
+
 async function saveTestingConfig() {
+  _tcStatus('saving…', '#888');
   try {
-    await fetch(`${API}/api/testing-config`, {
+    const r = await fetch(`${API}/api/testing-config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS, netAnchor: NET_ANCHOR }),
     });
-  } catch {}
+    const d = await r.json();
+    if (d.savedToCloud) {
+      _tcStatus('✓ saved to cloud', '#00cc66');
+    } else {
+      _tcStatus('⚠ saved locally only', '#ffaa00');
+    }
+  } catch (e) {
+    _tcStatus('✗ save failed', '#ff4444');
+  }
+}
+
+async function checkTcPersistence() {
+  try {
+    const r = await fetch(`${API}/api/testing-config/status`);
+    const d = await r.json();
+    if (d.supabase && d.hasCloud) {
+      _tcStatus('☁ cloud persistence active', '#00cc66');
+    } else if (d.supabase && !d.hasCloud) {
+      _tcStatus('☁ cloud ready (no data yet)', '#00aaff');
+    } else {
+      _tcStatus('⚠ no cloud — local only', '#ffaa00');
+    }
+  } catch {
+    _tcStatus('⚠ persistence unknown', '#888');
+  }
 }
 
 function isOutOfBounds(x, y) {
@@ -6676,6 +6707,7 @@ function initTestingPage() {
 
   loadTestingRoster();
   loadTestingConfig(); // restore OOB corners + zone dividers from Supabase
+  checkTcPersistence();
 
   document.getElementById('testingScale').oninput = (e) => {
     TESTING.scale = parseFloat(e.target.value);
