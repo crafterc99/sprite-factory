@@ -7582,8 +7582,8 @@ function testingRenderLoop(timestamp) {
       TESTING.lastFrameTime = 0;
     }
 
-    // Advance frame
-    if (TESTING.playing && timestamp) {
+    // Advance frame — skip when Game Mode is active (AnimationPlayer owns currentFrame)
+    if (!GM.active && TESTING.playing && timestamp) {
       const frameDuration = 1000 / (TESTING.fps * TESTING.speed);
       if (!TESTING.lastFrameTime) TESTING.lastFrameTime = timestamp;
       if (timestamp - TESTING.lastFrameTime >= frameDuration) {
