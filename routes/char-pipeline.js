@@ -1337,7 +1337,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           await removeBackground(framePath, framePath);
         }
 
-        // Upload to Supabase so it survives Railway redeploys
+        // Upload to R2 so it survives Railway redeploys
         sbUpload(`${prefix}${index}.png`, framePath);
 
         // Update the base64 stored in .characters.json registry so it survives redeploys

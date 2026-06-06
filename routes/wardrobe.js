@@ -30,7 +30,7 @@ function saveIndex(items) {
   fs.writeFileSync(WARDROBE_INDEX, JSON.stringify(items, null, 2));
   if (sbAvailable()) {
     sbUploadJson(SB_META_KEY, items).catch(e =>
-      console.warn('[wardrobe] Supabase backup failed:', e.message)
+      console.warn('[wardrobe] R2 backup failed:', e.message)
     );
   }
 }
@@ -45,9 +45,9 @@ async function restoreFromSupabase() {
     if (!Array.isArray(remote) || remote.length === 0) return;
     fs.mkdirSync(path.dirname(WARDROBE_INDEX), { recursive: true });
     fs.writeFileSync(WARDROBE_INDEX, JSON.stringify(remote, null, 2));
-    console.log(`  [wardrobe] restored ${remote.length} item(s) from Supabase`);
+    console.log(`  [wardrobe] restored ${remote.length} item(s) from R2`);
   } catch (e) {
-    console.warn('  [wardrobe] Supabase restore failed (non-fatal):', e.message);
+    console.warn('  [wardrobe] R2 restore failed (non-fatal):', e.message);
   }
 }
 

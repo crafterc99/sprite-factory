@@ -132,8 +132,8 @@ function saveCharacters(data) {
   if (sbAvailable()) {
     const deleted = Array.isArray(data._deleted) ? data._deleted : [];
     sbUploadJson(SB_REGISTRY_KEY, data)
-      .then(() => console.log(`[characters] ✓ Supabase backup saved (${Object.keys(data).filter(k=>k!=='_deleted').length} chars)`))
-      .catch(e => console.error('[characters] ✗ CRITICAL — Supabase backup FAILED, data will be lost on redeploy:', e.message));
+      .then(() => console.log(`[characters] ✓ R2 backup saved (${Object.keys(data).filter(k=>k!=='_deleted').length} chars)`))
+      .catch(e => console.error('[characters] ✗ CRITICAL — R2 backup FAILED, data will be lost on redeploy:', e.message));
     if (deleted.length > 0) {
       sbUploadJson(SB_DELETED_KEY, { deleted }).catch(e => console.warn('[characters] deleted-list backup failed:', e.message));
     }
@@ -156,13 +156,13 @@ async function syncDeletedFromSupabase() {
       if (Array.isArray(remoteRegistry._deleted)) {
         for (const n of remoteRegistry._deleted) remoteDeleted.add(n);
       }
-      // Always restore registry from Supabase — it is the source of truth, not git.
+      // Always restore registry from R2 — it is the source of truth, not git.
       // This overwrites any stale git-cloned .characters.json on every deploy.
       if (Object.keys(remoteRegistry).filter(k => k !== '_deleted').length > 0) {
         const dir = path.dirname(CHARACTERS_FILE);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(remoteRegistry, null, 2));
-        console.log(`  [characters] restored ${Object.keys(remoteRegistry).filter(k=>k!=='_deleted').length} character(s) from Supabase`);
+        console.log(`  [characters] restored ${Object.keys(remoteRegistry).filter(k=>k!=='_deleted').length} character(s) from R2`);
       }
     }
 
@@ -185,16 +185,16 @@ async function syncDeletedFromSupabase() {
     if (newCount > 0) {
       registry._deleted = merged;
       for (const name of merged) delete registry[name]; // remove any that came back via git
-      // Write to disk only (don't re-upload to Supabase — we just downloaded it)
+      // Write to disk only (don't re-upload — we just downloaded from R2)
       const dir = path.dirname(CHARACTERS_FILE);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(registry, null, 2));
-      console.log(`  [characters] applied ${newCount} deletion(s) from Supabase`);
+      console.log(`  [characters] applied ${newCount} deletion(s) from R2`);
     }
 
     return new Set(merged);
   } catch (e) {
-    console.warn('  [characters] Supabase deletion sync failed (non-fatal):', e.message);
+    console.warn('  [characters] R2 deletion sync failed (non-fatal):', e.message);
     return remoteDeleted;
   }
 }
@@ -213,7 +213,7 @@ function saveCustomAnimations(data) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(CUSTOM_ANIMS_FILE, JSON.stringify(data, null, 2));
   if (sbAvailable()) sbUploadJson('_meta/custom-animations.json', data)
-    .catch(e => console.error('[characters] custom-animations Supabase backup FAILED:', e.message));
+    .catch(e => console.error('[characters] custom-animations R2 backup FAILED:', e.message));
 }
 
 // ─── Clothing Registry ─────────────────────────────────────────────────
@@ -232,7 +232,7 @@ function loadClothingRegistry() {
 function saveClothingRegistry(registry) {
   fs.mkdirSync(path.dirname(CLOTHING_REGISTRY_FILE), { recursive: true });
   fs.writeFileSync(CLOTHING_REGISTRY_FILE, JSON.stringify(registry, null, 2));
-  if (sbAvailable()) sbUploadJson('_meta/clothing-registry.json', registry).catch(e => console.warn('[clothing-registry] Supabase backup failed:', e.message));
+  if (sbAvailable()) sbUploadJson('_meta/clothing-registry.json', registry).catch(e => console.warn('[clothing-registry] R2 backup failed:', e.message));
 }
 
 /**
@@ -587,9 +587,9 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     delete registry[name];
     if (!Array.isArray(registry._deleted)) registry._deleted = [];
     if (!registry._deleted.includes(name)) registry._deleted.push(name);
-    saveCharacters(registry);  // also backs up _deleted to Supabase
+    saveCharacters(registry);  // also backs up _deleted to R2
 
-    // Delete from Supabase Storage — awaited so files don't come back on next redeploy
+    // Delete from R2 — awaited so files don't come back on next redeploy
     if (sbAvailable()) {
       try {
         const { listFiles } = require('../lib/supabase-storage');
@@ -601,7 +601,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         );
         if (toRemove.length > 0) await sbDeleteFiles(toRemove);
       } catch (e) {
-        console.warn(`[characters] Supabase deletion failed for "${name}" (files may reappear on redeploy):`, e.message);
+        console.warn(`[characters] R2 deletion failed for "${name}" (files may reappear on redeploy):`, e.message);
       }
     }
 

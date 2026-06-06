@@ -35,14 +35,14 @@ function saveIndex(data) {
   fs.mkdirSync(LIB_DIR, { recursive: true });
   const json = JSON.stringify(data, null, 2);
   fs.writeFileSync(INDEX_FILE, json);
-  // Back up to Supabase so it survives Railway redeploys (fresh git clone wipes local file)
+  // Back up to R2 so it survives Railway redeploys (fresh git clone wipes local file)
   if (sbAvailable()) sbUploadJson(SB_META_KEY, data)
-    .then(() => console.log(`[anim-lib] ✓ Supabase backup saved (${Object.keys(data).length} anims)`))
-    .catch(e => console.error('[anim-lib] ✗ CRITICAL — Supabase backup FAILED, anim-lib will be lost on redeploy:', e.message));
+    .then(() => console.log(`[anim-lib] ✓ R2 backup saved (${Object.keys(data).length} anims)`))
+    .catch(e => console.error('[anim-lib] ✗ CRITICAL — R2 backup FAILED, anim-lib will be lost on redeploy:', e.message));
 }
 
 /**
- * Called on server startup — restores anim-lib index from Supabase if local is empty.
+ * Called on server startup — restores anim-lib index from R2 if local is empty.
  * Prevents animations from being wiped when Railway redeploys from a fresh git clone.
  */
 async function restoreFromSupabase() {
@@ -56,9 +56,9 @@ async function restoreFromSupabase() {
     if (Object.keys(remote).length === 0) return;
     fs.mkdirSync(LIB_DIR, { recursive: true });
     fs.writeFileSync(INDEX_FILE, JSON.stringify(remote, null, 2));
-    console.log(`  [anim-lib] restored ${Object.keys(remote).length} animation(s) from Supabase`);
+    console.log(`  [anim-lib] restored ${Object.keys(remote).length} animation(s) from R2`);
   } catch (e) {
-    console.warn('  [anim-lib] Supabase restore failed (non-fatal):', e.message);
+    console.warn('  [anim-lib] R2 restore failed (non-fatal):', e.message);
   }
 }
 

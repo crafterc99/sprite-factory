@@ -6436,7 +6436,7 @@ function drawNetMarker(ctx) {
 }
 
 // ── Out-of-bounds boundary ──────────────────────────────────────────────────
-// Editable trapezoid (4 corners). Persisted to Supabase via /api/testing-config.
+// Editable trapezoid (4 corners). Persisted to R2 via /api/testing-config.
 let OOB_BOUNDS = {
   topLeft:     { x: 88,  y: 175 },
   topRight:    { x: 955, y: 175 },
@@ -6706,7 +6706,7 @@ function initTestingPage() {
   TESTING.ctx = canvas.getContext('2d');
   TESTING.ctx.imageSmoothingEnabled = false;
 
-  // Restore court and hoop images from server (Supabase-backed) — works on any device
+  // Restore court and hoop images from server (R2-backed) — works on any device
   fetch('/api/testing-images/status').then(r => r.json()).then(status => {
     // Court image: use uploaded version if it exists, else fall back to default
     const courtSrc = status.hasCourt
@@ -6740,7 +6740,7 @@ function initTestingPage() {
   });
 
   loadTestingRoster();
-  loadTestingConfig(); // restore OOB corners + zone dividers from Supabase
+  loadTestingConfig(); // restore OOB corners + zone dividers from R2
   checkTcPersistence();
 
   document.getElementById('testingScale').oninput = (e) => {
@@ -6876,7 +6876,7 @@ function initTestingPage() {
     }
     if (TESTING.editMode && (TESTING.editDragCorner || TESTING.editDragDivider || TESTING.editDragNet)) {
       TESTING.editDragCorner = TESTING.editDragDivider = TESTING.editDragNet = null;
-      saveTestingConfig(); // persist to Supabase
+      saveTestingConfig(); // persist to R2
     }
   };
   canvas.addEventListener('mouseup',   stopDrag);
@@ -7141,7 +7141,7 @@ function loadAngleStrips(charName, animName, fallbackUrl, cacheBust) {
   }
 }
 
-// Cloud image persistence — saves court + hoop images to the server (→ Supabase)
+// Cloud image persistence — saves court + hoop images to the server (→ R2)
 // so any device loading the app sees the same images.
 
 async function _saveCourtCloud(dataUrl, name) {
@@ -7177,7 +7177,7 @@ function testingLoadCourtImage(input) {
     img.src = dataUrl;
     const nameEl = document.getElementById('testingCourtName');
     if (nameEl) nameEl.textContent = file.name;
-    // Save to server → Supabase so all devices see the same court image
+    // Save to server → R2 so all devices see the same court image
     const ok = await _saveCourtCloud(dataUrl, file.name);
     if (!ok) console.warn('[testing] court image cloud save failed');
   };
@@ -7238,7 +7238,7 @@ function hoopBgProcess() {
   if (dlBtn) dlBtn.style.display = '';
   const status = document.getElementById('hoopBgStatus');
   if (status) status.textContent = 'Done — background + glass removed';
-  // Save to server → Supabase and load onto court
+  // Save to server → R2 and load onto court
   const resultDataUrl = canvas.toDataURL('image/png');
   _saveHoopCloud(resultDataUrl).catch(() => {});
   const hImg = new Image();

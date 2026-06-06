@@ -229,7 +229,7 @@ router.get('/api/testing-config/status', async (req, res) => {
 router.get('/api/testing-config', async (req, res) => {
   try {
     const { downloadFile, isAvailable } = require('./lib/supabase-storage');
-    // Always prefer the live Supabase copy so zone edits from any session are reflected
+    // Always prefer the live R2 copy so zone edits from any session are reflected
     if (isAvailable()) {
       const buf = await downloadFile('_meta/testing-config.json');
       if (buf) {
@@ -240,7 +240,7 @@ router.get('/api/testing-config', async (req, res) => {
         return json(res, data);
       }
     }
-    // Supabase unavailable — fall back to local disk
+    // R2 unavailable — fall back to local disk
     if (fs.existsSync(TESTING_CONFIG_FILE)) {
       const data = JSON.parse(fs.readFileSync(TESTING_CONFIG_FILE, 'utf8'));
       return json(res, data);
@@ -275,9 +275,9 @@ router.post('/api/testing-config', async (req, res) => {
 });
 
 // ─── Testing Image Endpoints (court + hoop) ──────────────────────────────
-// Saves uploaded images to data/assets/ + Supabase so any device can load them.
+// Saves uploaded images to data/assets/ + R2 so any device can load them.
 // Client reads back via /assets/court-uploaded.png and /assets/hoop-processed.png
-// which already have Supabase fallback built into the /assets/ handler.
+// which already have R2 fallback built into the /assets/ handler.
 
 const COURT_IMG_PATH = path.join(ASSETS_DIR, 'court-uploaded.png');
 const HOOP_IMG_PATH  = path.join(ASSETS_DIR, 'hoop-processed.png');
@@ -328,36 +328,29 @@ router.get('/api/testing-images/status', (req, res) => {
 });
 
 // ─── Database Health / Debug Endpoint ───────────────────────────────────────
-// Backend-agnostic: prefers Cloudflare R2; falls back to Supabase if only
-// SUPABASE_* env vars are set. `lib/supabase-storage.js` is a router that
-// already delegates to r2-storage at runtime — we just need to report which
-// side is live so the persistence banner clears appropriately.
+// Drives the red "DATA PERSISTENCE BROKEN" banner in index-v2.html.
+// Returns ok:true when R2 is reachable; ok:false → banner shows.
 router.get('/api/debug/db', async (req, res) => {
-  const { verifyConnection, isAvailable, downloadFile } = require('./lib/supabase-storage');
+  const { verifyConnection, isAvailable, downloadFile } = require('./lib/r2-storage');
 
-  const r2Set = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
-  const sbSet = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
-  const backend = r2Set ? 'r2' : (sbSet ? 'supabase' : 'none');
-
-  const endpointPreview = r2Set
-    ? `${process.env.R2_ENDPOINT.slice(0, 48)}…  bucket=${process.env.R2_BUCKET || 'sprite-factory'}`
-    : (sbSet ? process.env.SUPABASE_URL.slice(0, 40) + '…' : 'NOT SET');
-  const keyPreview = r2Set
+  const bucket = process.env.R2_BUCKET || 'sprite-factory';
+  const endpointPreview = process.env.R2_ENDPOINT
+    ? `${process.env.R2_ENDPOINT.slice(0, 48)}…  bucket=${bucket}`
+    : 'NOT SET';
+  const keyPreview = process.env.R2_ACCESS_KEY_ID
     ? `${process.env.R2_ACCESS_KEY_ID.slice(0, 6)}…`
-    : (process.env.SUPABASE_SERVICE_KEY
-        ? (process.env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? 'eyJ…(JWT ok)' : 'SET but not JWT format — check key type')
-        : 'NOT SET');
+    : 'NOT SET';
 
   if (!isAvailable()) {
     return json(res, {
       ok: false,
       configured: false,
-      backend,
+      backend: 'none',
       endpointPreview, keyPreview,
       // Legacy fields kept so older clients don't break:
-      urlPreview: endpointPreview, urlSet: r2Set || sbSet, keySet: false,
-      error: 'No persistence backend configured. Set R2 env vars (preferred) or Supabase env vars in Railway → Variables.',
-      fix: 'Recommended: Railway dashboard → your service → Variables → add R2_ENDPOINT (https://<account>.r2.cloudflarestorage.com), R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET. Create the bucket + an Object Read/Write API token in Cloudflare → R2 first. Redeploy.',
+      urlPreview: endpointPreview, urlSet: false, keySet: false,
+      error: 'R2 not configured. Set R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (and optionally R2_BUCKET) in Railway → Variables.',
+      fix: 'Railway dashboard → your service → Variables → add R2_ENDPOINT (https://<account>.r2.cloudflarestorage.com), R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET. Create the bucket + an Object Read/Write API token in Cloudflare → R2 first. Redeploy.',
     });
   }
 
@@ -365,15 +358,13 @@ router.get('/api/debug/db', async (req, res) => {
     const health = await verifyConnection();
     const result = {
       ok: health.ok, configured: true,
-      backend,
+      backend: 'r2',
       endpointPreview, keyPreview,
       // Legacy aliases:
       urlPreview: endpointPreview,
       keyCount: health.keyCount, metaKeys: health.metaKeys, error: health.error,
       hint: health.ok ? null
-        : (r2Set
-            ? `R2 connection failed — check: 1) R2_ENDPOINT is "https://<account>.r2.cloudflarestorage.com" (no trailing slash, no bucket in path), 2) bucket "${process.env.R2_BUCKET || 'sprite-factory'}" exists in this account, 3) the API token has Object Read+Write on it.`
-            : 'Connection failed — check: 1) Supabase project not paused (free tier pauses after 1 week), 2) bucket "sprite-assets" exists and is public, 3) using service-role key not anon key'),
+        : `R2 connection failed — check: 1) R2_ENDPOINT is "https://<account>.r2.cloudflarestorage.com" (no trailing slash, no bucket in path), 2) bucket "${bucket}" exists in this account, 3) the API token has Object Read+Write on it.`,
     };
 
     // Peek at character count
@@ -596,12 +587,12 @@ async function handler(req, res) {
     res.writeHead(404); return res.end('Not found');
   }
 
-  // Serve sprite assets — disk first, Supabase fallback
+  // Serve sprite assets — disk first, R2 fallback
   if (pathname.startsWith('/assets/')) {
     const file = decodeURIComponent(pathname.replace('/assets/', ''));
     const localPath = path.join(ASSETS_DIR, file);
     if (fs.existsSync(localPath)) return serveImage(res, localPath);
-    // Not on disk — try Supabase Storage and cache locally
+    // Not on disk — try R2 and cache locally
     const { downloadFile, isAvailable } = require('./lib/supabase-storage');
     if (isAvailable()) {
       const buf = await downloadFile(file);
@@ -642,12 +633,12 @@ async function handler(req, res) {
 
 if (require.main === module) {
   (async () => {
-      // ── Supabase connectivity check — must pass before restoring any data
+    // ── R2 connectivity check — must pass before restoring any data
     const { verifyConnection: sbVerify, isAvailable: sbIsAvailable } = require('./lib/supabase-storage');
-    const storageBackend = process.env.R2_ENDPOINT ? 'R2' : 'Supabase';
+    const storageBackend = 'R2';
     if (!sbIsAvailable()) {
       console.error('\n  ╔══════════════════════════════════════════════════════════════╗');
-      console.error('  ║  CRITICAL: Storage not configured (no R2 or Supabase vars)   ║');
+      console.error('  ║  CRITICAL: R2 not configured (R2_ENDPOINT et al not set)      ║');
       console.error('  ║  All data (characters, anims, wardrobe) will be LOST on       ║');
       console.error('  ║  every Railway redeploy. Set env vars in Railway dashboard.   ║');
       console.error('  ╚══════════════════════════════════════════════════════════════╝\n');
@@ -675,10 +666,10 @@ if (require.main === module) {
       console.warn('  [startup] character deletion sync failed (non-fatal):', e.message);
     }
 
-    // ── STEP 2: Restore assets from storage FIRST — full resolution files take priority
+    // ── STEP 2: Restore assets from R2 FIRST — full resolution files take priority
     // Base64 thumbnails in .characters.json are only used as a last-resort fallback
-    // if Supabase is unreachable. Doing this before base64 restore means Supabase files
-    // win and portrait/angle quality is preserved at full resolution.
+    // if R2 is unreachable. Doing this before base64 restore means R2 files win
+    // and portrait/angle quality is preserved at full resolution.
     try {
       const { restoreAssetsToDir, downloadFile: dlFile, isAvailable: sbReady } = require('./lib/supabase-storage');
       await restoreAssetsToDir(path.join(__dirname, 'data/assets'), deletedCharSet);
@@ -699,8 +690,8 @@ if (require.main === module) {
     }
 
     // ── STEP 3: Fallback — restore any STILL-MISSING assets from .characters.json base64
-    // Only runs for files that Supabase couldn't provide (network issue or file never uploaded).
-    // This is intentionally AFTER the storage restore so full-res Supabase files always win.
+    // Only runs for files that R2 couldn't provide (network issue or file never uploaded).
+    // This is intentionally AFTER the R2 restore so full-res R2 files always win.
     try {
       const CHARACTERS_FILE = path.join(__dirname, 'data/.characters.json');
       const ASSETS_DIR_RESTORE = path.join(__dirname, 'data/assets');
@@ -768,7 +759,7 @@ if (require.main === module) {
           console.log(`  [startup] restored ${label} from storage`);
         };
         await Promise.all([
-          restoreJson('_meta/characters-full.json',    path.join(__dirname, 'data/.characters.json'),          'characters',        true), // always refresh — Supabase is source of truth, not git
+          restoreJson('_meta/characters-full.json',    path.join(__dirname, 'data/.characters.json'),          'characters',        true), // always refresh — R2 is source of truth, not git
           restoreJson('_meta/custom-animations.json',  path.join(__dirname, 'data/.custom-animations.json'),  'custom-animations', true),
           restoreJson('_meta/char-prompts.json',        path.join(__dirname, 'data/.char-prompts.json'),        'char-prompts'),
           restoreJson('_meta/frame-prompts.json',       path.join(__dirname, 'data/frame-prompts.json'),        'frame-prompts'),
@@ -797,8 +788,8 @@ if (require.main === module) {
       console.warn('  [startup] metadata restore failed (non-fatal):', e.message);
     }
 
-    // ── STEP 7: Proactively seed Supabase from local state (first-run or gap fill)
-    // If a file exists locally but the storage backup is stale/missing, upload now.
+    // ── STEP 7: Proactively seed R2 from local state (first-run or gap fill)
+    // If a file exists locally but the R2 backup is stale/missing, upload now.
     // This ensures the next cold deploy will always have the latest data to restore.
     try {
       const { isAvailable: sbOk, uploadJson: sbPushJson, uploadFile: sbPushFile, downloadFile: sbPeek } = require('./lib/supabase-storage');
@@ -818,16 +809,16 @@ if (require.main === module) {
           await sbPushFile(sbKey, localPath);
           console.log(`  [startup] seeded ${sbKey} → cloud storage (first backup)`);
         };
-        // Seed characters only if Supabase has NO backup yet (first-ever deploy)
-        // NEVER overwrite Supabase with git data — Supabase is the source of truth, not git
+        // Seed characters only if R2 has NO backup yet (first-ever deploy)
+        // NEVER overwrite R2 with git data — R2 is the source of truth, not git
         await seedIfMissing('_meta/characters-full.json',   path.join(__dirname, 'data/.characters.json'));
         await seedIfMissing('_meta/court-presets.json',      path.join(__dirname, 'data/court-presets.json'));
         await seedIfMissing('_meta/clothing-registry.json',  path.join(__dirname, 'data/.clothing-registry.json'));
-        // Seed court.webp to Supabase if not already there (restoreAssetsToDir picks it up next deploy)
+        // Seed court.webp to R2 if not already there (restoreAssetsToDir picks it up next deploy)
         await seedFileIfMissing('court.webp', path.join(__dirname, 'data/assets/court.webp'));
       }
     } catch (e) {
-      console.warn('  [startup] Supabase seed failed (non-fatal):', e.message);
+      console.warn('  [startup] R2 seed failed (non-fatal):', e.message);
     }
 
     const server = http.createServer(handler);
@@ -838,15 +829,14 @@ if (require.main === module) {
       console.log(`  Animations: 8`);
       console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}`);
       const r2On = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
-      const sbOn = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
       const storageLine = r2On
         ? `R2 (bucket=${process.env.R2_BUCKET || 'sprite-factory'})`
-        : (sbOn ? 'Supabase (legacy)' : 'NOT SET — data will not persist');
+        : 'NOT SET — data will not persist';
       console.log(`  Storage: ${storageLine}\n`);
     });
 
     // ── Periodic storage backup (safety net) ──────────────────────────────
-    // Every 5 minutes, flush all current data to Supabase even if individual
+    // Every 5 minutes, flush all current data to R2 even if individual
     // fire-and-forget saves failed. Ensures data is never more than 5 min stale.
     setInterval(async () => {
       const { isAvailable: sbOk, uploadJson: sbPush } = require('./lib/supabase-storage');
