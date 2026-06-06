@@ -17,6 +17,26 @@ const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
 
+// Load .env if present (no-op on Railway, where vars come from the platform).
+// Kept inline so local dev works without adding a `dotenv` dependency.
+(() => {
+  const envPath = path.resolve(__dirname, '.env');
+  if (!fs.existsSync(envPath)) return;
+  for (const raw of fs.readFileSync(envPath, 'utf8').split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    if (!key || key in process.env) continue; // never override platform-injected vars
+    let val = line.slice(eq + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    process.env[key] = val;
+  }
+})();
+
 const PORT = process.env.PORT || 3456;
 const ASSETS_DIR = process.env.ASSETS_DIR || path.resolve(__dirname, 'data/assets');
 const RAW_DIR = process.env.RAW_DIR || path.resolve(__dirname, 'data/raw-sprites');
@@ -308,38 +328,36 @@ router.get('/api/testing-images/status', (req, res) => {
 });
 
 // ─── Database Health / Debug Endpoint ───────────────────────────────────────
+// Backend-agnostic: prefers Cloudflare R2; falls back to Supabase if only
+// SUPABASE_* env vars are set. `lib/supabase-storage.js` is a router that
+// already delegates to r2-storage at runtime — we just need to report which
+// side is live so the persistence banner clears appropriately.
 router.get('/api/debug/db', async (req, res) => {
   const { verifyConnection, isAvailable, downloadFile } = require('./lib/supabase-storage');
-  const urlSet = !!process.env.SUPABASE_URL;
-  const keySet = !!process.env.SUPABASE_SERVICE_KEY;
-  const urlPreview = process.env.SUPABASE_URL ? process.env.SUPABASE_URL.slice(0, 40) + '...' : 'NOT SET';
-  const keyPreview = process.env.SUPABASE_SERVICE_KEY
-    ? (process.env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? 'eyJ...(JWT ok)' : 'SET but not JWT format — check key type')
-    : 'NOT SET';
+
+  const r2Set = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
+  const sbSet = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
+  const backend = r2Set ? 'r2' : (sbSet ? 'supabase' : 'none');
+
+  const endpointPreview = r2Set
+    ? `${process.env.R2_ENDPOINT.slice(0, 48)}…  bucket=${process.env.R2_BUCKET || 'sprite-factory'}`
+    : (sbSet ? process.env.SUPABASE_URL.slice(0, 40) + '…' : 'NOT SET');
+  const keyPreview = r2Set
+    ? `${process.env.R2_ACCESS_KEY_ID.slice(0, 6)}…`
+    : (process.env.SUPABASE_SERVICE_KEY
+        ? (process.env.SUPABASE_SERVICE_KEY.startsWith('eyJ') ? 'eyJ…(JWT ok)' : 'SET but not JWT format — check key type')
+        : 'NOT SET');
 
   if (!isAvailable()) {
     return json(res, {
       ok: false,
       configured: false,
-      urlSet, keySet, urlPreview, keyPreview,
-      error: 'SUPABASE_URL or SUPABASE_SERVICE_KEY not set in Railway env vars',
-      fix: 'Go to Railway dashboard → your service → Variables, add SUPABASE_URL and SUPABASE_SERVICE_KEY (service role key, not anon key)',
-    });
-  }
-  // Raw DNS/connectivity check first — faster than full Supabase client init
-  try {
-    const sbUrl = process.env.SUPABASE_URL;
-    const urlObj = new URL(sbUrl);
-    await new Promise((resolve, reject) => {
-      const dns = require('dns');
-      dns.lookup(urlObj.hostname, (err) => err ? reject(err) : resolve());
-    });
-  } catch (dnsErr) {
-    return json(res, {
-      ok: false, configured: true, urlPreview, keyPreview,
-      error: `DNS lookup FAILED for "${process.env.SUPABASE_URL}" — the Supabase project does not exist or was deleted`,
-      fix: 'The Supabase project URL in your Railway env vars is unreachable. Steps to fix: 1) Go to https://supabase.com/dashboard, 2) Create a new project, 3) Create a "sprite-assets" storage bucket (set to Public), 4) Copy the project URL and service-role key, 5) Update SUPABASE_URL and SUPABASE_SERVICE_KEY in Railway → Variables → Redeploy',
-      dnsError: dnsErr.message,
+      backend,
+      endpointPreview, keyPreview,
+      // Legacy fields kept so older clients don't break:
+      urlPreview: endpointPreview, urlSet: r2Set || sbSet, keySet: false,
+      error: 'No persistence backend configured. Set R2 env vars (preferred) or Supabase env vars in Railway → Variables.',
+      fix: 'Recommended: Railway dashboard → your service → Variables → add R2_ENDPOINT (https://<account>.r2.cloudflarestorage.com), R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET. Create the bucket + an Object Read/Write API token in Cloudflare → R2 first. Redeploy.',
     });
   }
 
@@ -347,9 +365,15 @@ router.get('/api/debug/db', async (req, res) => {
     const health = await verifyConnection();
     const result = {
       ok: health.ok, configured: true,
-      urlPreview, keyPreview,
+      backend,
+      endpointPreview, keyPreview,
+      // Legacy aliases:
+      urlPreview: endpointPreview,
       keyCount: health.keyCount, metaKeys: health.metaKeys, error: health.error,
-      hint: health.ok ? null : 'Connection failed — check: 1) Supabase project not paused (free tier pauses after 1 week), 2) bucket "sprite-assets" exists and is public, 3) using service-role key not anon key',
+      hint: health.ok ? null
+        : (r2Set
+            ? `R2 connection failed — check: 1) R2_ENDPOINT is "https://<account>.r2.cloudflarestorage.com" (no trailing slash, no bucket in path), 2) bucket "${process.env.R2_BUCKET || 'sprite-factory'}" exists in this account, 3) the API token has Object Read+Write on it.`
+            : 'Connection failed — check: 1) Supabase project not paused (free tier pauses after 1 week), 2) bucket "sprite-assets" exists and is public, 3) using service-role key not anon key'),
     };
 
     // Peek at character count
@@ -785,14 +809,14 @@ if (require.main === module) {
           if (existing) return; // already backed up — don't overwrite with stale local copy
           const content = fs.readFileSync(localPath);
           await sbPushJson(sbKey, JSON.parse(content.toString('utf8')));
-          console.log(`  [startup] seeded ${sbKey} → Supabase (first backup)`);
+          console.log(`  [startup] seeded ${sbKey} → cloud storage (first backup)`);
         };
         const seedFileIfMissing = async (sbKey, localPath) => {
           if (!fs.existsSync(localPath)) return;
           const existing = await sbPeek(sbKey).catch(() => null);
           if (existing) return;
           await sbPushFile(sbKey, localPath);
-          console.log(`  [startup] seeded ${sbKey} → Supabase (first backup)`);
+          console.log(`  [startup] seeded ${sbKey} → cloud storage (first backup)`);
         };
         // Seed characters only if Supabase has NO backup yet (first-ever deploy)
         // NEVER overwrite Supabase with git data — Supabase is the source of truth, not git
@@ -813,7 +837,12 @@ if (require.main === module) {
       console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
       console.log(`  Animations: 8`);
       console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}`);
-      console.log(`  Supabase: ${process.env.SUPABASE_URL ? 'configured' : 'NOT SET — data will not persist'}\n`);
+      const r2On = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
+      const sbOn = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
+      const storageLine = r2On
+        ? `R2 (bucket=${process.env.R2_BUCKET || 'sprite-factory'})`
+        : (sbOn ? 'Supabase (legacy)' : 'NOT SET — data will not persist');
+      console.log(`  Storage: ${storageLine}\n`);
     });
 
     // ── Periodic storage backup (safety net) ──────────────────────────────
