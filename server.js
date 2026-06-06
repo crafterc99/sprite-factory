@@ -168,7 +168,13 @@ require('./routes/pose-import').register(router, ctx);
 
 // ─── Storage Status Endpoint ─────────────────────────────────────────────
 router.get('/api/storage-status', async (req, res) => {
-  const r2Available = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
+  const vars = {
+    R2_ENDPOINT: !!process.env.R2_ENDPOINT,
+    R2_ACCESS_KEY_ID: !!process.env.R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY: !!process.env.R2_SECRET_ACCESS_KEY,
+    R2_BUCKET: !!process.env.R2_BUCKET,
+  };
+  const r2Available = vars.R2_ENDPOINT && vars.R2_ACCESS_KEY_ID && vars.R2_SECRET_ACCESS_KEY;
   const sbAvailable = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
   const backend = r2Available ? 'r2' : (sbAvailable ? 'supabase' : 'none');
   let connected = false;
@@ -177,9 +183,9 @@ router.get('/api/storage-status', async (req, res) => {
       const { listFiles } = require('./lib/r2-storage');
       await listFiles('_meta');
       connected = true;
-    } catch {}
+    } catch (e) { vars._connectError = e.message; }
   }
-  return json(res, { backend, r2Available, sbAvailable, connected });
+  return json(res, { backend, r2Available, sbAvailable, connected, vars });
 });
 
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
