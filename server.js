@@ -166,6 +166,22 @@ require('./routes/quiz').register(router, ctx);
 require('./routes/movement-profiles').register(router);
 require('./routes/pose-import').register(router, ctx);
 
+// ─── Storage Status Endpoint ─────────────────────────────────────────────
+router.get('/api/storage-status', async (req, res) => {
+  const r2Available = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
+  const sbAvailable = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
+  const backend = r2Available ? 'r2' : (sbAvailable ? 'supabase' : 'none');
+  let connected = false;
+  if (r2Available) {
+    try {
+      const { listFiles } = require('./lib/r2-storage');
+      await listFiles('_meta');
+      connected = true;
+    } catch {}
+  }
+  return json(res, { backend, r2Available, sbAvailable, connected });
+});
+
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
 const TESTING_CONFIG_FILE = path.join(__dirname, 'data/.testing-config.json');
 
