@@ -599,19 +599,20 @@ if (require.main === module) {
   (async () => {
       // ── Supabase connectivity check — must pass before restoring any data
     const { verifyConnection: sbVerify, isAvailable: sbIsAvailable } = require('./lib/supabase-storage');
+    const storageBackend = process.env.R2_ENDPOINT ? 'R2' : 'Supabase';
     if (!sbIsAvailable()) {
       console.error('\n  ╔══════════════════════════════════════════════════════════════╗');
-      console.error('  ║  CRITICAL: SUPABASE_URL or SUPABASE_SERVICE_KEY not set      ║');
+      console.error('  ║  CRITICAL: Storage not configured (no R2 or Supabase vars)   ║');
       console.error('  ║  All data (characters, anims, wardrobe) will be LOST on       ║');
       console.error('  ║  every Railway redeploy. Set env vars in Railway dashboard.   ║');
       console.error('  ╚══════════════════════════════════════════════════════════════╝\n');
     } else {
       const sbHealth = await sbVerify();
       if (!sbHealth.ok) {
-        console.error(`  [startup] ✗ Supabase connection FAILED: ${sbHealth.error}`);
+        console.error(`  [startup] ✗ ${storageBackend} connection FAILED: ${sbHealth.error}`);
         console.error('  [startup] Data will not persist across redeploys until this is fixed.');
       } else {
-        console.log(`  [startup] ✓ Supabase connected — ${sbHealth.keyCount} asset(s) in bucket`);
+        console.log(`  [startup] ✓ ${storageBackend} connected — ${sbHealth.keyCount} asset(s) in bucket`);
       }
     }
 
