@@ -395,55 +395,76 @@ router.get('/api/debug/db', async (req, res) => {
   }
 });
 
-// ─── Force backup endpoint — immediately flushes all data to Supabase ────────
-router.post('/api/debug/backup-now', async (req, res) => {
-  const { isAvailable: sbOk, uploadJson: sbPush } = require('./lib/supabase-storage');
-  if (!sbOk()) return json(res, { ok: false, error: 'Supabase not configured' });
+// ─── Full storage migration / backup endpoint ─────────────────────────────
+router.post('/api/migrate-to-storage', async (req, res) => {
+  const { isAvailable, uploadFile: storeFile, uploadJson: storeJson } = require('./lib/supabase-storage');
+  if (!isAvailable()) return json(res, { ok: false, error: 'No storage backend configured' });
+
   const results = {};
-  try {
-    const { loadCharacters } = require('./routes/characters');
-    const chars = loadCharacters();
-    const count = Object.keys(chars).filter(k => k !== '_deleted').length;
-    await sbPush('_meta/characters-full.json', chars);
-    results.characters = `saved (${count})`;
-  } catch (e) { results.characters = `FAILED: ${e.message}`; }
+  let assetCount = 0;
 
-  try {
-    const animFile = path.join(__dirname, 'data/anim-lib/index.json');
-    if (fs.existsSync(animFile)) {
-      const anims = JSON.parse(fs.readFileSync(animFile, 'utf8'));
-      await sbPush('_meta/anim-lib-index.json', anims);
-      results.animations = `saved (${Object.keys(anims).length})`;
-    } else { results.animations = 'no local file'; }
-  } catch (e) { results.animations = `FAILED: ${e.message}`; }
+  // ── Metadata JSON files ──
+  const metaUploads = [
+    { file: 'data/.characters.json',          key: '_meta/characters-full.json',   label: 'characters' },
+    { file: 'data/anim-lib/index.json',        key: '_meta/anim-lib-index.json',    label: 'animations' },
+    { file: 'data/wardrobe.json',              key: '_meta/wardrobe.json',          label: 'wardrobe' },
+    { file: 'data/.testing-config.json',       key: '_meta/testing-config.json',    label: 'testingConfig' },
+    { file: 'data/court-presets.json',         key: '_meta/court-presets.json',     label: 'courtPresets' },
+    { file: 'data/.custom-animations.json',    key: '_meta/custom-animations.json', label: 'customAnimations' },
+    { file: 'data/.clothing-registry.json',    key: '_meta/clothing-registry.json', label: 'clothingRegistry' },
+    { file: 'data/.char-prompts.json',         key: '_meta/char-prompts.json',      label: 'charPrompts' },
+    { file: 'data/frame-prompts.json',         key: '_meta/frame-prompts.json',     label: 'framePrompts' },
+    { file: 'data/.cost-tracking.json',        key: '_meta/cost-tracking.json',     label: 'costTracking' },
+  ];
 
-  try {
-    const wardFile = path.join(__dirname, 'data/wardrobe.json');
-    if (fs.existsSync(wardFile)) {
-      const ward = JSON.parse(fs.readFileSync(wardFile, 'utf8'));
-      await sbPush('_meta/wardrobe.json', ward);
-      results.wardrobe = `saved (${ward.length})`;
-    } else { results.wardrobe = 'no local file'; }
-  } catch (e) { results.wardrobe = `FAILED: ${e.message}`; }
+  for (const { file, key, label } of metaUploads) {
+    try {
+      const fullPath = path.join(__dirname, file);
+      if (!fs.existsSync(fullPath)) { results[label] = 'skipped (not found)'; continue; }
+      const obj = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      await storeJson(key, obj);
+      const count = Array.isArray(obj) ? obj.length : Object.keys(obj).filter(k => k !== '_deleted').length;
+      results[label] = `saved (${count})`;
+    } catch (e) { results[label] = `FAILED: ${e.message}`; }
+  }
 
+  // ── apply-anim metadata ──
   try {
-    const testFile = path.join(__dirname, 'data/.testing-config.json');
-    if (fs.existsSync(testFile)) {
-      await sbPush('_meta/testing-config.json', JSON.parse(fs.readFileSync(testFile, 'utf8')));
-      results.testingConfig = 'saved';
+    const applyDir = path.join(__dirname, 'data/apply-anim');
+    if (fs.existsSync(applyDir)) {
+      const files = fs.readdirSync(applyDir).filter(f => f.endsWith('.json'));
+      await Promise.all(files.map(async f => {
+        try {
+          const obj = JSON.parse(fs.readFileSync(path.join(applyDir, f), 'utf8'));
+          await storeJson(`_meta/apply-anim/${f}`, obj);
+        } catch {}
+      }));
+      results.applyAnim = `saved (${files.length})`;
     }
-  } catch (e) { results.testingConfig = `FAILED: ${e.message}`; }
+  } catch (e) { results.applyAnim = `FAILED: ${e.message}`; }
 
+  // ── Binary assets (PNGs, webp) ──
   try {
-    const presetsFile = path.join(__dirname, 'data/court-presets.json');
-    if (fs.existsSync(presetsFile)) {
-      await sbPush('_meta/court-presets.json', JSON.parse(fs.readFileSync(presetsFile, 'utf8')));
-      results.courtPresets = 'saved';
+    const assetsDir = path.join(__dirname, 'data/assets');
+    if (fs.existsSync(assetsDir)) {
+      const walkDir = (dir, base) => {
+        const entries = [];
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const rel = base ? `${base}/${entry.name}` : entry.name;
+          if (entry.isDirectory()) entries.push(...walkDir(path.join(dir, entry.name), rel));
+          else entries.push({ abs: path.join(dir, entry.name), rel });
+        }
+        return entries;
+      };
+      const allAssets = walkDir(assetsDir, '');
+      await Promise.all(allAssets.map(async ({ abs, rel }) => {
+        try { await storeFile(rel, abs); assetCount++; } catch {}
+      }));
     }
-  } catch (e) { results.courtPresets = `FAILED: ${e.message}`; }
+    results.assets = `uploaded (${assetCount})`;
+  } catch (e) { results.assets = `FAILED: ${e.message}`; }
 
-  console.log('[backup-now] forced backup results:', results);
-  json(res, { ok: true, results });
+  json(res, { ok: true, backend: process.env.R2_ENDPOINT ? 'r2' : 'supabase', results });
 });
 
 // ─── Court Presets Endpoints ─────────────────────────────────────────────
@@ -481,7 +502,7 @@ router.put('/api/court-presets/:id', async (req, res, params) => {
     fs.writeFileSync(COURT_PRESETS_FILE, JSON.stringify(stored, null, 2));
     const { uploadJson, isAvailable } = require('./lib/supabase-storage');
     if (isAvailable()) {
-      await uploadJson('_meta/court-presets.json', stored).catch(e => console.warn('[court-presets] Supabase backup failed:', e.message));
+      await uploadJson('_meta/court-presets.json', stored).catch(e => console.warn('[court-presets] storage backup failed:', e.message));
     }
     json(res, { success: true });
   } catch (e) {
@@ -616,7 +637,7 @@ if (require.main === module) {
       }
     }
 
-    // ── STEP 1: Sync deletions from Supabase FIRST — before any asset restore
+    // ── STEP 1: Sync deletions from storage FIRST — before any asset restore
     // This ensures we know exactly which characters are deleted before downloading anything.
     // Returns a Set of deleted character names so later steps can skip their files.
     let deletedCharSet = new Set();
@@ -630,7 +651,7 @@ if (require.main === module) {
       console.warn('  [startup] character deletion sync failed (non-fatal):', e.message);
     }
 
-    // ── STEP 2: Restore assets from Supabase FIRST — full resolution files take priority
+    // ── STEP 2: Restore assets from storage FIRST — full resolution files take priority
     // Base64 thumbnails in .characters.json are only used as a last-resort fallback
     // if Supabase is unreachable. Doing this before base64 restore means Supabase files
     // win and portrait/angle quality is preserved at full resolution.
@@ -650,12 +671,12 @@ if (require.main === module) {
         }
       }
     } catch (e) {
-      console.warn('  [startup] Supabase restore failed (non-fatal):', e.message);
+      console.warn('  [startup] storage restore failed (non-fatal):', e.message);
     }
 
     // ── STEP 3: Fallback — restore any STILL-MISSING assets from .characters.json base64
     // Only runs for files that Supabase couldn't provide (network issue or file never uploaded).
-    // This is intentionally AFTER the Supabase restore so full-res Supabase files always win.
+    // This is intentionally AFTER the storage restore so full-res Supabase files always win.
     try {
       const CHARACTERS_FILE = path.join(__dirname, 'data/.characters.json');
       const ASSETS_DIR_RESTORE = path.join(__dirname, 'data/assets');
@@ -692,7 +713,7 @@ if (require.main === module) {
       console.warn('  [startup] base64 fallback restore failed (non-fatal):', e.message);
     }
 
-    // ── STEP 4: Restore animation library from Supabase if local index is empty
+    // ── STEP 4: Restore animation library from storage if local index is empty
     try {
       const { restoreFromSupabase: restoreAnimLib } = require('./routes/anim-lib');
       await restoreAnimLib();
@@ -700,7 +721,7 @@ if (require.main === module) {
       console.warn('  [startup] anim-lib restore failed (non-fatal):', e.message);
     }
 
-    // ── STEP 5: Restore wardrobe from Supabase if local is empty
+    // ── STEP 5: Restore wardrobe from storage if local is empty
     try {
       const { restoreFromSupabase: restoreWardrobe } = require('./routes/wardrobe');
       await restoreWardrobe();
@@ -708,8 +729,8 @@ if (require.main === module) {
       console.warn('  [startup] wardrobe restore failed (non-fatal):', e.message);
     }
 
-    // ── STEP 6: Restore remaining metadata from Supabase
-    // testing-config is ALWAYS refreshed from Supabase (zone positions change frequently).
+    // ── STEP 6: Restore remaining metadata from storage
+    // testing-config is ALWAYS refreshed from storage (zone positions change frequently).
     // Other metadata files are only restored if missing locally.
     try {
       const { downloadFile, isAvailable } = require('./lib/supabase-storage');
@@ -720,7 +741,7 @@ if (require.main === module) {
           if (!buf) return;
           fs.mkdirSync(path.dirname(localPath), { recursive: true });
           fs.writeFileSync(localPath, buf);
-          console.log(`  [startup] restored ${label} from Supabase`);
+          console.log(`  [startup] restored ${label} from storage`);
         };
         await Promise.all([
           restoreJson('_meta/characters-full.json',    path.join(__dirname, 'data/.characters.json'),          'characters',        true), // always refresh — Supabase is source of truth, not git
@@ -745,7 +766,7 @@ if (require.main === module) {
           if (buf) { fs.writeFileSync(localPath, buf); }
         }));
         if (applyMetaFiles.length > 0) {
-          console.log(`  [startup] restored ${applyMetaFiles.length} apply-anim metadata file(s) from Supabase`);
+          console.log(`  [startup] restored ${applyMetaFiles.length} apply-anim metadata file(s) from storage`);
         }
       }
     } catch (e) {
@@ -753,7 +774,7 @@ if (require.main === module) {
     }
 
     // ── STEP 7: Proactively seed Supabase from local state (first-run or gap fill)
-    // If a file exists locally but the Supabase backup is stale/missing, upload now.
+    // If a file exists locally but the storage backup is stale/missing, upload now.
     // This ensures the next cold deploy will always have the latest data to restore.
     try {
       const { isAvailable: sbOk, uploadJson: sbPushJson, uploadFile: sbPushFile, downloadFile: sbPeek } = require('./lib/supabase-storage');
@@ -795,7 +816,7 @@ if (require.main === module) {
       console.log(`  Supabase: ${process.env.SUPABASE_URL ? 'configured' : 'NOT SET — data will not persist'}\n`);
     });
 
-    // ── Periodic Supabase backup (safety net) ──────────────────────────────
+    // ── Periodic storage backup (safety net) ──────────────────────────────
     // Every 5 minutes, flush all current data to Supabase even if individual
     // fire-and-forget saves failed. Ensures data is never more than 5 min stale.
     setInterval(async () => {
