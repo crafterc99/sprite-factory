@@ -241,19 +241,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
 
       const vidCost = recordCost(model || 'gemini-3-pro-image-preview', 'video', '2K', charRef ? 2 : 1, { character, animation: safeName });
 
-      const processed = await processSprite(outputPath, `${character}-${safeName}`, {
-        frameCount: count,
-        targetSize: 180,
-        outputDir: ASSETS_DIR,
-      });
-
-      // processSprite already saves frames to ${character}-${safeName}-frames/
-
       return json(res, {
         success: true,
         raw: `/raw/${character}-${safeName}-raw.png`,
-        processed: `/assets/${character}-${safeName}.png`,
-        frames: processed.frameCount,
+        processed: `/raw/${character}-${safeName}-raw.png`,
+        frames: count,
         cost: vidCost,
         animName: safeName,
         fps: fps || 8,
@@ -312,47 +304,20 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
         const promptData = buildFilmToSingleFramePrompt(character, animDescription, i, totalFrames);
         const client = new NanaBananaClient({ model: model || 'gemini-3-pro-image-preview' });
 
-        const rawPath = path.join(RAW_DIR, `${character}-${safeName}-frame-${i}-raw.png`);
+        const frameOutputPath = path.join(framesOutputDir, `frame-${i}.png`);
 
-        // Generate single frame using video frame as pose reference
+        // Generate single frame using video frame as pose reference — no post-processing
         await client.generateSprite(promptData.prompt, videoFramePath, charRef, {
           aspectRatio: '1:1',
           resolution: '1K',
           model: model || 'gemini-3-pro-image-preview',
-          outputPath: rawPath,
+          outputPath: frameOutputPath,
         });
 
         const frameCost = recordCost(model || 'gemini-3-pro-image-preview', 'video_fbf_frame', '1K', charRef ? 2 : 1, {
           character, animation: safeName, frame: i,
         });
         totalCost += frameCost?.totalCost || 0;
-
-        // Process the frame (remove green bg, normalize size)
-        const frameOutputPath = path.join(framesOutputDir, `frame-${i}.png`);
-        try {
-          // Process into a temp dir, then grab the single frame
-          const tmpProcessDir = path.join(TMP_DIR, sessionId, `fbf-proc-${i}`);
-          fs.mkdirSync(tmpProcessDir, { recursive: true });
-          const processed = await processSprite(rawPath, `fbf-${i}`, {
-            frameCount: 1,
-            targetSize: 180,
-            outputDir: tmpProcessDir,
-          });
-          // The processed single frame is in the -frames subdir
-          const processedFrame = path.join(tmpProcessDir, `fbf-${i}-frames`, 'frame-0.png');
-          if (fs.existsSync(processedFrame)) {
-            fs.copyFileSync(processedFrame, frameOutputPath);
-          } else if (processed.outputPath && fs.existsSync(processed.outputPath)) {
-            fs.copyFileSync(processed.outputPath, frameOutputPath);
-          } else {
-            fs.copyFileSync(rawPath, frameOutputPath);
-          }
-          // Cleanup temp
-          fs.rmSync(tmpProcessDir, { recursive: true, force: true });
-        } catch (procErr) {
-          // Fallback: use raw frame
-          fs.copyFileSync(rawPath, frameOutputPath);
-        }
         generatedFramePaths.push(frameOutputPath);
 
         sendSSE('frame_done', {

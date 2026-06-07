@@ -5190,7 +5190,7 @@ async function confirmVideoSelection() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Selection failed');
 
-    // Show selected strip preview — two sections: originals + subject slots
+    // Show selected frames
     const strip = document.getElementById('videoSelectedStrip');
     const originalsHtml = ordered.map((file, i) => {
       const frame = VID.frames.find(f => f.file === file);
@@ -5199,17 +5199,7 @@ async function confirmVideoSelection() {
         <div class="vst-label">frame ${i + 1}</div>
       </div>`;
     }).join('');
-    const subjectsHtml = ordered.map((file, i) =>
-      `<div class="video-selected-thumb" data-frame-index="${i}" data-frame-file="${file}">
-        <div class="vst-subject vst-pending"><span class="spinner active"></span></div>
-        <div class="vst-label">pose reference ${i + 1}</div>
-      </div>`
-    ).join('');
-    strip.innerHTML =
-      `<div class="video-selected-container">` +
-        `<div><div class="vst-section-label">Original Frames</div><div class="video-selected-strip">${originalsHtml}</div></div>` +
-        `<div><div class="vst-section-label">Pose References</div><div class="video-selected-strip" id="vstSubjectGrid">${subjectsHtml}</div></div>` +
-      `</div>`;
+    strip.innerHTML = `<div class="video-selected-strip">${originalsHtml}</div>`;
 
     // Pre-fill animation name (from locked multi-angle name, or leave blank)
     if (VID.lockedAnimName) {
@@ -5220,9 +5210,6 @@ async function confirmVideoSelection() {
 
     document.getElementById('videoConfigCard').style.display = 'block';
     document.getElementById('videoConfigCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    // Kick off background extraction — non-blocking
-    extractVideoSubjects(ordered);
   } catch (e) {
     toast('Confirm failed: ' + e.message, true);
   }
