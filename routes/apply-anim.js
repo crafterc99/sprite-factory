@@ -15,6 +15,7 @@
 const fs   = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { removeBackground } = require('../lib/sprite-processor/index');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost }       = require('../middleware/cost-tracker');
 const { uploadFile: sbUpload, uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/r2-storage');
@@ -223,9 +224,11 @@ function register(router, ctx) {
 
           recordCost(modelId, 'apply_anim', '1K', refImages.length, { animId, frame: i });
 
-          // Save raw output — no background removal or cropping
+          // Save raw output then remove green background
+          const rawPath = path.join(framesDir, `raw-${String(i).padStart(2,'0')}.png`);
           const processedPath = path.join(framesDir, `frame-${String(i).padStart(2,'0')}.png`);
-          fs.writeFileSync(processedPath, result.imageBuffer);
+          fs.writeFileSync(rawPath, result.imageBuffer);
+          await removeBackground(rawPath, processedPath);
 
           processedPaths.push(processedPath);
           prevFramePath = processedPath;

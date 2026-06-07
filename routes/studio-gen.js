@@ -291,8 +291,14 @@ function register(router, ctx) {
           })
         );
 
-        // Use raw frames directly — no background removal or cropping
-        const processedPaths = rawPaths;
+        // Remove green background only — no crop or resize
+        const processedPaths = await Promise.all(
+          rawPaths.map(async (rawPath, i) => {
+            const outPath = path.join(genDir, `frame-${i}.png`);
+            await removeGreenBackground(rawPath, outPath, { feather: 0 });
+            return outPath;
+          })
+        );
 
         // Assemble sprite strip — 180×180 per frame, game-engine compatible
         const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);

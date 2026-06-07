@@ -6,7 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { CHARACTERS, ANIMATIONS, ANGLE_NAMES, BALL_VARIANTS, buildPoseTransferPrompt, buildTextOnlyAnimPrompt, buildSingleFramePrompt, buildSectionedPrompt, getDefaultSections, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt, buildAnglePrompt, buildHeadshotAnglePrompt, buildClothesAnglePrompt, buildBallRefPrompt, getActiveSections, getActivePrompt } = require('../lib/sprite-generator/prompts');
-const { processSprite, cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes } = require('../lib/sprite-processor/index');
+const { processSprite, cutFrames, upscaleNN, buildStrip, processSingleFrame, normalizeFrameSizes, removeBackground } = require('../lib/sprite-processor/index');
 const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
 const { recordCost, getImageCost, loadCostData } = require('../middleware/cost-tracker');
 const jobStore = require('../job-store');
@@ -445,7 +445,9 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
 
       await runWithConcurrency(tasks, concurrency, interFrameDelay);
 
-      // Collect raw frames — no background removal or resize
+      // Remove green background from each frame — no resize or crop
+      const processedDir = path.join(fbfDir, 'processed');
+      fs.mkdirSync(processedDir, { recursive: true });
       const processedPaths = [];
       for (let i = 0; i < totalFrames; i++) {
         const rawPath = rawOutputPaths[i];
@@ -453,7 +455,9 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
           sse({ type: 'process_skip', frame: i });
           continue;
         }
-        processedPaths.push(rawPath);
+        const processedPath = path.join(processedDir, `frame-${String(i).padStart(3, '0')}.png`);
+        await removeBackground(rawPath, processedPath);
+        processedPaths.push(processedPath);
       }
 
       // Assemble horizontal strip

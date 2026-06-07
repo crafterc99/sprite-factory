@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { CHARACTERS, buildFilmToSpritePrompt, buildFilmToSingleFramePrompt } = require('../lib/sprite-generator/prompts');
-const { processSprite, cropToContent } = require('../lib/sprite-processor/index');
+const { processSprite, cropToContent, removeBackground } = require('../lib/sprite-processor/index');
 const { smartSelect, recordFeedback } = require('../lib/sprite-generator/smart-selector');
 const { extract } = require('../lib/sprite-generator/video-extractor');
 const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
@@ -304,15 +304,19 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
         const promptData = buildFilmToSingleFramePrompt(character, animDescription, i, totalFrames);
         const client = new NanaBananaClient({ model: model || 'gemini-3-pro-image-preview' });
 
+        const rawFramePath = path.join(RAW_DIR, `${character}-${safeName}-frame-${i}-raw.png`);
         const frameOutputPath = path.join(framesOutputDir, `frame-${i}.png`);
 
-        // Generate single frame using video frame as pose reference — no post-processing
+        // Generate single frame using video frame as pose reference
         await client.generateSprite(promptData.prompt, videoFramePath, charRef, {
           aspectRatio: '1:1',
           resolution: '1K',
           model: model || 'gemini-3-pro-image-preview',
-          outputPath: frameOutputPath,
+          outputPath: rawFramePath,
         });
+
+        // Remove green background — nothing else
+        await removeBackground(rawFramePath, frameOutputPath);
 
         const frameCost = recordCost(model || 'gemini-3-pro-image-preview', 'video_fbf_frame', '1K', charRef ? 2 : 1, {
           character, animation: safeName, frame: i,
