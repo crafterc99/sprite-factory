@@ -109,14 +109,12 @@ function recomputePackageStatus(pkg) {
 // ─── Persistent Character Registry ────────────────────────────────────
 
 const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, deleteFiles: sbDeleteFiles, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { readJsonCached, writeJsonCached } = require('../lib/json-cache');
 const SB_DELETED_KEY = '_meta/deleted-chars.json';
 const SB_REGISTRY_KEY = '_meta/characters-full.json';
 
 function loadCharacters() {
-  try {
-    if (fs.existsSync(CHARACTERS_FILE)) return JSON.parse(fs.readFileSync(CHARACTERS_FILE, 'utf8'));
-  } catch {}
-  return {};
+  return readJsonCached(CHARACTERS_FILE, {});
 }
 
 /** Returns the set of permanently deleted character names */
@@ -128,7 +126,7 @@ function loadDeletedSet() {
 function saveCharacters(data) {
   const dir = path.dirname(CHARACTERS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CHARACTERS_FILE, JSON.stringify(data, null, 2));
+  writeJsonCached(CHARACTERS_FILE, data);
   if (sbAvailable()) {
     const deleted = Array.isArray(data._deleted) ? data._deleted : [];
     sbUploadJson(SB_REGISTRY_KEY, data)
@@ -202,16 +200,13 @@ async function syncDeletedFromSupabase() {
 // ─── Custom Animation Registry ────────────────────────────────────────
 
 function loadCustomAnimations() {
-  try {
-    if (fs.existsSync(CUSTOM_ANIMS_FILE)) return JSON.parse(fs.readFileSync(CUSTOM_ANIMS_FILE, 'utf8'));
-  } catch {}
-  return {};
+  return readJsonCached(CUSTOM_ANIMS_FILE, {});
 }
 
 function saveCustomAnimations(data) {
   const dir = path.dirname(CUSTOM_ANIMS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(CUSTOM_ANIMS_FILE, JSON.stringify(data, null, 2));
+  writeJsonCached(CUSTOM_ANIMS_FILE, data);
   if (sbAvailable()) sbUploadJson('_meta/custom-animations.json', data)
     .catch(e => console.error('[characters] custom-animations R2 backup FAILED:', e.message));
 }
@@ -221,17 +216,12 @@ function saveCustomAnimations(data) {
 const CLOTHING_REGISTRY_FILE = path.resolve(__dirname, '../data/.clothing-registry.json');
 
 function loadClothingRegistry() {
-  try {
-    if (fs.existsSync(CLOTHING_REGISTRY_FILE)) {
-      return JSON.parse(fs.readFileSync(CLOTHING_REGISTRY_FILE, 'utf8'));
-    }
-  } catch {}
-  return { items: [] };
+  return readJsonCached(CLOTHING_REGISTRY_FILE, { items: [] });
 }
 
 function saveClothingRegistry(registry) {
   fs.mkdirSync(path.dirname(CLOTHING_REGISTRY_FILE), { recursive: true });
-  fs.writeFileSync(CLOTHING_REGISTRY_FILE, JSON.stringify(registry, null, 2));
+  writeJsonCached(CLOTHING_REGISTRY_FILE, registry);
   if (sbAvailable()) sbUploadJson('_meta/clothing-registry.json', registry).catch(e => console.warn('[clothing-registry] R2 backup failed:', e.message));
 }
 

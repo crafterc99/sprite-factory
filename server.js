@@ -884,81 +884,53 @@ if (require.main === module) {
     });
 
     // ── Periodic storage backup (safety net) ──────────────────────────────
-    // Every 5 minutes, flush all current data to R2 even if individual
-    // fire-and-forget saves failed. Ensures data is never more than 5 min stale.
+    // Every 5 minutes, flush all current data to R2 as a safety net in case
+    // individual fire-and-forget saves failed. Uses content-hash change
+    // detection so unchanged files are skipped — no wasted R2 writes/cost.
+    const crypto = require('crypto');
+    const _backupHashes = new Map(); // r2Key -> last-uploaded content hash
+    const hashOf = (buf) => crypto.createHash('sha1').update(buf).digest('hex');
+
+    // Files to back up: [localPath, r2Key, skipIfEmpty]
+    const BACKUP_TARGETS = [
+      ['data/.characters.json',          '_meta/characters-full.json',   true],
+      ['data/anim-lib/index.json',        '_meta/anim-lib-index.json',    true],
+      ['data/wardrobe.json',              '_meta/wardrobe.json',          true],
+      ['data/.clothing-registry.json',    '_meta/clothing-registry.json', false],
+      ['data/court-presets.json',         '_meta/court-presets.json',     false],
+      ['data/.testing-config.json',       '_meta/testing-config.json',    false],
+      ['data/movement-profiles.json',     '_meta/movement-profiles.json', false],
+      ['data/.production-db.json',         '_meta/production-db.json',      false],
+    ];
+
     setInterval(async () => {
-      const { isAvailable: sbOk, uploadJson: sbPush } = require('./lib/supabase-storage');
+      const { isAvailable: sbOk, uploadFile: sbPushRaw } = require('./lib/supabase-storage');
       if (!sbOk()) return;
-      const now = new Date().toISOString().slice(0,19);
-      try {
-        const { loadCharacters } = require('./routes/characters');
-        const chars = loadCharacters();
-        const count = Object.keys(chars).filter(k => k !== '_deleted').length;
-        if (count > 0) {
-          await sbPush('_meta/characters-full.json', chars);
-          console.log(`  [backup ${now}] ✓ characters (${count})`);
-        }
-      } catch (e) { console.warn(`  [backup] characters failed:`, e.message); }
-
-      try {
-        const animFile = path.join(__dirname, 'data/anim-lib/index.json');
-        if (fs.existsSync(animFile)) {
-          const anims = JSON.parse(fs.readFileSync(animFile, 'utf8'));
-          if (Object.keys(anims).length > 0) {
-            await sbPush('_meta/anim-lib-index.json', anims);
-            console.log(`  [backup ${now}] ✓ anim-lib (${Object.keys(anims).length})`);
+      const now = new Date().toISOString().slice(0, 19);
+      let uploaded = 0;
+      for (const [rel, key, skipIfEmpty] of BACKUP_TARGETS) {
+        try {
+          const fullPath = path.join(__dirname, rel);
+          if (!fs.existsSync(fullPath)) continue;
+          const buf = fs.readFileSync(fullPath);
+          if (skipIfEmpty) {
+            // Don't clobber R2 with an empty/zeroed local file
+            const parsed = JSON.parse(buf.toString('utf8'));
+            const n = Array.isArray(parsed)
+              ? parsed.length
+              : Object.keys(parsed).filter(k => k !== '_deleted').length;
+            if (n === 0) continue;
           }
+          const h = hashOf(buf);
+          if (_backupHashes.get(key) === h) continue; // unchanged since last backup
+          await sbPushRaw(key, buf, 'application/json');
+          _backupHashes.set(key, h);
+          uploaded++;
+        } catch (e) {
+          console.warn(`  [backup] ${key} failed:`, e.message);
         }
-      } catch (e) { console.warn(`  [backup] anim-lib failed:`, e.message); }
-
-      try {
-        const wardrobeFile = path.join(__dirname, 'data/wardrobe.json');
-        if (fs.existsSync(wardrobeFile)) {
-          const wardrobe = JSON.parse(fs.readFileSync(wardrobeFile, 'utf8'));
-          if (wardrobe.length > 0) {
-            await sbPush('_meta/wardrobe.json', wardrobe);
-            console.log(`  [backup ${now}] ✓ wardrobe (${wardrobe.length})`);
-          }
-        }
-      } catch (e) { console.warn(`  [backup] wardrobe failed:`, e.message); }
-
-      try {
-        const clothingFile = path.join(__dirname, 'data/.clothing-registry.json');
-        if (fs.existsSync(clothingFile)) {
-          const clothing = JSON.parse(fs.readFileSync(clothingFile, 'utf8'));
-          await sbPush('_meta/clothing-registry.json', clothing);
-        }
-      } catch (e) { /* clothing registry is optional */ }
-
-      try {
-        const presetsFile = path.join(__dirname, 'data/court-presets.json');
-        if (fs.existsSync(presetsFile)) {
-          const presets = JSON.parse(fs.readFileSync(presetsFile, 'utf8'));
-          await sbPush('_meta/court-presets.json', presets);
-        }
-      } catch (e) { /* court presets optional */ }
-
-      try {
-        const testingFile = path.join(__dirname, 'data/.testing-config.json');
-        if (fs.existsSync(testingFile)) {
-          const config = JSON.parse(fs.readFileSync(testingFile, 'utf8'));
-          await sbPush('_meta/testing-config.json', config);
-        }
-      } catch (e) { /* testing config optional */ }
-
-      try {
-        const mpFile = path.join(__dirname, 'data/movement-profiles.json');
-        if (fs.existsSync(mpFile)) {
-          await sbPush('_meta/movement-profiles.json', JSON.parse(fs.readFileSync(mpFile, 'utf8')));
-        }
-      } catch (e) { /* movement profiles optional */ }
-
-      try {
-        const prodFile = path.join(__dirname, 'data/.production-db.json');
-        if (fs.existsSync(prodFile)) {
-          await sbPush('_meta/production-db.json', JSON.parse(fs.readFileSync(prodFile, 'utf8')));
-        }
-      } catch (e) { /* production db optional */ }
+      }
+      if (uploaded > 0) console.log(`  [backup ${now}] ✓ flushed ${uploaded} changed file(s) to R2`);
     }, 5 * 60 * 1000);
   })();
 }
