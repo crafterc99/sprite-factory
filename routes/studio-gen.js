@@ -23,7 +23,18 @@ const ANIM_LIB_DIR  = path.resolve(__dirname, '../data/anim-lib');
 const ANIM_LIB_INDEX = path.join(ANIM_LIB_DIR, 'index.json');
 
 const DEFAULT_STUDIO_PROMPT =
-  'Replace the pixelated character from Image 2 with the pose from Image 1. The background is pure green (#00FF00).';
+  `Keep the exact pixelated character from Image 1. Copy only the exact pose and limb/body position from Image 2.
+Do not mix faces or identities. make sure the characters face does not change at all.
+Do not change body shape, skin tone, hairstyle, or facial structure.
+Match Image 2's full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.
+natural anatomy, no distortions.
+Pure green (#00FF00) background. with correct character angle body depending on the animation angle...
+ Keep the exact animated character from Image 1. Copy only the exact pose and limb/body position from Image 2.
+Do not mix faces or identities. make sure the characters face does not change at all.
+Do not change body shape, skin tone, hairstyle, or facial structure.
+Match Image 2's full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.
+natural anatomy, no distortions.
+Change the background to Pure green (#00FF00) background.`;
 
 const PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
 
@@ -275,7 +286,7 @@ function register(router, ctx) {
             }
 
             const result = await client.generate(loadStudioPrompt(), {
-              referenceImages: [posePath, resolvedAnglePath],
+              referenceImages: [resolvedAnglePath, posePath],
               aspectRatio: '3:4',
               resolution: '1K',
               model: modelId,
