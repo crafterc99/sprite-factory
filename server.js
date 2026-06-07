@@ -856,13 +856,12 @@ if (require.main === module) {
       ['data/court-presets.json',         '_meta/court-presets.json',     false],
       ['data/.testing-config.json',       '_meta/testing-config.json',    false],
       ['data/movement-profiles.json',     '_meta/movement-profiles.json', false],
-      ['data/.production-db.json',         '_meta/production-db.json',      false],
+      ['data/.production-db.json',        '_meta/production-db.json',     false],
     ];
 
-    setInterval(async () => {
+    async function runBackup(label) {
       const { isAvailable: sbOk, uploadFile: sbPushRaw } = require('./lib/r2-storage');
       if (!sbOk()) return;
-      const now = new Date().toISOString().slice(0, 19);
       let uploaded = 0;
       for (const [rel, key, skipIfEmpty] of BACKUP_TARGETS) {
         try {
@@ -870,7 +869,6 @@ if (require.main === module) {
           if (!fs.existsSync(fullPath)) continue;
           const buf = fs.readFileSync(fullPath);
           if (skipIfEmpty) {
-            // Don't clobber R2 with an empty/zeroed local file
             const parsed = JSON.parse(buf.toString('utf8'));
             const n = Array.isArray(parsed)
               ? parsed.length
@@ -878,7 +876,7 @@ if (require.main === module) {
             if (n === 0) continue;
           }
           const h = hashOf(buf);
-          if (_backupHashes.get(key) === h) continue; // unchanged since last backup
+          if (_backupHashes.get(key) === h) continue;
           await sbPushRaw(key, buf, 'application/json');
           _backupHashes.set(key, h);
           uploaded++;
@@ -886,8 +884,43 @@ if (require.main === module) {
           console.warn(`  [backup] ${key} failed:`, e.message);
         }
       }
-      if (uploaded > 0) console.log(`  [backup ${now}] ✓ flushed ${uploaded} changed file(s) to R2`);
-    }, 5 * 60 * 1000);
+      if (uploaded > 0) console.log(`  [backup:${label}] ✓ flushed ${uploaded} changed file(s) to R2`);
+    }
+
+    // Run once at startup to establish baseline hashes (so first interval skips unchanged files)
+    setTimeout(() => runBackup('startup').catch(() => {}), 10000);
+    setInterval(() => runBackup(new Date().toISOString().slice(0, 19)).catch(() => {}), 5 * 60 * 1000);
+
+    // ── Graceful shutdown — flush all data to R2 before Railway kills us ──
+    // Railway sends SIGTERM with a grace window before hard SIGKILL.
+    // Without this, any fire-and-forget R2 saves in-flight are dropped.
+    process.on('SIGTERM', async () => {
+      console.log('\n  [shutdown] SIGTERM — flushing data to R2...');
+      const deadline = Date.now() + 20000; // 20s hard cap
+
+      try {
+        const { flushToR2 } = require('./routes/characters');
+        await Promise.race([
+          flushToR2(),
+          new Promise(r => setTimeout(r, deadline - Date.now())),
+        ]);
+        console.log('  [shutdown] ✓ Character data flushed');
+      } catch (e) {
+        console.error('  [shutdown] Character flush error:', e.message);
+      }
+
+      try {
+        await Promise.race([
+          runBackup('shutdown'),
+          new Promise(r => setTimeout(r, deadline - Date.now())),
+        ]);
+        console.log('  [shutdown] ✓ Final backup complete');
+      } catch (e) {
+        console.error('  [shutdown] Final backup error:', e.message);
+      }
+
+      process.exit(0);
+    });
   })();
 }
 

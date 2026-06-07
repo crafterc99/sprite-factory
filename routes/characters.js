@@ -123,19 +123,37 @@ function loadDeletedSet() {
   return new Set(Array.isArray(data._deleted) ? data._deleted : []);
 }
 
+// Track the most recent R2 upload so SIGTERM handler can wait for it.
+let _latestSavePromise = Promise.resolve();
+
 function saveCharacters(data) {
   const dir = path.dirname(CHARACTERS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   writeJsonCached(CHARACTERS_FILE, data);
   if (sbAvailable()) {
     const deleted = Array.isArray(data._deleted) ? data._deleted : [];
-    sbUploadJson(SB_REGISTRY_KEY, data)
+    _latestSavePromise = sbUploadJson(SB_REGISTRY_KEY, data)
       .then(() => console.log(`[characters] ✓ R2 backup saved (${Object.keys(data).filter(k=>k!=='_deleted').length} chars)`))
       .catch(e => console.error('[characters] ✗ CRITICAL — R2 backup FAILED, data will be lost on redeploy:', e.message));
     if (deleted.length > 0) {
       sbUploadJson(SB_DELETED_KEY, { deleted }).catch(e => console.warn('[characters] deleted-list backup failed:', e.message));
     }
   }
+}
+
+/**
+ * Force-upload the current character registry to R2 right now.
+ * Called on SIGTERM so Railway's graceful-shutdown window can flush data
+ * that a fire-and-forget save may not have finished uploading.
+ */
+async function flushToR2() {
+  if (!sbAvailable()) return;
+  await _latestSavePromise.catch(() => {}); // wait for any in-flight upload
+  const data = loadCharacters();
+  const charCount = Object.keys(data).filter(k => k !== '_deleted').length;
+  if (charCount === 0) return;
+  await sbUploadJson(SB_REGISTRY_KEY, data);
+  console.log(`  [flush] ✓ ${charCount} character(s) flushed to R2`);
 }
 
 /**
@@ -424,6 +442,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
 
       const pixelPath = path.join(ASSETS_DIR, `${name}full.png`);
       fs.copyFileSync(optPath, pixelPath);
+      // Upload portrait to R2 immediately so it survives Railway redeploys
+      if (sbAvailable()) sbUpload(`${name}full.png`, pixelPath).catch(e => console.warn(`[characters] portrait R2 upload failed for ${name}:`, e.message));
 
       // Register in runtime
       CHARACTERS[name] = {
@@ -1572,4 +1592,4 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   });
 }
 
-module.exports = { register, loadCharacters, saveCharacters, syncDeletedFromStorage, getCharacterRegistry, computeScale, loadCustomAnimations, saveCustomAnimations, loadPackage, savePackage, initPackage, ANGLE_NAMES, CLOTHING_CATEGORIES };
+module.exports = { register, loadCharacters, saveCharacters, flushToR2, syncDeletedFromStorage, getCharacterRegistry, computeScale, loadCustomAnimations, saveCustomAnimations, loadPackage, savePackage, initPackage, ANGLE_NAMES, CLOTHING_CATEGORIES };
