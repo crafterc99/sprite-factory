@@ -20,6 +20,7 @@ const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { processSingleFrame } = require('../lib/sprite-processor');
 const { recordCost } = require('../middleware/cost-tracker');
 const { loadCharacters, saveCharacters, getCharacterRegistry } = require('./characters');
+const { uploadFile: sbUpload, isAvailable: sbAvailable } = require('../lib/r2-storage');
 
 function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) {
 
@@ -121,6 +122,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
       });
 
       fs.writeFileSync(portraitPath, result.imageBuffer);
+      if (sbAvailable()) sbUpload(`${character}full.png`, portraitPath);
       const cost = recordCost(model || 'gemini-3-pro-image-preview', 'anchor-portrait', '2K', 0, { character });
 
       // Sync runtime CHARACTERS
@@ -185,6 +187,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
         });
 
         fs.writeFileSync(filePath, result.imageBuffer);
+        if (sbAvailable()) sbUpload(fileName, filePath);
         const cost = recordCost(modelId, 'anchor-angle', '1K', 1, {
           character, angle: angleName, index: idx,
         });
@@ -293,6 +296,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
         });
 
         fs.writeFileSync(filePath, result.imageBuffer);
+        if (sbAvailable()) sbUpload(fileName, filePath);
         const cost = recordCost(model || 'gemini-3-pro-image-preview', 'anchor-ball-ref', '2K', referenceImages.length, {
           character, variant, index: idx,
         });
@@ -439,6 +443,13 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
           try {
             await processSingleFrame(framePath, framePath);
           } catch {}
+
+          // Backup processed frame to R2 — key matches its path under ASSETS_DIR
+          // so restoreAssetsToDir() puts it back in the right place on next boot.
+          if (sbAvailable()) {
+            const r2Key = `${targetChar}-${sourceAnimation}-frames/frame-${String(fi).padStart(3, '0')}.png`;
+            sbUpload(r2Key, framePath);
+          }
 
           const cost = recordCost(model || 'gemini-3-pro-image-preview', 'anchor-replicate', '2K', 2, {
             sourceCharacter, targetCharacter: targetChar, animation: sourceAnimation, frame: fi,

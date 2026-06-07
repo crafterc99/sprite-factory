@@ -767,6 +767,8 @@ if (require.main === module) {
           restoreJson('_meta/testing-config.json',      path.join(__dirname, 'data/.testing-config.json'),      'testing-config',    true), // always refresh
           restoreJson('_meta/court-presets.json',       path.join(__dirname, 'data/court-presets.json'),        'court-presets',     true),
           restoreJson('_meta/clothing-registry.json',   path.join(__dirname, 'data/.clothing-registry.json'),  'clothing-registry', true),
+          restoreJson('_meta/movement-profiles.json',   path.join(__dirname, 'data/movement-profiles.json'),    'movement-profiles', true),
+          restoreJson('_meta/production-db.json',       path.join(__dirname, 'data/.production-db.json'),       'production-db',     true),
         ]);
         // Restore apply-anim metadata files
         const { listFiles } = require('./lib/supabase-storage');
@@ -814,6 +816,8 @@ if (require.main === module) {
         await seedIfMissing('_meta/characters-full.json',   path.join(__dirname, 'data/.characters.json'));
         await seedIfMissing('_meta/court-presets.json',      path.join(__dirname, 'data/court-presets.json'));
         await seedIfMissing('_meta/clothing-registry.json',  path.join(__dirname, 'data/.clothing-registry.json'));
+        await seedIfMissing('_meta/movement-profiles.json',  path.join(__dirname, 'data/movement-profiles.json'));
+        await seedIfMissing('_meta/production-db.json',      path.join(__dirname, 'data/.production-db.json'));
         // Seed court.webp to R2 if not already there (restoreAssetsToDir picks it up next deploy)
         await seedFileIfMissing('court.webp', path.join(__dirname, 'data/assets/court.webp'));
       }
@@ -897,6 +901,20 @@ if (require.main === module) {
           await sbPush('_meta/testing-config.json', config);
         }
       } catch (e) { /* testing config optional */ }
+
+      try {
+        const mpFile = path.join(__dirname, 'data/movement-profiles.json');
+        if (fs.existsSync(mpFile)) {
+          await sbPush('_meta/movement-profiles.json', JSON.parse(fs.readFileSync(mpFile, 'utf8')));
+        }
+      } catch (e) { /* movement profiles optional */ }
+
+      try {
+        const prodFile = path.join(__dirname, 'data/.production-db.json');
+        if (fs.existsSync(prodFile)) {
+          await sbPush('_meta/production-db.json', JSON.parse(fs.readFileSync(prodFile, 'utf8')));
+        }
+      } catch (e) { /* production db optional */ }
     }, 5 * 60 * 1000);
   })();
 }

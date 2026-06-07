@@ -467,6 +467,7 @@ async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
         const dest = destPattern.replace('{i}', idx);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.writeFileSync(dest, buf);
+        if (sbAvailable()) sbUpload(path.basename(dest), dest);
         result.push({ index: idx, label: ANGLE_LABELS_8[idx] || `angle_${idx}`, path: dest });
         idx++;
       }
@@ -487,6 +488,7 @@ async function sliceSheet(sheetPath, outputDir, frameCount, destPattern) {
       const dest = destPattern.replace('{i}', idx);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.writeFileSync(dest, buf);
+      if (sbAvailable()) sbUpload(path.basename(dest), dest);
       result.push({ index: idx, label: ANGLE_LABELS_8[idx] || `angle_${idx}`, path: dest });
       idx++;
     }

@@ -12,8 +12,10 @@
 const fs   = require('fs');
 const path = require('path');
 const { scheduleSync } = require('../lib/auto-git-sync');
+const { uploadJson: sbUploadJson, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/r2-storage');
 
 const DATA_FILE = path.resolve(__dirname, '../data/movement-profiles.json');
+const R2_KEY    = '_meta/movement-profiles.json';
 
 function load() {
   try {
@@ -23,8 +25,29 @@ function load() {
 }
 
 function save(data) {
+  fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  if (sbAvailable()) {
+    sbUploadJson(R2_KEY, data)
+      .then(() => console.log(`[movement-profiles] ✓ R2 backup saved (${Object.keys(data).length} profiles)`))
+      .catch(e => console.error('[movement-profiles] ✗ R2 backup FAILED:', e.message));
+  }
   scheduleSync();
+}
+
+async function restoreFromR2() {
+  if (!sbAvailable()) return;
+  try {
+    const buf = await sbDownload(R2_KEY);
+    if (!buf) return;
+    const remote = JSON.parse(buf.toString('utf8'));
+    if (!remote || typeof remote !== 'object') return;
+    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+    fs.writeFileSync(DATA_FILE, JSON.stringify(remote, null, 2));
+    console.log(`  [movement-profiles] restored ${Object.keys(remote).length} profile(s) from R2`);
+  } catch (e) {
+    console.warn('  [movement-profiles] R2 restore failed (non-fatal):', e.message);
+  }
 }
 
 function json(res, data, status = 200) {
@@ -101,4 +124,4 @@ function register(router) {
   });
 }
 
-module.exports = { register };
+module.exports = { register, restoreFromR2 };

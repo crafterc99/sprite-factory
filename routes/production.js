@@ -12,12 +12,14 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { uploadJson: sbUploadJson, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/r2-storage');
 
 // ─── Paths ──────────────────────────────────────────────────────────
 const ASSETS_DIR = process.env.ASSETS_DIR || path.resolve(__dirname, '../data/assets');
 const RAW_DIR = process.env.RAW_DIR || path.resolve(__dirname, '../data/raw-sprites');
 const CHARACTERS_FILE = process.env.CHARACTERS_FILE || path.resolve(__dirname, '../data/.characters.json');
 const PRODUCTION_DB = process.env.PRODUCTION_DB || path.resolve(__dirname, '../data/.production-db.json');
+const R2_KEY = '_meta/production-db.json';
 
 // ─── Priority 1 Animation IDs ──────────────────────────────────────
 const PRIORITY_1 = new Set([
@@ -412,7 +414,26 @@ function loadProductionDB() {
 }
 
 function saveProductionDB(db) {
+  fs.mkdirSync(path.dirname(PRODUCTION_DB), { recursive: true });
   fs.writeFileSync(PRODUCTION_DB, JSON.stringify(db, null, 2));
+  if (sbAvailable()) {
+    sbUploadJson(R2_KEY, db).catch(e => console.warn('[production] R2 backup failed:', e.message));
+  }
+}
+
+async function restoreFromR2() {
+  if (!sbAvailable()) return;
+  try {
+    const buf = await sbDownload(R2_KEY);
+    if (!buf) return;
+    const remote = JSON.parse(buf.toString('utf8'));
+    if (!remote || typeof remote !== 'object') return;
+    fs.mkdirSync(path.dirname(PRODUCTION_DB), { recursive: true });
+    fs.writeFileSync(PRODUCTION_DB, JSON.stringify(remote, null, 2));
+    console.log('  [production] restored production-db from R2');
+  } catch (e) {
+    console.warn('  [production] R2 restore failed (non-fatal):', e.message);
+  }
 }
 
 // ─── Asset Discovery ────────────────────────────────────────────────
@@ -964,4 +985,4 @@ function register(router, ctx) {
   });
 }
 
-module.exports = { register, ANIMATION_MANIFEST, GAME_ANIMATIONS, SKIN_SLOTS, PRIORITY_1 };
+module.exports = { register, restoreFromR2, ANIMATION_MANIFEST, GAME_ANIMATIONS, SKIN_SLOTS, PRIORITY_1 };

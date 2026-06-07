@@ -254,7 +254,9 @@ function register(router, ctx) {
         fs.mkdirSync(sheetDir, { recursive: true });
         const sheetPath = path.join(sheetDir, `${animId}-sheet.png`);
         await buildSpriteSheet(processedPaths, sheetPath, { frameWidth, frameHeight, columns });
-        sbUpload(`spritesheets/${animId}/sheet.png`, sheetPath);
+        // R2 key matches the path under ASSETS_DIR so restoreAssetsToDir() puts
+        // it back where the metadata's spriteSheetUrl points.
+        if (sbAvailable()) sbUpload(`apply-anim/${animId}-sheet.png`, sheetPath);
 
         // ── Copy frames to persistent assets dir ───────────────────────────
         const framesAssetDir = path.join(ASSETS_DIR, `applyf-${animId}`);
@@ -262,6 +264,8 @@ function register(router, ctx) {
         processedPaths.forEach((p, fi) => {
           const dest = path.join(framesAssetDir, `frame-${String(fi).padStart(2,'0')}.png`);
           fs.copyFileSync(p, dest);
+          // Same convention: R2 key === relative path under ASSETS_DIR.
+          if (sbAvailable()) sbUpload(`applyf-${animId}/frame-${String(fi).padStart(2,'0')}.png`, dest);
         });
 
         // ── Metadata JSON ──────────────────────────────────────────────────
