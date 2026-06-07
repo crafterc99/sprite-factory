@@ -633,6 +633,50 @@ async function handler(req, res) {
 
 if (require.main === module) {
   (async () => {
+    // ── STEP 0: One-time Supabase→R2 migration if R2 is empty ──────────────
+    // Runs only when R2 is configured and has no characters file yet.
+    // Pulls everything directly from Supabase (bypassing the storage shim)
+    // and seeds R2. After this runs once, R2 is the sole source of truth.
+    if (process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY &&
+        process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+      try {
+        const r2 = require('./lib/r2-storage');
+        const hasChars = await r2.downloadFile('_meta/characters-full.json');
+        if (!hasChars) {
+          console.log('  [startup] R2 is empty — migrating existing data from Supabase...');
+          const { createClient } = require('@supabase/supabase-js');
+          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
+          const SB_BUCKET = 'sprite-assets';
+          const listSb = async (prefix) => {
+            const { data } = await sb.storage.from(SB_BUCKET).list(prefix || '', { limit: 1000 });
+            if (!data) return [];
+            const out = [];
+            for (const f of data) {
+              const k = prefix ? `${prefix}/${f.name}` : f.name;
+              if (f.id === null) out.push(...await listSb(k));
+              else out.push(k);
+            }
+            return out;
+          };
+          const files = await listSb();
+          console.log(`  [startup] Supabase has ${files.length} files — uploading to R2...`);
+          let ok = 0;
+          await Promise.all(files.map(async key => {
+            try {
+              const { data, error } = await sb.storage.from(SB_BUCKET).download(key);
+              if (error || !data) return;
+              const buf = Buffer.from(await data.arrayBuffer());
+              await r2.uploadFile(key, buf);
+              ok++;
+            } catch {}
+          }));
+          console.log(`  [startup] ✓ Migrated ${ok}/${files.length} files Supabase→R2`);
+        }
+      } catch (e) {
+        console.warn('  [startup] Supabase→R2 migration failed (non-fatal):', e.message);
+      }
+    }
+
     // ── R2 connectivity check — must pass before restoring any data
     const { verifyConnection: sbVerify, isAvailable: sbIsAvailable } = require('./lib/supabase-storage');
     const storageBackend = 'R2';
