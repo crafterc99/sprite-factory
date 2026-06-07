@@ -402,19 +402,8 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
       const cutResult = await cutFrames(poseRefPath, refFramesDir);
       const refFramePaths = cutResult.frames.slice(0, totalFrames);
 
-      // Upscale each frame to 512x512
-      const upscaledDir = path.join(fbfDir, 'upscaled');
-      fs.mkdirSync(upscaledDir, { recursive: true });
-      const upscaledPaths = [];
-      for (let i = 0; i < refFramePaths.length; i++) {
-        const upPath = path.join(upscaledDir, `frame-${String(i).padStart(3, '0')}.png`);
-        await upscaleNN(refFramePaths[i], upPath, { width: 512, height: 512 });
-        upscaledPaths.push(upPath);
-      }
+      sse({ type: 'prep_done', framesReady: refFramePaths.length });
 
-      sse({ type: 'prep_done', framesReady: upscaledPaths.length });
-
-      
       const concurrency = 1;
       const interFrameDelay = 15000;
       const maxRetries = 5;
@@ -422,7 +411,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
 
       const rawOutputPaths = [];
 
-      const tasks = upscaledPaths.map((upPath, i) => async () => {
+      const tasks = refFramePaths.map((upPath, i) => async () => {
         sse({ type: 'frame_start', frame: i, total: totalFrames });
 
         // Always use the universal fixed prompt — no per-frame overrides
@@ -456,28 +445,15 @@ function register(router, { ASSETS_DIR, RAW_DIR, runWithConcurrency, json, parse
 
       await runWithConcurrency(tasks, concurrency, interFrameDelay);
 
-      // Process all raw frames
-      const processedDir = path.join(fbfDir, 'processed');
-      fs.mkdirSync(processedDir, { recursive: true });
+      // Collect raw frames — no background removal or resize
       const processedPaths = [];
-
       for (let i = 0; i < totalFrames; i++) {
         const rawPath = rawOutputPaths[i];
         if (!rawPath || !fs.existsSync(rawPath)) {
           sse({ type: 'process_skip', frame: i });
           continue;
         }
-
-        const processedPath = path.join(processedDir, `frame-${String(i).padStart(3, '0')}.png`);
-        await processSingleFrame(rawPath, processedPath, { width: 180, height: 180 });
-        processedPaths.push(processedPath);
-        sse({ type: 'frame_processed', frame: i, processedUrl: `/fbf-working/${character}-${animation}-fbf/processed/frame-${String(i).padStart(3, '0')}.png` });
-      }
-
-      // Normalize frame sizes
-      if (processedPaths.length > 1) {
-        await normalizeFrameSizes(processedPaths, { targetWidth: 180, targetHeight: 180 });
-        sse({ type: 'normalized', frames: processedPaths.length });
+        processedPaths.push(rawPath);
       }
 
       // Assemble horizontal strip

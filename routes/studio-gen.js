@@ -291,20 +291,8 @@ function register(router, ctx) {
           })
         );
 
-        // Phase 2: Remove green BG and crop each frame — per-frame fallback so one bad frame doesn't fail the job
-        updateJob(jobId, { frame: frameCount, total: frameCount, msg: 'Processing frames…' });
-        const processedPaths = await Promise.all(
-          rawPaths.map(async (rawPath, i) => {
-            const outPath = path.join(genDir, `frame-${i}.png`);
-            try {
-              await processFrame(rawPath, outPath);
-            } catch (err) {
-              console.warn(`[studio-gen] frame ${i} processing failed, using raw:`, err.message);
-              await sharp(rawPath).png({ compressionLevel: 0, effort: 1 }).toFile(outPath);
-            }
-            return outPath;
-          })
-        );
+        // Use raw frames directly — no background removal or cropping
+        const processedPaths = rawPaths;
 
         // Assemble sprite strip — 180×180 per frame, game-engine compatible
         const stripPath = path.join(ASSETS_DIR, `${charName}-${animName}.png`);
