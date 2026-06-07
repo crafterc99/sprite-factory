@@ -10,7 +10,8 @@
   },
   "devDependencies": {
     "@ngrok/ngrok": "^1.7.0",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "playwright": "^1.60.0"
   },
   "scripts": {
     "start": "node server.js",

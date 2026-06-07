@@ -202,7 +202,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     try {
       const frames = fs.readdirSync(selectDir).filter(f => f.endsWith('.png')).sort().map(f => path.join(selectDir, f));
       const stripPath = path.join(TMP_DIR, sessionId, 'ref-strip.png');
-      await buildRefStrip(frames, stripPath, { targetHeight: 512 });
+      await buildRefStrip(frames, stripPath);
       return json(res, { stripUrl: `/api/video/strip-image/${sessionId}`, frameCount: frames.length });
     } catch (err) {
       return json(res, { error: err.message }, 500);

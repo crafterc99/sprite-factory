@@ -1,3 +1,4 @@
+tests/reports/
 .DS_Store
 node_modules/
 .env
