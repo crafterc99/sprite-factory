@@ -15,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scheduleSync } = require('../lib/auto-git-sync');
-const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/r2-storage');
 
 const LIB_DIR = path.resolve(__dirname, '../data/anim-lib');
 const INDEX_FILE = path.join(LIB_DIR, 'index.json');
@@ -45,7 +45,7 @@ function saveIndex(data) {
  * Called on server startup — restores anim-lib index from R2 if local is empty.
  * Prevents animations from being wiped when Railway redeploys from a fresh git clone.
  */
-async function restoreFromSupabase() {
+async function restoreFromStorage() {
   if (!sbAvailable()) return;
   try {
     // Always prefer Supabase — it is the source of truth, not the local file.
@@ -282,4 +282,4 @@ function register(router, ctx) {
   });
 }
 
-module.exports = { register, ANGLE_LABELS, restoreFromSupabase };
+module.exports = { register, ANGLE_LABELS, restoreFromStorage };

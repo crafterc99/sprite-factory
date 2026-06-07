@@ -4,7 +4,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/r2-storage');
 
 const COST_FILE = process.env.COST_FILE || path.resolve(__dirname, '../data/.cost-tracking.json');
 

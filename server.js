@@ -195,8 +195,7 @@ router.get('/api/storage-status', async (req, res) => {
     R2_BUCKET: !!process.env.R2_BUCKET,
   };
   const r2Available = vars.R2_ENDPOINT && vars.R2_ACCESS_KEY_ID && vars.R2_SECRET_ACCESS_KEY;
-  const sbAvailable = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
-  const backend = r2Available ? 'r2' : (sbAvailable ? 'supabase' : 'none');
+  const backend = r2Available ? 'r2' : 'none';
   let connected = false;
   if (r2Available) {
     try {
@@ -205,7 +204,7 @@ router.get('/api/storage-status', async (req, res) => {
       connected = true;
     } catch (e) { vars._connectError = e.message; }
   }
-  return json(res, { backend, r2Available, sbAvailable, connected, vars });
+  return json(res, { backend, r2Available, connected, vars });
 });
 
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
@@ -213,14 +212,14 @@ const TESTING_CONFIG_FILE = path.join(__dirname, 'data/.testing-config.json');
 
 // Health/status — lets the client confirm cloud persistence is working
 router.get('/api/testing-config/status', async (req, res) => {
-  const { isAvailable, downloadFile } = require('./lib/supabase-storage');
-  const sbOk = isAvailable();
+  const { isAvailable, downloadFile } = require('./lib/r2-storage');
+  const r2Ok = isAvailable();
   let hasCloud = false;
-  if (sbOk) {
+  if (r2Ok) {
     try { hasCloud = !!(await downloadFile('_meta/testing-config.json')); } catch {}
   }
   json(res, {
-    supabase: sbOk,
+    r2: r2Ok,
     hasCloud,
     hasLocal: fs.existsSync(TESTING_CONFIG_FILE),
   });
@@ -228,7 +227,7 @@ router.get('/api/testing-config/status', async (req, res) => {
 
 router.get('/api/testing-config', async (req, res) => {
   try {
-    const { downloadFile, isAvailable } = require('./lib/supabase-storage');
+    const { downloadFile, isAvailable } = require('./lib/r2-storage');
     // Always prefer the live R2 copy so zone edits from any session are reflected
     if (isAvailable()) {
       const buf = await downloadFile('_meta/testing-config.json');
@@ -262,7 +261,7 @@ router.post('/api/testing-config', async (req, res) => {
     const body = await parseBody(req);
     fs.mkdirSync(path.dirname(TESTING_CONFIG_FILE), { recursive: true });
     fs.writeFileSync(TESTING_CONFIG_FILE, JSON.stringify(body, null, 2));
-    const { uploadJson, isAvailable } = require('./lib/supabase-storage');
+    const { uploadJson, isAvailable } = require('./lib/r2-storage');
     let savedToCloud = false;
     if (isAvailable()) {
       await uploadJson('_meta/testing-config.json', body);
@@ -290,7 +289,7 @@ router.post('/api/testing-images/court', async (req, res) => {
     const buf = Buffer.from(b64, 'base64');
     fs.mkdirSync(ASSETS_DIR, { recursive: true });
     fs.writeFileSync(COURT_IMG_PATH, buf);
-    const { uploadFile, isAvailable } = require('./lib/supabase-storage');
+    const { uploadFile, isAvailable } = require('./lib/r2-storage');
     if (isAvailable()) {
       await uploadFile('court-uploaded.png', COURT_IMG_PATH).catch(e => console.warn('[testing-images] court upload failed:', e.message));
     }
@@ -308,7 +307,7 @@ router.post('/api/testing-images/hoop', async (req, res) => {
     const buf = Buffer.from(b64, 'base64');
     fs.mkdirSync(ASSETS_DIR, { recursive: true });
     fs.writeFileSync(HOOP_IMG_PATH, buf);
-    const { uploadFile, isAvailable } = require('./lib/supabase-storage');
+    const { uploadFile, isAvailable } = require('./lib/r2-storage');
     if (isAvailable()) {
       await uploadFile('hoop-processed.png', HOOP_IMG_PATH).catch(e => console.warn('[testing-images] hoop upload failed:', e.message));
     }
@@ -412,7 +411,7 @@ router.get('/api/debug/db', async (req, res) => {
 
 // ─── Full storage migration / backup endpoint ─────────────────────────────
 router.post('/api/migrate-to-storage', async (req, res) => {
-  const { isAvailable, uploadFile: storeFile, uploadJson: storeJson } = require('./lib/supabase-storage');
+  const { isAvailable, uploadFile: storeFile, uploadJson: storeJson } = require('./lib/r2-storage');
   if (!isAvailable()) return json(res, { ok: false, error: 'No storage backend configured' });
 
   const results = {};
@@ -479,7 +478,7 @@ router.post('/api/migrate-to-storage', async (req, res) => {
     results.assets = `uploaded (${assetCount})`;
   } catch (e) { results.assets = `FAILED: ${e.message}`; }
 
-  json(res, { ok: true, backend: process.env.R2_ENDPOINT ? 'r2' : 'supabase', results });
+  json(res, { ok: true, backend: process.env.R2_ENDPOINT ? 'r2' : 'none', results });
 });
 
 // ─── Court Presets Endpoints ─────────────────────────────────────────────
@@ -515,7 +514,7 @@ router.put('/api/court-presets/:id', async (req, res, params) => {
     stored[params.id] = { ...body, id: params.id };
     fs.mkdirSync(path.dirname(COURT_PRESETS_FILE), { recursive: true });
     fs.writeFileSync(COURT_PRESETS_FILE, JSON.stringify(stored, null, 2));
-    const { uploadJson, isAvailable } = require('./lib/supabase-storage');
+    const { uploadJson, isAvailable } = require('./lib/r2-storage');
     if (isAvailable()) {
       await uploadJson('_meta/court-presets.json', stored).catch(e => console.warn('[court-presets] storage backup failed:', e.message));
     }
@@ -593,7 +592,7 @@ async function handler(req, res) {
     const localPath = path.join(ASSETS_DIR, file);
     if (fs.existsSync(localPath)) return serveImage(res, localPath);
     // Not on disk — try R2 and cache locally
-    const { downloadFile, isAvailable } = require('./lib/supabase-storage');
+    const { downloadFile, isAvailable } = require('./lib/r2-storage');
     if (isAvailable()) {
       const buf = await downloadFile(file);
       if (buf) {
@@ -633,52 +632,9 @@ async function handler(req, res) {
 
 if (require.main === module) {
   (async () => {
-    // ── STEP 0: One-time Supabase→R2 migration if R2 is empty ──────────────
-    // Runs only when R2 is configured and has no characters file yet.
-    // Pulls everything directly from Supabase (bypassing the storage shim)
-    // and seeds R2. After this runs once, R2 is the sole source of truth.
-    if (process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY &&
-        process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
-      try {
-        const r2 = require('./lib/r2-storage');
-        const hasChars = await r2.downloadFile('_meta/characters-full.json');
-        if (!hasChars) {
-          console.log('  [startup] R2 is empty — migrating existing data from Supabase...');
-          const { createClient } = require('@supabase/supabase-js');
-          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
-          const SB_BUCKET = 'sprite-assets';
-          const listSb = async (prefix) => {
-            const { data } = await sb.storage.from(SB_BUCKET).list(prefix || '', { limit: 1000 });
-            if (!data) return [];
-            const out = [];
-            for (const f of data) {
-              const k = prefix ? `${prefix}/${f.name}` : f.name;
-              if (f.id === null) out.push(...await listSb(k));
-              else out.push(k);
-            }
-            return out;
-          };
-          const files = await listSb();
-          console.log(`  [startup] Supabase has ${files.length} files — uploading to R2...`);
-          let ok = 0;
-          await Promise.all(files.map(async key => {
-            try {
-              const { data, error } = await sb.storage.from(SB_BUCKET).download(key);
-              if (error || !data) return;
-              const buf = Buffer.from(await data.arrayBuffer());
-              await r2.uploadFile(key, buf);
-              ok++;
-            } catch {}
-          }));
-          console.log(`  [startup] ✓ Migrated ${ok}/${files.length} files Supabase→R2`);
-        }
-      } catch (e) {
-        console.warn('  [startup] Supabase→R2 migration failed (non-fatal):', e.message);
-      }
-    }
 
     // ── R2 connectivity check — must pass before restoring any data
-    const { verifyConnection: sbVerify, isAvailable: sbIsAvailable } = require('./lib/supabase-storage');
+    const { verifyConnection: sbVerify, isAvailable: sbIsAvailable } = require('./lib/r2-storage');
     const storageBackend = 'R2';
     if (!sbIsAvailable()) {
       console.error('\n  ╔══════════════════════════════════════════════════════════════╗');
@@ -701,8 +657,8 @@ if (require.main === module) {
     // Returns a Set of deleted character names so later steps can skip their files.
     let deletedCharSet = new Set();
     try {
-      const { syncDeletedFromSupabase } = require('./routes/characters');
-      deletedCharSet = await syncDeletedFromSupabase();
+      const { syncDeletedFromStorage } = require('./routes/characters');
+      deletedCharSet = await syncDeletedFromStorage();
       if (deletedCharSet.size > 0) {
         console.log(`  [startup] tombstoned ${deletedCharSet.size} deleted character(s): ${[...deletedCharSet].join(', ')}`);
       }
@@ -715,7 +671,7 @@ if (require.main === module) {
     // if R2 is unreachable. Doing this before base64 restore means R2 files win
     // and portrait/angle quality is preserved at full resolution.
     try {
-      const { restoreAssetsToDir, downloadFile: dlFile, isAvailable: sbReady } = require('./lib/supabase-storage');
+      const { restoreAssetsToDir, downloadFile: dlFile, isAvailable: sbReady } = require('./lib/r2-storage');
       await restoreAssetsToDir(path.join(__dirname, 'data/assets'), deletedCharSet);
       // Always force-refresh the court and hoop images — they change frequently and
       // the "skip if exists" logic in restoreAssetsToDir would keep stale versions.
@@ -774,7 +730,7 @@ if (require.main === module) {
 
     // ── STEP 4: Restore animation library from storage if local index is empty
     try {
-      const { restoreFromSupabase: restoreAnimLib } = require('./routes/anim-lib');
+      const { restoreFromStorage: restoreAnimLib } = require('./routes/anim-lib');
       await restoreAnimLib();
     } catch (e) {
       console.warn('  [startup] anim-lib restore failed (non-fatal):', e.message);
@@ -782,7 +738,7 @@ if (require.main === module) {
 
     // ── STEP 5: Restore wardrobe from storage if local is empty
     try {
-      const { restoreFromSupabase: restoreWardrobe } = require('./routes/wardrobe');
+      const { restoreFromStorage: restoreWardrobe } = require('./routes/wardrobe');
       await restoreWardrobe();
     } catch (e) {
       console.warn('  [startup] wardrobe restore failed (non-fatal):', e.message);
@@ -792,7 +748,7 @@ if (require.main === module) {
     // testing-config is ALWAYS refreshed from storage (zone positions change frequently).
     // Other metadata files are only restored if missing locally.
     try {
-      const { downloadFile, isAvailable } = require('./lib/supabase-storage');
+      const { downloadFile, isAvailable } = require('./lib/r2-storage');
       if (isAvailable()) {
         const restoreJson = async (sbKey, localPath, label, alwaysRefresh) => {
           if (!alwaysRefresh && fs.existsSync(localPath)) return; // already on disk
@@ -815,7 +771,7 @@ if (require.main === module) {
           restoreJson('_meta/production-db.json',       path.join(__dirname, 'data/.production-db.json'),       'production-db',     true),
         ]);
         // Restore apply-anim metadata files
-        const { listFiles } = require('./lib/supabase-storage');
+        const { listFiles } = require('./lib/r2-storage');
         const applyMetaFiles = (await listFiles('_meta/apply-anim')).filter(f => f.endsWith('.json'));
         const applyAnimDir = path.join(__dirname, 'data/apply-anim');
         fs.mkdirSync(applyAnimDir, { recursive: true });
@@ -838,7 +794,7 @@ if (require.main === module) {
     // If a file exists locally but the R2 backup is stale/missing, upload now.
     // This ensures the next cold deploy will always have the latest data to restore.
     try {
-      const { isAvailable: sbOk, uploadJson: sbPushJson, uploadFile: sbPushFile, downloadFile: sbPeek } = require('./lib/supabase-storage');
+      const { isAvailable: sbOk, uploadJson: sbPushJson, uploadFile: sbPushFile, downloadFile: sbPeek } = require('./lib/r2-storage');
       if (sbOk()) {
         const seedIfMissing = async (sbKey, localPath) => {
           if (!fs.existsSync(localPath)) return;
@@ -904,7 +860,7 @@ if (require.main === module) {
     ];
 
     setInterval(async () => {
-      const { isAvailable: sbOk, uploadFile: sbPushRaw } = require('./lib/supabase-storage');
+      const { isAvailable: sbOk, uploadFile: sbPushRaw } = require('./lib/r2-storage');
       if (!sbOk()) return;
       const now = new Date().toISOString().slice(0, 19);
       let uploaded = 0;

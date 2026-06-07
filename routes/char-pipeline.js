@@ -26,7 +26,7 @@ const { recordCost } = require('../middleware/cost-tracker');
 const { cutFrames, removeBackground, cropToContent } = require('../lib/sprite-processor/index');
 const { CHARACTERS } = require('../lib/sprite-generator/prompts');
 const { scheduleSync } = require('../lib/auto-git-sync');
-const { uploadFile: sbUpload, uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/r2-storage');
 const { loadCharacters, saveCharacters } = require('./characters');
 
 const CHAR_PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');

@@ -16,7 +16,7 @@ const sharp = require('sharp');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost } = require('../middleware/cost-tracker');
 const { removeGreenBackground, cropToContent, getContentBounds, placeContentInFrame, processFrameSetConsistently } = require('../lib/sprite-processor/index');
-const { uploadFile: sbUpload } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload } = require('../lib/r2-storage');
 
 const { scaleToHeight, BASELINE_Y, DEFAULT_FRAME_SIZE } = require('../lib/sprite-processor/height-scaler');
 const ANIM_LIB_DIR  = path.resolve(__dirname, '../data/anim-lib');

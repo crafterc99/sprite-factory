@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const { scheduleSync } = require('../lib/auto-git-sync');
-const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, isAvailable: sbAvailable } = require('../lib/r2-storage');
 
 const WARDROBE_INDEX = path.resolve(__dirname, '../data/wardrobe.json');
 const SB_META_KEY = '_meta/wardrobe.json';
@@ -35,7 +35,7 @@ function saveIndex(items) {
   }
 }
 
-async function restoreFromSupabase() {
+async function restoreFromStorage() {
   if (!sbAvailable()) return;
   try {
     // Always prefer Supabase — it is the source of truth, not the local file.
@@ -156,4 +156,4 @@ function register(router) {
 
 }
 
-module.exports = { register, restoreFromSupabase };
+module.exports = { register, restoreFromStorage };

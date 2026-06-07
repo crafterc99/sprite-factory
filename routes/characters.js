@@ -108,7 +108,7 @@ function recomputePackageStatus(pkg) {
 
 // ─── Persistent Character Registry ────────────────────────────────────
 
-const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, deleteFiles: sbDeleteFiles, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, downloadFile: sbDownload, deleteFiles: sbDeleteFiles, isAvailable: sbAvailable } = require('../lib/r2-storage');
 const { readJsonCached, writeJsonCached } = require('../lib/json-cache');
 const SB_DELETED_KEY = '_meta/deleted-chars.json';
 const SB_REGISTRY_KEY = '_meta/characters-full.json';
@@ -143,7 +143,7 @@ function saveCharacters(data) {
  * Also checks the full registry backup in case git push failed to capture a deletion.
  * Returns the final Set of deleted character names so startup can skip re-downloading their files.
  */
-async function syncDeletedFromSupabase() {
+async function syncDeletedFromStorage() {
   if (!sbAvailable()) return new Set();
   const remoteDeleted = new Set();
   try {
@@ -582,7 +582,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     // Delete from R2 — awaited so files don't come back on next redeploy
     if (sbAvailable()) {
       try {
-        const { listFiles } = require('../lib/supabase-storage');
+        const { listFiles } = require('../lib/r2-storage');
         const files = await listFiles();
         const toRemove = files.filter(f =>
           f === `${name}full.png` ||
@@ -1572,4 +1572,4 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
   });
 }
 
-module.exports = { register, loadCharacters, saveCharacters, syncDeletedFromSupabase, getCharacterRegistry, computeScale, loadCustomAnimations, saveCustomAnimations, loadPackage, savePackage, initPackage, ANGLE_NAMES, CLOTHING_CATEGORIES };
+module.exports = { register, loadCharacters, saveCharacters, syncDeletedFromStorage, getCharacterRegistry, computeScale, loadCustomAnimations, saveCustomAnimations, loadPackage, savePackage, initPackage, ANGLE_NAMES, CLOTHING_CATEGORIES };

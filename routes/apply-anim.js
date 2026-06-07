@@ -18,7 +18,7 @@ const sharp = require('sharp');
 const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
 const { recordCost }       = require('../middleware/cost-tracker');
 const { removeBackground, cropToContent } = require('../lib/sprite-processor/index');
-const { uploadFile: sbUpload, uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/supabase-storage');
+const { uploadFile: sbUpload, uploadJson: sbUploadJson, isAvailable: sbAvailable } = require('../lib/r2-storage');
 const { scheduleSync } = require('../lib/auto-git-sync');
 
 // ── Prompt ────────────────────────────────────────────────────────────────────
