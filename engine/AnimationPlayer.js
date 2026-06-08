@@ -96,13 +96,14 @@ class AnimationPlayer {
 
   /**
    * Main update — call every animation frame.
-   * @param {number}  timestamp    performance.now() / rAF timestamp
-   * @param {object}  input        from ControllerInput.poll()
-   * @param {number}  dt           ms since last frame
-   * @param {boolean} defenseMode  L2 held
+   * @param {number}  timestamp     performance.now() / rAF timestamp
+   * @param {object}  input         from ControllerInput.poll()
+   * @param {number}  dt            ms since last frame
+   * @param {boolean} defenseMode   L2 held
+   * @param {string}  positionZone  current court zone id (e.g. 'arc', 'paint')
    * @returns {object} { animName, frame, facingRight, state, speedTier }
    */
-  update(timestamp, input, dt, defenseMode) {
+  update(timestamp, input, dt, defenseMode, positionZone = null) {
     const sprint    = input?.sprint ?? false;
     const speedTier = this.physics?.speedTier ?? (sprint ? 'sprint' : 'idle');
 
@@ -125,8 +126,6 @@ class AnimationPlayer {
       // Pick animation pool based on defense mode and speed tier
       let candidates;
       if (defenseMode) {
-        // Defense: choose based on movement direction
-        // Moving backward (up on Y) → backpedal; lateral → shuffle
         const moveY = input?.moveY ?? 0;
         if (moving && moveY < -0.3) {
           candidates = ['defense-backpedal', 'defense-shuffle'];
@@ -139,7 +138,9 @@ class AnimationPlayer {
       } else {
         candidates = moving ? MOVING_ANIMS : IDLE_ANIMS;
       }
-      const desired = this._findFirstMatch(candidates) ?? this.availableAnims[0];
+      // Zone-aware pick: prefer anims valid for this zone, exclude blocked ones.
+      // Falls back to zone-agnostic anims, then first available.
+      const desired = this._findBestForZone(candidates, positionZone) ?? this.availableAnims[0];
       if (desired && desired.name !== this.currentAnim) {
         this._setAnim(desired.name);
       }
@@ -206,6 +207,42 @@ class AnimationPlayer {
       if (found) return found;
     }
     return null;
+  }
+
+  /**
+   * Zone-aware animation picker.
+   * 1. Filter candidates to what's actually available.
+   * 2. Remove any explicitly blocked for this zone.
+   * 3. Prefer anims that list this zone in validZones.
+   * 4. Fall back to zone-agnostic anims (no validZones set).
+   * 5. Fall back to first available candidate regardless of zone.
+   */
+  _findBestForZone(candidates, positionZone) {
+    const available = candidates
+      .map(name => this._findAnim(name))
+      .filter(Boolean);
+
+    if (!available.length) return null;
+    if (!positionZone) return available[0];
+
+    // Filter out blocked anims for this zone
+    const notBlocked = available.filter(a => {
+      const blocked = a.blockedZones;
+      return !blocked || !blocked.includes(positionZone);
+    });
+
+    if (!notBlocked.length) return available[0]; // all blocked? fall back
+
+    // Prefer anims that explicitly include this zone
+    const preferred = notBlocked.filter(a => {
+      const valid = a.validZones;
+      return valid && valid.includes(positionZone);
+    });
+    if (preferred.length) return preferred[0];
+
+    // Fall back to zone-agnostic anims (no validZones restriction)
+    const agnostic = notBlocked.filter(a => !a.validZones || !a.validZones.length);
+    return agnostic[0] ?? notBlocked[0];
   }
 }
 

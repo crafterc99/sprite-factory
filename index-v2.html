@@ -7958,7 +7958,7 @@ function gmTick(timestamp) {
     : 'arc';
 
   // Update animation player (sprint available via input.sprint + physics.speedTier)
-  const animState = GM.player.update(timestamp, input, dt, inDefense);
+  const animState = GM.player.update(timestamp, input, dt, inDefense, GM._positionZone);
   TESTING.currentFrame = animState.frame;
 
   // Sync TESTING fps/loop for existing render code
