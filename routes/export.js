@@ -8,9 +8,34 @@ const { buildGrid, GRID_LAYOUT } = require('../lib/sprite-processor/index');
 
 const FRAME_SIZE = 180;
 const SPRITE_FACTORY_ROOT = path.resolve(__dirname, '..');
-const SOUL_JAM_IMAGES_DIR = path.resolve(SPRITE_FACTORY_ROOT, '..', 'soul-jam', 'public', 'assets', 'images');
+const SOUL_JAM_PUBLIC_DIR = path.resolve(SPRITE_FACTORY_ROOT, '..', 'soul-jam', 'public');
+const SOUL_JAM_IMAGES_DIR = path.join(SOUL_JAM_PUBLIC_DIR, 'assets', 'images');
+const SOUL_JAM_REGISTRY_PATH = path.join(SOUL_JAM_PUBLIC_DIR, 'characters-registry.json');
 const ASSETS_DIR_LOCAL = path.join(SPRITE_FACTORY_ROOT, 'data', 'assets');
 const CONTRACT_PATH = path.join(SPRITE_FACTORY_ROOT, 'data', 'animation-contract.json');
+
+// Soul Jam animation slots — maps Soul Jam animation names to sprite-factory strip names
+const SOUL_JAM_SLOTS = {
+  idleDribble: { sfAnim: 'static-dribble',   fps: 8,  repeat: -1 },
+  runDribble:  { sfAnim: 'dribble',           fps: 10, repeat: -1 },
+  jumpshot:    { sfAnim: 'jumpshot',          fps: 8,  repeat: 0  },
+  stepback:    { sfAnim: 'stepback',          fps: 8,  repeat: 0  },
+  crossover:   { sfAnim: 'crossover',         fps: 13, repeat: 0  },
+  backpedal:   { sfAnim: 'defense-backpedal', fps: 8,  repeat: -1 },
+  shuffle:     { sfAnim: 'defense-shuffle',   fps: 6,  repeat: -1 },
+  steal:       { sfAnim: 'steal',             fps: 8,  repeat: 0  },
+};
+
+function loadContract() {
+  try { return JSON.parse(fs.readFileSync(CONTRACT_PATH, 'utf8')); } catch { return { animations: {} }; }
+}
+
+function loadRegistry() {
+  try {
+    if (fs.existsSync(SOUL_JAM_REGISTRY_PATH)) return JSON.parse(fs.readFileSync(SOUL_JAM_REGISTRY_PATH, 'utf8'));
+  } catch {}
+  return { version: '1', characters: {} };
+}
 
 function register(router, { ASSETS_DIR, json, parseBody }) {
 
@@ -254,72 +279,123 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
 
   // ─── Deploy to Soul Jam ──────────────────────────────────────────────
 
-  // POST /api/deploy/:char — Full deploy: build grid + generate game entries
-  router.post('/api/deploy/:char', async (req, res, params) => {
-    const charName = params.char;
-    try {
-      // 1. Build grid sheet
-      const gridResult = await buildGrid(charName);
-
-      // 2. Check which animations exist
-      const anims = GRID_LAYOUT.map(row => {
-        const stripFile = `${charName}-${row.name}.png`;
-        return {
-          name: row.name,
-          frames: row.frames,
-          exists: fs.existsSync(path.join(ASSETS_DIR, stripFile)),
-        };
-      });
-
-      const completedAnims = anims.filter(a => a.exists);
-      const missingAnims = anims.filter(a => !a.exists);
-
-      // 3. Generate Characters.ts snippet
-      const { loadCharacters } = require('./characters');
-      const registry = loadCharacters();
-      const charData = registry[charName] || {};
-
-      const charactersEntry = [
-        `  '${charName}': {`,
-        `    name: '${charData.name || charName}',`,
-        `    spritesheet: '${charName}-spritesheet',`,
-        `    spritesheetPath: 'assets/images/${charName}-spritesheet.png',`,
-        `    frameSize: 180,`,
-        `    animations: {`,
-        ...completedAnims.map(a => {
-          const layout = GRID_LAYOUT.find(r => r.name === a.name);
-          const row = GRID_LAYOUT.indexOf(layout);
-          return `      '${a.name}': { row: ${row}, frames: ${a.frames}, fps: 8, loop: ${['static-dribble', 'dribble', 'defense-backpedal', 'defense-shuffle'].includes(a.name)} },`;
-        }),
-        `    },`,
-        `  },`,
-      ].join('\n');
-
-      // 4. Generate PreloadScene.ts snippet
-      const preloadEntry = `    this.load.spritesheet('${charName}-spritesheet', 'assets/images/${charName}-spritesheet.png', { frameWidth: 180, frameHeight: 180 });`;
-
-      return json(res, {
-        success: true,
-        character: charName,
-        grid: gridResult,
-        completedAnims: completedAnims.length,
-        missingAnims: missingAnims.map(a => a.name),
-        gameIntegration: {
-          charactersEntry,
-          preloadEntry,
-          instructions: [
-            `1. Grid sheet saved to: ${gridResult.outputPath}`,
-            `2. Add the following to Characters.ts:`,
-            charactersEntry,
-            `3. Add the following to PreloadScene.ts:`,
-            preloadEntry,
-            missingAnims.length > 0 ? `4. Missing animations: ${missingAnims.map(a => a.name).join(', ')}` : '4. All animations complete!',
-          ],
-        },
-      });
-    } catch (err) {
-      return json(res, { error: err.message }, 500);
+  // GET /api/deploy/status — per-character deploy status vs Soul Jam
+  router.get('/api/deploy/status', (req, res) => {
+    const { CHARACTERS: promptChars } = require('../lib/sprite-generator/prompts');
+    const { getCharacterRegistry } = require('./characters');
+    const fileRegistry = getCharacterRegistry(ASSETS_DIR_LOCAL);
+    // Merge: prompt system is canonical, file registry fills in portrait/name data
+    const chars = { ...promptChars };
+    for (const [id, data] of Object.entries(fileRegistry)) {
+      if (id.startsWith('_')) continue;
+      chars[id] = { ...chars[id], ...data };
     }
+    const contract = loadContract();
+    const reg = loadRegistry();
+    const soulJamAvailable = fs.existsSync(SOUL_JAM_PUBLIC_DIR);
+
+    const status = {};
+    for (const [charId, charData] of Object.entries(chars)) {
+      if (charId.startsWith('_') || !charData || typeof charData !== 'object') continue;
+
+      const animations = {};
+      let readyCount = 0;
+      let deployedCount = 0;
+
+      for (const [sjSlot, slotDef] of Object.entries(SOUL_JAM_SLOTS)) {
+        const sfAnim = slotDef.sfAnim;
+        const stripPath = path.join(ASSETS_DIR_LOCAL, `${charId}-${sfAnim}.png`);
+        const ready = fs.existsSync(stripPath);
+        if (ready) readyCount++;
+
+        const deployedPath = path.join(SOUL_JAM_IMAGES_DIR, `${charId}-${sfAnim}.png`);
+        const deployed = soulJamAvailable && fs.existsSync(deployedPath);
+        if (deployed) deployedCount++;
+
+        const contractAnim = contract.animations?.[sfAnim] || {};
+        animations[sjSlot] = { sfAnim, ready, deployed, frames: contractAnim.frames || null };
+      }
+
+      status[charId] = {
+        id: charId,
+        name: charData.name || charId,
+        portraitPath: charData.portraitPath || `${charId}full.png`,
+        readyCount,
+        deployedCount,
+        totalSlots: Object.keys(SOUL_JAM_SLOTS).length,
+        inRegistry: !!(reg.characters && reg.characters[charId]),
+        animations,
+      };
+    }
+
+    return json(res, { status, soulJamAvailable });
+  });
+
+  // POST /api/deploy/:char — Copy animation strips to Soul Jam + update registry
+  router.post('/api/deploy/:char', async (req, res, params) => {
+    const charId = params.char.toLowerCase();
+    const { CHARACTERS: promptChars } = require('../lib/sprite-generator/prompts');
+    const { getCharacterRegistry } = require('./characters');
+    const fileRegistry = getCharacterRegistry(ASSETS_DIR_LOCAL);
+    const charData = { ...promptChars[charId], ...fileRegistry[charId] };
+    if (!promptChars[charId] && !fileRegistry[charId]) return json(res, { error: `Character "${charId}" not found` }, 404);
+
+    if (!fs.existsSync(SOUL_JAM_IMAGES_DIR)) {
+      return json(res, {
+        error: 'soul-jam assets directory not found',
+        hint: 'Clone soul-jam as a sibling directory at ../soul-jam',
+      }, 404);
+    }
+
+    const contract = loadContract();
+    const deployed = [];
+    const missing = [];
+    const animDefs = {};
+
+    for (const [sjSlot, slotDef] of Object.entries(SOUL_JAM_SLOTS)) {
+      const sfAnim = slotDef.sfAnim;
+      const srcPath = path.join(ASSETS_DIR_LOCAL, `${charId}-${sfAnim}.png`);
+      if (!fs.existsSync(srcPath)) {
+        missing.push({ slot: sjSlot, sfAnim });
+        continue;
+      }
+
+      const destFile = `${charId}-${sfAnim}.png`;
+      fs.copyFileSync(srcPath, path.join(SOUL_JAM_IMAGES_DIR, destFile));
+      deployed.push({ slot: sjSlot, sfAnim, file: destFile });
+
+      const contractAnim = contract.animations?.[sfAnim] || {};
+      const frames = contractAnim.frames || 4;
+      animDefs[sjSlot] = {
+        textureKey: `${charId}-${sfAnim}`,
+        startFrame: 0,
+        endFrame: frames - 1,
+        fps: contractAnim.fps || slotDef.fps,
+        repeat: slotDef.repeat,
+      };
+    }
+
+    // Update characters-registry.json
+    const reg = loadRegistry();
+    reg.characters[charId] = {
+      id: charId,
+      name: charData.name || charId,
+      spriteSize: 180,
+      deployedAt: new Date().toISOString(),
+      animations: animDefs,
+    };
+    fs.writeFileSync(SOUL_JAM_REGISTRY_PATH, JSON.stringify(reg, null, 2));
+
+    return json(res, {
+      success: true,
+      character: charId,
+      deployed: deployed.length,
+      missing: missing.length,
+      deployedAnims: deployed,
+      missingAnims: missing,
+      registryUpdated: true,
+      totalInRegistry: Object.keys(reg.characters).length,
+    });
   });
 }
 

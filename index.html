@@ -857,6 +857,43 @@
   }
   .target-char .name { font-family: var(--mono); font-size: 8px; margin-top: 2px; }
 
+  /* ─── DEPLOY TAB ─── */
+  .deploy-char-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .deploy-char-card.in-soul-jam { border-color: rgba(68,255,100,0.35); }
+  .deploy-portrait {
+    width: 48px; height: 48px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    border-radius: 4px;
+    background: var(--bg);
+    flex-shrink: 0;
+  }
+  .deploy-char-info { flex: 1; min-width: 0; }
+  .deploy-char-name { font-weight: 700; font-size: 12px; margin-bottom: 4px; display:flex; align-items:center; gap:6px; }
+  .deploy-badge { font-family: var(--mono); font-size: 9px; padding: 1px 6px; border-radius: 3px; font-weight:600; }
+  .deploy-badge.live { background: rgba(68,255,100,0.15); color: #44ff64; border: 1px solid rgba(68,255,100,0.3); }
+  .deploy-badge.partial { background: rgba(255,170,0,0.12); color: #ffaa00; border: 1px solid rgba(255,170,0,0.3); }
+  .deploy-badge.undeployed { background: rgba(255,255,255,0.05); color: var(--text-dim); border: 1px solid var(--border); }
+  .deploy-anim-slots { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .deploy-slot {
+    font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 3px;
+    border: 1px solid var(--border); background: var(--bg);
+    color: var(--text-dim);
+  }
+  .deploy-slot.ready { border-color: rgba(68,255,100,0.4); color: #44ff64; background: rgba(68,255,100,0.07); }
+  .deploy-slot.deployed { border-color: rgba(68,255,100,0.7); color: #44ff64; background: rgba(68,255,100,0.14); font-weight:700; }
+  .deploy-slot.missing { border-color: rgba(255,255,255,0.1); color: var(--text-dim); }
+  .deploy-footer { display: flex; align-items: center; gap: 8px; }
+  .deploy-count { font-family: var(--mono); font-size: 10px; color: var(--text-dim); flex:1; }
+
   /* ─── CHARACTER FORM ─── */
   .char-options-grid {
     display: grid;
@@ -942,6 +979,7 @@
     <button class="flow-tab" onclick="setWorkflow('D')"><span class="tab-key">D</span> Video</button>
     <button class="flow-tab" onclick="setWorkflow('E')"><span class="tab-key">E</span> Replicate</button>
     <button class="flow-tab" onclick="setWorkflow('F')"><span class="tab-key">F</span> Test/Export</button>
+    <button class="flow-tab" onclick="setWorkflow('G')"><span class="tab-key">G</span> Deploy</button>
   </div>
   <div class="header-right">
     <select class="char-selector" id="charSelector" onchange="selectCharacter(this.value)">
@@ -1191,6 +1229,21 @@
               <option value="true">Yes</option>
             </select>
           </div>
+          <div class="form-group">
+            <label class="form-label">Move Type</label>
+            <select class="input" id="videoAnimMoveType" onchange="onMoveTypeChange()">
+              <option value="">Normal</option>
+              <option value="stepback">Stepback</option>
+              <option value="crossover">Crossover</option>
+            </select>
+          </div>
+          <div class="form-group" id="moveDirectionGroup" style="display:none">
+            <label class="form-label">Direction</label>
+            <div class="mode-toggle" id="moveDirectionToggle">
+              <button class="active" onclick="setMoveDirection('left', this)">Left</button>
+              <button onclick="setMoveDirection('right', this)">Right</button>
+            </div>
+          </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
           <div class="mode-toggle" id="videoGenModeToggle">
@@ -1301,6 +1354,24 @@
         <button class="btn btn-success" onclick="exportToSoulJam()" style="flex:1">Export to Soul Jam</button>
         <button class="btn btn-secondary" onclick="buildGridSheet()">Build Grid</button>
         <button class="btn btn-secondary" onclick="runAudit()">Audit</button>
+      </div>
+    </div>
+
+    <!-- FLOW G: Deploy to Soul Jam -->
+    <div class="flow-section" id="flowG">
+      <div class="workspace-title">G — Deploy to Soul Jam</div>
+
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <div style="flex:1">
+            <div class="section-label" style="padding:0 0 2px">Soul Jam Integration</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim)" id="deployStatusLine">—</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="loadDeployStatus()">↻ Refresh</button>
+        </div>
+        <div id="deployGrid" style="display:flex;flex-direction:column;gap:10px">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);text-align:center;padding:20px">Loading...</div>
+        </div>
       </div>
     </div>
 
@@ -1563,7 +1634,7 @@ function setWorkflow(wf) {
 
   // Update tabs
   document.querySelectorAll('.flow-tab').forEach((tab, i) => {
-    tab.classList.toggle('active', 'ABCDEF'[i] === wf);
+    tab.classList.toggle('active', 'ABCDEFG'[i] === wf);
   });
 
   // Show/hide flow sections
@@ -1579,6 +1650,7 @@ function setWorkflow(wf) {
   if (wf === 'C') refreshBallRefs();
   if (wf === 'E') setupReplication();
   if (wf === 'F') setupTestExport();
+  if (wf === 'G') loadDeployStatus();
 
   updateDebug();
 }
@@ -1592,6 +1664,7 @@ function renderFlowSteps(wf) {
     D: ['Upload video', 'Extract frames', 'Select key frames', 'Configure animation', 'Generate sprites'],
     E: ['Pick source', 'Pick targets', 'Replicate', 'Review results'],
     F: ['Select animation', 'Preview player', 'Export to Soul Jam'],
+    G: ['View characters', 'Check animation status', 'Deploy to Soul Jam'],
   };
 
   const list = steps[wf] || [];
@@ -2549,13 +2622,15 @@ function handleVideoFbfEvent(data, totalFrames) {
 
 async function registerCustomAnim(name, frames, fps, loop, action) {
   try {
+    const moveType = el('videoAnimMoveType').value;
+    const moveDirection = STATE.moveDirection;
     await fetch(`${API}/api/animations/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, frames, fps, loop, action, source: 'video' }),
+      body: JSON.stringify({ name, frames, fps, loop, action, source: 'video', moveType: moveType || undefined, moveDirection: moveType ? moveDirection : undefined }),
     });
-    STATE.customAnimations[name] = { frames, fps, loop, action, custom: true };
-    log('Custom animation registered: ' + name, 'success');
+    STATE.customAnimations[name] = { frames, fps, loop, action, custom: true, moveType: moveType || undefined };
+    log('Custom animation registered: ' + name + (moveType ? ` [${moveType}${moveType !== 'stepback' ? '-' + moveDirection : ''}]` : ''), 'success');
   } catch {}
 }
 
@@ -2946,6 +3021,129 @@ function trackSessionCost(amount) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// FLOW D: MOVE TYPE (Stepback / Crossover direction)
+// ═══════════════════════════════════════════════════════════════════════
+
+STATE.moveType = '';
+STATE.moveDirection = 'left';
+
+function onMoveTypeChange() {
+  const moveType = el('videoAnimMoveType').value;
+  STATE.moveType = moveType;
+  el('moveDirectionGroup').style.display = moveType ? 'block' : 'none';
+}
+
+function setMoveDirection(dir, btn) {
+  STATE.moveDirection = dir;
+  el('moveDirectionToggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FLOW G: DEPLOY TO SOUL JAM
+// ═══════════════════════════════════════════════════════════════════════
+
+const SOUL_JAM_SLOT_LABELS = {
+  idleDribble: 'idle-dribble',
+  runDribble:  'run-dribble',
+  jumpshot:    'jumpshot',
+  stepback:    'stepback',
+  crossover:   'crossover',
+  backpedal:   'backpedal',
+  shuffle:     'shuffle',
+  steal:       'steal',
+};
+
+async function loadDeployStatus() {
+  const grid = el('deployGrid');
+  const statusLine = el('deployStatusLine');
+  statusLine.textContent = 'Loading...';
+  grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);text-align:center;padding:20px">Loading...</div>';
+
+  try {
+    const resp = await fetch(`${API}/api/deploy/status`);
+    const data = await resp.json();
+
+    if (!data.soulJamAvailable) {
+      statusLine.textContent = 'soul-jam directory not found at ../soul-jam';
+      grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--warning);padding:12px">soul-jam not found — clone it as a sibling directory.</div>';
+      return;
+    }
+
+    const chars = Object.values(data.status || {});
+    const inGame = chars.filter(c => c.inRegistry).length;
+    statusLine.textContent = `${inGame}/${chars.length} characters deployed · soul-jam linked`;
+
+    if (chars.length === 0) {
+      grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:12px">No characters in roster.</div>';
+      return;
+    }
+
+    grid.innerHTML = chars.map(c => renderDeployCard(c)).join('');
+  } catch (err) {
+    statusLine.textContent = 'Error: ' + err.message;
+    grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--danger);padding:12px">' + err.message + '</div>';
+  }
+}
+
+function renderDeployCard(c) {
+  const badgeClass = c.inRegistry ? 'live' : (c.deployedCount > 0 ? 'partial' : 'undeployed');
+  const badgeLabel = c.inRegistry ? 'In Soul Jam' : (c.deployedCount > 0 ? 'Partial' : 'Not Deployed');
+  const cardClass = c.inRegistry ? 'deploy-char-card in-soul-jam' : 'deploy-char-card';
+
+  const slots = Object.entries(c.animations || {}).map(([slot, info]) => {
+    const label = SOUL_JAM_SLOT_LABELS[slot] || slot;
+    const cls = info.deployed ? 'deploy-slot deployed' : (info.ready ? 'deploy-slot ready' : 'deploy-slot missing');
+    const prefix = info.deployed ? '✓ ' : (info.ready ? '● ' : '○ ');
+    const title = info.deployed ? 'Deployed to Soul Jam' : (info.ready ? 'Ready to deploy' : 'Animation not generated yet');
+    return `<span class="${cls}" title="${title}">${prefix}${label}</span>`;
+  }).join('');
+
+  const canDeploy = c.readyCount > 0;
+  const btnLabel = c.inRegistry ? 'Re-Deploy' : 'Deploy';
+  const deployBtn = canDeploy
+    ? `<button class="btn btn-success btn-sm" onclick="deployCharacter('${c.id}', this)">${btnLabel}</button>`
+    : `<button class="btn btn-secondary btn-sm" disabled title="No animations ready">Deploy</button>`;
+
+  return `<div class="${cardClass}" id="deployCard-${c.id}">
+    <img class="deploy-portrait" src="${API}/assets/${c.portraitPath || c.id + 'full.png'}" onerror="this.style.opacity='0.2'" />
+    <div class="deploy-char-info">
+      <div class="deploy-char-name">
+        ${c.name || c.id}
+        <span class="deploy-badge ${badgeClass}">${badgeLabel}</span>
+      </div>
+      <div class="deploy-anim-slots">${slots}</div>
+      <div class="deploy-footer">
+        <span class="deploy-count">${c.readyCount}/${c.totalSlots} animations ready · ${c.deployedCount} deployed</span>
+        ${deployBtn}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function deployCharacter(charId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Deploying...'; }
+
+  try {
+    const resp = await fetch(`${API}/api/deploy/${charId}`, { method: 'POST' });
+    const data = await resp.json();
+
+    if (data.error) {
+      toast(`Deploy failed: ${data.error}`, true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Deploy'; }
+      return;
+    }
+
+    toast(`✓ ${charId} deployed — ${data.deployed} animations copied`);
+    log(`Deployed ${charId} to Soul Jam: ${data.deployed} anims. Missing: ${data.missing}`, data.missing > 0 ? 'warn' : 'success');
+    loadDeployStatus();
+  } catch (err) {
+    toast('Deploy error: ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Deploy'; }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // KEYBOARD SHORTCUTS
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -2953,7 +3151,7 @@ document.addEventListener('keydown', e => {
   // Alt+A-F for flow switching
   if (e.altKey && !e.ctrlKey && !e.metaKey) {
     const key = e.key.toUpperCase();
-    if ('ABCDEF'.includes(key)) {
+    if ('ABCDEFG'.includes(key)) {
       e.preventDefault();
       setWorkflow(key);
     }
