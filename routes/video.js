@@ -53,6 +53,28 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     }
   });
 
+  // POST /api/video/from-direct-url — Download any direct HTTP video URL (HiggsField CDN, etc.)
+  router.post('/api/video/from-direct-url', async (req, res) => {
+    const body = await parseBody(req);
+    const { url } = body;
+    if (!url || !/^https?:\/\//.test(url)) return json(res, { error: 'Valid http/https URL required' }, 400);
+    const sessionId = Date.now().toString(36);
+    const sessionDir = path.join(TMP_DIR, sessionId);
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const ext = (url.match(/\.(mp4|mov|webm|mkv)(\?|$)/i)?.[1] || 'mp4').toLowerCase();
+    const videoPath = path.join(sessionDir, `input.${ext}`);
+    try {
+      const { execSync } = require('child_process');
+      execSync(`curl -fsSL -o "${videoPath}" "${url}"`, { stdio: 'pipe', timeout: 120000 });
+      if (!fs.existsSync(videoPath) || fs.statSync(videoPath).size < 1024) {
+        throw new Error('Downloaded file is empty or too small');
+      }
+      return json(res, { sessionId, videoPath, size: fs.statSync(videoPath).size });
+    } catch (err) {
+      return json(res, { error: 'Download failed: ' + err.message.substring(0, 200) }, 500);
+    }
+  });
+
   // POST /api/video/from-path — Use existing video file on disk
   router.post('/api/video/from-path', async (req, res) => {
     const body = await parseBody(req);

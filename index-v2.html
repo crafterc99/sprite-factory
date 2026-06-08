@@ -419,6 +419,22 @@
   .nav-btn { font-family:var(--mono); font-size:9px; letter-spacing:1px; padding:6px 12px; border:1px solid var(--border); border-radius:6px; background:transparent; color:#50507a; cursor:pointer; transition:all 0.15s; }
   .nav-btn:hover { color:var(--text); border-color:var(--border-hi); }
   .nav-btn.active { background:var(--surface2); color:var(--text); border-color:var(--border-hi); }
+  /* ─── Deploy page ─── */
+  .deploy-char-card { background:var(--surface2); border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; gap:14px; align-items:flex-start; }
+  .deploy-char-card.live { border-color:rgba(68,255,100,0.35); }
+  .deploy-portrait { width:52px; height:52px; object-fit:contain; image-rendering:pixelated; border-radius:6px; background:var(--surface); flex-shrink:0; }
+  .deploy-char-info { flex:1; min-width:0; }
+  .deploy-char-name { font-weight:700; font-size:13px; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+  .deploy-badge { font-family:var(--mono); font-size:9px; padding:2px 7px; border-radius:3px; font-weight:600; }
+  .deploy-badge.live { background:rgba(68,255,100,0.15); color:#44ff64; border:1px solid rgba(68,255,100,0.3); }
+  .deploy-badge.partial { background:rgba(255,170,0,0.12); color:#ffaa00; border:1px solid rgba(255,170,0,0.3); }
+  .deploy-badge.undeployed { background:rgba(255,255,255,0.05); color:#50507a; border:1px solid var(--border); }
+  .deploy-anim-slots { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
+  .deploy-slot { font-family:var(--mono); font-size:9px; padding:3px 7px; border-radius:3px; border:1px solid var(--border); background:var(--surface); color:#50507a; }
+  .deploy-slot.ready { border-color:rgba(68,255,100,0.4); color:#44ff64; background:rgba(68,255,100,0.07); }
+  .deploy-slot.deployed { border-color:rgba(68,255,100,0.7); color:#44ff64; background:rgba(68,255,100,0.14); font-weight:700; }
+  .deploy-footer { display:flex; align-items:center; gap:10px; }
+  .deploy-count { font-family:var(--mono); font-size:10px; color:#50507a; flex:1; }
 
   /* Misc */
   .divider { height:1px; background:var(--border); margin:16px 0; }
@@ -893,6 +909,7 @@
       <button class="nav-btn" onclick="showPage('wardrobe')">Wardrobe</button>
       <button class="nav-btn" onclick="showPage('prompts')">Prompts</button>
       <button class="nav-btn" onclick="showPage('testing')">Testing</button>
+      <button class="nav-btn" onclick="showPage('deploy')">Deploy</button>
     </nav>
     <div class="header-right">
       <div class="cost-pill" id="costPill">spend: <span>$0.00</span></div>
@@ -1076,6 +1093,13 @@
         <div class="card" id="videoUploadCard">
           <div class="card-title">1 — Upload Video</div>
 
+          <!-- URL input: paste a direct .mp4 link (HiggsField CDN, etc.) -->
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input class="input" id="videoUrlInput" type="text" placeholder="Paste video URL (HiggsField CDN link…)" style="flex:1;font-size:12px" />
+            <button class="btn btn-secondary" onclick="loadVideoFromUrl()" style="white-space:nowrap">Load URL</button>
+          </div>
+          <div style="text-align:center;color:#50507a;font-size:11px;margin-bottom:10px">— or upload file —</div>
+
           <!-- Drop zone -->
           <div class="drop-zone" id="videoDropZone" style="margin-bottom:12px">
             <div class="drop-icon">🎬</div>
@@ -1083,7 +1107,7 @@
             <input type="file" id="videoFileInput" accept="video/*" onchange="handleVideoFile(this.files[0])" />
           </div>
 
-          <!-- FPS + Extract (shown after file picked) -->
+          <!-- FPS + Extract (shown after file picked or URL loaded) -->
           <div id="videoPreExtract" style="display:none">
             <div id="videoFileInfo" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-bottom:10px"></div>
             <div style="display:flex;gap:8px;align-items:center">
@@ -1095,6 +1119,8 @@
               </button>
             </div>
           </div>
+          <!-- Persistent inline error box -->
+          <div id="videoExtractError" style="display:none;margin-top:10px;padding:10px;background:#1a0505;border:1px solid #ff4444;border-radius:6px;color:#ff8888;font-size:12px;font-family:var(--mono);white-space:pre-wrap"></div>
         </div>
 
         <!-- Step 2: Frame gallery -->
@@ -1169,6 +1195,20 @@
               </label>
             </div>
           </div>
+          <!-- Direction — shown for crossover/stepback slots -->
+          <div id="videoMoveDirectionRow" style="display:none;margin-bottom:14px">
+            <label class="form-label">Direction</label>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px">
+                <input type="radio" name="videoMoveDir" value="left" checked> Left
+              </label>
+              <label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px">
+                <input type="radio" name="videoMoveDir" value="right"> Right
+              </label>
+            </div>
+            <div style="font-family:var(--mono);font-size:9px;color:#50507a;margin-top:4px" id="videoMoveDirHint"></div>
+          </div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
             <div class="form-group">
               <label class="form-label">FPS</label>
@@ -1760,6 +1800,20 @@
         </div><!-- /tv2-layout -->
       </div><!-- /page-testing -->
 
+      <!-- PAGE: Deploy -->
+      <div class="page" id="page-deploy" style="padding:20px 24px;max-width:900px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <div>
+            <div style="font-size:18px;font-weight:700;margin-bottom:2px">Deploy to Soul Jam</div>
+            <div style="font-family:var(--mono);font-size:11px;color:#50507a" id="deployStatusLine">—</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="loadDeployStatus()">↻ Refresh</button>
+        </div>
+        <div id="deployGrid" style="display:flex;flex-direction:column;gap:12px">
+          <div style="font-family:var(--mono);font-size:11px;color:#50507a;padding:20px 0">Loading…</div>
+        </div>
+      </div><!-- /page-deploy -->
+
 
     </div>
   </main>
@@ -2248,6 +2302,7 @@ function showPage(name) {
   if (name === 'prompts') { ptInitSelects().then(() => { ptLoadLibrary(); ptLoad(); }); }
   if (name === 'wardrobe') loadWardrobePage();
   if (name === 'testing') initTestingPage();
+  if (name === 'deploy') loadDeployStatus();
   if (name === 'studio') {
     if (STATE.selectedChar) {
       selectChar(STATE.selectedChar.name);
@@ -5417,10 +5472,47 @@ function handleVideoFile(file) {
   VID.file = file;
   VID.sessionId = null;
   document.getElementById('videoDropZone').classList.remove('dragover');
+  document.getElementById('videoExtractError').style.display = 'none';
 
   const info = document.getElementById('videoFileInfo');
   if (info) info.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
   document.getElementById('videoPreExtract').style.display = 'block';
+}
+
+async function loadVideoFromUrl() {
+  const urlEl = document.getElementById('videoUrlInput');
+  const url = (urlEl?.value || '').trim();
+  if (!url) return toast('Paste a video URL first', true);
+
+  const btn = document.querySelector('[onclick="loadVideoFromUrl()"]');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Downloading…';
+  document.getElementById('videoExtractError').style.display = 'none';
+
+  try {
+    const res = await fetch(`${API}/api/video/from-direct-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Download failed');
+
+    VID.sessionId = data.sessionId;
+    VID.file = null;
+    const info = document.getElementById('videoFileInfo');
+    if (info) info.textContent = `${url.split('/').pop().split('?')[0]} · ${(data.size / 1024 / 1024).toFixed(1)} MB (from URL)`;
+    document.getElementById('videoPreExtract').style.display = 'block';
+    toast('Video loaded — click Extract Frames');
+  } catch (e) {
+    const errEl = document.getElementById('videoExtractError');
+    errEl.textContent = 'URL load failed: ' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
 }
 
 
@@ -5448,8 +5540,10 @@ async function extractVideoFrames() {
   if (!VID.file && !VID.sessionId) return toast('Upload a video first', true);
   const btn = document.getElementById('videoExtractBtn');
   const spinner = document.getElementById('videoExtractSpinner');
+  const errEl = document.getElementById('videoExtractError');
   btn.disabled = true;
   spinner.classList.add('active');
+  errEl.style.display = 'none';
   document.getElementById('videoGalleryCard').style.display = 'none';
   document.getElementById('videoConfigCard').style.display = 'none';
   document.getElementById('videoSaveResult').style.display = 'none';
@@ -5463,7 +5557,7 @@ async function extractVideoFrames() {
         headers: { 'Content-Type': VID.file.type },
       });
       const upData = await upRes.json();
-      if (!upRes.ok) throw new Error(upData.error || 'Upload failed');
+      if (!upRes.ok) throw new Error('Upload failed: ' + (upData.error || upRes.status));
       VID.sessionId = upData.sessionId;
     }
 
@@ -5475,7 +5569,8 @@ async function extractVideoFrames() {
       body: JSON.stringify({ sessionId: VID.sessionId, fps }),
     });
     const exData = await exRes.json();
-    if (!exRes.ok) throw new Error(exData.error || 'Extract failed');
+    if (!exRes.ok) throw new Error('Extract failed: ' + (exData.error || exRes.status));
+    if (!exData.frames || exData.frames.length === 0) throw new Error('Extract returned 0 frames — check server logs');
 
     VID.frames = exData.frames;
     VID.selected.clear();
@@ -5485,7 +5580,9 @@ async function extractVideoFrames() {
     updateVideoSelCount();
     toast(`Extracted ${exData.frameCount} frames`);
   } catch (e) {
-    toast('Extract failed: ' + e.message, true);
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+    toast('Extract failed', true);
   } finally {
     btn.disabled = false;
     spinner.classList.remove('active');
@@ -5778,6 +5875,18 @@ function videoOnSlotChange() {
   // Auto-set loop based on slot type
   const loopEl = document.getElementById('videoAnimLoop');
   if (loopEl) loopEl.value = slot.loop ? 'true' : 'false';
+
+  // Show direction picker for crossover and stepback — mirrors Soul Jam's move logic
+  const dirRow = document.getElementById('videoMoveDirectionRow');
+  const dirHint = document.getElementById('videoMoveDirHint');
+  if (dirRow) {
+    const needsDir = slotId === 'cross' || slotId === 'stepback';
+    dirRow.style.display = needsDir ? 'block' : 'none';
+    if (dirHint) {
+      if (slotId === 'cross') dirHint.textContent = 'Crossover: lateral burst perpendicular to hoop — character shifts this direction';
+      else if (slotId === 'stepback') dirHint.textContent = 'Stepback: burst away from hoop — character leans back to this side';
+    }
+  }
 }
 
 async function saveAnimToLibrary() {
@@ -5824,9 +5933,14 @@ async function saveAnimToLibrary() {
   btn.disabled = true;
   spinner.classList.add('active');
 
+  // Direction for crossover/stepback — mirrors Soul Jam's lateral burst direction
+  const moveDir = document.querySelector('input[name="videoMoveDir"]:checked')?.value || 'left';
+  const hasDirection = slotId === 'cross' || slotId === 'stepback';
+
   // Always include sessionId+frameFiles so server can read from disk if base64 incomplete
   const payload = {
     name: animName, angle, fps, loop,
+    ...(hasDirection ? { moveType: slotId === 'cross' ? 'crossover' : 'stepback', moveDirection: moveDir } : {}),
     sessionId: VID.sessionId,
     frameFiles: orderedFrames,
     ...(frameBase64Array.length > 0 ? { frameBase64Array } : {}),
