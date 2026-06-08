@@ -29,7 +29,7 @@ function register(router, ctx) {
       registry[character].pose_source   = poseSource;
       registry[character].net_anchor    = netAnchor ?? { x: 480, y: 185 };
       registry[character].updated_at    = new Date().toISOString();
-      saveCharacters(registry);
+      await saveCharacters(registry);
 
       return json(res, {
         success: true,

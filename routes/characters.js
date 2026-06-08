@@ -123,32 +123,30 @@ function loadDeletedSet() {
   return new Set(Array.isArray(data._deleted) ? data._deleted : []);
 }
 
-// Track the most recent R2 upload so SIGTERM handler can wait for it.
-let _latestSavePromise = Promise.resolve();
-
-function saveCharacters(data) {
+/**
+ * Save characters to disk AND await the R2 upload before returning.
+ * Every caller must await this — fire-and-forget means data loss on redeploy.
+ */
+async function saveCharacters(data) {
   const dir = path.dirname(CHARACTERS_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   writeJsonCached(CHARACTERS_FILE, data);
-  if (sbAvailable()) {
+  if (!sbAvailable()) return;
+  try {
+    await sbUploadJson(SB_REGISTRY_KEY, data);
+    console.log(`[characters] ✓ R2 saved (${Object.keys(data).filter(k => k !== '_deleted').length} chars)`);
     const deleted = Array.isArray(data._deleted) ? data._deleted : [];
-    _latestSavePromise = sbUploadJson(SB_REGISTRY_KEY, data)
-      .then(() => console.log(`[characters] ✓ R2 backup saved (${Object.keys(data).filter(k=>k!=='_deleted').length} chars)`))
-      .catch(e => console.error('[characters] ✗ CRITICAL — R2 backup FAILED, data will be lost on redeploy:', e.message));
     if (deleted.length > 0) {
-      sbUploadJson(SB_DELETED_KEY, { deleted }).catch(e => console.warn('[characters] deleted-list backup failed:', e.message));
+      await sbUploadJson(SB_DELETED_KEY, { deleted }).catch(e => console.warn('[characters] deleted-list R2 failed:', e.message));
     }
+  } catch (e) {
+    console.error('[characters] ✗ R2 FAILED — redeploy will lose data:', e.message);
   }
 }
 
-/**
- * Force-upload the current character registry to R2 right now.
- * Called on SIGTERM so Railway's graceful-shutdown window can flush data
- * that a fire-and-forget save may not have finished uploading.
- */
+/** Force-upload current state to R2 — called by SIGTERM handler. */
 async function flushToR2() {
   if (!sbAvailable()) return;
-  await _latestSavePromise.catch(() => {}); // wait for any in-flight upload
   const data = loadCharacters();
   const charCount = Object.keys(data).filter(k => k !== '_deleted').length;
   if (charCount === 0) return;
@@ -375,7 +373,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       teamColors: registry[name].teamColors,
     };
 
-    saveCharacters(registry);
+    await saveCharacters(registry);
     scheduleSync();
     return json(res, { success: true, character: registry[name] });
   });
@@ -473,7 +471,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
         pixelHeight,
         status: 'portrait_done',
       };
-      saveCharacters(registry);
+      await saveCharacters(registry);
       scheduleSync();
 
       // Fire-and-forget: kick off animation gap-fill for this character in the background.
@@ -553,7 +551,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       registry[params.name] = { name: params.name, id: params.name };
     }
     registry[params.name].ratings = { ...ratings };
-    saveCharacters(registry);
+    await saveCharacters(registry);
     scheduleSync();
     return json(res, { success: true, ratings: registry[params.name].ratings });
   });
@@ -574,7 +572,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       angle: angle || null, angleIndex: angleIndex !== undefined ? angleIndex : null,
       savedAt: new Date().toISOString(),
     };
-    saveCharacters(registry);
+    await saveCharacters(registry);
     scheduleSync();
     return json(res, { success: true, animation: registry[params.name].savedAnimations[animId] });
   });
@@ -597,7 +595,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     delete registry[name];
     if (!Array.isArray(registry._deleted)) registry._deleted = [];
     if (!registry._deleted.includes(name)) registry._deleted.push(name);
-    saveCharacters(registry);  // also backs up _deleted to R2
+    await saveCharacters(registry);  // also backs up _deleted to R2
 
     // Delete from R2 — awaited so files don't come back on next redeploy
     if (sbAvailable()) {

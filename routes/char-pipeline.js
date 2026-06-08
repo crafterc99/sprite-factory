@@ -849,7 +849,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         scaleMultiplier, pixelHeight,
         status: 'portrait_done',
       };
-      saveCharacters(registry);
+      await saveCharacters(registry);
       scheduleSync();
 
       return json(res, {
@@ -1096,7 +1096,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           const p = path.join(ASSETS_DIR, `${name}-angle-${f.index}.png`);
           if (fs.existsSync(p)) registry[name].bodyAngles[f.index] = fs.readFileSync(p).toString('base64');
         }
-        saveCharacters(registry);
+        await saveCharacters(registry);
         scheduleSync();
         finishJob(jobId, { success: true, name, frames });
       } catch (err) {
@@ -1167,7 +1167,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           const p = path.join(ASSETS_DIR, `${name}-headshot-${f.index}.png`);
           if (fs.existsSync(p)) registry[name].headshots[f.index] = fs.readFileSync(p).toString('base64');
         }
-        saveCharacters(registry);
+        await saveCharacters(registry);
         scheduleSync();
         finishJob(jobId, { success: true, name, frames });
       } catch (err) {
@@ -1267,7 +1267,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (!registry[name].angleLabels) registry[name].angleLabels = {};
     if (!registry[name].angleLabels[type]) registry[name].angleLabels[type] = {};
     registry[name].angleLabels[type][index] = label;
-    saveCharacters(registry);
+    await saveCharacters(registry);
     scheduleSync();
 
     return json(res, { success: true, name, type, index, label });
@@ -1353,7 +1353,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           if (!registry[name].bodyAngles) registry[name].bodyAngles = {};
           registry[name].bodyAngles[index] = fs.readFileSync(framePath).toString('base64');
         }
-        saveCharacters(registry);
+        await saveCharacters(registry);
         scheduleSync();
 
         const imageBase64 = 'data:image/png;base64,' + fs.readFileSync(framePath).toString('base64');
@@ -1384,7 +1384,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     if (registry[name]) {
       registry[name].status = 'pipeline_complete';
       registry[name].pipelineCompletedAt = new Date().toISOString();
-      saveCharacters(registry);
+      await saveCharacters(registry);
       scheduleSync();
     }
 

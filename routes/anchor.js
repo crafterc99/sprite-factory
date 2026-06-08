@@ -65,7 +65,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
     } else {
       a.status = 'incomplete';
     }
-    saveCharacters(registry);
+    await saveCharacters(registry);
     return registry[charName].anchor;
   }
 
