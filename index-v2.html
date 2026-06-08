@@ -5623,8 +5623,20 @@ async function extractVideoSubjects(frameFiles) {
   // Fire one request per frame — each slot updates the moment its result lands
   // Max 3 concurrent to avoid rate-limiting the AI
   const CONCURRENCY = 3;
+  const RETRY_DELAYS = [2000, 5000, 10000]; // backoff for 503 / transient errors
 
-  async function extractOne(file, i) {
+  function _errMsg(data, httpStatus) {
+    // Unwrap nested error objects — server sometimes returns {"error":{"code":503,"message":"..."}}
+    const raw = data?.error ?? data;
+    if (raw && typeof raw === 'object') {
+      const msg = raw.message ?? raw.msg ?? JSON.stringify(raw);
+      if (raw.code === 503 || httpStatus === 503) return '⏳ AI busy — retrying…';
+      return String(msg).slice(0, 120);
+    }
+    return String(raw ?? 'Unknown error').slice(0, 120);
+  }
+
+  async function extractOne(file, i, attempt = 0) {
     const thumb = document.querySelector(`#vstSubjectGrid [data-frame-index="${i}"]`);
     const slot  = thumb?.querySelector('.vst-subject');
 
@@ -5637,8 +5649,29 @@ async function extractVideoSubjects(frameFiles) {
       const data = await res.json();
 
       if (!slot) return;
+
+      // 503 / model overloaded — retry with backoff
+      const is503 = res.status === 503
+        || (data?.error && (data.error?.code === 503 || String(data.error).includes('503')));
+      if (is503 && attempt < RETRY_DELAYS.length) {
+        const delay = RETRY_DELAYS[attempt];
+        slot.innerHTML = `<span style="font-size:9px;color:#888;text-align:center;padding:6px">AI busy<br>retry ${attempt + 1}/${RETRY_DELAYS.length}…</span>`;
+        await new Promise(r => setTimeout(r, delay));
+        return extractOne(file, i, attempt + 1);
+      }
+
       if (data.error) {
-        slot.innerHTML = `<span style="font-size:9px;color:var(--danger)">${data.error}</span>`;
+        const msg = _errMsg(data, res.status);
+        slot.innerHTML = `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px">
+            <span style="font-size:9px;color:var(--danger);text-align:center">${msg}</span>
+            <button style="font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:4px;
+              border:1px solid #333;background:#111;color:#aaa;cursor:pointer"
+              onclick="this.closest('.vst-subject').innerHTML='<span class=\\'spinner active\\'></span>';
+                extractOne('${file.replace(/'/g,"\\'")}', ${i})">
+              retry
+            </button>
+          </div>`;
       } else {
         const img = document.createElement('img');
         img.src   = data.url + '?t=' + Date.now();
@@ -5648,7 +5681,18 @@ async function extractVideoSubjects(frameFiles) {
         slot.title = 'Double-click to edit';
       }
     } catch (e) {
-      if (slot) slot.innerHTML = `<span style="font-size:9px;color:var(--text-muted)">—</span>`;
+      if (slot) {
+        slot.innerHTML = `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px">
+            <span style="font-size:9px;color:#666;text-align:center">network error</span>
+            <button style="font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:4px;
+              border:1px solid #333;background:#111;color:#aaa;cursor:pointer"
+              onclick="this.closest('.vst-subject').innerHTML='<span class=\\'spinner active\\'></span>';
+                extractOne('${file.replace(/'/g,"\\'")}', ${i})">
+              retry
+            </button>
+          </div>`;
+      }
     } finally {
       slot?.classList.remove('vst-pending');
     }

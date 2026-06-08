@@ -488,7 +488,14 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     let prompt = 'Extract the basketball player from this image. Place them centered on a PURE GREEN (#00FF00) background — no court, no arena, no floor, no shadows. Scale the player up so they fill at least 70% of the image height — if they are far from the camera, zoom in so the player is large and centered. Keep their exact pose, body proportions, and the basketball if visible. Solid pure green everywhere the player is not.';
     if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
 
-    try {
+    const RETRY_DELAYS = [3000, 8000, 15000];
+
+    function _is503(err) {
+      const s = String(err?.message ?? err);
+      return s.includes('503') || s.includes('UNAVAILABLE') || s.includes('high demand');
+    }
+
+    async function runExtraction(attempt = 0) {
       const { removeBackground } = require('../lib/sprite-processor/index');
       const client = new NanaBananaClient({ model: 'gemini-3-pro-image-preview' });
       const result  = await client.generate(prompt, {
@@ -504,7 +511,6 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       const croppedPath = path.join(subjectsDir, `cropped-${frameIndex}.png`);
       fs.writeFileSync(rawPath, result.imageBuffer);
 
-      // Remove green → crop tight to character → composite on white (portrait 3:4)
       await removeBackground(rawPath, greenRemovedPath);
       await cropToContent(greenRemovedPath, croppedPath, { width: 384, height: 512, padding: 6 });
       const sharp = require('sharp');
@@ -515,9 +521,29 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
 
       recordCost('gemini-3-pro-image-preview', 'subject-extract', '1K', 1, { sessionId, frameIndex });
       return json(res, { frameIndex, url: `/api/video/subject/${sessionId}/${outFile}` });
-    } catch (err) {
-      return json(res, { frameIndex, error: err.message }, 500);
     }
+
+    async function withRetry(attempt) {
+      try {
+        return await runExtraction(attempt);
+      } catch (err) {
+        if (_is503(err) && attempt < RETRY_DELAYS.length) {
+          console.warn(`[extract-subject] 503 on frame ${frameIndex}, retry ${attempt + 1} in ${RETRY_DELAYS[attempt]}ms`);
+          await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+          return withRetry(attempt + 1);
+        }
+        // Clean up error message — strip raw JSON if present
+        let msg = String(err?.message ?? err);
+        try {
+          const parsed = JSON.parse(msg);
+          msg = parsed?.error?.message ?? parsed?.message ?? msg;
+        } catch {}
+        if (_is503(err)) msg = 'AI model busy — please retry in a moment';
+        return json(res, { frameIndex, error: msg }, _is503(err) ? 503 : 500);
+      }
+    }
+
+    return withRetry(0);
   });
 
   // POST /api/video/extract-subjects — Extract ALL subjects (kept for compatibility)
