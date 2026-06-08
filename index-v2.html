@@ -8429,7 +8429,7 @@ async function loadGMAnims() {
       const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
       if (!slot) continue;
 
-      GM.charAnims.push({
+      const entry = {
         name: slotId,
         animKey: key,
         zoneId,
@@ -8438,7 +8438,15 @@ async function loadGMAnims() {
         frameCount: sa.frameCount ?? 1,
         stripUrl: sa.spriteUrl,
         movementData: null,
-      });
+        _img: null,
+      };
+      // Preload image so zone transitions are instant (no blank frame gap)
+      if (sa.spriteUrl) {
+        const img = new Image();
+        img.src = sa.spriteUrl;
+        entry._img = img;
+      }
+      GM.charAnims.push(entry);
     }
 
     if (GM.player) GM.player.setAnimations(GM.charAnims);
@@ -8453,10 +8461,18 @@ function gmLoadStrip(animEntry) {
   TESTING.frameCount = animEntry.frameCount ?? 1;
   TESTING.fps        = animEntry.fps ?? 8;
   TESTING.loop       = animEntry.loop ?? true;
-  TESTING.stripLoaded = false;
-  TESTING.stripImg = new Image();
-  TESTING.stripImg.onload = () => { TESTING.stripLoaded = true; };
-  TESTING.stripImg.src = animEntry.stripUrl + '?t=' + Date.now();
+  // Use preloaded image (loaded during loadGMAnims) to avoid blank frame on zone transition
+  if (animEntry._img?.complete && animEntry._img.naturalWidth > 0) {
+    TESTING.stripImg    = animEntry._img;
+    TESTING.stripLoaded = true;
+  } else {
+    TESTING.stripLoaded = false;
+    TESTING.stripImg = new Image();
+    TESTING.stripImg.onload = () => { TESTING.stripLoaded = true; };
+    TESTING.stripImg.src = animEntry.stripUrl + '?t=' + Date.now();
+    // Cache for future calls once loaded
+    TESTING.stripImg.onload = () => { TESTING.stripLoaded = true; animEntry._img = TESTING.stripImg; };
+  }
 }
 
 // ── Game Mode tick — called inside testingRenderLoop before draw ────────────
@@ -8576,9 +8592,6 @@ function gmTick(timestamp) {
     TESTING.fps  = curAnim.fps;
     TESTING.loop = animState.state !== 'ACTION';
   }
-
-  // Track facing direction for sprite flip — physics is authoritative
-  GM._facingRight = GM.physics.facingRight;
 
   // ── HUD update ─────────────────────────────────────────────────────────────
   const tier = phys.speedTier ?? 'idle';
@@ -9285,19 +9298,9 @@ function _drawFallbackCourt(ctx, W, H) {
   ctx.restore();
 }
 
-// ── Draw facing flip helper (called from within testingRenderLoop when GM active)
-function gmApplyFacingFlip(ctx, charX, drawW) {
-  if (GM.active && !(GM._facingRight ?? true)) {
-    ctx.save();
-    ctx.translate(charX * 2, 0);
-    ctx.scale(-1, 1);
-    return true;
-  }
-  return false;
-}
-function gmRestoreFlip(ctx, flipped) {
-  if (flipped) ctx.restore();
-}
+// Sprite flip disabled — always draw at scale(1,1) regardless of movement direction
+function gmApplyFacingFlip(ctx, charX, drawW) { return false; }
+function gmRestoreFlip(ctx, flipped) {}
 </script>
 </body>
 </html>
