@@ -408,11 +408,11 @@ function register(router, ctx) {
       } else if (customPrompt) {
         // Edit mode: keep character but apply user modification
         prompt = `Keep all details about the character exactly the same but: ${customPrompt}. The background is pure green (#00FF00).`;
-        referenceImages = [posePath, resolvedAnglePath];
+        referenceImages = [resolvedAnglePath, posePath];
       } else {
-        // Standard regen
+        // Standard regen — must match initial generation image order exactly
         prompt = loadStudioPrompt();
-        referenceImages = [posePath, resolvedAnglePath];
+        referenceImages = [resolvedAnglePath, posePath];
       }
 
       const result = await client.generate(prompt, {
