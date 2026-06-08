@@ -633,6 +633,25 @@ async function handler(req, res) {
 if (require.main === module) {
   (async () => {
 
+    // Bind PORT immediately so Railway's health check passes within the startup window.
+    // All restore/seed work runs in the background after the server is already listening.
+    const server = http.createServer(handler);
+    server.listen(PORT, () => {
+      const { CHARACTERS } = require('./lib/sprite-generator/prompts');
+      console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
+      console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
+      console.log(`  Animations: 8`);
+      console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}`);
+      const r2On = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
+      const storageLine = r2On
+        ? `R2 (bucket=${process.env.R2_BUCKET || 'sprite-factory'})`
+        : 'NOT SET — data will not persist';
+      console.log(`  Storage: ${storageLine}\n`);
+    });
+
+    // ── Background restore — runs after PORT is bound ──────────────────────
+    setImmediate(async () => {
+
     // ── R2 connectivity check — must pass before restoring any data
     const { verifyConnection: sbVerify, isAvailable: sbIsAvailable } = require('./lib/r2-storage');
     const storageBackend = 'R2';
@@ -825,20 +844,6 @@ if (require.main === module) {
       console.warn('  [startup] R2 seed failed (non-fatal):', e.message);
     }
 
-    const server = http.createServer(handler);
-    server.listen(PORT, () => {
-      const { CHARACTERS } = require('./lib/sprite-generator/prompts');
-      console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
-      console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
-      console.log(`  Animations: 8`);
-      console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}`);
-      const r2On = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
-      const storageLine = r2On
-        ? `R2 (bucket=${process.env.R2_BUCKET || 'sprite-factory'})`
-        : 'NOT SET — data will not persist';
-      console.log(`  Storage: ${storageLine}\n`);
-    });
-
     // ── Periodic storage backup (safety net) ──────────────────────────────
     // Every 5 minutes, flush all current data to R2 as a safety net in case
     // individual fire-and-forget saves failed. Uses content-hash change
@@ -890,6 +895,8 @@ if (require.main === module) {
     // Run once at startup to establish baseline hashes (so first interval skips unchanged files)
     setTimeout(() => runBackup('startup').catch(() => {}), 10000);
     setInterval(() => runBackup(new Date().toISOString().slice(0, 19)).catch(() => {}), 5 * 60 * 1000);
+
+    }); // end setImmediate (background restore)
 
     // ── Graceful shutdown — flush all data to R2 before Railway kills us ──
     // Railway sends SIGTERM with a grace window before hard SIGKILL.

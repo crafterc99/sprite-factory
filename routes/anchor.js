@@ -43,7 +43,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, json, parseBody, serveImage }) 
   }
 
   // ─── Helper: Update anchor data in character registry ──────────────
-  function updateAnchor(charName, updates) {
+  async function updateAnchor(charName, updates) {
     const registry = loadCharacters();
     if (!registry[charName]) return;
     if (!registry[charName].anchor) {
