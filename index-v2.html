@@ -7349,8 +7349,24 @@ const TESTING = {
 function initTestingPage() {
   const canvas = document.getElementById('testingCourt');
   if (!canvas) return;
+
+  // Scale canvas to devicePixelRatio so it's crisp on Retina/HiDPI displays.
+  // The CSS size stays at the logical 960×640; the internal buffer is 2× (or 3×) larger.
+  const dpr = Math.round(window.devicePixelRatio || 1);
+  const LOGICAL_W = 960, LOGICAL_H = 640;
+  canvas.width  = LOGICAL_W * dpr;
+  canvas.height = LOGICAL_H * dpr;
+  canvas.style.width  = LOGICAL_W + 'px';
+  canvas.style.height = LOGICAL_H + 'px';
+
   TESTING.ctx = canvas.getContext('2d');
-  TESTING.ctx.imageSmoothingEnabled = false;
+  TESTING.ctx.scale(dpr, dpr);
+  TESTING._dpr = dpr;
+
+  // Sprites are real photos — use high-quality smoothing for downscales.
+  // imageSmoothingEnabled = false was only appropriate for pixel-art.
+  TESTING.ctx.imageSmoothingEnabled = true;
+  TESTING.ctx.imageSmoothingQuality = 'high';
 
   // Restore court and hoop images from server (R2-backed) — works on any device
   fetch('/api/testing-images/status').then(r => r.json()).then(status => {
@@ -8328,7 +8344,7 @@ function testingRenderLoop(timestamp) {
     }
     TESTING.currentFrame = Math.min(TESTING.currentFrame, activeFCount - 1);
 
-    ctx.imageSmoothingEnabled = false;
+    // Keep high-quality smoothing for photographic sprites (set once in initTestingPage)
 
     // Prefer native-res individual frames (HD) when available; fall back to strip
     const hdImg = TESTING.hdFrames?.[TESTING.currentFrame];
@@ -9486,9 +9502,23 @@ function _drawFallbackCourt(ctx, W, H) {
   ctx.restore();
 }
 
-// Sprite flip disabled — always draw at scale(1,1) regardless of movement direction
-function gmApplyFacingFlip(ctx, charX, drawW) { return false; }
-function gmRestoreFlip(ctx, flipped) {}
+// Side-dribble animations are directionally baked — don't mirror them
+const _NO_FLIP_ANIMS = new Set(['side-dribble-l', 'side-dribble-r']);
+
+function gmApplyFacingFlip(ctx, charX, drawW) {
+  if (!GM?.physics || GM.physics.facingRight) return false;
+  const anim = GM.player?.currentAnim ?? TESTING.selectedAnim ?? '';
+  if (_NO_FLIP_ANIMS.has(anim)) return false;
+  ctx.save();
+  ctx.translate(charX, 0);
+  ctx.scale(-1, 1);
+  ctx.translate(-charX, 0);
+  return true;
+}
+
+function gmRestoreFlip(ctx, flipped) {
+  if (flipped) ctx.restore();
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // DEPLOY PAGE — Soul Jam integration
