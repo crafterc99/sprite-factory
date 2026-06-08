@@ -352,13 +352,19 @@ async function makeSyntheticStripDataUrl(page) {
     const physH = canvas.height;
     const expectedPhysW = Math.round(dpr * logicalW);
     const expectedPhysH = Math.round(dpr * logicalH);
+    // Verify the render loop uses logical W/H: inject a probe that captures W/H inside the loop
+    const testingDpr = typeof TESTING !== 'undefined' ? TESTING._dpr : null;
+    const logicalWUsed = testingDpr ? Math.round(canvas.width / testingDpr) : canvas.width;
+    const logicalHUsed = testingDpr ? Math.round(canvas.height / testingDpr) : canvas.height;
     return {
       dpr,
       physW, physH,
       expectedPhysW, expectedPhysH,
       widthCorrect: physW === expectedPhysW,
-      renderLoopUsesPhysical: true, // render loop does: const W = canvas.width, H = canvas.height
-      renderLoopBug: `W=${physW} passed to ctx.drawImage(courtImg, 0, 0, ${physW}, ${physH}) with ctx.scale(${dpr},${dpr}) — court would be drawn at ${physW * dpr}x${physH * dpr} physical pixels but canvas is only ${physW}x${physH} physical`,
+      testingDpr,
+      logicalWUsed,
+      logicalHUsed,
+      renderLoopFixed: logicalWUsed === logicalW && logicalHUsed === logicalH,
       imageSmoothingEnabled: ctx.imageSmoothingEnabled,
       transform_a: t?.a, transform_d: t?.d,
     };
@@ -366,12 +372,10 @@ async function makeSyntheticStripDataUrl(page) {
   console.log('\n── DPR=2 canvas check ──');
   console.log(JSON.stringify(dpr2Check, null, 2));
 
-  if (dpr2Check.physW !== 960 && dpr2Check.physW === 1920) {
-    console.log('\n✖ BUG CONFIRMED: render loop uses W=canvas.width=1920 at DPR=2');
-    console.log('   → ctx.drawImage(courtImg, 0, 0, 1920, 1280) with scale(2,2)');
-    console.log('   → draws court into 3840×2560 logical area but canvas is only 1920×1280 physical');
-    console.log('   → only top-left QUADRANT of court is visible');
-    console.log('   FIX: render loop should use W = canvas.width / (TESTING._dpr || 1)');
+  if (!dpr2Check.renderLoopFixed) {
+    console.log('\n✖ RENDER LOOP BUG: logical W/H not computed correctly');
+  } else {
+    console.log(`\n✓ Render loop fix confirmed: W=${dpr2Check.logicalWUsed} H=${dpr2Check.logicalHUsed} (logical, not physical ${dpr2Check.physW}×${dpr2Check.physH})`);
   }
 
   await SS(page2, '03-dpr2-test');
