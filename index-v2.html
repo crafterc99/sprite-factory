@@ -420,20 +420,31 @@
   .nav-btn:hover { color:var(--text); border-color:var(--border-hi); }
   .nav-btn.active { background:var(--surface2); color:var(--text); border-color:var(--border-hi); }
   /* ─── Deploy page ─── */
-  .deploy-char-card { background:var(--surface2); border:1.5px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; gap:14px; align-items:flex-start; }
-  .deploy-char-card.live { border-color:rgba(68,255,100,0.35); }
-  .deploy-portrait { width:52px; height:52px; object-fit:contain; image-rendering:pixelated; border-radius:6px; background:var(--surface); flex-shrink:0; }
+  .deploy-char-card { background:var(--surface2); border:1.5px solid var(--border); border-radius:10px; padding:16px 18px; display:flex; gap:14px; align-items:flex-start; transition:border-color 0.2s; }
+  .deploy-char-card.live { border-color:rgba(68,255,100,0.5); background:rgba(68,255,100,0.03); }
+  .deploy-portrait { width:56px; height:56px; object-fit:contain; image-rendering:pixelated; border-radius:8px; background:var(--surface); flex-shrink:0; border:1px solid var(--border); }
   .deploy-char-info { flex:1; min-width:0; }
-  .deploy-char-name { font-weight:700; font-size:13px; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+  .deploy-char-name { font-weight:700; font-size:14px; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
   .deploy-badge { font-family:var(--mono); font-size:9px; padding:2px 7px; border-radius:3px; font-weight:600; }
   .deploy-badge.live { background:rgba(68,255,100,0.15); color:#44ff64; border:1px solid rgba(68,255,100,0.3); }
   .deploy-badge.partial { background:rgba(255,170,0,0.12); color:#ffaa00; border:1px solid rgba(255,170,0,0.3); }
   .deploy-badge.undeployed { background:rgba(255,255,255,0.05); color:#50507a; border:1px solid var(--border); }
+  /* Slot grid */
+  .deploy-slots-grid { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+  .deploy-slot-row { display:flex; align-items:center; gap:8px; }
+  .deploy-slot-label { font-family:var(--mono); font-size:9px; width:110px; flex-shrink:0; color:#50507a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .deploy-slot-label.has-any { color:var(--text); }
+  .deploy-zone-pips { display:flex; gap:3px; }
+  .deploy-zpip { font-family:var(--mono); font-size:8px; padding:2px 5px; border-radius:3px; border:1px solid var(--border); color:#25254a; background:var(--surface); }
+  .deploy-zpip.filled { border-color:rgba(68,255,100,0.5); color:#44ff64; background:rgba(68,255,100,0.1); }
+  /* Legacy ones (old _a format) */
+  .deploy-zpip.legacy { border-color:rgba(255,170,0,0.4); color:#ffaa00; background:rgba(255,170,0,0.07); }
+  /* Old-style flat badges kept for compat */
   .deploy-anim-slots { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
   .deploy-slot { font-family:var(--mono); font-size:9px; padding:3px 7px; border-radius:3px; border:1px solid var(--border); background:var(--surface); color:#50507a; }
   .deploy-slot.ready { border-color:rgba(68,255,100,0.4); color:#44ff64; background:rgba(68,255,100,0.07); }
   .deploy-slot.deployed { border-color:rgba(68,255,100,0.7); color:#44ff64; background:rgba(68,255,100,0.14); font-weight:700; }
-  .deploy-footer { display:flex; align-items:center; gap:10px; }
+  .deploy-footer { display:flex; align-items:center; gap:10px; margin-top:4px; }
   .deploy-count { font-family:var(--mono); font-size:10px; color:#50507a; flex:1; }
 
   /* Misc */
@@ -1804,10 +1815,16 @@
       <div class="page" id="page-deploy" style="padding:20px 24px;max-width:900px">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
           <div>
-            <div style="font-size:18px;font-weight:700;margin-bottom:2px">Deploy to Soul Jam</div>
+            <div style="font-size:18px;font-weight:700;margin-bottom:2px">Characters &amp; Animations</div>
             <div style="font-family:var(--mono);font-size:11px;color:#50507a" id="deployStatusLine">—</div>
           </div>
           <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="loadDeployStatus()">↻ Refresh</button>
+        </div>
+        <!-- Legend -->
+        <div style="display:flex;gap:14px;margin-bottom:16px;font-family:var(--mono);font-size:9px;flex-wrap:wrap">
+          <span><span class="deploy-zpip filled" style="display:inline-block">Z1</span> animation saved</span>
+          <span><span class="deploy-zpip" style="display:inline-block">Z1</span> not yet made</span>
+          <span style="color:#50507a">Zones: Z1=Front · Z2=Front-Left · Z3=Left · Z4=Back-Left · Z5=Back</span>
         </div>
         <div id="deployGrid" style="display:flex;flex-direction:column;gap:12px">
           <div style="font-family:var(--mono);font-size:11px;color:#50507a;padding:20px 0">Loading…</div>
@@ -9430,61 +9447,112 @@ async function loadDeployStatus() {
   const grid = document.getElementById('deployGrid');
   const statusLine = document.getElementById('deployStatusLine');
   if (!grid) return;
-  statusLine.textContent = 'Loading…';
-  grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:#50507a;padding:20px 0">Loading…</div>';
 
-  try {
-    const resp = await fetch(API + '/api/deploy/status');
-    const data = await resp.json();
-
-    const chars = Object.values(data.status || {});
-    const inGame = chars.filter(c => c.inRegistry).length;
-    const backendLabel = data.r2Available ? '☁ R2 connected' : (data.soulJamAvailable ? '⇄ local soul-jam' : '⚠ no backend');
-    statusLine.textContent = inGame + '/' + chars.length + ' in Soul Jam · ' + backendLabel;
-
-    if (chars.length === 0) {
-      grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:#50507a;padding:12px 0">No characters found.</div>';
+  // Load roster if not yet populated
+  if (!TESTING.roster || TESTING.roster.length === 0) {
+    statusLine.textContent = 'Loading roster…';
+    try {
+      const r = await fetch(`${API}/api/roster`);
+      const data = await r.json();
+      TESTING.roster = data.roster || [];
+    } catch(e) {
+      statusLine.textContent = 'Failed to load roster';
+      grid.innerHTML = '<div style="color:#c06020;font-family:var(--mono);font-size:11px;padding:12px 0">' + e.message + '</div>';
       return;
     }
-
-    grid.innerHTML = chars.map(c => renderDeployCard(c, data.r2Available)).join('');
-  } catch (err) {
-    statusLine.textContent = 'Error: ' + err.message;
-    grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:#c06020;padding:12px 0">' + err.message + '</div>';
   }
+
+  renderDeployPage();
 }
 
-function renderDeployCard(c, r2Available) {
-  const badgeClass = c.inRegistry ? 'live' : (c.deployedCount > 0 ? 'partial' : 'undeployed');
-  const badgeLabel = c.inRegistry ? 'Live in Soul Jam' : (c.readyCount > 0 ? 'Ready' : 'Not Ready');
-  const cardClass = c.inRegistry ? 'deploy-char-card live' : 'deploy-char-card';
+function renderDeployPage() {
+  const grid = document.getElementById('deployGrid');
+  const statusLine = document.getElementById('deployStatusLine');
+  if (!grid) return;
 
-  const slots = Object.entries(c.animations || {}).map(function(entry) {
-    const slot = entry[0], info = entry[1];
-    const label = SOUL_JAM_SLOT_LABELS[slot] || slot;
-    const cls = info.deployed ? 'deploy-slot deployed' : (info.ready ? 'deploy-slot ready' : 'deploy-slot');
-    const prefix = info.deployed ? '✓ ' : (info.ready ? '● ' : '○ ');
-    const title = info.deployed
-      ? (info.url ? 'Live on R2: ' + info.url : 'Deployed to Soul Jam')
-      : (info.ready ? 'Ready to deploy' : 'Not generated yet');
-    return '<span class="' + cls + '" title="' + title + '">' + prefix + label + '</span>';
+  const roster = TESTING.roster || [];
+  const liveChar = GM.selectedChar || TESTING.selectedChar;
+  const totalAnims = roster.reduce((sum, c) => sum + Object.keys(c.savedAnimations || {}).length, 0);
+
+  statusLine.textContent = roster.length + ' character' + (roster.length !== 1 ? 's' : '') +
+    ' · ' + totalAnims + ' animation' + (totalAnims !== 1 ? 's' : '') +
+    (liveChar ? ' · live: ' + liveChar : '');
+
+  if (roster.length === 0) {
+    grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:#50507a;padding:20px 0">No characters yet — create one in the Dashboard.</div>';
+    return;
+  }
+
+  grid.innerHTML = roster.map(c => renderDeployCharCard(c, liveChar)).join('');
+}
+
+function renderDeployCharCard(char, liveChar) {
+  const isLive = char.name === liveChar;
+  const savedAnims = char.savedAnimations || {};
+  const savedKeys = Object.keys(savedAnims);
+
+  // Build slot rows — for each of the 11 slots, show 5 zone pips
+  const slotRows = (typeof ANIMATION_SLOTS !== 'undefined' ? ANIMATION_SLOTS : []).map(slot => {
+    const zones = (typeof ANIMATION_ZONES !== 'undefined' ? ANIMATION_ZONES : []).map(zone => {
+      const zKey = slot.id + '_z' + zone.id;
+      if (savedAnims[zKey]) return '<span class="deploy-zpip filled" title="' + slot.label + ' · ' + zone.label + '">' + zone.short + '</span>';
+      // Legacy _a format check
+      const hasLegacy = savedKeys.some(k => k.startsWith(slot.id + '_a'));
+      if (hasLegacy) return '<span class="deploy-zpip legacy" title="' + slot.label + ' (legacy angle)">' + zone.short + '</span>';
+      return '<span class="deploy-zpip" title="' + slot.label + ' · ' + zone.label + ' — not yet made">' + zone.short + '</span>';
+    }).join('');
+
+    const filledZones = (typeof ANIMATION_ZONES !== 'undefined' ? ANIMATION_ZONES : []).filter(zone =>
+      !!savedAnims[slot.id + '_z' + zone.id] || savedKeys.some(k => k.startsWith(slot.id + '_a'))
+    ).length;
+
+    const lblCls = 'deploy-slot-label' + (filledZones > 0 ? ' has-any' : '');
+    const groupColor = slot.group === 'r2' ? '#aa88ff' : slot.group === 'shot' ? '#ff9944' : '';
+    const groupDot = groupColor ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + groupColor + ';margin-right:4px;vertical-align:middle"></span>' : '';
+
+    return '<div class="deploy-slot-row">' +
+      '<span class="' + lblCls + '" title="' + slot.desc + '">' + groupDot + slot.icon + ' ' + slot.label + '</span>' +
+      '<div class="deploy-zone-pips">' + zones + '</div>' +
+    '</div>';
   }).join('');
 
-  const canDeploy = c.readyCount > 0;
-  const btnLabel = c.inRegistry ? 'Re-Deploy' : 'Deploy';
-  const deployTarget = r2Available ? ' to R2' : '';
-  const deployBtn = canDeploy
-    ? '<button class="btn btn-primary btn-sm" onclick="deployCharacter(\'' + c.id + '\', this)">' + btnLabel + deployTarget + '</button>'
-    : '<button class="btn btn-secondary btn-sm" disabled title="No animations ready yet">Deploy</button>';
+  const totalSaved = savedKeys.length;
+  const portrait = char.portrait
+    ? '<img class="deploy-portrait" src="' + char.portrait + '" onerror="this.style.opacity=\'0.15\'" />'
+    : '<div class="deploy-portrait" style="display:flex;align-items:center;justify-content:center;font-size:26px">🏀</div>';
 
-  return '<div class="' + cardClass + '" id="deployCard-' + c.id + '">' +
-    '<img class="deploy-portrait" src="' + API + '/assets/' + (c.portraitPath || c.id + 'full.png') + '" onerror="this.style.opacity=\'0.15\'" />' +
+  const liveBtn = isLive
+    ? '<button class="btn btn-secondary btn-sm" disabled style="color:#44ff64;border-color:rgba(68,255,100,0.4)">✓ Live in Testing</button>'
+    : '<button class="btn btn-primary btn-sm" onclick="deployMakeLive(\'' + char.name + '\')"' + (totalSaved === 0 ? ' disabled title="No animations saved yet"' : '') + '>Make Live</button>';
+
+  const goBtn = isLive
+    ? '<button class="btn btn-secondary btn-sm" onclick="showPage(\'testing\')" style="margin-left:6px">→ Go to Testing</button>'
+    : '';
+
+  return '<div class="deploy-char-card ' + (isLive ? 'live' : '') + '" id="deployCard-' + char.name + '">' +
+    portrait +
     '<div class="deploy-char-info">' +
-      '<div class="deploy-char-name">' + (c.name || c.id) + '<span class="deploy-badge ' + badgeClass + '">' + badgeLabel + '</span></div>' +
-      '<div class="deploy-anim-slots">' + slots + '</div>' +
-      '<div class="deploy-footer"><span class="deploy-count">' + c.readyCount + '/' + c.totalSlots + ' ready · ' + c.deployedCount + ' live</span>' + deployBtn + '</div>' +
+      '<div class="deploy-char-name">' +
+        char.name +
+        (isLive ? '<span class="deploy-badge live">● Live</span>' : '') +
+      '</div>' +
+      '<div class="deploy-slots-grid">' + slotRows + '</div>' +
+      '<div class="deploy-footer">' +
+        '<span class="deploy-count">' + totalSaved + ' animation' + (totalSaved !== 1 ? 's' : '') + ' saved</span>' +
+        liveBtn + goBtn +
+      '</div>' +
     '</div>' +
   '</div>';
+}
+
+function deployMakeLive(charName) {
+  showPage('testing');
+  setTimeout(() => {
+    testingSelectChar(charName);
+    toast('✓ ' + charName + ' is live — use the controller in Testing');
+    // Re-render deploy page so Live badge updates
+    setTimeout(renderDeployPage, 300);
+  }, 150);
 }
 
 async function deployCharacter(charId, btn) {
@@ -9497,8 +9565,7 @@ async function deployCharacter(charId, btn) {
       if (btn) { btn.disabled = false; btn.textContent = 'Deploy'; }
       return;
     }
-    const dest = data.r2 ? 'R2 (live)' : 'soul-jam';
-    toast('✓ ' + charId + ' deployed — ' + data.deployed + ' animations → ' + dest);
+    toast('✓ ' + charId + ' deployed — ' + data.deployed + ' animations');
     loadDeployStatus();
   } catch (err) {
     toast('Deploy error: ' + err.message, true);
