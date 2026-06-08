@@ -299,6 +299,10 @@
   .vst-subject { min-height:180px; display:flex; align-items:center; justify-content:center; background:var(--surface3); cursor:pointer; }
   .vst-subject img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; }
   .vst-label { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:#50507a; text-align:center; padding:3px 0; background:var(--surface2); border-top:1px solid var(--border); }
+  .vst-actions { display:flex; gap:4px; padding:4px; background:var(--surface2); border-top:1px solid var(--border); }
+  .vst-actions button { flex:1; font-family:var(--mono); font-size:8px; padding:3px 0; border-radius:3px; border:1px solid var(--border); background:var(--surface3); color:#888; cursor:pointer; transition:color 0.1s,border-color 0.1s; }
+  .vst-actions button:hover { color:var(--text); border-color:#555; }
+  .vst-actions .vst-del-btn:hover { color:var(--danger); border-color:rgba(255,68,68,0.4); }
   .video-result-frame { position:relative; min-height:180px; border:1px solid var(--border); border-radius:6px; overflow:hidden; background:var(--surface3); cursor:pointer; transition:border-color 0.15s; }
   .video-result-frame:hover { border-color:var(--border-hi); }
   .video-result-frame img { width:100%; height:100%; object-fit:contain; image-rendering:pixelated; display:block; }
@@ -5706,8 +5710,12 @@ async function confirmVideoSelection() {
     // Show selected frames + subject extraction grid (cut out player+ball, remove background)
     const strip = document.getElementById('videoSelectedStrip');
     const thumbsHtml = ordered.map((file, i) => {
-      return `<div class="video-selected-thumb" data-frame-index="${i}">
+      return `<div class="video-selected-thumb" data-frame-index="${i}" data-frame-file="${file.replace(/"/g,'&quot;')}">
         <div class="vst-subject vst-pending"><span class="spinner active"></span></div>
+        <div class="vst-actions" style="display:none">
+          <button onclick="redoSubjectFrame(${i})">↻ redo</button>
+          <button class="vst-del-btn" onclick="deleteSubjectFrame(${i})">✕ delete</button>
+        </div>
         <div class="vst-label">ref ${i + 1}</div>
       </div>`;
     }).join('');
@@ -5781,8 +5789,7 @@ async function extractVideoSubjects(frameFiles) {
             <span style="font-size:9px;color:var(--danger);text-align:center">${msg}</span>
             <button style="font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:4px;
               border:1px solid #333;background:#111;color:#aaa;cursor:pointer"
-              onclick="this.closest('.vst-subject').innerHTML='<span class=\\'spinner active\\'></span>';
-                extractOne('${file.replace(/'/g,"\\'")}', ${i})">
+              onclick="redoSubjectFrame(${i})">
               retry
             </button>
           </div>`;
@@ -5793,6 +5800,8 @@ async function extractVideoSubjects(frameFiles) {
         slot.appendChild(img);
         slot.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slot, i, file); };
         slot.title = 'Double-click to edit';
+        const actBar = thumb?.querySelector('.vst-actions');
+        if (actBar) actBar.style.display = 'flex';
       }
     } catch (e) {
       if (slot) {
@@ -5801,8 +5810,7 @@ async function extractVideoSubjects(frameFiles) {
             <span style="font-size:9px;color:#666;text-align:center">network error</span>
             <button style="font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:4px;
               border:1px solid #333;background:#111;color:#aaa;cursor:pointer"
-              onclick="this.closest('.vst-subject').innerHTML='<span class=\\'spinner active\\'></span>';
-                extractOne('${file.replace(/'/g,"\\'")}', ${i})">
+              onclick="redoSubjectFrame(${i})">
               retry
             </button>
           </div>`;
@@ -5821,6 +5829,55 @@ async function extractVideoSubjects(frameFiles) {
   // Update section label once all done
   const label = document.querySelector('#videoSelectedStrip .vst-section-label');
   if (label) label.textContent = 'Sprite references ready — double-click any to edit, then save to library';
+}
+
+function redoSubjectFrame(i) {
+  const thumb = document.querySelector(`#vstSubjectGrid [data-frame-index="${i}"]`);
+  if (!thumb) return;
+  const file = thumb.dataset.frameFile;
+  if (!file || !VID.sessionId) return toast('No session — upload a video first', true);
+  const slot = thumb.querySelector('.vst-subject');
+  const actBar = thumb.querySelector('.vst-actions');
+  if (actBar) actBar.style.display = 'none';
+  if (slot) { slot.innerHTML = '<span class="spinner active"></span>'; slot.classList.add('vst-pending'); }
+
+  fetch(`${API}/api/video/extract-subject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: VID.sessionId, frameFile: file, frameIndex: i }),
+  }).then(r => r.json()).then(data => {
+    if (!slot) return;
+    if (data.error) {
+      slot.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px">
+        <span style="font-size:9px;color:var(--danger);text-align:center">${String(data.error).slice(0,100)}</span>
+        <button style="font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:4px;border:1px solid #333;background:#111;color:#aaa;cursor:pointer"
+          onclick="redoSubjectFrame(${i})">retry</button>
+      </div>`;
+    } else {
+      const img = document.createElement('img');
+      img.src = data.url + '?t=' + Date.now();
+      slot.innerHTML = '';
+      slot.appendChild(img);
+      slot.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slot, i, file); };
+      slot.title = 'Double-click to edit';
+      if (actBar) actBar.style.display = 'flex';
+    }
+    slot.classList.remove('vst-pending');
+  }).catch(e => {
+    if (slot) { slot.innerHTML = `<div style="padding:8px;font-size:9px;color:#666">error</div>`; slot.classList.remove('vst-pending'); }
+    if (actBar) actBar.style.display = 'flex';
+    toast('Redo failed: ' + e.message, true);
+  });
+}
+
+function deleteSubjectFrame(i) {
+  const thumb = document.querySelector(`#vstSubjectGrid [data-frame-index="${i}"]`);
+  if (!thumb) return;
+  const file = thumb.dataset.frameFile;
+  if (file && VID.selected) VID.selected.delete(file);
+  thumb.style.transition = 'opacity 0.15s';
+  thumb.style.opacity = '0';
+  setTimeout(() => thumb.remove(), 150);
 }
 
 function openSubjectEditor(slotEl, frameIndex, frameFile) {
