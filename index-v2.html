@@ -8144,9 +8144,20 @@ function testingRenderLoop(timestamp) {
   // Clear
   ctx.clearRect(0, 0, W, H);
 
-  // Draw court background
+  // Draw court background — cover-scale to fill canvas without stretching
   if (TESTING.courtLoaded && TESTING.courtImg) {
-    ctx.drawImage(TESTING.courtImg, 0, 0, W, H);
+    const _ci = TESTING.courtImg;
+    const _iar = _ci.naturalWidth / _ci.naturalHeight;
+    const _car = W / H;
+    let _sx, _sy, _sw, _sh;
+    if (_iar > _car) {
+      _sh = _ci.naturalHeight; _sw = _sh * _car;
+      _sx = (_ci.naturalWidth - _sw) / 2; _sy = 0;
+    } else {
+      _sw = _ci.naturalWidth; _sh = _sw / _car;
+      _sx = 0; _sy = (_ci.naturalHeight - _sh) / 2;
+    }
+    ctx.drawImage(_ci, _sx, _sy, _sw, _sh, 0, 0, W, H);
   } else {
     _drawFallbackCourt(ctx, W, H);
   }
