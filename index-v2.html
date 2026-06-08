@@ -5193,9 +5193,7 @@ async function confirmVideoSelection() {
     // Show selected frames + subject extraction grid (cut out player+ball, remove background)
     const strip = document.getElementById('videoSelectedStrip');
     const thumbsHtml = ordered.map((file, i) => {
-      const frame = VID.frames.find(f => f.file === file);
       return `<div class="video-selected-thumb" data-frame-index="${i}">
-        <div class="vst-raw"><img src="${frame.url}" /></div>
         <div class="vst-subject vst-pending"><span class="spinner active"></span></div>
         <div class="vst-label">ref ${i + 1}</div>
       </div>`;
