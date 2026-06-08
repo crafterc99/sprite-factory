@@ -8540,9 +8540,10 @@ function startGameMode(silent) {
   GM.active = true;
   GM.selectedChar = TESTING.selectedChar;
 
-  // Clear manual-selection strips — Game Mode owns TESTING.stripImg instead
+  // Clear manual-selection state — Game Mode owns TESTING.stripImg/hdFrames
   TESTING.angleStrips = {};
   TESTING.stripLoaded = false;
+  TESTING.hdFrames = null;
 
   // ── Initialise physics ──────────────────────────────────────────────────
   GM.physics = new PhysicsEngine({
@@ -8570,6 +8571,7 @@ function startGameMode(silent) {
         TESTING.selectedAnim = name;
         TESTING.currentFrame = 0;
         TESTING.lastFrameTime = 0;
+        TESTING.hdFrames = null; // strip-only rendering in game mode
         // Load zone-correct strip for the new slot
         const curZoneId = getZoneForPos(TESTING.charX, TESTING.charY)?.id ?? 1;
         const entry = GM.charAnims.find(a => a.name === name && a.zoneId === curZoneId)
