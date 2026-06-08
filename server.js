@@ -328,19 +328,44 @@ router.get('/api/testing-images/status', (req, res) => {
 
 // POST /api/debug/r2-write-test — round-trip write+read to confirm R2 uploads work
 router.post('/api/debug/r2-write-test', async (req, res) => {
-  const { uploadJson, downloadFile, isAvailable } = require('./lib/r2-storage');
-  if (!isAvailable()) return json(res, { ok: false, error: 'R2 not configured' });
-  const key = '_meta/write-test.json';
-  const payload = { ok: true, ts: Date.now() };
-  try {
-    await uploadJson(key, payload);
-    const buf = await downloadFile(key);
-    if (!buf) return json(res, { ok: false, error: 'Upload succeeded but read-back returned null' });
-    const read = JSON.parse(buf.toString('utf8'));
-    return json(res, { ok: true, wrote: payload.ts, read: read.ts, match: payload.ts === read.ts });
-  } catch (e) {
-    return json(res, { ok: false, error: e.message });
+  const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+  const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET } = process.env;
+  if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+    return json(res, { ok: false, error: 'R2 env vars missing' });
   }
+  const bucket = R2_BUCKET || 'sprite-factory';
+  const key = '_meta/write-test.json';
+  const ts = Date.now();
+  const client = new S3Client({
+    endpoint: R2_ENDPOINT,
+    region: 'auto',
+    credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
+  });
+  // Test write
+  let writeError = null;
+  try {
+    await client.send(new PutObjectCommand({
+      Bucket: bucket, Key: key,
+      Body: Buffer.from(JSON.stringify({ ok: true, ts })),
+      ContentType: 'application/json',
+    }));
+  } catch (e) {
+    writeError = e.message;
+  }
+  if (writeError) return json(res, { ok: false, stage: 'write', error: writeError, bucket, endpoint: R2_ENDPOINT.slice(0, 50) });
+
+  // Test read
+  let readError = null, readTs = null;
+  try {
+    const r = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const chunks = [];
+    for await (const chunk of r.Body) chunks.push(chunk);
+    readTs = JSON.parse(Buffer.concat(chunks).toString('utf8')).ts;
+  } catch (e) {
+    readError = e.message;
+  }
+  if (readError) return json(res, { ok: false, stage: 'read', error: readError });
+  return json(res, { ok: true, match: ts === readTs, bucket, endpoint: R2_ENDPOINT.slice(0, 50) });
 });
 
 // ─── Database Health / Debug Endpoint ───────────────────────────────────────
