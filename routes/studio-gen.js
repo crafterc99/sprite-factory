@@ -317,14 +317,18 @@ function register(router, ctx) {
         await buildStrip(processedPaths, stripPath, { pixelHeight: charPixelHeight });
         sbUpload(`${charName}-${animName}.png`, stripPath).catch(e => console.warn(`[studio-gen] strip upload failed for ${charName}-${animName}:`, e.message));
 
-        // Copy individual frames to assets dir so the result grid can load them
+        // Extract individual 180×180 frames from the strip — HD mode in testing requires square frames
         const framesOutDir = path.join(ASSETS_DIR, `${charName}-${animName}-frames`);
         fs.mkdirSync(framesOutDir, { recursive: true });
-        processedPaths.forEach((p, i) => {
+        const FRAME_SIZE = 180;
+        await Promise.all(processedPaths.map(async (_, i) => {
           const dest = path.join(framesOutDir, `frame-${i}.png`);
-          fs.copyFileSync(p, dest);
+          await sharp(stripPath)
+            .extract({ left: i * FRAME_SIZE, top: 0, width: FRAME_SIZE, height: FRAME_SIZE })
+            .png({ compressionLevel: 0, effort: 1 })
+            .toFile(dest);
           sbUpload(`${charName}-${animName}-frames/frame-${i}.png`, dest).catch(e => console.warn(`[studio-gen] frame ${i} upload failed:`, e.message));
-        });
+        }));
 
         finishJob(jobId, {
           success: true,
