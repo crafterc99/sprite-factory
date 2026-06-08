@@ -2732,12 +2732,12 @@ async function loadCharPackage(name) {
 
 // ─── STUDIO ───────────────────────────────────────────────────────────────
 const STUDIO = { selectedAnim: null, selectedAngle: null, animLib: [] };
-const ANGLE_LABELS = ['Front','FR','Right','BR','Back','BL','Left','FL'];
+const STUDIO_ANGLE_LABELS = ['Front','FR','Right','BR','Back','BL','Left','FL'];
 
 function renderStudioAngleSelector(selectedIdx) {
   const container = document.getElementById('studioAngleSelector');
   if (!container) return;
-  container.innerHTML = ANGLE_LABELS.map((label, i) => {
+  container.innerHTML = STUDIO_ANGLE_LABELS.map((label, i) => {
     const active = i === selectedIdx;
     return `<button onclick="studioSetAngle(${i})" style="font-family:var(--mono);font-size:9px;padding:4px 9px;border-radius:4px;border:1px solid ${active ? '#00ff88' : '#1e1e30'};background:${active ? 'rgba(0,255,136,0.1)' : '#0a0a14'};color:${active ? '#00ff88' : '#50507a'};cursor:pointer;transition:all 0.15s">${label}</button>`;
   }).join('');
@@ -4956,7 +4956,7 @@ function renderVideoAnglePills(containerId) {
   const parent = el.parentElement;
   if (parent) parent.style.display = VID.savedAngles.length > 0 ? 'block' : 'none';
   el.innerHTML = VID.savedAngles.map(a =>
-    `<span style="font-family:var(--mono);font-size:9px;padding:3px 9px;border-radius:4px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);color:#00ff88">${ANGLE_LABELS[a.angleIndex] || a.angleIndex} ✓</span>`
+    `<span style="font-family:var(--mono);font-size:9px;padding:3px 9px;border-radius:4px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);color:#00ff88">${STUDIO_ANGLE_LABELS[a.angleIndex] || a.angleIndex} ✓</span>`
   ).join('');
 }
 
