@@ -326,6 +326,23 @@ router.get('/api/testing-images/status', (req, res) => {
   });
 });
 
+// POST /api/debug/r2-write-test — round-trip write+read to confirm R2 uploads work
+router.post('/api/debug/r2-write-test', async (req, res) => {
+  const { uploadJson, downloadFile, isAvailable } = require('./lib/r2-storage');
+  if (!isAvailable()) return json(res, { ok: false, error: 'R2 not configured' });
+  const key = '_meta/write-test.json';
+  const payload = { ok: true, ts: Date.now() };
+  try {
+    await uploadJson(key, payload);
+    const buf = await downloadFile(key);
+    if (!buf) return json(res, { ok: false, error: 'Upload succeeded but read-back returned null' });
+    const read = JSON.parse(buf.toString('utf8'));
+    return json(res, { ok: true, wrote: payload.ts, read: read.ts, match: payload.ts === read.ts });
+  } catch (e) {
+    return json(res, { ok: false, error: e.message });
+  }
+});
+
 // ─── Database Health / Debug Endpoint ───────────────────────────────────────
 // Drives the red "DATA PERSISTENCE BROKEN" banner in index-v2.html.
 // Returns ok:true when R2 is reachable; ok:false → banner shows.
