@@ -2028,7 +2028,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   loadCosts();
-  initAdjustInteraction();
+  if (typeof initAdjustInteraction === 'function') initAdjustInteraction();
   wdUpdateSubcategories(); // init subcategory dropdown with defaults
 
   const dz = document.getElementById('cpDropZone');
