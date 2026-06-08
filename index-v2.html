@@ -8004,9 +8004,12 @@ function toggleEditMode() {
 
 function getActiveStrip() {
   const zone = getZoneForPos(TESTING.charX, TESTING.charY);
-  const entry = TESTING.angleStrips[zone.angleIdx];
-  if (entry && entry.loaded) return { img: entry.img, frameCount: entry.frameCount, zone };
-  // Fall back to default strip
+  // In Game Mode, gmLoadStrip() manages TESTING.stripImg directly — the old
+  // angleStrips table (used by manual animation selection) must not override it.
+  if (!GM.active) {
+    const entry = TESTING.angleStrips[zone.angleIdx];
+    if (entry && entry.loaded) return { img: entry.img, frameCount: entry.frameCount, zone };
+  }
   if (TESTING.stripLoaded) return { img: TESTING.stripImg, frameCount: TESTING.frameCount, zone };
   return null;
 }
@@ -8536,6 +8539,10 @@ function startGameMode(silent) {
 
   GM.active = true;
   GM.selectedChar = TESTING.selectedChar;
+
+  // Clear manual-selection strips — Game Mode owns TESTING.stripImg instead
+  TESTING.angleStrips = {};
+  TESTING.stripLoaded = false;
 
   // ── Initialise physics ──────────────────────────────────────────────────
   GM.physics = new PhysicsEngine({
