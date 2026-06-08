@@ -9415,6 +9415,97 @@ function _drawFallbackCourt(ctx, W, H) {
 // Sprite flip disabled — always draw at scale(1,1) regardless of movement direction
 function gmApplyFacingFlip(ctx, charX, drawW) { return false; }
 function gmRestoreFlip(ctx, flipped) {}
+
+// ═══════════════════════════════════════════════════════════════════════
+// DEPLOY PAGE — Soul Jam integration
+// ═══════════════════════════════════════════════════════════════════════
+
+const SOUL_JAM_SLOT_LABELS = {
+  idleDribble: 'idle-dribble', runDribble: 'run-dribble', jumpshot: 'jumpshot',
+  stepback: 'stepback', crossover: 'crossover', backpedal: 'backpedal',
+  shuffle: 'shuffle', steal: 'steal',
+};
+
+async function loadDeployStatus() {
+  const grid = document.getElementById('deployGrid');
+  const statusLine = document.getElementById('deployStatusLine');
+  if (!grid) return;
+  statusLine.textContent = 'Loading…';
+  grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:#50507a;padding:20px 0">Loading…</div>';
+
+  try {
+    const resp = await fetch(API + '/api/deploy/status');
+    const data = await resp.json();
+
+    if (!data.soulJamAvailable) {
+      statusLine.textContent = 'soul-jam directory not found at ../soul-jam';
+      grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:#c06020;padding:12px 0">soul-jam not found — clone it as a sibling directory (../soul-jam).</div>';
+      return;
+    }
+
+    const chars = Object.values(data.status || {});
+    const inGame = chars.filter(c => c.inRegistry).length;
+    statusLine.textContent = inGame + '/' + chars.length + ' characters deployed · soul-jam linked';
+
+    if (chars.length === 0) {
+      grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:#50507a;padding:12px 0">No characters found.</div>';
+      return;
+    }
+
+    grid.innerHTML = chars.map(c => renderDeployCard(c)).join('');
+  } catch (err) {
+    statusLine.textContent = 'Error: ' + err.message;
+    grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:#c06020;padding:12px 0">' + err.message + '</div>';
+  }
+}
+
+function renderDeployCard(c) {
+  const badgeClass = c.inRegistry ? 'live' : (c.deployedCount > 0 ? 'partial' : 'undeployed');
+  const badgeLabel = c.inRegistry ? 'In Soul Jam' : (c.deployedCount > 0 ? 'Partial' : 'Not Deployed');
+  const cardClass = c.inRegistry ? 'deploy-char-card live' : 'deploy-char-card';
+
+  const slots = Object.entries(c.animations || {}).map(function(entry) {
+    const slot = entry[0], info = entry[1];
+    const label = SOUL_JAM_SLOT_LABELS[slot] || slot;
+    const cls = info.deployed ? 'deploy-slot deployed' : (info.ready ? 'deploy-slot ready' : 'deploy-slot');
+    const prefix = info.deployed ? '✓ ' : (info.ready ? '● ' : '○ ');
+    const title = info.deployed ? 'Deployed to Soul Jam' : (info.ready ? 'Ready to deploy' : 'Not generated yet');
+    return '<span class="' + cls + '" title="' + title + '">' + prefix + label + '</span>';
+  }).join('');
+
+  const canDeploy = c.readyCount > 0;
+  const btnLabel = c.inRegistry ? 'Re-Deploy' : 'Deploy';
+  const deployBtn = canDeploy
+    ? '<button class="btn btn-primary btn-sm" onclick="deployCharacter(\'' + c.id + '\', this)">' + btnLabel + '</button>'
+    : '<button class="btn btn-secondary btn-sm" disabled title="No animations ready yet">Deploy</button>';
+
+  return '<div class="' + cardClass + '" id="deployCard-' + c.id + '">' +
+    '<img class="deploy-portrait" src="' + API + '/assets/' + (c.portraitPath || c.id + 'full.png') + '" onerror="this.style.opacity=\'0.15\'" />' +
+    '<div class="deploy-char-info">' +
+      '<div class="deploy-char-name">' + (c.name || c.id) + '<span class="deploy-badge ' + badgeClass + '">' + badgeLabel + '</span></div>' +
+      '<div class="deploy-anim-slots">' + slots + '</div>' +
+      '<div class="deploy-footer"><span class="deploy-count">' + c.readyCount + '/' + c.totalSlots + ' ready · ' + c.deployedCount + ' deployed</span>' + deployBtn + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+async function deployCharacter(charId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Deploying…'; }
+  try {
+    const resp = await fetch(API + '/api/deploy/' + charId, { method: 'POST' });
+    const data = await resp.json();
+    if (data.error) {
+      toast('Deploy failed: ' + data.error, true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Deploy'; }
+      return;
+    }
+    toast('✓ ' + charId + ' deployed — ' + data.deployed + ' animations copied to Soul Jam');
+    loadDeployStatus();
+  } catch (err) {
+    toast('Deploy error: ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Deploy'; }
+  }
+}
 </script>
 </body>
 </html>
