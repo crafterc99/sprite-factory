@@ -1,0 +1,5 @@
+[build]
+buildCommand = "npm ci --omit=dev"
+
+[deploy]
+startCommand = "npm start"
