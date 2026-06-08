@@ -5,6 +5,9 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const { buildGrid, GRID_LAYOUT } = require('../lib/sprite-processor/index');
+const r2 = require('../lib/r2-storage');
+
+const R2_GAME_PREFIX = 'game-assets';
 
 const FRAME_SIZE = 180;
 const SPRITE_FACTORY_ROOT = path.resolve(__dirname, '..');
@@ -328,10 +331,13 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
       };
     }
 
-    return json(res, { status, soulJamAvailable });
+    const r2RegistryUrl = r2.isAvailable()
+      ? r2.getPublicUrl(`${R2_GAME_PREFIX}/characters-registry.json`)
+      : null;
+    return json(res, { status, soulJamAvailable, r2Available: r2.isAvailable(), r2RegistryUrl });
   });
 
-  // POST /api/deploy/:char — Copy animation strips to Soul Jam + update registry
+  // POST /api/deploy/:char — Copy animation strips to Soul Jam + upload to R2 + update registry
   router.post('/api/deploy/:char', async (req, res, params) => {
     const charId = params.char.toLowerCase();
     const { CHARACTERS: promptChars } = require('../lib/sprite-generator/prompts');
@@ -340,17 +346,11 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
     const charData = { ...promptChars[charId], ...fileRegistry[charId] };
     if (!promptChars[charId] && !fileRegistry[charId]) return json(res, { error: `Character "${charId}" not found` }, 404);
 
-    if (!fs.existsSync(SOUL_JAM_IMAGES_DIR)) {
-      return json(res, {
-        error: 'soul-jam assets directory not found',
-        hint: 'Clone soul-jam as a sibling directory at ../soul-jam',
-      }, 404);
-    }
-
     const contract = loadContract();
     const deployed = [];
     const missing = [];
     const animDefs = {};
+    const useR2 = r2.isAvailable();
 
     for (const [sjSlot, slotDef] of Object.entries(SOUL_JAM_SLOTS)) {
       const sfAnim = slotDef.sfAnim;
@@ -361,21 +361,38 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
       }
 
       const destFile = `${charId}-${sfAnim}.png`;
-      fs.copyFileSync(srcPath, path.join(SOUL_JAM_IMAGES_DIR, destFile));
-      deployed.push({ slot: sjSlot, sfAnim, file: destFile });
+      const r2Key = `${R2_GAME_PREFIX}/${destFile}`;
 
       const contractAnim = contract.animations?.[sfAnim] || {};
       const frames = contractAnim.frames || 4;
-      animDefs[sjSlot] = {
+      const animEntry = {
         textureKey: `${charId}-${sfAnim}`,
         startFrame: 0,
         endFrame: frames - 1,
         fps: contractAnim.fps || slotDef.fps,
         repeat: slotDef.repeat,
       };
+
+      // Upload to R2 if configured
+      if (useR2) {
+        try {
+          await r2.uploadFile(r2Key, srcPath, 'image/png');
+          animEntry.url = r2.getPublicUrl(r2Key);
+        } catch (e) {
+          console.error(`[deploy] R2 upload failed for ${destFile}:`, e.message);
+        }
+      }
+
+      // Copy to local soul-jam dir if present (local dev convenience)
+      if (fs.existsSync(SOUL_JAM_IMAGES_DIR)) {
+        try { fs.copyFileSync(srcPath, path.join(SOUL_JAM_IMAGES_DIR, destFile)); } catch {}
+      }
+
+      animDefs[sjSlot] = animEntry;
+      deployed.push({ slot: sjSlot, sfAnim, file: destFile, r2: !!animEntry.url });
     }
 
-    // Update characters-registry.json
+    // Build and persist registry
     const reg = loadRegistry();
     reg.characters[charId] = {
       id: charId,
@@ -384,7 +401,21 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
       deployedAt: new Date().toISOString(),
       animations: animDefs,
     };
-    fs.writeFileSync(SOUL_JAM_REGISTRY_PATH, JSON.stringify(reg, null, 2));
+
+    // Upload registry to R2 so Soul Jam can fetch it anywhere
+    if (useR2) {
+      try {
+        await r2.uploadJson(`${R2_GAME_PREFIX}/characters-registry.json`, reg);
+        reg._registryUrl = r2.getPublicUrl(`${R2_GAME_PREFIX}/characters-registry.json`);
+      } catch (e) {
+        console.error('[deploy] R2 registry upload failed:', e.message);
+      }
+    }
+
+    // Also write registry locally (for local dev / soul-jam sibling dir)
+    if (fs.existsSync(SOUL_JAM_PUBLIC_DIR)) {
+      try { fs.writeFileSync(SOUL_JAM_REGISTRY_PATH, JSON.stringify(reg, null, 2)); } catch {}
+    }
 
     return json(res, {
       success: true,
@@ -393,6 +424,8 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
       missing: missing.length,
       deployedAnims: deployed,
       missingAnims: missing,
+      r2: useR2,
+      registryUrl: reg._registryUrl || null,
       registryUpdated: true,
       totalInRegistry: Object.keys(reg.characters).length,
     });
