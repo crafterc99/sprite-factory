@@ -974,7 +974,12 @@
                 <div class="card-title">Result</div>
                 <div id="studioFrameGrid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
                 <div id="studioResultMeta" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:4px;margin-bottom:12px"></div>
-                <button class="btn btn-primary btn-sm" id="studioSaveBtn" onclick="studioSaveToChar()" style="width:100%">Save Animation</button>
+                <!-- Slot assignment — replaces free-form naming -->
+                <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">
+                  Assign to slot · <span id="studioSlotAngleLabel" style="color:#00ff88"></span>
+                </div>
+                <div id="studioSlotBtns" style="display:flex;gap:8px"></div>
+                <div id="studioSlotStatus" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:10px;min-height:16px"></div>
               </div>
 
               </div><!-- /studioLibraryContent -->
@@ -2752,6 +2757,8 @@ function studioSetAngle(idx) {
     angleImg.onerror = () => { angleImg.src = `/assets/${char.name}-angle-0.png`; };
   }
   renderStudioAngleSelector(idx);
+  // Refresh slot picker angle label if result card is visible
+  if (STUDIO.lastResult) studioRenderSlotPicker();
 }
 
 function renderStudioRoster() {
@@ -2961,10 +2968,75 @@ function showStudioResult(result) {
 
   document.getElementById('studioResultMeta').textContent =
     `${result.charName} · ${result.animName} · ${result.frameCount} frames · ${result.fps}fps`;
-  const saveBtn = document.getElementById('studioSaveBtn');
-  if (saveBtn) { saveBtn.textContent = 'Save Animation'; saveBtn.disabled = false; }
+  document.getElementById('studioSlotStatus').textContent = '';
+
+  // Render slot assignment buttons
+  studioRenderSlotPicker();
   card.style.display = 'block';
   card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function studioRenderSlotPicker() {
+  const angleIdx = STUDIO.selectedAngle ?? 0;
+  const angleLabel = STUDIO_ANGLE_LABELS[angleIdx] ?? `Angle ${angleIdx}`;
+  const el = document.getElementById('studioSlotAngleLabel');
+  if (el) el.textContent = angleLabel;
+
+  const container = document.getElementById('studioSlotBtns');
+  if (!container) return;
+  container.innerHTML = ANIMATION_SLOTS.map(slot => `
+    <button onclick="studioAssignSlot('${slot.id}')"
+      style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;
+             background:#0a0a14;border:1px solid #1e1e30;border-radius:6px;cursor:pointer;
+             font-family:var(--mono);transition:border-color 0.15s"
+      onmouseover="this.style.borderColor='#00ff88'" onmouseout="this.style.borderColor='#1e1e30'">
+      <span style="font-size:20px">${slot.icon}</span>
+      <span style="font-size:8px;letter-spacing:1px;color:#c0c0e0;text-transform:uppercase">${slot.label}</span>
+      <span style="font-size:8px;color:#50507a">${angleLabel}</span>
+    </button>
+  `).join('');
+}
+
+async function studioAssignSlot(slotId) {
+  const r = STUDIO.lastResult;
+  if (!r) return;
+  const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
+  if (!slot) return;
+
+  const angleIndex = STUDIO.selectedAngle ?? 0;
+  const animId = `${slotId}_a${angleIndex}`;
+  const statusEl = document.getElementById('studioSlotStatus');
+
+  // Disable all slot buttons while saving
+  document.querySelectorAll('#studioSlotBtns button').forEach(b => b.disabled = true);
+  if (statusEl) statusEl.textContent = 'Saving…';
+
+  try {
+    const res = await fetch(`${API}/api/character/${encodeURIComponent(r.charName)}/save-animation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        animId,
+        animName: slot.label,
+        spriteUrl: r.spriteUrl,
+        fps: r.fps,
+        frameCount: r.frameCount,
+        angle: STUDIO_ANGLE_LABELS[angleIndex] ?? null,
+        angleIndex,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (statusEl) statusEl.textContent = `✓ Saved to ${slot.label} · ${STUDIO_ANGLE_LABELS[angleIndex] ?? angleIndex}`;
+    toast(`Assigned to ${slot.label} (${STUDIO_ANGLE_LABELS[angleIndex]}) for ${r.charName}`);
+    await loadRoster();
+    if (STATE.dashSelected === r.charName) selectDashChar(r.charName);
+  } catch (e) {
+    toast('Save failed: ' + e.message, true);
+    if (statusEl) statusEl.textContent = '✗ ' + e.message;
+  } finally {
+    document.querySelectorAll('#studioSlotBtns button').forEach(b => b.disabled = false);
+  }
 }
 
 function studioMakeFrameCell(charName, animName, frameIndex, totalFrames) {
@@ -6939,15 +7011,21 @@ function renderTestingCharGrid() {
 }
 
 // ── Move definitions — game controls for the left panel ─────────────────────
+// ── Canonical animation slots — the named categories every character's animation library maps to ──
+const ANIMATION_SLOTS = [
+  { id: 'idle-dribble', label: 'Idle Dribble', icon: '🏀', state: 'idle',   loop: true,  desc: 'Standing still with ball' },
+  { id: 'jog-dribble',  label: 'Jog Dribble',  icon: '🏃', state: 'moving', loop: true,  desc: 'Moving with ball' },
+  { id: 'hand-switch',  label: 'Hand Switch',   icon: '🔄', state: 'action', loop: false, desc: 'Left/right hand transition' },
+];
+
 const MOVE_DEFS = [
-  { id: 'idle',      label: 'Idle Dribble', key: 'auto',    desc: 'Standing still' },
-  { id: 'walk',      label: 'Walk',         key: 'WASD',    desc: 'Slow move' },
-  { id: 'run',       label: 'Run',          key: 'WASD+⇧',  desc: 'Sprint' },
-  { id: 'crossover', label: 'Crossover',    key: 'Q / E',   desc: 'Flick or Q/E' },
-  { id: 'stepback',  label: 'Step Back',    key: 'L',       desc: '○ button' },
-  { id: 'jumpshot',  label: 'Jump Shot',    key: 'I',       desc: '□ button' },
-  { id: 'dribble',   label: 'Dribble',      key: 'J/Spc',   desc: '✕ button' },
-  { id: 'steal',     label: 'Steal',        key: 'F+I',     desc: 'Defense+□' },
+  { id: 'idle-dribble', label: 'Idle Dribble', key: 'auto',   desc: 'Standing still', slot: true },
+  { id: 'jog-dribble',  label: 'Jog Dribble',  key: 'WASD',   desc: 'Moving with ball', slot: true },
+  { id: 'hand-switch',  label: 'Hand Switch',   key: 'J/Spc',  desc: '✕ button', slot: true },
+  { id: 'crossover',    label: 'Crossover',     key: 'Q / E',  desc: 'Flick or Q/E' },
+  { id: 'stepback',     label: 'Step Back',     key: 'L',      desc: '○ button' },
+  { id: 'jumpshot',     label: 'Jump Shot',     key: 'I',      desc: '□ button' },
+  { id: 'steal',        label: 'Steal',         key: 'F+I',    desc: 'Defense+□' },
 ];
 
 function _moveZoneInfo(animName) {
@@ -6964,35 +7042,52 @@ function renderMovesPanel(charName) {
   const char = TESTING.roster.find(c => c.name === charName);
   if (!char) { panel.innerHTML = '<div style="color:#252540;font-size:10px;padding:14px 10px;font-family:var(--mono)">No character</div>'; return; }
   const curAnim = TESTING.selectedAnim || '';
-  let html = '<div class="tv2-section-hdr">Game Controls</div>';
+  const savedAnims = char.savedAnimations || {};
+
+  let html = '<div class="tv2-section-hdr">Basic Animations</div>';
   for (const m of MOVE_DEFS) {
-    const hasSprite = !!(char.savedAnimations?.[m.id] || char.sprites?.[m.id]?.exists);
-    const isActive = curAnim === m.id || curAnim === `__saved__${m.id}`;
-    const zi = _moveZoneInfo(m.id);
-    const clickAttr = hasSprite ? `onclick="testingSelectAnim('${m.id}')"` : '';
-    html += `<div class="tv2-move-item${isActive?' active':''}${!hasSprite?' disabled':''}" ${clickAttr} style="--mclr:${zi.color}">
-      <div class="tv2-move-row">
-        <span class="tv2-zone-dot" style="background:${zi.color}"></span>
-        <span class="tv2-move-name${hasSprite?' live':''}">${m.label}</span>
-        <span class="tv2-move-key">${m.key}</span>
-      </div>
-      <div class="tv2-move-sub">${m.desc}</div>
-    </div>`;
-  }
-  const saved = char.savedAnimations ? Object.values(char.savedAnimations) : [];
-  if (saved.length) {
-    html += '<div class="tv2-section-hdr">Saved Animations</div>';
-    for (const a of saved) {
-      const isActive = curAnim === `__saved__${a.animId}`;
-      html += `<div class="tv2-move-item${isActive?' active':''}" onclick="testingSelectSavedAnim('${a.animId}','${a.spriteUrl}',${a.frameCount},${a.fps},${a.angleIndex ?? 'null'})" style="--mclr:#5050aa">
-        <div class="tv2-move-row">
-          <span class="tv2-zone-dot" style="background:#5050aa"></span>
-          <span class="tv2-move-name live">${a.animName || a.animId}</span>
-          <span class="tv2-move-key">${a.frameCount}f</span>
-        </div>
-        <div class="tv2-move-sub">${a.angle || 'custom'}</div>
-      </div>`;
+    let hasSprite, filledAngles = [], clickAttr, subText;
+
+    if (m.slot) {
+      // Slot-based: find all angle variants saved for this slot
+      filledAngles = Object.keys(savedAnims)
+        .filter(k => k.startsWith(m.id + '_a'))
+        .map(k => parseInt(k.match(/_a(\d+)$/)?.[1]))
+        .filter(n => !isNaN(n));
+      hasSprite = filledAngles.length > 0;
+      if (hasSprite) {
+        // Pick first available angle to load when clicked
+        const firstKey = `${m.id}_a${filledAngles[0]}`;
+        const sa = savedAnims[firstKey];
+        clickAttr = `onclick="testingSelectSavedAnim('${firstKey}','${sa?.spriteUrl}',${sa?.frameCount ?? 4},${sa?.fps ?? 8},${filledAngles[0]})"`;
+      } else {
+        clickAttr = '';
+      }
+      subText = hasSprite
+        ? filledAngles.map(i => (STUDIO_ANGLE_LABELS[i] ?? i)).join(', ')
+        : m.desc;
+    } else {
+      hasSprite = !!(savedAnims[m.id] || char.sprites?.[m.id]?.exists);
+      clickAttr = hasSprite ? `onclick="testingSelectAnim('${m.id}')"` : '';
+      subText = m.desc;
     }
+
+    const isActive = curAnim === m.id || curAnim === `__saved__${m.id}`
+      || (m.slot && filledAngles.some(i => curAnim === `__saved__${m.id}_a${i}`));
+    const zi = _moveZoneInfo(m.id);
+    const dotColor = m.slot ? (hasSprite ? '#5050ff' : '#252540') : zi.color;
+
+    html += `<div class="tv2-move-item${isActive?' active':''}${!hasSprite?' disabled':''}" ${clickAttr} style="--mclr:${dotColor}">
+      <div class="tv2-move-row">
+        <span class="tv2-zone-dot" style="background:${dotColor}"></span>
+        <span class="tv2-move-name${hasSprite?' live':''}">${m.label}</span>
+        <span class="tv2-move-key">${m.slot ? (hasSprite ? filledAngles.length+'/8' : '—') : m.key}</span>
+      </div>
+      <div class="tv2-move-sub">${subText}</div>
+    </div>`;
+
+    // Separator before action animations
+    if (m.id === 'hand-switch') html += '<div class="tv2-section-hdr">Actions</div>';
   }
   panel.innerHTML = html;
 }
@@ -7813,22 +7908,30 @@ function startGameMode(silent) {
   });
   GM.physics.reset(TESTING.charX, 520);
 
-  // ── Load character animations from anim-lib ─────────────────────────────
+  // ── Load character animations from savedAnimations slot entries ─────────────
   loadGMAnims().then(() => {
     // ── Initialise animation player ─────────────────────────────────────
     GM.player = new AnimationPlayer({
       availableAnims: GM.charAnims,
       physics: GM.physics,
       onAnimChange: (name) => {
-        if (TESTING.selectedAnim !== name) {
-          TESTING.selectedAnim = name;
-          TESTING.currentFrame = 0;
-          TESTING.lastFrameTime = 0;
-          // Reflect active move in left panel
-          if (TESTING.selectedChar) renderMovesPanel(TESTING.selectedChar);
-        }
+        TESTING.selectedAnim = name;
+        TESTING.currentFrame = 0;
+        TESTING.lastFrameTime = 0;
+        // Load the sprite sheet for this animation
+        const entry = GM.charAnims.find(a => a.name === name);
+        if (entry) gmLoadStrip(entry);
+        // Reflect active move in left panel
+        if (TESTING.selectedChar) renderMovesPanel(TESTING.selectedChar);
       },
     });
+
+    // Load initial strip for the first idle animation
+    const idleEntry = GM.charAnims.find(a => a.name === 'idle-dribble') ?? GM.charAnims[0];
+    if (idleEntry) {
+      TESTING.selectedAnim = idleEntry.name;
+      gmLoadStrip(idleEntry);
+    }
 
     // ── Initialise controller input ────────────────────────────────────
     GM.input = new ControllerInput();
@@ -7849,38 +7952,55 @@ function stopGameMode() {
   toast('Game Mode OFF', false);
 }
 
-// ── Load anim-lib entries for the current character ─────────────────────────
+// ── Load character's slot-based animations into GM.charAnims ─────────────────
 async function loadGMAnims() {
   try {
-    const r = await fetch(`${API}/api/anim-lib`);
-    const d = await r.json();
-    const allAnims = d.animations ?? [];
-    // Resolve strip images for each animation
+    const char = TESTING.roster.find(c => c.name === GM.selectedChar);
+    if (!char) { GM.charAnims = []; return; }
+
+    const savedAnims = char.savedAnimations || {};
     GM.charAnims = [];
-    for (const anim of allAnims) {
-      const stripUrl = `/assets/${GM.selectedChar}-${anim.name}.png`;
+
+    for (const [key, sa] of Object.entries(savedAnims)) {
+      // Key format: {slotId}_a{angleIndex}  e.g. "idle-dribble_a0"
+      const m = key.match(/^(.+)_a(\d+)$/);
+      if (!m) continue;
+      const slotId    = m[1];
+      const angleIndex = parseInt(m[2]);
+      const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
+      if (!slot) continue;
+
       GM.charAnims.push({
-        name: anim.name,
-        fps: anim.fps ?? 8,
-        loop: anim.loop ?? true,
-        frameCount: anim.frameCount ?? 1,
-        movementData: anim.movementData ?? null,
-        movementProfileId: anim.movementProfileId ?? null,
-        facingAngle: anim.facingAngle ?? null,
-        validZones: anim.validZones ?? [],
-        preferredZones: anim.preferredZones ?? [],
-        blockedZones: anim.blockedZones ?? [],
-        fallbackAnimationId: anim.fallbackAnimationId ?? null,
-        tags: anim.tags ?? [],
-        category: anim.category ?? null,
-        legacy: anim.legacy ?? false,
-        stripUrl,
+        name: slotId,
+        animKey: key,
+        angleIndex,
+        fps: sa.fps ?? 8,
+        loop: slot.loop,
+        frameCount: sa.frameCount ?? 1,
+        stripUrl: sa.spriteUrl,
+        validZones: [],
+        preferredZones: [],
+        blockedZones: [],
+        movementData: null,
       });
     }
+
     if (GM.player) GM.player.setAnimations(GM.charAnims);
   } catch (e) {
     console.warn('[GM] Failed to load anims:', e.message);
   }
+}
+
+// Load strip image for a charAnim entry into TESTING (used by game mode on anim switch)
+function gmLoadStrip(animEntry) {
+  if (!animEntry?.stripUrl) return;
+  TESTING.frameCount = animEntry.frameCount ?? 1;
+  TESTING.fps        = animEntry.fps ?? 8;
+  TESTING.loop       = animEntry.loop ?? true;
+  TESTING.stripLoaded = false;
+  TESTING.stripImg = new Image();
+  TESTING.stripImg.onload = () => { TESTING.stripLoaded = true; };
+  TESTING.stripImg.src = animEntry.stripUrl + '?t=' + Date.now();
 }
 
 // ── Game Mode tick — called inside testingRenderLoop before draw ────────────

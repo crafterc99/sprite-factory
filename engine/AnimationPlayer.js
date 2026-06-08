@@ -30,15 +30,15 @@ const ACTION_ANIMS = {
   crossover: ['crossover', 'tween-cross', 'ac-cgs'],
   stepback:  ['stepback'],
   steal:     ['steal'],
-  dribble:   ['static-dribble', 'dribble'],
+  dribble:   ['hand-switch', 'static-dribble', 'dribble'],
   defense:   ['defense-shuffle', 'defense-backpedal'],
 };
 
-// Animation candidates by movement state (Soul Jam priority order)
-const IDLE_ANIMS         = ['static-dribble', 'idle_ball', 'dribble', 'idle'];
-const WALK_ANIMS         = ['dribble', 'walk', 'static-dribble'];
-const MOVING_ANIMS       = ['dribble', 'static-dribble'];
-const SPRINT_ANIMS       = ['dribble'];  // same anim, faster fps
+// Animation candidates by movement state (slot IDs first, legacy names as fallback)
+const IDLE_ANIMS         = ['idle-dribble', 'static-dribble', 'idle_ball', 'dribble', 'idle'];
+const WALK_ANIMS         = ['jog-dribble', 'dribble', 'walk', 'static-dribble'];
+const MOVING_ANIMS       = ['jog-dribble', 'dribble', 'static-dribble'];
+const SPRINT_ANIMS       = ['jog-dribble', 'dribble'];
 const DEFENSE_IDLE_ANIMS = ['defense-shuffle', 'defense-backpedal'];
 const DEFENSE_MOVE_ANIMS = ['defense-shuffle', 'defense-backpedal'];
 
