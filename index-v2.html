@@ -742,6 +742,78 @@
   .tv2-icon-btn:hover { border-color:#4444aa; color:#a0a0d0; }
   .tv2-icon-btn.open { background:#12122a; border-color:#5050aa; color:#a0a0ff; }
 
+  /* ── Controller HUD — bottom overlay ─────────────────────────────────────── */
+  #gmCtrlHud {
+    position:absolute; bottom:0; left:0; right:0;
+    display:none; align-items:center; justify-content:center; gap:10px;
+    padding:8px 14px; pointer-events:none; z-index:12;
+    background:linear-gradient(transparent, rgba(2,2,10,0.92) 40%);
+  }
+  .ctrl-group { display:flex; align-items:center; gap:5px; }
+  .ctrl-divider { width:1px; height:36px; background:#1a1a30; }
+
+  /* Stick visualization */
+  .ctrl-stick { width:40px; height:40px; border-radius:50%; border:1px solid #1e1e38;
+    background:#07070f; position:relative; flex-shrink:0; }
+  .ctrl-stick-dot { width:10px; height:10px; border-radius:50%; background:#404070;
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    transition:background .08s; }
+  .ctrl-stick-dot.active { background:#00ff88; }
+
+  /* Trigger bars (L2/R2) */
+  .ctrl-trigger { display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .ctrl-trigger-bar { width:18px; border-radius:2px; background:#0d0d1e;
+    border:1px solid #1a1a30; overflow:hidden; height:32px; position:relative; }
+  .ctrl-trigger-fill { position:absolute; bottom:0; left:0; right:0;
+    background:#404070; border-radius:2px; transition:height .05s, background .05s; }
+  .ctrl-trigger-fill.active { background:#00ff88; }
+  .ctrl-trigger-fill.r2 { background:#ffaa00; }
+  .ctrl-trigger-lbl { font-family:var(--mono); font-size:7px; color:#252545;
+    letter-spacing:.5px; transition:color .1s; }
+  .ctrl-trigger-lbl.active { color:#00ff88; }
+  .ctrl-trigger-lbl.r2 { color:#ffaa00; }
+
+  /* Shoulder buttons */
+  .ctrl-shoulder { display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .ctrl-shoulder-btn { font-family:var(--mono); font-size:8px; padding:3px 7px;
+    border-radius:4px; border:1px solid #1a1a30; background:#07070f; color:#25254a;
+    letter-spacing:.5px; transition:all .05s; min-width:26px; text-align:center; }
+  .ctrl-shoulder-btn.active { background:#12122a; border-color:#ffcc00; color:#ffcc00; }
+  .ctrl-shoulder-lbl { font-family:var(--mono); font-size:7px; color:#252545; }
+
+  /* Face buttons */
+  .ctrl-face-wrap { display:grid; grid-template-columns:repeat(3,1fr);
+    grid-template-rows:repeat(3,1fr); gap:3px; width:82px; height:82px; }
+  .ctrl-fbtn { display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:1px; border-radius:50%; border:1px solid #1a1a30; background:#07070f;
+    width:24px; height:24px; font-family:var(--mono); font-size:9px;
+    color:#252545; transition:all .06s; }
+  .ctrl-fbtn.active { border-color:currentColor; }
+  .ctrl-fbtn-lbl { font-size:6px; color:#252545; font-family:var(--mono);
+    text-align:center; line-height:1; transition:color .06s; max-width:36px; }
+  .ctrl-fbtn-lbl.active { color:#c0c0d8; }
+  .ctrl-fbtn.sq  { color:#5588ff; grid-area:2/1; }
+  .ctrl-fbtn.sq.active  { background:rgba(85,136,255,0.12); }
+  .ctrl-fbtn.cr  { color:#55ddaa; grid-area:2/3; }
+  .ctrl-fbtn.cr.active  { background:rgba(85,221,170,0.12); }
+  .ctrl-fbtn.ci  { color:#ff6680; grid-area:3/2; }
+  .ctrl-fbtn.ci.active  { background:rgba(255,102,128,0.12); }
+  .ctrl-fbtn.tr  { color:#bbdd44; grid-area:1/2; }
+  .ctrl-fbtn.tr.active  { background:rgba(187,221,68,0.12); }
+
+  /* Mode banner */
+  .ctrl-mode-banner { font-family:var(--mono); font-size:8px; letter-spacing:1px;
+    padding:3px 8px; border-radius:4px; border:1px solid #333320;
+    background:rgba(60,40,0,0.5); color:#504020; text-transform:uppercase;
+    transition:all .1s; white-space:nowrap; }
+  .ctrl-mode-banner.r2  { border-color:#ffaa00; background:rgba(80,50,0,0.7); color:#ffaa00; }
+  .ctrl-mode-banner.def { border-color:#4488ff; background:rgba(0,20,80,0.7); color:#4488ff; }
+
+  /* Action flash */
+  .ctrl-action-flash { font-family:var(--mono); font-size:11px; letter-spacing:1px;
+    color:#00ff88; opacity:0; transition:opacity .15s; min-width:80px; text-align:center; }
+  .ctrl-action-flash.show { opacity:1; }
+
   /* Overlay panels (controls + settings) */
   .tv2-panel { position:absolute; background:rgba(6,6,18,0.97); border:1px solid #22224a; border-radius:12px; z-index:20; font-family:var(--mono); font-size:9px; color:#9090b0; backdrop-filter:blur(12px); box-shadow:0 8px 40px rgba(0,0,0,0.6); }
   .tv2-panel-hdr { padding:12px 16px 8px; font-size:8px; letter-spacing:2px; color:#50508a; text-transform:uppercase; border-bottom:1px solid #1a1a30; }
@@ -1364,6 +1436,84 @@
             <span id="gmHudVy"     style="display:none"></span>
             <span id="gmHudPos"    style="display:none"></span>
 
+            <!-- Controller live input HUD — bottom overlay -->
+            <div id="gmCtrlHud">
+              <!-- Left stick -->
+              <div class="ctrl-group">
+                <div class="ctrl-stick" id="ctrlStickWrap">
+                  <div class="ctrl-stick-dot" id="ctrlStickDot"></div>
+                </div>
+              </div>
+
+              <div class="ctrl-divider"></div>
+
+              <!-- L1 / L2 -->
+              <div class="ctrl-group" style="gap:6px">
+                <div class="ctrl-shoulder">
+                  <div class="ctrl-shoulder-btn" id="ctrlL1">L1</div>
+                  <div class="ctrl-shoulder-lbl">sprint</div>
+                </div>
+                <div class="ctrl-trigger">
+                  <div class="ctrl-trigger-bar">
+                    <div class="ctrl-trigger-fill" id="ctrlL2Fill" style="height:0%"></div>
+                  </div>
+                  <div class="ctrl-trigger-lbl" id="ctrlL2Lbl">L2</div>
+                </div>
+              </div>
+
+              <div class="ctrl-divider"></div>
+
+              <!-- Mode + action flash (center) -->
+              <div class="ctrl-group" style="flex-direction:column;gap:4px;min-width:90px">
+                <div class="ctrl-mode-banner" id="ctrlModeBanner">free move</div>
+                <div class="ctrl-action-flash" id="ctrlActionFlash"></div>
+              </div>
+
+              <div class="ctrl-divider"></div>
+
+              <!-- R2 / R1 -->
+              <div class="ctrl-group" style="gap:6px">
+                <div class="ctrl-trigger">
+                  <div class="ctrl-trigger-bar">
+                    <div class="ctrl-trigger-fill r2" id="ctrlR2Fill" style="height:0%"></div>
+                  </div>
+                  <div class="ctrl-trigger-lbl r2" id="ctrlR2Lbl">R2</div>
+                </div>
+                <div class="ctrl-shoulder">
+                  <div class="ctrl-shoulder-btn" id="ctrlR1">R1</div>
+                  <div class="ctrl-shoulder-lbl">sprint</div>
+                </div>
+              </div>
+
+              <div class="ctrl-divider"></div>
+
+              <!-- Face buttons (PS4 layout: △ top, □ left, ○ right, ✕ bottom) -->
+              <div class="ctrl-group" style="flex-direction:column;align-items:center;gap:2px">
+                <!-- Triangle -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+                  <div class="ctrl-fbtn tr" id="ctrlTriangle">△</div>
+                  <div class="ctrl-fbtn-lbl" id="ctrlTriangleLbl">tween</div>
+                </div>
+                <div style="display:flex;gap:18px;align-items:center">
+                  <!-- Square left -->
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+                    <div class="ctrl-fbtn sq" id="ctrlSquare">□</div>
+                    <div class="ctrl-fbtn-lbl" id="ctrlSquareLbl">shot</div>
+                  </div>
+                  <!-- Circle right -->
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+                    <div class="ctrl-fbtn ci" id="ctrlCircle">○</div>
+                    <div class="ctrl-fbtn-lbl" id="ctrlCircleLbl">stepback</div>
+                  </div>
+                </div>
+                <!-- Cross bottom -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+                  <div class="ctrl-fbtn cr" id="ctrlCross">✕</div>
+                  <div class="ctrl-fbtn-lbl" id="ctrlCrossLbl">dribble</div>
+                </div>
+              </div>
+            </div>
+
             <!-- Controls overlay panel -->
             <div class="tv2-panel" id="tv2CtrlPanel" style="display:none">
               <div class="tv2-panel-hdr">Controls</div>
@@ -1372,24 +1522,29 @@
                   <div class="tv2-ctrl-col">
                     <div class="tv2-ctrl-head">Controller</div>
                     <div class="tv2-ctrl-row"><kbd>L-Stick</kbd> Move</div>
-                    <div class="tv2-ctrl-row"><kbd>flick</kbd> Crossover</div>
                     <div class="tv2-ctrl-row"><kbd>L1/R1</kbd> Sprint</div>
-                    <div class="tv2-ctrl-row"><kbd>L2</kbd> Defense</div>
-                    <div class="tv2-ctrl-row"><kbd>□</kbd> Jumpshot</div>
+                    <div class="tv2-ctrl-row"><kbd>L2</kbd> Defense mode</div>
+                    <div class="tv2-ctrl-row"><kbd>R2</kbd> Dribble moves</div>
+                    <div class="tv2-ctrl-row"><kbd>□</kbd> Jump shot</div>
                     <div class="tv2-ctrl-row"><kbd>L2+□</kbd> Steal</div>
-                    <div class="tv2-ctrl-row"><kbd>✕</kbd> Dribble</div>
-                    <div class="tv2-ctrl-row"><kbd>○</kbd> Stepback</div>
+                    <div class="tv2-ctrl-row"><kbd>R2+✕</kbd> Crossover</div>
+                    <div class="tv2-ctrl-row"><kbd>R2+△</kbd> Between legs</div>
+                    <div class="tv2-ctrl-row"><kbd>R2+○</kbd> Step back</div>
+                    <div class="tv2-ctrl-row"><kbd>stick flick</kbd> Crossover</div>
                   </div>
                   <div class="tv2-ctrl-col">
                     <div class="tv2-ctrl-head">Keyboard</div>
                     <div class="tv2-ctrl-row"><kbd>WASD</kbd> Move</div>
-                    <div class="tv2-ctrl-row"><kbd>Q/E</kbd> Crossover</div>
                     <div class="tv2-ctrl-row"><kbd>⇧</kbd> Sprint</div>
                     <div class="tv2-ctrl-row"><kbd>F</kbd> Defense</div>
-                    <div class="tv2-ctrl-row"><kbd>I</kbd> Jumpshot</div>
+                    <div class="tv2-ctrl-row"><kbd>R</kbd> Dribble mode</div>
+                    <div class="tv2-ctrl-row"><kbd>I</kbd> Jump shot</div>
                     <div class="tv2-ctrl-row"><kbd>F+I</kbd> Steal</div>
-                    <div class="tv2-ctrl-row"><kbd>J/Spc</kbd> Dribble</div>
-                    <div class="tv2-ctrl-row"><kbd>L</kbd> Stepback</div>
+                    <div class="tv2-ctrl-row"><kbd>R+J</kbd> Crossover</div>
+                    <div class="tv2-ctrl-row"><kbd>R+T</kbd> Between legs</div>
+                    <div class="tv2-ctrl-row"><kbd>R+B</kbd> Behind back</div>
+                    <div class="tv2-ctrl-row"><kbd>R+L</kbd> Step back</div>
+                    <div class="tv2-ctrl-row"><kbd>Q/E</kbd> Crossover flick</div>
                   </div>
                 </div>
               </div>
@@ -2730,6 +2885,115 @@ function tv2UpdateHud(state, animName, padConnected, defenseMode, sprint) {
   if (pad) {
     pad.textContent = padConnected ? '🎮 connected' : 'no gamepad';
     pad.className   = 'tv2-pad-pill' + (padConnected ? ' connected' : '');
+  }
+}
+
+// ── Controller live HUD — shows button states + triggered animations ──────────
+let _ctrlFlashTimer = null;
+function gmUpdateCtrlHud(input, inDefense, inDribble, lastTriggeredAction) {
+  const hud = document.getElementById('gmCtrlHud');
+  if (!hud) return;
+
+  // Show/hide HUD with game mode
+  hud.style.display = GM.active ? 'flex' : 'none';
+  if (!GM.active) return;
+
+  // ── Stick position ──────────────────────────────────────────────────────
+  const dot = document.getElementById('ctrlStickDot');
+  if (dot) {
+    const lx = input.stickLX ?? 0, ly = input.stickLY ?? 0;
+    const moving = Math.abs(lx) > 0.1 || Math.abs(ly) > 0.1;
+    // Map -1..1 to 5..35 within 40px circle
+    const cx = 20 + lx * 13;
+    const cy = 20 + ly * 13;
+    dot.style.left = (cx - 5) + 'px';
+    dot.style.top  = (cy - 5) + 'px';
+    dot.classList.toggle('active', moving);
+  }
+
+  // ── L2 trigger ─────────────────────────────────────────────────────────
+  const l2Fill = document.getElementById('ctrlL2Fill');
+  const l2Lbl  = document.getElementById('ctrlL2Lbl');
+  if (l2Fill) {
+    const pct = Math.round((input.l2Value ?? 0) * 100);
+    l2Fill.style.height = pct + '%';
+    l2Fill.classList.toggle('active', inDefense);
+  }
+  if (l2Lbl) l2Lbl.classList.toggle('active', inDefense);
+
+  // ── R2 trigger ─────────────────────────────────────────────────────────
+  const r2Fill = document.getElementById('ctrlR2Fill');
+  const r2Lbl  = document.getElementById('ctrlR2Lbl');
+  if (r2Fill) {
+    const pct = Math.round((input.r2Value ?? 0) * 100);
+    r2Fill.style.height = pct + '%';
+  }
+  if (r2Lbl) r2Lbl.classList.toggle('r2', inDribble);
+
+  // ── Shoulder buttons ────────────────────────────────────────────────────
+  const l1 = document.getElementById('ctrlL1');
+  const r1 = document.getElementById('ctrlR1');
+  if (l1) l1.classList.toggle('active', input.sprint ?? false);
+  if (r1) r1.classList.toggle('active', input.sprint ?? false);
+
+  // ── Mode banner ─────────────────────────────────────────────────────────
+  const banner = document.getElementById('ctrlModeBanner');
+  if (banner) {
+    if (inDefense) {
+      banner.textContent = 'defense (L2)';
+      banner.className = 'ctrl-mode-banner def';
+    } else if (inDribble) {
+      banner.textContent = 'dribble moves (R2)';
+      banner.className = 'ctrl-mode-banner r2';
+    } else {
+      banner.textContent = 'free movement';
+      banner.className = 'ctrl-mode-banner';
+    }
+  }
+
+  // ── Face buttons — label changes based on R2 mode ──────────────────────
+  const sq  = document.getElementById('ctrlSquare');
+  const cr  = document.getElementById('ctrlCross');
+  const ci  = document.getElementById('ctrlCircle');
+  const tr  = document.getElementById('ctrlTriangle');
+  const sqL = document.getElementById('ctrlSquareLbl');
+  const crL = document.getElementById('ctrlCrossLbl');
+  const ciL = document.getElementById('ctrlCircleLbl');
+  const trL = document.getElementById('ctrlTriangleLbl');
+
+  if (sq) sq.classList.toggle('active', input.btnSquare ?? false);
+  if (cr) cr.classList.toggle('active', input.btnCross ?? false);
+  if (ci) ci.classList.toggle('active', input.btnCircle ?? false);
+  if (tr) tr.classList.toggle('active', input.btnTriangle ?? false);
+
+  if (sqL) {
+    sqL.textContent = inDefense ? 'steal' : 'jump shot';
+    sqL.classList.toggle('active', input.btnSquare ?? false);
+  }
+  if (crL) {
+    crL.textContent = inDribble ? 'crossover' : 'dribble';
+    crL.classList.toggle('active', input.btnCross ?? false);
+  }
+  if (ciL) {
+    ciL.textContent = 'stepback';
+    ciL.classList.toggle('active', input.btnCircle ?? false);
+  }
+  if (trL) {
+    trL.textContent = inDribble ? 'between legs' : '—';
+    trL.classList.toggle('active', input.btnTriangle ?? false);
+  }
+
+  // ── Action flash ────────────────────────────────────────────────────────
+  if (lastTriggeredAction) {
+    const flash = document.getElementById('ctrlActionFlash');
+    if (flash) {
+      flash.textContent = lastTriggeredAction.toUpperCase();
+      flash.classList.add('show');
+      if (_ctrlFlashTimer) clearTimeout(_ctrlFlashTimer);
+      _ctrlFlashTimer = setTimeout(() => {
+        flash.classList.remove('show');
+      }, 600);
+    }
   }
 }
 
@@ -8083,7 +8347,8 @@ function stopGameMode() {
   GM.physics = null;
   GM.player  = null;
   GM.charAnims = [];
-
+  const hud = document.getElementById('gmCtrlHud');
+  if (hud) hud.style.display = 'none';
   toast('Game Mode OFF', false);
 }
 
@@ -8159,6 +8424,8 @@ function gmTick(timestamp) {
   const inDefense  = input.defenseMode || (GM._screenDefenseActive ?? false);
   const inDribble  = input.dribbleMode; // R2 held
 
+  let _triggeredAction = null; // tracks what action fired this tick (for HUD flash)
+
   // ── Action button handling ────────────────────────────────────────────────
   if (GM.player.state !== 'ACTION') {
 
@@ -8175,50 +8442,52 @@ function gmTick(timestamp) {
       if (inDefense) {
         GM.player.triggerAction('steal', null);
         const e = _gmFindSlot('steal'); if (e) gmLoadStrip(e);
+        _triggeredAction = 'steal';
       } else {
         GM.player.triggerAction('jumpshot', null);
         const e = _gmFindSlot('jumpshot'); if (e) gmLoadStrip(e);
+        _triggeredAction = 'jump shot';
       }
     }
 
     // R2 HELD — Dribble moves
     else if (inDribble && !inDefense) {
       if (input.justCross) {
-        // Cross / J / Space → Crossover dribble move
         GM.player.triggerAction('cross', null);
         const e = _gmFindSlot('cross'); if (e) gmLoadStrip(e);
+        _triggeredAction = 'crossover';
       } else if (input.justTriangle) {
-        // Triangle / T → Between legs
         GM.player.triggerAction('tween', null);
         const e = _gmFindSlot('tween'); if (e) gmLoadStrip(e);
+        _triggeredAction = 'between legs';
       } else if (input.justBehind) {
-        // B key → Behind back
         GM.player.triggerAction('behind', null);
         const e = _gmFindSlot('behind'); if (e) gmLoadStrip(e);
+        _triggeredAction = 'behind back';
       } else if (input.justCircle) {
-        // Circle / L → Stepback
         GM.player.triggerAction('stepback', null);
         const e = _gmFindSlot('stepback'); if (e) gmLoadStrip(e);
+        _triggeredAction = 'step back';
       }
     }
 
     // R2 NOT HELD — standard actions
     else {
-      // CROSS — Dribble action (hand switch / static-dribble)
       if (input.justCross) {
         GM.player.triggerAction('dribble', null);
+        _triggeredAction = 'dribble';
       }
-      // CIRCLE — Stepback
       else if (input.justCircle) {
         GM.player.triggerAction('stepback', null);
         const e = _gmFindSlot('stepback'); if (e) gmLoadStrip(e);
+        _triggeredAction = 'step back';
       }
-      // LEFT STICK FLICK — Crossover
       else if (input.justCrossoverLeft || input.justCrossoverRight) {
         if (input.justCrossoverLeft)  GM.physics.facingRight = false;
         if (input.justCrossoverRight) GM.physics.facingRight = true;
         GM.player.triggerAction('cross', null);
         const e = _gmFindSlot('cross'); if (e) gmLoadStrip(e);
+        _triggeredAction = 'crossover';
       }
     }
   }
@@ -8270,6 +8539,7 @@ function gmTick(timestamp) {
   // ── HUD update ─────────────────────────────────────────────────────────────
   const tier = phys.speedTier ?? 'idle';
   tv2UpdateHud(tier.toUpperCase(), animState.animName, input.gamepadConnected, inDefense, animState.sprint);
+  gmUpdateCtrlHud(input, inDefense, inDribble, _triggeredAction);
 
   // Defensive stance visual tint (subtle blue on canvas when L2 held)
   GM._defenseMode = inDefense;
