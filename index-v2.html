@@ -5190,16 +5190,22 @@ async function confirmVideoSelection() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Selection failed');
 
-    // Show selected frames
+    // Show selected frames + subject extraction grid (cut out player+ball, remove background)
     const strip = document.getElementById('videoSelectedStrip');
-    const originalsHtml = ordered.map((file, i) => {
+    const thumbsHtml = ordered.map((file, i) => {
       const frame = VID.frames.find(f => f.file === file);
-      return `<div class="video-selected-thumb">
+      return `<div class="video-selected-thumb" data-frame-index="${i}">
         <div class="vst-raw"><img src="${frame.url}" /></div>
-        <div class="vst-label">frame ${i + 1}</div>
+        <div class="vst-subject vst-pending"><span class="spinner active"></span></div>
+        <div class="vst-label">ref ${i + 1}</div>
       </div>`;
     }).join('');
-    strip.innerHTML = `<div class="video-selected-strip">${originalsHtml}</div>`;
+    strip.innerHTML =
+      `<div class="vst-section-label" style="margin-bottom:8px">Cutting out player + basketball &amp; removing background…</div>` +
+      `<div id="vstSubjectGrid" class="video-selected-strip">${thumbsHtml}</div>`;
+
+    // Kick off subject extraction — updates each slot progressively as AI finishes
+    extractVideoSubjects(ordered);
 
     // Pre-fill animation name (from locked multi-angle name, or leave blank)
     if (VID.lockedAnimName) {
@@ -5255,6 +5261,10 @@ async function extractVideoSubjects(frameFiles) {
     const batch = frameFiles.slice(start, start + CONCURRENCY);
     await Promise.all(batch.map((file, offset) => extractOne(file, start + offset)));
   }
+
+  // Update section label once all done
+  const label = document.querySelector('#videoSelectedStrip .vst-section-label');
+  if (label) label.textContent = 'Sprite references ready — double-click any to edit, then save to library';
 }
 
 function openSubjectEditor(slotEl, frameIndex, frameFile) {

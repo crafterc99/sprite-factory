@@ -192,18 +192,40 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     }
   });
 
-  // POST /api/video/strip — Build reference strip from selected frames
+  // POST /api/video/strip — Build reference strip from selected frames.
+  // Prefers subject-extracted frames (cut out + bg removed) if they exist;
+  // falls back to raw selected frames.
   router.post('/api/video/strip', async (req, res) => {
     const body = await parseBody(req);
     const { sessionId } = body;
-    const selectDir = path.join(TMP_DIR, sessionId, 'selected');
+    const selectDir   = path.join(TMP_DIR, sessionId, 'selected');
+    const subjectsDir = path.join(TMP_DIR, sessionId, 'subjects');
     if (!fs.existsSync(selectDir)) return json(res, { error: 'No selected frames' }, 404);
 
     try {
-      const frames = fs.readdirSync(selectDir).filter(f => f.endsWith('.png')).sort().map(f => path.join(selectDir, f));
+      // Use processed subject frames when available (player+ball cutouts, bg removed)
+      let frames;
+      const subjectFiles = fs.existsSync(subjectsDir)
+        ? fs.readdirSync(subjectsDir).filter(f => /^subject-\d+\.png$/.test(f)).sort((a, b) => {
+            const ai = parseInt(a.match(/\d+/)[0]);
+            const bi = parseInt(b.match(/\d+/)[0]);
+            return ai - bi;
+          }).map(f => path.join(subjectsDir, f))
+        : [];
+
+      if (subjectFiles.length > 0) {
+        frames = subjectFiles;
+      } else {
+        frames = fs.readdirSync(selectDir).filter(f => f.endsWith('.png')).sort().map(f => path.join(selectDir, f));
+      }
+
       const stripPath = path.join(TMP_DIR, sessionId, 'ref-strip.png');
       await buildRefStrip(frames, stripPath);
-      return json(res, { stripUrl: `/api/video/strip-image/${sessionId}`, frameCount: frames.length });
+      return json(res, {
+        stripUrl: `/api/video/strip-image/${sessionId}`,
+        frameCount: frames.length,
+        source: subjectFiles.length > 0 ? 'subjects' : 'selected',
+      });
     } catch (err) {
       return json(res, { error: err.message }, 500);
     }
