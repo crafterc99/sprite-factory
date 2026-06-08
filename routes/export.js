@@ -305,18 +305,24 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
       let readyCount = 0;
       let deployedCount = 0;
 
+      const regChar = reg.characters?.[charId];
       for (const [sjSlot, slotDef] of Object.entries(SOUL_JAM_SLOTS)) {
         const sfAnim = slotDef.sfAnim;
         const stripPath = path.join(ASSETS_DIR_LOCAL, `${charId}-${sfAnim}.png`);
         const ready = fs.existsSync(stripPath);
         if (ready) readyCount++;
 
-        const deployedPath = path.join(SOUL_JAM_IMAGES_DIR, `${charId}-${sfAnim}.png`);
-        const deployed = soulJamAvailable && fs.existsSync(deployedPath);
+        // "deployed" = slot exists in registry (covers both R2 and local copy)
+        const regAnim = regChar?.animations?.[sjSlot];
+        const deployed = !!regAnim;
         if (deployed) deployedCount++;
 
         const contractAnim = contract.animations?.[sfAnim] || {};
-        animations[sjSlot] = { sfAnim, ready, deployed, frames: contractAnim.frames || null };
+        animations[sjSlot] = {
+          sfAnim, ready, deployed,
+          url: regAnim?.url || null,
+          frames: contractAnim.frames || null,
+        };
       }
 
       status[charId] = {
@@ -326,7 +332,7 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
         readyCount,
         deployedCount,
         totalSlots: Object.keys(SOUL_JAM_SLOTS).length,
-        inRegistry: !!(reg.characters && reg.characters[charId]),
+        inRegistry: !!regChar,
         animations,
       };
     }
