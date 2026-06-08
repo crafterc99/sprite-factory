@@ -376,9 +376,10 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
         });
       }
 
-      // Assemble strip from individual frames
+      // Assemble strip from individual frames — save at native 1K height so no
+      // quality is lost; the game scales sprites at draw time anyway.
       const stripPath = path.join(ASSETS_DIR, `${character}-${safeName}.png`);
-      await buildRefStrip(generatedFramePaths, stripPath, { targetHeight: 180 });
+      await buildRefStrip(generatedFramePaths, stripPath, { targetHeight: 1024 });
 
       sendSSE('complete', {
         success: true,
@@ -480,7 +481,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
         .map(f => path.join(framesOutputDir, f));
 
       const stripPath = path.join(ASSETS_DIR, `${character}-${safeName}.png`);
-      await buildRefStrip(allFramePaths, stripPath, { targetHeight: 180 });
+      await buildRefStrip(allFramePaths, stripPath, { targetHeight: 1024 });
 
       return json(res, {
         success: true,
@@ -507,7 +508,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     fs.mkdirSync(subjectsDir, { recursive: true });
 
     // Green background so removeBackground (chroma-key) works reliably
-    let prompt = 'Extract the basketball player from this image. Place them centered on a PURE GREEN (#00FF00) background — no court, no arena, no floor, no shadows. Scale the player up so they fill at least 70% of the image height — if they are far from the camera, zoom in so the player is large and centered. Keep their exact pose, body proportions, and the basketball if visible. Solid pure green everywhere the player is not.';
+    let prompt = 'Extract the basketball player from this image. Place them centered on a PURE GREEN (#00FF00) background — no court, no arena, no floor, no shadows. Scale the player up so they fill approximately 60% of the image height — if they are far from the camera, zoom in so the player is large and centered. Keep their exact pose, body proportions, and the basketball if visible. Solid pure green everywhere the player is not.';
     if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
 
     const RETRY_DELAYS = [3000, 8000, 15000];
@@ -582,7 +583,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     const subjectsDir = path.join(TMP_DIR, sessionId, 'subjects');
     fs.mkdirSync(subjectsDir, { recursive: true });
 
-    let prompt = 'Extract the basketball player from this image. Place them centered on a PURE GREEN (#00FF00) background — no court, no arena, no floor, no shadows. Scale the player up so they fill at least 70% of the image height — if they are far from the camera, zoom in so the player is large and centered. Keep their exact pose, body proportions, and the basketball if visible. Solid pure green everywhere the player is not.';
+    let prompt = 'Extract the basketball player from this image. Place them centered on a PURE GREEN (#00FF00) background — no court, no arena, no floor, no shadows. Scale the player up so they fill approximately 60% of the image height — if they are far from the camera, zoom in so the player is large and centered. Keep their exact pose, body proportions, and the basketball if visible. Solid pure green everywhere the player is not.';
     if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';
     const { removeBackground: removeBg } = require('../lib/sprite-processor/index');
     const client = new NanaBananaClient({ model: 'gemini-3-pro-image-preview' });
