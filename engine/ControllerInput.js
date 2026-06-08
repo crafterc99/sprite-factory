@@ -5,10 +5,11 @@
  *   Left stick            → movement (walk/run)
  *   Left stick flick L/R  → crossover in that direction (velocity threshold)
  *   Square  (btn 2)       → Jumpshot (offense) / Steal (when L2 held = defense)
- *   Cross   (btn 0)       → Dribble action
+ *   Cross   (btn 0)       → Dribble action / Crossover (when R2 held)
  *   Circle  (btn 1)       → Stepback
- *   Triangle(btn 3)       → (reserved / combo)
+ *   Triangle(btn 3)       → Between Legs / Tween (when R2 held)
  *   L2      (btn 6)       → Defense mode — hold for defensive sliding
+ *   R2      (btn 7)       → Dribble moves mode — hold to enable cross/tween/behind/stepback
  *   L1      (btn 4)       → Sprint
  *   R1      (btn 5)       → Sprint
  *   D-pad                 → movement fallback
@@ -17,8 +18,11 @@
  *   WASD / Arrows    → movement
  *   Q / E            → crossover left / right (flick)
  *   I / Shift        → Jumpshot / Steal (when F held)
- *   J / Space        → Dribble
+ *   J / Space        → Dribble / Crossover (when R held)
+ *   T                → Between Legs / Tween (when R held)
+ *   B                → Behind Back (when R held)
  *   L                → Stepback
+ *   R (hold)         → Dribble moves mode (R2)
  *   F (hold)         → Defense mode
  *   Z                → Defensive slide (while F held)
  */
@@ -51,11 +55,14 @@ class ControllerInput {
 
       // Buttons (current frame state)
       btnSquare:   false,   // Jumpshot (offense) or Steal (defense)
-      btnCross:    false,   // Dribble
+      btnCross:    false,   // Dribble / Crossover (when R2)
       btnCircle:   false,   // Stepback
-      btnTriangle: false,   // Reserved
+      btnTriangle: false,   // Between Legs / Tween (when R2)
+      btnBehind:   false,   // Behind Back (keyboard B, no dedicated gamepad btn)
       l2:          false,   // Defense mode (hold)
       l2Value:     0,       // Analog value 0–1
+      r2:          false,   // Dribble moves mode (hold)
+      r2Value:     0,       // Analog value 0–1
       sprint:      false,
 
       // Crossover flick (detected from stick velocity)
@@ -67,12 +74,15 @@ class ControllerInput {
       justCross:    false,
       justCircle:   false,
       justTriangle: false,
+      justBehind:   false,
       justL2:       false,
+      justR2:       false,
       justCrossoverLeft:  false,
       justCrossoverRight: false,
 
       // Meta
       defenseMode:      false,  // true while L2/F is held
+      dribbleMode:      false,  // true while R2/R is held
       gamepadConnected: false,
     };
   }
@@ -119,10 +129,14 @@ class ControllerInput {
 
     // ── Keyboard action buttons ──────────────────────────────────────────
     s.btnSquare   = k.has('KeyI');                                               // Jumpshot / Steal (I key)
-    s.btnCross    = k.has('KeyJ') || k.has('Space');                             // Dribble
+    s.btnCross    = k.has('KeyJ') || k.has('Space');                             // Dribble / Crossover (R2 mode)
     s.btnCircle   = k.has('KeyL');                                               // Stepback
+    s.btnTriangle = k.has('KeyT');                                               // Between Legs / Tween (R2 mode)
+    s.btnBehind   = k.has('KeyB');                                               // Behind Back (R2 mode)
     s.l2          = k.has('KeyF');                                               // Defense mode (hold)
     s.l2Value     = s.l2 ? 1 : 0;
+    s.r2          = k.has('KeyR');                                               // Dribble moves mode (hold)
+    s.r2Value     = s.r2 ? 1 : 0;
     s.sprint      = k.has('ShiftLeft') || k.has('ShiftRight');                   // Sprint (hold)
 
     // Keyboard crossover flick: Q = left, E = right
@@ -165,6 +179,16 @@ class ControllerInput {
         s.l2 = l2Raw > 0.3; // threshold for "held"
       }
 
+      // R2 analog trigger (button 7) — dribble moves mode
+      const r2Raw = gp.buttons[7]?.value ?? (gp.buttons[7]?.pressed ? 1 : 0);
+      if (r2Raw > s.r2Value) {
+        s.r2Value = r2Raw;
+        s.r2 = r2Raw > 0.3;
+      }
+
+      // Triangle (btn 3) → tween / between-legs (when R2 held)
+      s.btnTriangle = s.btnTriangle || !!gp.buttons[3]?.pressed;
+
       // ── Left-stick crossover flick detection ────────────────────────────
       // A flick is: axis crosses FLICK_THRESHOLD quickly (within FLICK_WINDOW ms)
       const absLX = Math.abs(lx);
@@ -191,13 +215,17 @@ class ControllerInput {
 
     // Defense mode = L2 held (or F key)
     s.defenseMode = s.l2;
+    // Dribble moves mode = R2 held (or R key)
+    s.dribbleMode = s.r2;
 
     // ── Rising edge detection ────────────────────────────────────────────
     s.justSquare         = s.btnSquare   && !prev.btnSquare;
     s.justCross          = s.btnCross    && !prev.btnCross;
     s.justCircle         = s.btnCircle   && !prev.btnCircle;
     s.justTriangle       = s.btnTriangle && !prev.btnTriangle;
+    s.justBehind         = s.btnBehind   && !prev.btnBehind;
     s.justL2             = s.l2          && !prev.l2;
+    s.justR2             = s.r2          && !prev.r2;
     s.justCrossoverLeft  = s.crossoverLeft  && !prev.crossoverLeft;
     s.justCrossoverRight = s.crossoverRight && !prev.crossoverRight;
 

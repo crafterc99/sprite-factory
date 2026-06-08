@@ -28,6 +28,9 @@ const PLAYER_STATES = {
 const ACTION_ANIMS = {
   jumpshot:  ['jumpshot', 'ac-jumpshot', 'tween-tween'],
   crossover: ['crossover', 'tween-cross', 'ac-cgs'],
+  cross:     ['cross', 'crossover', 'tween-cross'],
+  tween:     ['tween', 'hand-switch', 'static-dribble'],
+  behind:    ['behind', 'hand-switch', 'static-dribble'],
   stepback:  ['stepback'],
   steal:     ['steal'],
   dribble:   ['hand-switch', 'static-dribble', 'dribble'],
@@ -35,12 +38,15 @@ const ACTION_ANIMS = {
 };
 
 // Animation candidates by movement state (slot IDs first, legacy names as fallback)
-const IDLE_ANIMS         = ['idle-dribble', 'static-dribble', 'idle_ball', 'dribble', 'idle'];
-const WALK_ANIMS         = ['jog-dribble', 'dribble', 'walk', 'static-dribble'];
-const MOVING_ANIMS       = ['jog-dribble', 'dribble', 'static-dribble'];
-const SPRINT_ANIMS       = ['jog-dribble', 'dribble'];
-const DEFENSE_IDLE_ANIMS = ['defense-shuffle', 'defense-backpedal'];
-const DEFENSE_MOVE_ANIMS = ['defense-shuffle', 'defense-backpedal'];
+const IDLE_ANIMS            = ['idle-dribble', 'static-dribble', 'idle_ball', 'dribble', 'idle'];
+const JOG_ANIMS             = ['jog-dribble', 'dribble', 'static-dribble'];
+const SPRINT_ANIMS          = ['sprint-dribble', 'jog-dribble', 'dribble'];
+const BACKPEDAL_ANIMS       = ['backpedal-dribble', 'jog-dribble', 'dribble', 'static-dribble'];
+const SIDE_L_ANIMS          = ['side-dribble-l', 'jog-dribble', 'dribble'];
+const SIDE_R_ANIMS          = ['side-dribble-r', 'jog-dribble', 'dribble'];
+const WALK_ANIMS            = ['jog-dribble', 'dribble', 'walk', 'static-dribble'];
+const DEFENSE_IDLE_ANIMS    = ['defense-shuffle', 'defense-backpedal'];
+const DEFENSE_MOVE_ANIMS    = ['defense-shuffle', 'defense-backpedal'];
 
 // Sprint fps multiplier applied on top of the animation's base fps
 const SPRINT_FPS_MULT = 1.4;
@@ -104,8 +110,11 @@ class AnimationPlayer {
    * @returns {object} { animName, frame, facingRight, state, speedTier }
    */
   update(timestamp, input, dt, defenseMode, positionZone = null) {
-    const sprint    = input?.sprint ?? false;
-    const speedTier = this.physics?.speedTier ?? (sprint ? 'sprint' : 'idle');
+    const sprint      = input?.sprint ?? false;
+    const dribbleMode = input?.dribbleMode ?? false; // R2 held
+    const speedTier   = this.physics?.speedTier ?? (sprint ? 'sprint' : 'idle');
+    const moveX       = input?.moveX ?? 0;
+    const moveY       = input?.moveY ?? 0;
 
     // ── Action timer ────────────────────────────────────────────────────────
     if (this.state === PLAYER_STATES.ACTION) {
@@ -119,24 +128,34 @@ class AnimationPlayer {
 
     // ── State transitions ────────────────────────────────────────────────────
     if (this.state !== PLAYER_STATES.ACTION) {
-      const moving = Math.abs(input?.moveX ?? 0) > 0.1 || Math.abs(input?.moveY ?? 0) > 0.1;
+      const moving = Math.abs(moveX) > 0.1 || Math.abs(moveY) > 0.1;
       this.state = moving ? PLAYER_STATES.MOVING : PLAYER_STATES.IDLE;
       this._sprintActive = sprint && moving;
 
-      // Pick animation pool based on defense mode and speed tier
+      // Pick animation pool based on defense mode, dribble mode, and movement direction
       let candidates;
       if (defenseMode) {
-        const moveY = input?.moveY ?? 0;
         if (moving && moveY < -0.3) {
           candidates = ['defense-backpedal', 'defense-shuffle'];
-        } else {
+        } else if (moving) {
           candidates = DEFENSE_MOVE_ANIMS;
+        } else {
+          candidates = DEFENSE_IDLE_ANIMS;
         }
-        if (!moving) candidates = DEFENSE_IDLE_ANIMS;
+      } else if (!moving) {
+        candidates = IDLE_ANIMS;
+      } else if (sprint) {
+        candidates = SPRINT_ANIMS;
+      } else if (moveY > 0.3 && Math.abs(moveX) < Math.abs(moveY)) {
+        // Moving backward (down the court from player's view)
+        candidates = BACKPEDAL_ANIMS;
+      } else if (Math.abs(moveX) > 0.5 && Math.abs(moveY) < 0.3) {
+        // Pure lateral movement
+        candidates = moveX < 0 ? SIDE_L_ANIMS : SIDE_R_ANIMS;
       } else if (speedTier === 'walk') {
-        candidates = moving ? WALK_ANIMS : IDLE_ANIMS;
+        candidates = WALK_ANIMS;
       } else {
-        candidates = moving ? MOVING_ANIMS : IDLE_ANIMS;
+        candidates = JOG_ANIMS;
       }
       // Zone-aware pick: prefer anims valid for this zone, exclude blocked ones.
       // Falls back to zone-agnostic anims, then first available.
@@ -151,7 +170,7 @@ class AnimationPlayer {
     if (anim && timestamp) {
       let fps  = anim.fps ?? 8;
       // Sprint fps boost for locomotion animations
-      if (this._sprintActive && (anim.name === 'dribble' || anim.name === 'walk')) {
+      if (this._sprintActive && ['dribble', 'walk', 'jog-dribble', 'sprint-dribble'].includes(anim.name)) {
         fps = fps * SPRINT_FPS_MULT;
       }
       const loop = this.state !== PLAYER_STATES.ACTION ? true : (anim.loop ?? false);

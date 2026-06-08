@@ -978,7 +978,7 @@
                 <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">
                   Assign to slot · <span id="studioSlotAngleLabel" style="color:#00ff88"></span>
                 </div>
-                <div id="studioSlotBtns" style="display:flex;gap:8px"></div>
+                <div id="studioSlotBtns" style="display:block"></div>
                 <div id="studioSlotStatus" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-top:10px;min-height:16px"></div>
               </div>
 
@@ -1055,24 +1055,49 @@
             <div id="videoConfigAnglePillsList" style="display:flex;flex-wrap:wrap;gap:4px"></div>
           </div>
           <div id="videoSelectedStrip" style="margin-bottom:14px"></div>
+          <div style="margin-bottom:14px">
+            <label class="form-label">Animation Slot</label>
+            <select class="input" id="videoAnimSlot" onchange="videoOnSlotChange()">
+              <optgroup label="Free Movement (no R2)">
+                <option value="idle-dribble">Idle Dribble — standing still with ball</option>
+                <option value="jog-dribble">Jog Dribble — moving with ball</option>
+                <option value="sprint-dribble">Sprint Dribble — sprinting with ball</option>
+                <option value="backpedal-dribble">Backpedal — moving backward</option>
+                <option value="side-dribble-l">Side Left — strafing left</option>
+                <option value="side-dribble-r">Side Right — strafing right</option>
+              </optgroup>
+              <optgroup label="Dribble Moves (hold R2)">
+                <option value="cross">Crossover (R2 + Cross)</option>
+                <option value="tween">Between Legs (R2 + Triangle)</option>
+                <option value="behind">Behind Back (R2 + B)</option>
+                <option value="stepback">Step Back (R2 + Circle)</option>
+              </optgroup>
+              <optgroup label="Jump Shot">
+                <option value="jumpshot">Jump Shot (Square)</option>
+              </optgroup>
+            </select>
+          </div>
+          <div style="margin-bottom:14px">
+            <label class="form-label">Court Zone / Camera Angle</label>
+            <div id="videoZonePicker" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+              <label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px">
+                <input type="radio" name="videoAnimZone" value="1" checked> Z1 — Front
+              </label>
+              <label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px">
+                <input type="radio" name="videoAnimZone" value="2"> Z2 — Front Left
+              </label>
+              <label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px">
+                <input type="radio" name="videoAnimZone" value="3"> Z3 — Left
+              </label>
+              <label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px">
+                <input type="radio" name="videoAnimZone" value="4"> Z4 — Back Left
+              </label>
+              <label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px">
+                <input type="radio" name="videoAnimZone" value="5"> Z5 — Back
+              </label>
+            </div>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-            <div class="form-group">
-              <label class="form-label">Animation Name</label>
-              <input class="input" id="videoAnimName" placeholder="spin-move" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Camera Angle / POV</label>
-              <select class="input" id="videoAnimAngle">
-                <option value="0">Front</option>
-                <option value="1">Front Right</option>
-                <option value="2">Right</option>
-                <option value="3">Back Right</option>
-                <option value="4">Back</option>
-                <option value="5">Back Left</option>
-                <option value="6">Left</option>
-                <option value="7">Front Left</option>
-              </select>
-            </div>
             <div class="form-group">
               <label class="form-label">FPS</label>
               <input class="input" type="number" id="videoAnimFps" value="8" min="1" max="30" />
@@ -2736,7 +2761,7 @@ async function loadCharPackage(name) {
 
 
 // ─── STUDIO ───────────────────────────────────────────────────────────────
-const STUDIO = { selectedAnim: null, selectedAngle: null, animLib: [] };
+const STUDIO = { selectedAnim: null, selectedAngle: null, animLib: [], pendingSlotId: null };
 const STUDIO_ANGLE_LABELS = ['Front','FR','Right','BR','Back','BL','Left','FL'];
 
 function renderStudioAngleSelector(selectedIdx) {
@@ -2977,37 +3002,68 @@ function showStudioResult(result) {
 }
 
 function studioRenderSlotPicker() {
-  const angleIdx = STUDIO.selectedAngle ?? 0;
-  const angleLabel = STUDIO_ANGLE_LABELS[angleIdx] ?? `Angle ${angleIdx}`;
+  const container = document.getElementById('studioSlotBtns');
+  if (!container) return;
+
+  const GROUP_LABELS = { move: 'Free Movement', r2: 'Dribble Moves (R2)', shot: 'Jump Shot' };
+  const groups = ['move', 'r2', 'shot'];
+
+  let html = '';
+  for (const g of groups) {
+    const slots = ANIMATION_SLOTS.filter(s => s.group === g);
+    html += `<div style="font-family:var(--mono);font-size:8px;letter-spacing:1px;color:#50507a;text-transform:uppercase;margin:8px 0 4px">${GROUP_LABELS[g]}</div>`;
+    html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">`;
+    for (const slot of slots) {
+      html += `<button onclick="studioPickSlot('${slot.id}')"
+        style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 10px;
+               background:#0a0a14;border:1px solid #1e1e30;border-radius:6px;cursor:pointer;
+               font-family:var(--mono);min-width:72px;transition:border-color 0.15s"
+        onmouseover="this.style.borderColor='#00ff88'" onmouseout="this.style.borderColor='#1e1e30'">
+        <span style="font-size:11px;color:#c0c0e0;text-transform:uppercase;letter-spacing:0.5px">${slot.label}</span>
+      </button>`;
+    }
+    html += `</div>`;
+  }
+  container.innerHTML = html;
+  document.getElementById('studioSlotAngleLabel').textContent = 'Pick a slot';
+}
+
+function studioPickSlot(slotId) {
+  STUDIO.pendingSlotId = slotId;
+  const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
   const el = document.getElementById('studioSlotAngleLabel');
-  if (el) el.textContent = angleLabel;
+  if (el) el.textContent = slot?.label + ' — pick zone:';
 
   const container = document.getElementById('studioSlotBtns');
   if (!container) return;
-  container.innerHTML = ANIMATION_SLOTS.map(slot => `
-    <button onclick="studioAssignSlot('${slot.id}')"
-      style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;
+
+  let html = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">`;
+  for (const z of ANIMATION_ZONES) {
+    html += `<button onclick="studioAssignSlot('${slotId}', ${z.id})"
+      style="flex:1;min-width:60px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;
              background:#0a0a14;border:1px solid #1e1e30;border-radius:6px;cursor:pointer;
              font-family:var(--mono);transition:border-color 0.15s"
       onmouseover="this.style.borderColor='#00ff88'" onmouseout="this.style.borderColor='#1e1e30'">
-      <span style="font-size:20px">${slot.icon}</span>
-      <span style="font-size:8px;letter-spacing:1px;color:#c0c0e0;text-transform:uppercase">${slot.label}</span>
-      <span style="font-size:8px;color:#50507a">${angleLabel}</span>
-    </button>
-  `).join('');
+      <span style="font-size:11px;letter-spacing:1px;color:#00ff88">${z.short}</span>
+      <span style="font-size:9px;color:#808098">${z.label}</span>
+    </button>`;
+  }
+  html += `</div>`;
+  html += `<button onclick="studioRenderSlotPicker()" style="font-family:var(--mono);font-size:9px;color:#50507a;background:none;border:none;cursor:pointer;padding:0;margin-top:2px">← Back to slots</button>`;
+  container.innerHTML = html;
 }
 
-async function studioAssignSlot(slotId) {
+async function studioAssignSlot(slotId, zoneId) {
   const r = STUDIO.lastResult;
   if (!r) return;
   const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
   if (!slot) return;
+  const zone = ANIMATION_ZONES.find(z => z.id === zoneId);
+  if (!zone) return;
 
-  const angleIndex = STUDIO.selectedAngle ?? 0;
-  const animId = `${slotId}_a${angleIndex}`;
+  const animId = `${slotId}_z${zoneId}`;
   const statusEl = document.getElementById('studioSlotStatus');
 
-  // Disable all slot buttons while saving
   document.querySelectorAll('#studioSlotBtns button').forEach(b => b.disabled = true);
   if (statusEl) statusEl.textContent = 'Saving…';
 
@@ -3017,20 +3073,24 @@ async function studioAssignSlot(slotId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         animId,
-        animName: slot.label,
+        animName: `${slot.label} — ${zone.label}`,
         spriteUrl: r.spriteUrl,
         fps: r.fps,
         frameCount: r.frameCount,
-        angle: STUDIO_ANGLE_LABELS[angleIndex] ?? null,
-        angleIndex,
+        angle: zone.label,
+        angleIndex: COURT_ZONES.find(c => c.id === zoneId)?.angleIdx ?? 0,
+        slotId,
+        zoneId,
       }),
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    if (statusEl) statusEl.textContent = `✓ Saved to ${slot.label} · ${STUDIO_ANGLE_LABELS[angleIndex] ?? angleIndex}`;
-    toast(`Assigned to ${slot.label} (${STUDIO_ANGLE_LABELS[angleIndex]}) for ${r.charName}`);
+    if (statusEl) statusEl.textContent = `✓ Saved: ${slot.label} · ${zone.label}`;
+    toast(`${slot.label} ${zone.short} saved for ${r.charName}`);
     await loadRoster();
     if (STATE.dashSelected === r.charName) selectDashChar(r.charName);
+    STUDIO.pendingSlotId = null;
+    studioRenderSlotPicker();
   } catch (e) {
     toast('Save failed: ' + e.message, true);
     if (statusEl) statusEl.textContent = '✗ ' + e.message;
@@ -5020,21 +5080,23 @@ const VIDEO_PRESETS = [
   { label: 'defense-backpedal', frames: 6,  fps: 8,  extractFps: 10, action: 'defensive backpedal' },
 ];
 
-const VID = { sessionId: null, frames: [], selected: new Set(), mode: 'strip', file: null, preset: null, duration: 0, savedAngles: [], lockedAnimName: '' };
+const VID = { sessionId: null, frames: [], selected: new Set(), mode: 'strip', file: null, preset: null, duration: 0, savedAngles: [], lockedAnimName: '', lockedSlotId: null };
 
 function renderVideoAnglePills(containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;
   const parent = el.parentElement;
   if (parent) parent.style.display = VID.savedAngles.length > 0 ? 'block' : 'none';
-  el.innerHTML = VID.savedAngles.map(a =>
-    `<span style="font-family:var(--mono);font-size:9px;padding:3px 9px;border-radius:4px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);color:#00ff88">${STUDIO_ANGLE_LABELS[a.angleIndex] || a.angleIndex} ✓</span>`
-  ).join('');
+  el.innerHTML = VID.savedAngles.map(a => {
+    const label = a.label ?? (a.zoneId ? `Zone ${a.zoneId}` : (STUDIO_ANGLE_LABELS[a.angleIndex] || a.angleIndex));
+    return `<span style="font-family:var(--mono);font-size:9px;padding:3px 9px;border-radius:4px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);color:#00ff88">${label} ✓</span>`;
+  }).join('');
 }
 
 function videoAddAngle() {
-  const animName = VID.lockedAnimName || document.getElementById('videoAnimName')?.value.trim();
-  VID.lockedAnimName = animName;
+  const slotId = VID.lockedSlotId || document.getElementById('videoAnimSlot')?.value;
+  VID.lockedSlotId = slotId;
+  VID.lockedAnimName = slotId;
   VID.sessionId = null;
   VID.frames = [];
   VID.selected = new Set();
@@ -5047,7 +5109,8 @@ function videoAddAngle() {
   const fi = document.getElementById('videoFileInput');
   if (fi) fi.value = '';
   document.getElementById('videoUploadCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  toast(`Upload video for next angle of "${animName}"`);
+  const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
+  toast(`Upload video for next zone of "${slot?.label ?? slotId}"`);
 }
 
 function initVideoPage() {
@@ -5073,11 +5136,11 @@ function applyVideoPreset(i) {
   // Set output FPS
   const afEl = document.getElementById('videoAnimFps');
   if (afEl) afEl.value = p.fps;
-  // Set animation name if empty or matches a preset label (user hasn't customized it)
-  const nameEl = document.getElementById('videoAnimName');
-  if (nameEl) {
-    const isPresetLabel = VIDEO_PRESETS.some(x => x.label === nameEl.value);
-    if (!nameEl.value || isPresetLabel) nameEl.value = p.label;
+  // Auto-select slot matching preset label if available
+  const slotEl = document.getElementById('videoAnimSlot');
+  if (slotEl && ANIMATION_SLOTS.some(s => s.id === p.label)) {
+    slotEl.value = p.label;
+    videoOnSlotChange();
   }
   // Set action (only if empty)
   const actionEl = document.getElementById('videoAnimAction');
@@ -5277,9 +5340,10 @@ async function confirmVideoSelection() {
     // Kick off subject extraction — updates each slot progressively as AI finishes
     extractVideoSubjects(ordered);
 
-    // Pre-fill animation name (from locked multi-angle name, or leave blank)
-    if (VID.lockedAnimName) {
-      document.getElementById('videoAnimName').value = VID.lockedAnimName;
+    // Pre-select slot if locked (multi-zone session)
+    if (VID.lockedSlotId) {
+      const slotEl = document.getElementById('videoAnimSlot');
+      if (slotEl) { slotEl.value = VID.lockedSlotId; slotEl.disabled = true; }
     }
     // Show already-captured angles if any
     renderVideoAnglePills('videoConfigAnglePillsList');
@@ -5397,14 +5461,34 @@ function _bufToBase64(buffer) {
   return btoa(binary);
 }
 
+function videoOnSlotChange() {
+  const slotEl = document.getElementById('videoAnimSlot');
+  if (!slotEl) return;
+  const slotId = slotEl.value;
+  const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
+  if (!slot) return;
+  // Auto-set loop based on slot type
+  const loopEl = document.getElementById('videoAnimLoop');
+  if (loopEl) loopEl.value = slot.loop ? 'true' : 'false';
+}
+
 async function saveAnimToLibrary() {
-  const animName = document.getElementById('videoAnimName').value.trim();
-  const angle = document.getElementById('videoAnimAngle').value;
+  const slotEl = document.getElementById('videoAnimSlot');
+  const zoneEl = document.querySelector('input[name="videoAnimZone"]:checked');
   const fps = parseInt(document.getElementById('videoAnimFps').value) || 8;
   const loop = document.getElementById('videoAnimLoop').value === 'true';
 
-  if (!animName) return toast('Enter an animation name', true);
+  const slotId = slotEl?.value;
+  const zoneId = zoneEl ? parseInt(zoneEl.value) : 1;
+  const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
+  const zone = ANIMATION_ZONES.find(z => z.id === zoneId);
+
+  if (!slotId || !slot) return toast('Select an animation slot', true);
   if (!VID.sessionId) return toast('No video session', true);
+
+  // Build the anim-lib name from slot+zone
+  const animName = `${slotId}_z${zoneId}`;
+  const angle = zone?.label ?? 'Front';
 
   const orderedFrames = VID.frames.filter(f => VID.selected.has(f.file)).map(f => f.file);
   if (orderedFrames.length === 0) return toast('No frames selected', true);
@@ -5440,7 +5524,7 @@ async function saveAnimToLibrary() {
     ...(frameBase64Array.length > 0 ? { frameBase64Array } : {}),
   };
 
-  toast(`Saving "${animName}" (${orderedFrames.length} frames)…`);
+  toast(`Saving ${slot.label} ${zone?.short ?? ''} (${orderedFrames.length} frames)…`);
 
   fetch(`${API}/api/anim-lib`, {
     method: 'POST',
@@ -5452,22 +5536,22 @@ async function saveAnimToLibrary() {
     if (data.error) throw new Error(data.error);
     const anim = data.animation;
     document.getElementById('videoSaveResultMeta').textContent =
-      `"${anim.displayName}" · ${anim.frameCount} frames · ${anim.fps}fps · ${anim.angle}`;
+      `${slot.label} · ${zone?.label ?? ''} · ${anim.frameCount} frames · ${anim.fps}fps`;
     const frameStrip = document.getElementById('videoSaveFrameStrip');
     frameStrip.innerHTML = Array.from({ length: anim.frameCount }, (_, i) =>
       `<img src="${API}/api/anim-lib/frame/${anim.name}/${i}?t=${Date.now()}" style="width:56px;height:56px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14" />`
     ).join('');
-    // Track saved angles and update pills
+    // Track saved zones
+    VID.lockedSlotId = slotId;
     VID.lockedAnimName = animName;
-    const angleIdx = parseInt(angle);
-    if (!VID.savedAngles.find(a => a.angleIndex === angleIdx)) {
-      VID.savedAngles.push({ angleIndex: angleIdx, frameCount: anim.frameCount });
+    if (!VID.savedAngles.find(a => a.zoneId === zoneId)) {
+      VID.savedAngles.push({ zoneId, label: zone?.label ?? zoneId, frameCount: anim.frameCount });
     }
     renderVideoAnglePills('videoSavedAnglePills');
     renderVideoAnglePills('videoConfigAnglePillsList');
     document.getElementById('videoSaveResult').style.display = 'block';
     document.getElementById('videoSaveResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    toast(`Saved "${anim.displayName}" to animation library`);
+    toast(`${slot.label} ${zone?.short ?? ''} saved to library`);
     studioLoadAnimLib();
   })
   .catch(e => toast('Save failed: ' + e.message, true))
@@ -5485,8 +5569,7 @@ function videoReset() {
   VID.duration = 0;
   VID.savedAngles = [];
   VID.lockedAnimName = '';
-  const animNameEl = document.getElementById('videoAnimName');
-  if (animNameEl) animNameEl.value = '';
+  VID.lockedSlotId = null;
   document.getElementById('videoGalleryCard').style.display = 'none';
   document.getElementById('videoConfigCard').style.display = 'none';
   document.getElementById('videoSaveResult').style.display = 'none';
@@ -7012,20 +7095,51 @@ function renderTestingCharGrid() {
 
 // ── Move definitions — game controls for the left panel ─────────────────────
 // ── Canonical animation slots — the named categories every character's animation library maps to ──
+// Animation slots — the canonical categories every character animation maps to.
+// group: 'move' = free movement (R2 not held), 'r2' = dribble moves (R2 held), 'shot' = jump shot
 const ANIMATION_SLOTS = [
-  { id: 'idle-dribble', label: 'Idle Dribble', icon: '🏀', state: 'idle',   loop: true,  desc: 'Standing still with ball' },
-  { id: 'jog-dribble',  label: 'Jog Dribble',  icon: '🏃', state: 'moving', loop: true,  desc: 'Moving with ball' },
-  { id: 'hand-switch',  label: 'Hand Switch',   icon: '🔄', state: 'action', loop: false, desc: 'Left/right hand transition' },
+  // Free movement — R2 NOT held
+  { id: 'idle-dribble',      label: 'Idle Dribble',    icon: '🏀', group: 'move', state: 'idle',   loop: true,  desc: 'Standing still with ball' },
+  { id: 'jog-dribble',       label: 'Jog Dribble',     icon: '🏃', group: 'move', state: 'moving', loop: true,  desc: 'Moving with ball' },
+  { id: 'sprint-dribble',    label: 'Sprint Dribble',  icon: '💨', group: 'move', state: 'moving', loop: true,  desc: 'Sprinting with ball' },
+  { id: 'backpedal-dribble', label: 'Backpedal',       icon: '⬆', group: 'move', state: 'moving', loop: true,  desc: 'Moving backward with ball' },
+  { id: 'side-dribble-l',    label: 'Side Left',       icon: '⬅', group: 'move', state: 'moving', loop: true,  desc: 'Strafing left with ball' },
+  { id: 'side-dribble-r',    label: 'Side Right',      icon: '➡', group: 'move', state: 'moving', loop: true,  desc: 'Strafing right with ball' },
+  // Dribble moves — R2 HELD
+  { id: 'cross',             label: 'Crossover',       icon: 'X',  group: 'r2',   state: 'action', loop: false, desc: 'Crossover dribble (R2+Cross)' },
+  { id: 'tween',             label: 'Between Legs',    icon: 'Y',  group: 'r2',   state: 'action', loop: false, desc: 'Between the legs (R2+Triangle)' },
+  { id: 'behind',            label: 'Behind Back',     icon: 'B',  group: 'r2',   state: 'action', loop: false, desc: 'Behind the back (R2+B)' },
+  { id: 'stepback',          label: 'Step Back',       icon: 'O',  group: 'r2',   state: 'action', loop: false, desc: 'Step back dribble (R2+Circle)' },
+  // Jump Shot — Square button (always)
+  { id: 'jumpshot',          label: 'Jump Shot',       icon: 'S',  group: 'shot', state: 'action', loop: false, desc: 'Jump shot (Square / I)' },
 ];
 
+// 5 court perspective zones — each animation slot has one variant per zone.
+// Zone IDs 1-5 match COURT_ZONES[].id directly.
+const ANIMATION_ZONES = [
+  { id: 1, label: 'Front',      short: 'Z1' },
+  { id: 2, label: 'Front Left', short: 'Z2' },
+  { id: 3, label: 'Left',       short: 'Z3' },
+  { id: 4, label: 'Back Left',  short: 'Z4' },
+  { id: 5, label: 'Back',       short: 'Z5' },
+];
+
+// MOVE_DEFS mirrors ANIMATION_SLOTS but adds key binding info for the panel display.
 const MOVE_DEFS = [
-  { id: 'idle-dribble', label: 'Idle Dribble', key: 'auto',   desc: 'Standing still', slot: true },
-  { id: 'jog-dribble',  label: 'Jog Dribble',  key: 'WASD',   desc: 'Moving with ball', slot: true },
-  { id: 'hand-switch',  label: 'Hand Switch',   key: 'J/Spc',  desc: '✕ button', slot: true },
-  { id: 'crossover',    label: 'Crossover',     key: 'Q / E',  desc: 'Flick or Q/E' },
-  { id: 'stepback',     label: 'Step Back',     key: 'L',      desc: '○ button' },
-  { id: 'jumpshot',     label: 'Jump Shot',     key: 'I',      desc: '□ button' },
-  { id: 'steal',        label: 'Steal',         key: 'F+I',    desc: 'Defense+□' },
+  // Free movement — no R2
+  { id: 'idle-dribble',      label: 'Idle Dribble',   key: 'auto',    group: 'move', slot: true },
+  { id: 'jog-dribble',       label: 'Jog Dribble',    key: 'WASD',    group: 'move', slot: true },
+  { id: 'sprint-dribble',    label: 'Sprint Dribble', key: 'Sft+WASD',group: 'move', slot: true },
+  { id: 'backpedal-dribble', label: 'Backpedal',      key: 'S',       group: 'move', slot: true },
+  { id: 'side-dribble-l',    label: 'Side Left',      key: 'A',       group: 'move', slot: true },
+  { id: 'side-dribble-r',    label: 'Side Right',     key: 'D',       group: 'move', slot: true },
+  // Dribble moves — R2 held
+  { id: 'cross',             label: 'Crossover',      key: 'R+J',     group: 'r2',   slot: true },
+  { id: 'tween',             label: 'Between Legs',   key: 'R+T',     group: 'r2',   slot: true },
+  { id: 'behind',            label: 'Behind Back',    key: 'R+B',     group: 'r2',   slot: true },
+  { id: 'stepback',          label: 'Step Back',      key: 'R+L',     group: 'r2',   slot: true },
+  // Jump shot
+  { id: 'jumpshot',          label: 'Jump Shot',      key: 'I / □',   group: 'shot', slot: true },
 ];
 
 function _moveZoneInfo(animName) {
@@ -7044,50 +7158,69 @@ function renderMovesPanel(charName) {
   const curAnim = TESTING.selectedAnim || '';
   const savedAnims = char.savedAnimations || {};
 
-  let html = '<div class="tv2-section-hdr">Basic Animations</div>';
-  for (const m of MOVE_DEFS) {
-    let hasSprite, filledAngles = [], clickAttr, subText;
+  const GROUP_HEADERS = {
+    move: 'Free Movement (no R2)',
+    r2:   'Dribble Moves (hold R)',
+    shot: 'Jump Shot',
+  };
 
-    if (m.slot) {
-      // Slot-based: find all angle variants saved for this slot
-      filledAngles = Object.keys(savedAnims)
-        .filter(k => k.startsWith(m.id + '_a'))
-        .map(k => parseInt(k.match(/_a(\d+)$/)?.[1]))
-        .filter(n => !isNaN(n));
-      hasSprite = filledAngles.length > 0;
-      if (hasSprite) {
-        // Pick first available angle to load when clicked
-        const firstKey = `${m.id}_a${filledAngles[0]}`;
-        const sa = savedAnims[firstKey];
-        clickAttr = `onclick="testingSelectSavedAnim('${firstKey}','${sa?.spriteUrl}',${sa?.frameCount ?? 4},${sa?.fps ?? 8},${filledAngles[0]})"`;
-      } else {
-        clickAttr = '';
-      }
-      subText = hasSprite
-        ? filledAngles.map(i => (STUDIO_ANGLE_LABELS[i] ?? i)).join(', ')
-        : m.desc;
-    } else {
-      hasSprite = !!(savedAnims[m.id] || char.sprites?.[m.id]?.exists);
-      clickAttr = hasSprite ? `onclick="testingSelectAnim('${m.id}')"` : '';
-      subText = m.desc;
+  let html = '';
+  let lastGroup = null;
+  for (const m of MOVE_DEFS) {
+    if (m.group !== lastGroup) {
+      html += `<div class="tv2-section-hdr">${GROUP_HEADERS[m.group] || m.group}</div>`;
+      lastGroup = m.group;
     }
 
-    const isActive = curAnim === m.id || curAnim === `__saved__${m.id}`
-      || (m.slot && filledAngles.some(i => curAnim === `__saved__${m.id}_a${i}`));
-    const zi = _moveZoneInfo(m.id);
-    const dotColor = m.slot ? (hasSprite ? '#5050ff' : '#252540') : zi.color;
+    // Slot-based: find all zone variants saved (both _z and legacy _a formats)
+    const filledZoneIds = Object.keys(savedAnims)
+      .filter(k => k.startsWith(m.id + '_z'))
+      .map(k => parseInt(k.match(/_z(\d+)$/)?.[1]))
+      .filter(n => !isNaN(n));
+    const filledAngles = Object.keys(savedAnims)
+      .filter(k => k.startsWith(m.id + '_a'))
+      .map(k => parseInt(k.match(/_a(\d+)$/)?.[1]))
+      .filter(n => !isNaN(n));
+
+    const hasSprite = filledZoneIds.length > 0 || filledAngles.length > 0;
+
+    let clickAttr = '';
+    if (hasSprite) {
+      // Prefer zone format, fall back to angle format
+      let firstKey, sa;
+      if (filledZoneIds.length > 0) {
+        firstKey = `${m.id}_z${filledZoneIds[0]}`;
+        sa = savedAnims[firstKey];
+      } else {
+        firstKey = `${m.id}_a${filledAngles[0]}`;
+        sa = savedAnims[firstKey];
+      }
+      clickAttr = `onclick="testingSelectSavedAnim('${firstKey}','${sa?.spriteUrl}',${sa?.frameCount ?? 4},${sa?.fps ?? 8},0)"`;
+    }
+
+    const fillLabel = filledZoneIds.length > 0
+      ? filledZoneIds.map(z => `Z${z}`).join(' ')
+      : filledAngles.length > 0
+        ? filledAngles.map(i => STUDIO_ANGLE_LABELS[i] ?? `A${i}`).join(' ')
+        : '';
+    const badgeText = hasSprite
+      ? (filledZoneIds.length > 0 ? `${filledZoneIds.length}/5` : `${filledAngles.length}/8`)
+      : '—';
+
+    const isActive = curAnim === m.id
+      || filledZoneIds.some(z => curAnim === `${m.id}_z${z}`)
+      || filledAngles.some(i => curAnim === `${m.id}_a${i}`);
+
+    const dotColor = hasSprite ? '#00cc66' : '#252540';
 
     html += `<div class="tv2-move-item${isActive?' active':''}${!hasSprite?' disabled':''}" ${clickAttr} style="--mclr:${dotColor}">
       <div class="tv2-move-row">
         <span class="tv2-zone-dot" style="background:${dotColor}"></span>
         <span class="tv2-move-name${hasSprite?' live':''}">${m.label}</span>
-        <span class="tv2-move-key">${m.slot ? (hasSprite ? filledAngles.length+'/8' : '—') : m.key}</span>
+        <span class="tv2-move-key">${hasSprite ? badgeText : m.key}</span>
       </div>
-      <div class="tv2-move-sub">${subText}</div>
+      ${fillLabel ? `<div class="tv2-move-sub" style="color:#00cc66;font-size:8px">${fillLabel}</div>` : ''}
     </div>`;
-
-    // Separator before action animations
-    if (m.id === 'hand-switch') html += '<div class="tv2-section-hdr">Actions</div>';
   }
   panel.innerHTML = html;
 }
@@ -7918,8 +8051,10 @@ function startGameMode(silent) {
         TESTING.selectedAnim = name;
         TESTING.currentFrame = 0;
         TESTING.lastFrameTime = 0;
-        // Load the sprite sheet for this animation
-        const entry = GM.charAnims.find(a => a.name === name);
+        // Load zone-correct strip for the new slot
+        const curZoneId = getZoneForPos(TESTING.charX, TESTING.charY)?.id ?? 1;
+        const entry = GM.charAnims.find(a => a.name === name && a.zoneId === curZoneId)
+                   ?? GM.charAnims.find(a => a.name === name);
         if (entry) gmLoadStrip(entry);
         // Reflect active move in left panel
         if (TESTING.selectedChar) renderMovesPanel(TESTING.selectedChar);
@@ -7938,7 +8073,7 @@ function startGameMode(silent) {
     GM.input.start();
   });
 
-  if (!silent) toast('Game Mode ON — WASD/stick to move, I/J/L/Q/E for moves', false);
+  if (!silent) toast('Game Mode ON — WASD move · Shift sprint · R+J/T/B/L dribble moves · I jump shot', false);
 }
 
 function stopGameMode() {
@@ -7953,6 +8088,9 @@ function stopGameMode() {
 }
 
 // ── Load character's slot-based animations into GM.charAnims ─────────────────
+// Key formats supported:
+//   {slotId}_z{zoneId}   e.g. "idle-dribble_z1"  (new — 5 court zones)
+//   {slotId}_a{angleIdx} e.g. "idle-dribble_a0"  (legacy — 8-angle system)
 async function loadGMAnims() {
   try {
     const char = TESTING.roster.find(c => c.name === GM.selectedChar);
@@ -7962,25 +8100,34 @@ async function loadGMAnims() {
     GM.charAnims = [];
 
     for (const [key, sa] of Object.entries(savedAnims)) {
-      // Key format: {slotId}_a{angleIndex}  e.g. "idle-dribble_a0"
-      const m = key.match(/^(.+)_a(\d+)$/);
-      if (!m) continue;
-      const slotId    = m[1];
-      const angleIndex = parseInt(m[2]);
+      let slotId, zoneId;
+
+      const mz = key.match(/^(.+)_z(\d+)$/);
+      if (mz) {
+        slotId = mz[1];
+        zoneId = parseInt(mz[2]);
+      } else {
+        // Legacy _a format — map angle index to nearest zone id
+        const ma = key.match(/^(.+)_a(\d+)$/);
+        if (!ma) continue;
+        slotId = ma[1];
+        const angleIdx = parseInt(ma[2]);
+        // Find the court zone whose angleIdx matches
+        const courtZone = COURT_ZONES.find(z => z.angleIdx === angleIdx);
+        zoneId = courtZone?.id ?? 1;
+      }
+
       const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
       if (!slot) continue;
 
       GM.charAnims.push({
         name: slotId,
         animKey: key,
-        angleIndex,
+        zoneId,
         fps: sa.fps ?? 8,
         loop: slot.loop,
         frameCount: sa.frameCount ?? 1,
         stripUrl: sa.spriteUrl,
-        validZones: [],
-        preferredZones: [],
-        blockedZones: [],
         movementData: null,
       });
     }
@@ -8009,57 +8156,70 @@ function gmTick(timestamp) {
 
   // Poll input (pass timestamp for flick timing)
   const input = GM.input.poll(timestamp);
-  const inDefense = input.defenseMode || (GM._screenDefenseActive ?? false);
+  const inDefense  = input.defenseMode || (GM._screenDefenseActive ?? false);
+  const inDribble  = input.dribbleMode; // R2 held
 
   // ── Action button handling ────────────────────────────────────────────────
   if (GM.player.state !== 'ACTION') {
 
-    // Helper: resolve best anim for action using zone+angle awareness
-    const _gmResolve = (action, fallbackNames) => {
-      const posZone = GM._positionZone ?? 'arc';
-      const perspAngle = getZoneForPos(TESTING.charX, TESTING.charY)?.angleIdx ?? 0;
-      if (typeof resolveAnimation === 'function') {
-        const best = resolveAnimation(action, GM.charAnims, posZone, perspAngle);
-        if (best) return best;
-      }
-      return GM.charAnims.find(a => fallbackNames.includes(a.name)) ?? null;
+    // Find best slot entry for current zone (zone-variant strip loading)
+    const _gmFindSlot = (slotId) => {
+      const curZoneId = getZoneForPos(TESTING.charX, TESTING.charY)?.id ?? 1;
+      return GM.charAnims.find(a => a.name === slotId && a.zoneId === curZoneId)
+          ?? GM.charAnims.find(a => a.name === slotId)
+          ?? null;
     };
 
-    // SQUARE — Jumpshot (offense) OR Steal (while L2/defense held)
+    // SQUARE — Jumpshot (always) OR Steal (defense)
     if (input.justSquare) {
       if (inDefense) {
-        const anim = _gmResolve('steal', ['steal']);
-        const md = anim?.movementData ?? resolveMovementData('steal', null);
-        GM.player.triggerAction('steal', md);
+        GM.player.triggerAction('steal', null);
+        const e = _gmFindSlot('steal'); if (e) gmLoadStrip(e);
       } else {
-        const anim = _gmResolve('jumpshot', ['jumpshot','ac-jumpshot','tween-tween']);
-        const md = anim?.movementData ?? resolveMovementData(anim?.name ?? 'jumpshot', null);
-        GM.player.triggerAction('jumpshot', md);
+        GM.player.triggerAction('jumpshot', null);
+        const e = _gmFindSlot('jumpshot'); if (e) gmLoadStrip(e);
       }
     }
 
-    // CROSS — Dribble action
-    else if (input.justCross) {
-      const anim = _gmResolve('dribble', ['static-dribble','dribble']);
-      const md = anim?.movementData ?? resolveMovementData(anim?.name ?? 'dribble', null);
-      GM.player.triggerAction('dribble', md);
+    // R2 HELD — Dribble moves
+    else if (inDribble && !inDefense) {
+      if (input.justCross) {
+        // Cross / J / Space → Crossover dribble move
+        GM.player.triggerAction('cross', null);
+        const e = _gmFindSlot('cross'); if (e) gmLoadStrip(e);
+      } else if (input.justTriangle) {
+        // Triangle / T → Between legs
+        GM.player.triggerAction('tween', null);
+        const e = _gmFindSlot('tween'); if (e) gmLoadStrip(e);
+      } else if (input.justBehind) {
+        // B key → Behind back
+        GM.player.triggerAction('behind', null);
+        const e = _gmFindSlot('behind'); if (e) gmLoadStrip(e);
+      } else if (input.justCircle) {
+        // Circle / L → Stepback
+        GM.player.triggerAction('stepback', null);
+        const e = _gmFindSlot('stepback'); if (e) gmLoadStrip(e);
+      }
     }
 
-    // CIRCLE — Stepback
-    else if (input.justCircle) {
-      const anim = _gmResolve('stepback', ['stepback']);
-      const md = anim?.movementData ?? resolveMovementData('stepback', null);
-      GM.player.triggerAction('stepback', md);
-    }
-
-    // LEFT STICK FLICK — Crossover (direction from stick)
-    else if (input.justCrossoverLeft || input.justCrossoverRight) {
-      if (input.justCrossoverLeft)  GM.physics.facingRight = false;
-      if (input.justCrossoverRight) GM.physics.facingRight = true;
-      const anim = _gmResolve('crossover', ['crossover','tween-cross','ac-cgs']);
-      const md = anim?.movementData ?? resolveMovementData(anim?.name ?? 'crossover', null);
-      const directedMd = { ...md, velocityX: Math.abs(md?.velocityX ?? 5) * (input.justCrossoverRight ? 1 : -1) };
-      GM.player.triggerAction('crossover', directedMd);
+    // R2 NOT HELD — standard actions
+    else {
+      // CROSS — Dribble action (hand switch / static-dribble)
+      if (input.justCross) {
+        GM.player.triggerAction('dribble', null);
+      }
+      // CIRCLE — Stepback
+      else if (input.justCircle) {
+        GM.player.triggerAction('stepback', null);
+        const e = _gmFindSlot('stepback'); if (e) gmLoadStrip(e);
+      }
+      // LEFT STICK FLICK — Crossover
+      else if (input.justCrossoverLeft || input.justCrossoverRight) {
+        if (input.justCrossoverLeft)  GM.physics.facingRight = false;
+        if (input.justCrossoverRight) GM.physics.facingRight = true;
+        GM.player.triggerAction('cross', null);
+        const e = _gmFindSlot('cross'); if (e) gmLoadStrip(e);
+      }
     }
   }
 
@@ -8072,12 +8232,28 @@ function gmTick(timestamp) {
   TESTING.charX = phys.x;
   TESTING.charY = phys.y;
 
-  // Track current spatial position zone for zone-aware anim resolution
+  // Track current court zone for zone-variant strip selection
+  const newCourtZone = (typeof getZoneForPos === 'function')
+    ? getZoneForPos(TESTING.charX, TESTING.charY)
+    : null;
+  const newZoneId = newCourtZone?.id ?? 1;
+
+  // When zone changes, reload strip for current locomotion slot (zone variant)
+  if (GM._positionZoneId !== newZoneId && GM.player.state !== 'ACTION') {
+    GM._positionZoneId = newZoneId;
+    const curSlot = GM.player.currentAnim;
+    if (curSlot) {
+      const entry = GM.charAnims.find(a => a.name === curSlot && a.zoneId === newZoneId)
+                 ?? GM.charAnims.find(a => a.name === curSlot);
+      if (entry) gmLoadStrip(entry);
+    }
+  }
+
   GM._positionZone = (typeof getPositionZone === 'function')
     ? getPositionZone(TESTING.charX, TESTING.charY)
     : 'arc';
 
-  // Update animation player (sprint available via input.sprint + physics.speedTier)
+  // Update animation player (sprint + direction → correct locomotion slot)
   const animState = GM.player.update(timestamp, input, dt, inDefense, GM._positionZone);
   TESTING.currentFrame = animState.frame;
 
