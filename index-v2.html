@@ -7840,13 +7840,9 @@ function testingSelectAnim(animName) {
   };
   TESTING.stripImg.src = defaultUrl + '?t=' + cacheBust;
 
-  // Load native-res individual frames for HD tester rendering
-  TESTING.hdFrames = [];
-  for (let i = 0; i < TESTING.frameCount; i++) {
-    const img = new Image();
-    img.src = `/assets/${TESTING.selectedChar}-${animName}-frames/frame-${i}.png?t=${cacheBust}`;
-    TESTING.hdFrames.push(img);
-  }
+  // Strip path handles rendering with correct baselineFrac (170/frameH); individual
+  // HD frames have unknown padding and wrong baseline so they render incorrectly.
+  TESTING.hdFrames = null;
 
   // Preload angle-specific strips for each zone
   loadAngleStrips(TESTING.selectedChar, animName, defaultUrl, cacheBust);
@@ -8040,15 +8036,9 @@ function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps, angleIndex) 
   };
   TESTING.stripImg.src = bustUrl;
 
-  // Load native-res individual frames for HD tester rendering
-  // Derive charName/animName from the saved animId (animId is the animName for studio-generated)
-  const _savedCharName = TESTING.selectedChar;
-  TESTING.hdFrames = [];
-  for (let i = 0; i < (frameCount || 4); i++) {
-    const img = new Image();
-    img.src = `/assets/${_savedCharName}-${animId}-frames/frame-${i}.png?t=${cacheBust}`;
-    TESTING.hdFrames.push(img);
-  }
+  // Strip path handles rendering with correct baselineFrac (170/frameH); individual
+  // HD frames have unknown padding/baseline so they render incorrectly.
+  TESTING.hdFrames = null;
 
   // Build angleStrips: this anim was recorded at a specific angle.
   // All zones load the same strip (only the correct angle is non-fallback for HUD display).
