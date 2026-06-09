@@ -8386,24 +8386,7 @@ function testingRenderLoop(timestamp) {
       drawX = TESTING.charX - drawW / 2;
       drawY = TESTING.charY - baselineFrac * drawH;
       const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, drawW);
-      // Two-pass upscale for low-res strips: first blit at 2× to a cached
-      // offscreen canvas (bilinear pass 1), then draw to court at final size
-      // (bilinear pass 2). Two smaller steps beat one 3× jump in perceived clarity.
-      if (isStandardFrame && drawH > frameH * 1.5) {
-        if (!TESTING._upCache) TESTING._upCache = document.createElement('canvas');
-        if (TESTING._upCache.width !== frameW * 2 || TESTING._upCache.height !== frameH * 2) {
-          TESTING._upCache.width = frameW * 2;
-          TESTING._upCache.height = frameH * 2;
-        }
-        const uc = TESTING._upCache.getContext('2d');
-        uc.clearRect(0, 0, frameW * 2, frameH * 2);
-        uc.imageSmoothingEnabled = true;
-        uc.imageSmoothingQuality = 'high';
-        uc.drawImage(activeImg, TESTING.currentFrame * frameW, 0, frameW, frameH, 0, 0, frameW * 2, frameH * 2);
-        ctx.drawImage(TESTING._upCache, 0, 0, frameW * 2, frameH * 2, drawX, drawY, drawW, drawH);
-      } else {
-        ctx.drawImage(activeImg, TESTING.currentFrame * frameW, 0, frameW, frameH, drawX, drawY, drawW, drawH);
-      }
+      ctx.drawImage(activeImg, TESTING.currentFrame * frameW, 0, frameW, frameH, drawX, drawY, drawW, drawH);
       gmRestoreFlip(ctx, _flipped);
     }
 
