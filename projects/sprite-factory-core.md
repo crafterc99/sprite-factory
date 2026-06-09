@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | IN_PROGRESS |
-| **Last Updated** | 2026-03-31 |
+| **Last Updated** | 2026-06-09 |
 | **Owner** | Claude Code |
 
 ## Goal
@@ -50,6 +50,7 @@ None currently — pending Railway stability.
 
 | Date | What happened |
 |---|---|
+| 2026-06-09 | Game Mode movement fixed: actions now resolve movement data (saved editor values > presets); added Soul Jam burst physics (linear-decay separation bursts) with stepback/crossover direction applicators; procedural vector hoop replaces image overlay in Testing tab |
 | 2026-03-31 | Default model changed to gemini-3-pro-image-preview across all 5 generation endpoints |
 | 2026-03-31 | Fixed chalk ESM crash in strip-builder.js and smart-selector.js |
 | 2026-03-31 | Vercel deployment added (assets excluded from bundle due to 250MB size limit) |

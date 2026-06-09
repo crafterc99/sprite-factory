@@ -33,15 +33,39 @@ class PhysicsEngine {
     this.grounded = true;
     this.facingRight = true;
     this._locked = false; // locked during action animations (crossover, stepback)
+    this._burst = null;   // active Soul Jam separation burst {vx, vy, duration, elapsed}
 
     // Track current speed tier for AnimationPlayer
     this.speedTier = 'idle'; // 'idle' | 'walk' | 'run' | 'sprint'
   }
 
-  /** Apply a movement burst from AnimationMovementData */
+  /**
+   * Apply a movement burst from AnimationMovementData.
+   *
+   * curve: 'burst' replicates Soul Jam's separation moves (PlayerStates.ts):
+   * the burst velocity decays linearly to zero over `duration`
+   * (speedCurve = 1 - progress) and displaces position directly, so run
+   * friction can't eat the move. velocityX/velocityY are the peak speed in
+   * px/frame; an explicit unit direction can be given via dirX/dirY
+   * (e.g. stepback = away from hoop, crossover = lateral to hoop).
+   */
   applyBurst(moveData, facingRight) {
     if (!moveData) return;
     const dir = facingRight ? 1 : -1;
+
+    if (moveData.curve === 'burst') {
+      let bvx, bvy;
+      if (moveData.dirX !== undefined || moveData.dirY !== undefined) {
+        const speed = Math.hypot(moveData.velocityX ?? 0, moveData.velocityY ?? 0);
+        bvx = (moveData.dirX ?? 0) * speed;
+        bvy = (moveData.dirY ?? 0) * speed;
+      } else {
+        bvx = (moveData.velocityX ?? 0) * dir;
+        bvy = moveData.velocityY ?? 0;
+      }
+      this._burst = { vx: bvx, vy: bvy, duration: Math.max(1, moveData.duration ?? 300), elapsed: 0 };
+      return;
+    }
 
     if (moveData.type === 'vertical' || moveData.type === 'combo') {
       this.vy = moveData.velocityY ?? -10;
@@ -58,9 +82,10 @@ class PhysicsEngine {
    * @param {number}  inputY       -1..1
    * @param {boolean} defenseMode  L2 held — slower speed, no jumping, shuffle stance
    * @param {boolean} sprint       L1/R1 held — faster speed
+   * @param {number}  dt           ms since last frame (default one 60fps frame)
    * Returns {x, y, vx, vy, grounded, speedTier}
    */
-  update(inputX, inputY, defenseMode, sprint) {
+  update(inputX, inputY, defenseMode, sprint, dt = 16.67) {
     // Determine effective max speed and acceleration based on speed tier
     const stickMag = Math.sqrt(inputX * inputX + inputY * inputY);
     const isWalking = !defenseMode && !sprint && stickMag > 0 && stickMag < this.walkThresh;
@@ -115,6 +140,19 @@ class PhysicsEngine {
     this.x += this.vx;
     this.y += this.vy;
 
+    // Soul Jam separation burst — decelerating displacement on top of the
+    // regular integration: position += burstVel * (1 - progress) * dt
+    if (this._burst) {
+      const b = this._burst;
+      b.elapsed += dt;
+      const progress = Math.min(1, b.elapsed / b.duration);
+      const speedCurve = 1 - progress;
+      const frames = dt / 16.67; // burst velocities are px/frame at 60fps
+      this.x += b.vx * speedCurve * frames;
+      this.y += b.vy * speedCurve * frames;
+      if (progress >= 1) this._burst = null;
+    }
+
     // Ground collision
     if (this.y >= this.groundY) {
       this.y = this.groundY;
@@ -139,6 +177,7 @@ class PhysicsEngine {
     this.vy = 0;
     this.grounded = true;
     this._locked = false;
+    this._burst = null;
     this.speedTier = 'idle';
   }
 }

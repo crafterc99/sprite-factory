@@ -2617,3 +2617,17 @@ What remains (optional, not blocking):
 
 ### Next Dependency
 None. All terminals are clear. Human decision required to begin next phase.
+
+## TASK-ADHOC-20260609 — Game Mode movement + Soul Jam applicators + procedural hoop
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - engine/Physics.js — added Soul Jam burst system: `applyBurst` supports `curve: 'burst'` (position-driven displacement with linear velocity decay, `speedCurve = 1 - progress`, optional dirX/dirY unit vector); `update()` accepts dt and integrates the burst; reset clears it
+  - engine/MovementEngine.js — crossover/stepback presets converted to Soul Jam burst values (300ms/350ms, 7 px/frame peak); added `cross` alias; added `burst` easing case; added `calcSeparationBurst()` (port of soul-jam SeparationModel)
+  - engine/AnimationPlayer.js — `triggerAction` now self-resolves movement data from the chosen animation (saved editor data layered over preset) when none is passed — this was the root cause of the movement setting doing nothing
+  - index-v2.html — `loadGMAnims` fetches saved movementData from /api/anim-lib (was hardcoded null); `gmTick` passes dt to physics and triggers stepback/cross with `gmActionMoveData()` (stepback = away from hoop, crossover = lateral with input/facing side pick, SeparationModel movement bonus); curve dropdown gained "burst (soul jam)"; added `drawProceduralHoop()` — full vector goal (pole, struts, perspective backboard, glass, shooter's square, bracket, rim ring, lattice net) anchored to NET_ANCHOR with animatable TESTING.hoopFx params; drawn whenever no hoop image is uploaded
+  - scripts/render-hoop-preview.cjs — sharp-based SVG preview renderer used to validate the hoop geometry against the reference art
+- What changed: the Testing tab's Game Mode movement actually moves the character now; crossover/stepback replicate soul-jam's burst motion; hoop is code-drawn (animatable) instead of an image overlay
+- Validation: node smoke test of burst physics (70px decay displacement, state/lock cleanup); Playwright load of served studio — no JS errors, presets resolve, end-to-end burst displacement verified in-page; Testing tab screenshot confirms procedural hoop at NET anchor
+- Assumptions: default ratings (handle 75 / defense 50) for the separation movement bonus in the tester; hoop image upload still takes precedence over the procedural hoop
+- Next dependency: none — soul-jam repo received the matching HoopRenderer + global PLAYER_SCALE in the same session

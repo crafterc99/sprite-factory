@@ -1713,6 +1713,7 @@
                       <option value="ease-in">ease-in</option>
                       <option value="ease-out">ease-out</option>
                       <option value="arc">arc</option>
+                      <option value="burst">burst (soul jam)</option>
                     </select>
                   </div>
                   <div class="gm-move-row">
@@ -7087,6 +7088,130 @@ function drawNetMarker(ctx) {
   ctx.restore();
 }
 
+// ── Procedural hoop (vector port of the reference art — no image overlay) ───
+// Draws the full goal in code: gooseneck pole, support struts, perspective
+// backboard with glass + shooter's square, mount bracket, orange rim ring and
+// the diamond-lattice net. Geometry lives in HOOP_REF (1920x1080 reference
+// space, anchored at the rim center) and is mapped onto NET_ANCHOR, so the
+// whole structure scales/moves with the editable net handle. Every part is a
+// parameterized shape — TESTING.hoopFx (rimTilt, rimDip, netSway, netBulge)
+// animates the rim and net without touching the geometry.
+const HOOP_REF = { rimX: 1148, rimY: 430, rimRX: 96, rimRY: 36 };
+const HOOP_COLORS = {
+  poleFill: '#5d6470', poleDark: '#3a3f48', poleLight: '#7a818d',
+  boardBorder: '#e0512f', boardDark: '#b53e22',
+  glass: '#cfe9f5', glassShade: '#aed6e9',
+  square: '#e8772a', rim: '#e8772a', rimDark: '#c75d18',
+  net: '#ffffff', netShade: '#c8cdd4',
+};
+
+function drawProceduralHoop(ctx, anchor, fx = {}) {
+  const C = HOOP_COLORS;
+  const s = anchor.w / (HOOP_REF.rimRX * 2);            // rim width = anchor.w
+  const rimCX = anchor.x;
+  const rimCY = anchor.y - anchor.h / 4 + 6;            // matches the net marker's rim oval
+  const px = (x) => rimCX + (x - HOOP_REF.rimX) * s;
+  const py = (y) => rimCY + (y - HOOP_REF.rimY) * s;
+
+  const poly = (pts, fill, alpha = 1, stroke = null, lw = 2) => {
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => i ? ctx.lineTo(px(x), py(y)) : ctx.moveTo(px(x), py(y)));
+    ctx.closePath();
+    ctx.globalAlpha = alpha;
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  };
+
+  ctx.save();
+
+  // ── Pole: vertical shaft + horizontal arm with mitred elbow ──
+  poly([[668,1060],[668,490],[700,430],[905,430],[905,478],[730,478],[718,500],[718,1060]],
+    C.poleFill, 1, C.poleDark, Math.max(1.5, 6 * s));
+  poly([[700,1060],[700,505],[718,505],[718,1060]], C.poleLight, 0.55);
+  poly([[730,478],[905,478],[905,462],[730,462]], C.poleDark, 0.45);
+
+  // ── Support struts (elbow → back of the backboard top) ──
+  ctx.strokeStyle = C.poleDark;
+  ctx.lineWidth = Math.max(1.5, 11 * s);
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(px(762), py(432)); ctx.lineTo(px(884), py(196)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(px(790), py(448)); ctx.lineTo(px(892), py(252)); ctx.stroke();
+
+  // ── Backboard (3/4 view — right edge nearest the viewer) ──
+  poly([[880,170],[858,182],[860,556],[882,540]], C.boardDark);
+  poly([[882,540],[860,556],[1086,608],[1105,590]], C.boardDark);
+  poly([[1095,45],[1123,62],[1133,575],[1105,590]], C.boardBorder);
+  poly([[1095,45],[1123,62],[1133,575],[1105,590]], '#000000', 0.18);
+  poly([[880,170],[1095,45],[1105,590],[882,540]], C.boardBorder);
+  poly([[901,180],[1074,80],[1083,560],[903,520]], C.glass);
+  poly([[901,180],[1074,80],[1080,300],[902,330]], C.glassShade, 0.5);
+  poly([[955,170],[990,150],[935,505],[915,500]], '#ffffff', 0.65);
+  poly([[1010,140],[1026,131],[975,512],[962,509]], '#ffffff', 0.5);
+  // inner shooter's square
+  poly([[962,302],[1042,262],[1046,468],[966,452]], null, 1, C.square, Math.max(2, 14 * s));
+
+  // ── Rim mount bracket ──
+  poly([[1046,420],[1076,408],[1076,468],[1046,470]], C.rim, 1, C.rimDark, Math.max(1, 5 * s));
+  ctx.fillStyle = C.rimDark;
+  ctx.beginPath(); ctx.arc(px(1061), py(442), Math.max(1.5, 9 * s), 0, Math.PI * 2); ctx.fill();
+
+  // ── Net: diamond lattice hanging from the rim ──
+  const rimRX = HOOP_REF.rimRX * s;
+  const rimRY = HOOP_REF.rimRY * s;
+  const rimDip = fx.rimDip ?? 0;
+  const sway = fx.netSway ?? 0;
+  const bulge = fx.netBulge ?? 0;
+  const netLen = Math.max(16, anchor.h * 0.75 - 6);
+  const COLS = 6, ROWS = 4;
+  const netPt = (u, v) => {
+    const fu = u / COLS, fv = v / ROWS;
+    const side = (fu - 0.5) * 2;
+    const halfW = (rimRX * 0.94) * (1 - fv) + (rimRX * 0.42) * fv + bulge * fv * (1 - fv) * 4;
+    const sag = Math.sin(fv * Math.PI) * netLen * 0.02;
+    const x = rimCX + side * halfW + sway * (1 - fv * 0.85);
+    const y = v === 0
+      ? rimCY + rimDip + Math.sqrt(Math.max(0, 1 - side * side)) * rimRY
+      : rimCY + rimDip + rimRY * 0.55 + fv * netLen + sag;
+    return [x, y];
+  };
+  const netSegs = [];
+  for (let v = 0; v < ROWS; v++) {
+    for (let u = 0; u < COLS; u++) {
+      netSegs.push([netPt(u, v), netPt(u + 1, v + 1)]);
+      netSegs.push([netPt(u + 1, v), netPt(u, v + 1)]);
+    }
+  }
+  const strokeNet = (color, lw, alpha) => {
+    ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.globalAlpha = alpha; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const [[x1, y1], [x2, y2]] of netSegs) { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  strokeNet(C.netShade, Math.max(1.5, 9 * s), 0.9);
+  strokeNet(C.net, Math.max(1, 5.5 * s), 1);
+  // bottom rim of the net
+  ctx.strokeStyle = C.net; ctx.lineWidth = Math.max(1, 6 * s);
+  ctx.beginPath();
+  for (let u = 0; u <= COLS; u++) {
+    const [x, y] = netPt(u, ROWS);
+    u ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.stroke();
+
+  // ── Rim ring (over the net top) ──
+  const tilt = ((fx.rimTilt ?? -7) * Math.PI) / 180;
+  ctx.beginPath();
+  ctx.ellipse(rimCX, rimCY + rimDip, rimRX, rimRY, tilt, 0, Math.PI * 2);
+  ctx.strokeStyle = C.rimDark; ctx.lineWidth = Math.max(2.5, 22 * s); ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(rimCX, rimCY + rimDip, rimRX, rimRY, tilt, 0, Math.PI * 2);
+  ctx.strokeStyle = C.rim; ctx.lineWidth = Math.max(1.5, 14 * s); ctx.stroke();
+
+  ctx.restore();
+}
+
 // ── Out-of-bounds boundary ──────────────────────────────────────────────────
 // Editable trapezoid (4 corners). Persisted to R2 via /api/testing-config.
 let OOB_BOUNDS = {
@@ -7335,6 +7460,8 @@ const TESTING = {
   courtPreset: null,
   hoopImg: null,
   hoopLoaded: false,
+  // Animatable parameters for the procedural (code-drawn) hoop
+  hoopFx: { rimTilt: -7, rimDip: 0, netSway: 0, netBulge: 0 },
   sandboxOverlays: {
     polygonZones: true,
     directions: true,
@@ -8445,15 +8572,6 @@ function testingRenderLoop(timestamp) {
       ctx.fill();
     }
 
-    // ── Hoop image over character (front of net when player walks behind) ────
-    if (TESTING.hoopLoaded && TESTING.hoopImg) {
-      const { x: nx, y: ny, w: nw } = NET_ANCHOR;
-      const scale = nw / TESTING.hoopImg.naturalWidth;
-      const dw = TESTING.hoopImg.naturalWidth  * scale;
-      const dh = TESTING.hoopImg.naturalHeight * scale;
-      ctx.drawImage(TESTING.hoopImg, nx - dw / 2, ny - NET_ANCHOR.h / 4, dw, dh);
-    }
-
     // HUD: zone + angle info
     const angleEntry = TESTING.angleStrips[currentZone.angleIdx];
     const hasAngleStrip = angleEntry && angleEntry.loaded && !angleEntry.fallback;
@@ -8514,6 +8632,18 @@ function testingRenderLoop(timestamp) {
       ctx.fillText(TESTING.selectedChar.toUpperCase(), TESTING.charX, TESTING.charY - 26);
       ctx.textAlign = 'start';
     }
+  }
+
+  // ── Hoop over character (front of net when player walks behind) ───────────
+  if (TESTING.hoopLoaded && TESTING.hoopImg) {
+    const { x: nx, y: ny, w: nw } = NET_ANCHOR;
+    const scale = nw / TESTING.hoopImg.naturalWidth;
+    const dw = TESTING.hoopImg.naturalWidth  * scale;
+    const dh = TESTING.hoopImg.naturalHeight * scale;
+    ctx.drawImage(TESTING.hoopImg, nx - dw / 2, ny - NET_ANCHOR.h / 4, dw, dh);
+  } else {
+    // No uploaded hoop image — draw the procedural vector hoop instead
+    drawProceduralHoop(ctx, NET_ANCHOR, TESTING.hoopFx);
   }
 
   // ── Sandbox: update debug panel (throttled via rAF — every frame is fine) ──
@@ -8662,6 +8792,17 @@ async function loadGMAnims() {
     const savedAnims = char.savedAnimations || {};
     GM.charAnims = [];
 
+    // Pull saved movement data from the anim library so the Movement data
+    // editor's values actually drive Game Mode bursts (was always null before).
+    let libMove = {};
+    try {
+      const r = await fetch(`${API}/api/anim-lib`);
+      const d = await r.json();
+      for (const a of (d.animations ?? [])) {
+        if (a.movementData) libMove[a.name] = a.movementData;
+      }
+    } catch { /* anim-lib unavailable — presets still apply */ }
+
     for (const [key, sa] of Object.entries(savedAnims)) {
       let slotId, zoneId;
 
@@ -8691,7 +8832,7 @@ async function loadGMAnims() {
         loop: slot.loop,
         frameCount: sa.frameCount ?? 1,
         stripUrl: sa.spriteUrl,
-        movementData: null,
+        movementData: libMove[slotId] ?? null,
         _img: null,
       };
       // Preload image so zone transitions are instant (no blank frame gap)
@@ -8727,6 +8868,53 @@ function gmLoadStrip(animEntry) {
     // Cache for future calls once loaded
     TESTING.stripImg.onload = () => { TESTING.stripLoaded = true; animEntry._img = TESTING.stripImg; };
   }
+}
+
+// ── Soul Jam movement applicators ───────────────────────────────────────────
+// Mirrors GameSimulation.executeStepback/executeCrossover: stepback bursts
+// straight away from the hoop, crossover bursts perpendicular to the hoop
+// direction (side picked from the stick, else the facing direction). The
+// burst itself decays linearly to zero (Physics.applyBurst, curve 'burst').
+function gmActionMoveData(slotId, input) {
+  const entry = GM.charAnims.find(a => a.name === slotId) ?? null;
+  const md = (typeof resolveMovementData === 'function')
+    ? resolveMovementData(slotId, entry?.movementData ?? null)
+    : (entry?.movementData ?? null);
+  if (!md || md.curve !== 'burst') return md;
+
+  const out = Object.assign({}, md);
+
+  // Hoop direction from the player (net anchor = hoop)
+  const hx = NET_ANCHOR.x - TESTING.charX;
+  const hy = NET_ANCHOR.y - TESTING.charY;
+  const hl = Math.hypot(hx, hy) || 1;
+  const toHoop = { x: hx / hl, y: hy / hl };
+
+  if (slotId === 'stepback') {
+    out.dirX = -toHoop.x;
+    out.dirY = -toHoop.y;
+  } else {
+    let perp = { x: -toHoop.y, y: toHoop.x };
+    const mx = input?.moveX ?? 0, my = input?.moveY ?? 0;
+    if (Math.abs(mx) > 0.1 || Math.abs(my) > 0.1) {
+      if (mx * perp.x + my * perp.y < 0) perp = { x: -perp.x, y: -perp.y };
+    } else if (perp.x * (GM.physics?.facingRight ? 1 : -1) < 0) {
+      perp = { x: -perp.x, y: -perp.y };
+    }
+    out.dirX = perp.x;
+    out.dirY = perp.y;
+  }
+
+  // SeparationModel movement bonus: moving before the move adds up to +30%
+  if (typeof calcSeparationBurst === 'function' && GM.physics) {
+    const speedPxSec = Math.hypot(GM.physics.vx, GM.physics.vy) * 60;
+    const bonus = calcSeparationBurst(75, 50, speedPxSec).burstVelocity
+                / calcSeparationBurst(75, 50, 0).burstVelocity;
+    const peak = Math.hypot(out.velocityX ?? 0, out.velocityY ?? 0) || 7;
+    out.velocityX = peak * bonus;
+    out.velocityY = 0;
+  }
+  return out;
 }
 
 // ── Game Mode tick — called inside testingRenderLoop before draw ────────────
@@ -8767,7 +8955,7 @@ function gmTick(timestamp) {
     // R2 HELD — Dribble moves
     else if (inDribble && !inDefense) {
       if (input.justCross) {
-        GM.player.triggerAction('cross', null);
+        GM.player.triggerAction('cross', gmActionMoveData('cross', input));
         const e = _gmFindSlot('cross'); if (e) gmLoadStrip(e);
         _triggeredAction = 'crossover';
       } else if (input.justTriangle) {
@@ -8779,7 +8967,7 @@ function gmTick(timestamp) {
         const e = _gmFindSlot('behind'); if (e) gmLoadStrip(e);
         _triggeredAction = 'behind back';
       } else if (input.justCircle) {
-        GM.player.triggerAction('stepback', null);
+        GM.player.triggerAction('stepback', gmActionMoveData('stepback', input));
         const e = _gmFindSlot('stepback'); if (e) gmLoadStrip(e);
         _triggeredAction = 'step back';
       }
@@ -8792,14 +8980,14 @@ function gmTick(timestamp) {
         _triggeredAction = 'dribble';
       }
       else if (input.justCircle) {
-        GM.player.triggerAction('stepback', null);
+        GM.player.triggerAction('stepback', gmActionMoveData('stepback', input));
         const e = _gmFindSlot('stepback'); if (e) gmLoadStrip(e);
         _triggeredAction = 'step back';
       }
       else if (input.justCrossoverLeft || input.justCrossoverRight) {
         if (input.justCrossoverLeft)  GM.physics.facingRight = false;
         if (input.justCrossoverRight) GM.physics.facingRight = true;
-        GM.player.triggerAction('cross', null);
+        GM.player.triggerAction('cross', gmActionMoveData('cross', input));
         const e = _gmFindSlot('cross'); if (e) gmLoadStrip(e);
         _triggeredAction = 'crossover';
       }
@@ -8810,8 +8998,8 @@ function gmTick(timestamp) {
   const dt = GM.lastTimestamp ? Math.min(timestamp - GM.lastTimestamp, 50) : 16;
   GM.lastTimestamp = timestamp;
 
-  // Update physics — pass defense mode + sprint
-  const phys = GM.physics.update(input.moveX, input.moveY, inDefense, input.sprint);
+  // Update physics — pass defense mode + sprint (dt drives the burst decay)
+  const phys = GM.physics.update(input.moveX, input.moveY, inDefense, input.sprint, dt);
   TESTING.charX = phys.x;
   TESTING.charY = phys.y;
 

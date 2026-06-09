@@ -89,6 +89,14 @@ class AnimationPlayer {
     const anim = this._findFirstMatch(candidates);
     if (!anim) return;
 
+    // No explicit movement data? Resolve it from the chosen animation:
+    // saved editor data (anim.movementData) layered over the built-in preset.
+    if (!movementData) {
+      movementData = (typeof resolveMovementData === 'function')
+        ? resolveMovementData(anim.name, anim.movementData ?? null)
+        : (anim.movementData ?? null);
+    }
+
     this._setAnim(anim.name);
     this.state = PLAYER_STATES.ACTION;
     this.actionTimer = movementData?.duration ?? (anim.frameCount / anim.fps) * 1000;
