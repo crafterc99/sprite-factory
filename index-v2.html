@@ -8396,6 +8396,7 @@ function testingRenderLoop(timestamp) {
           TESTING._upCache.height = frameH * 2;
         }
         const uc = TESTING._upCache.getContext('2d');
+        uc.clearRect(0, 0, frameW * 2, frameH * 2);
         uc.imageSmoothingEnabled = true;
         uc.imageSmoothingQuality = 'high';
         uc.drawImage(activeImg, TESTING.currentFrame * frameW, 0, frameW, frameH, 0, 0, frameW * 2, frameH * 2);
