@@ -1472,7 +1472,7 @@
 
           <!-- ② Court canvas -->
           <div class="tv2-court-wrap" id="tv2CourtWrap">
-            <canvas id="testingCourt" width="960" height="640"></canvas>
+            <canvas id="testingCourt" width="960" height="540"></canvas>
 
             <!-- Live status pill (top-left) -->
             <div class="tv2-live-hud">
@@ -1624,9 +1624,15 @@
                 </div>
                 <!-- Anim speed -->
                 <div class="tv2-set-row">
-                  <span>Anim speed</span>
+                  <span>Speed</span>
                   <input type="range" id="testingSpeed" min="0.25" max="3" value="1" step="0.25" />
                   <span id="testingSpeedLabel" style="font-family:var(--mono);min-width:24px;text-align:right">1x</span>
+                </div>
+                <!-- FPS — per-animation, saved to localStorage -->
+                <div class="tv2-set-row">
+                  <span>FPS</span>
+                  <input type="range" id="testingFPS" min="1" max="30" value="8" step="1" />
+                  <span id="testingFPSLabel" style="font-family:var(--mono);min-width:28px;text-align:right">8fps</span>
                 </div>
                 <!-- Debug toggles -->
                 <!-- Resize mode toggle -->
@@ -7296,7 +7302,7 @@ const TESTING = {
   courtImg: null,
   courtLoaded: false,
   charX: 480,
-  charY: 380,
+  charY: 320,
   stripImg: null,
   stripLoaded: false,
   currentFrame: 0,
@@ -7353,7 +7359,7 @@ function initTestingPage() {
   // Scale canvas to devicePixelRatio so it's crisp on Retina/HiDPI displays.
   // The CSS size stays at the logical 960×640; the internal buffer is 2× (or 3×) larger.
   const dpr = Math.round(window.devicePixelRatio || 1);
-  const LOGICAL_W = 960, LOGICAL_H = 640;
+  const LOGICAL_W = 960, LOGICAL_H = 540;
   canvas.width  = LOGICAL_W * dpr;
   canvas.height = LOGICAL_H * dpr;
   canvas.style.width  = LOGICAL_W + 'px';
@@ -7405,13 +7411,32 @@ function initTestingPage() {
   loadTestingConfig(); // restore OOB corners + zone dividers from R2
   checkTcPersistence();
 
+  // Restore persisted scale/speed
+  const _savedScale = parseFloat(localStorage.getItem('testing_scale') || '3');
+  const _savedSpeed = parseFloat(localStorage.getItem('testing_speed') || '1');
+  TESTING.scale = _savedScale;
+  TESTING.speed = _savedSpeed;
+  const _scaleEl = document.getElementById('testingScale');
+  const _speedEl = document.getElementById('testingSpeed');
+  if (_scaleEl) { _scaleEl.value = _savedScale; document.getElementById('testingScaleLabel').textContent = _savedScale + 'x'; }
+  if (_speedEl) { _speedEl.value = _savedSpeed; document.getElementById('testingSpeedLabel').textContent = _savedSpeed + 'x'; }
+
   document.getElementById('testingScale').oninput = (e) => {
     TESTING.scale = parseFloat(e.target.value);
     document.getElementById('testingScaleLabel').textContent = TESTING.scale + 'x';
+    localStorage.setItem('testing_scale', TESTING.scale);
   };
   document.getElementById('testingSpeed').oninput = (e) => {
     TESTING.speed = parseFloat(e.target.value);
     document.getElementById('testingSpeedLabel').textContent = TESTING.speed + 'x';
+    localStorage.setItem('testing_speed', TESTING.speed);
+  };
+  document.getElementById('testingFPS').oninput = (e) => {
+    TESTING.fps = parseInt(e.target.value);
+    document.getElementById('testingFPSLabel').textContent = TESTING.fps + 'fps';
+    if (TESTING.selectedAnim) {
+      localStorage.setItem('testing_fps_' + TESTING.selectedChar + '_' + TESTING.selectedAnim, TESTING.fps);
+    }
   };
   document.getElementById('testingShowHitbox').onchange = (e) => { TESTING.showHitbox = e.target.checked; };
   document.getElementById('testingShowZones').onchange  = (e) => { TESTING.showZones  = e.target.checked; };
@@ -7826,8 +7851,11 @@ function testingSelectAnim(animName) {
   const char = TESTING.roster.find(c => c.name === TESTING.selectedChar);
   const savedAnim = char?.savedAnimations?.[animName];
   TESTING.frameCount = savedAnim?.frameCount || animDef?.frames || 4;
-  TESTING.fps = savedAnim?.fps || animDef?.fps || DEFAULT_FPS_ANIM[animName] || 8;
+  const _afKey = 'testing_fps_' + TESTING.selectedChar + '_' + animName;
+  TESTING.fps = parseInt(localStorage.getItem(_afKey) || '') || savedAnim?.fps || animDef?.fps || DEFAULT_FPS_ANIM[animName] || 8;
   TESTING.loop = animDef?.loop !== false;
+  const _afEl = document.getElementById('testingFPS');
+  if (_afEl) { _afEl.value = TESTING.fps; document.getElementById('testingFPSLabel').textContent = TESTING.fps + 'fps'; }
 
   // Cache-bust so regenned strips always load fresh
   const cacheBust = Date.now();
@@ -8021,8 +8049,13 @@ function testingSelectSavedAnim(animId, spriteUrl, frameCount, fps, angleIndex) 
   TESTING.currentFrame = 0;
   TESTING.stripLoaded = false;
   TESTING.frameCount = frameCount || 4;
-  TESTING.fps = fps || 8;
+  // Per-animation FPS override wins over saved default
+  const _fpsKey = 'testing_fps_' + TESTING.selectedChar + '_' + `__saved__${animId}`;
+  TESTING.fps = parseInt(localStorage.getItem(_fpsKey) || '') || fps || 8;
   TESTING.loop = true;
+  // Sync FPS slider
+  const _fpsEl = document.getElementById('testingFPS');
+  if (_fpsEl) { _fpsEl.value = TESTING.fps; document.getElementById('testingFPSLabel').textContent = TESTING.fps + 'fps'; }
 
   // Cache-bust so regen'd strips always load fresh
   const cacheBust = Date.now();
@@ -8098,7 +8131,7 @@ function testingTogglePlay() {
 
 function testingResetPosition() {
   TESTING.charX = 480;
-  TESTING.charY = 380;
+  TESTING.charY = 320;
 }
 
 function testingRenderLoop(timestamp) {
@@ -8372,9 +8405,7 @@ function testingRenderLoop(timestamp) {
       drawW = drawH * (hdImg.naturalWidth / hdImg.naturalHeight);
       drawX = TESTING.charX - drawW / 2;
       drawY = TESTING.charY - drawH;
-      const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, drawW);
       ctx.drawImage(hdImg, 0, 0, hdImg.naturalWidth, hdImg.naturalHeight, drawX, drawY, drawW, drawH);
-      gmRestoreFlip(ctx, _flipped);
     } else {
       // Strip fallback
       const frameW = activeFCount > 0 ? Math.round(activeImg.width / activeFCount) : activeImg.width;
@@ -8385,9 +8416,7 @@ function testingRenderLoop(timestamp) {
       const baselineFrac = isStandardFrame ? (170 / frameH) : 1.0;
       drawX = TESTING.charX - drawW / 2;
       drawY = TESTING.charY - baselineFrac * drawH;
-      const _flipped = gmApplyFacingFlip(ctx, TESTING.charX, drawW);
       ctx.drawImage(activeImg, TESTING.currentFrame * frameW, 0, frameW, frameH, drawX, drawY, drawW, drawH);
-      gmRestoreFlip(ctx, _flipped);
     }
 
     // Shadow at feet position
@@ -8559,9 +8588,9 @@ function startGameMode(silent) {
 
   // ── Initialise physics ──────────────────────────────────────────────────
   GM.physics = new PhysicsEngine({
-    groundY:     520,
+    groundY:     460,
     boundsX:     [80, 880],
-    boundsY:     [80, 520],
+    boundsY:     [60, 460],
     maxSpeed:    5,       // run speed (px/frame at full stick)
     sprintMult:  1.6,     // L1/R1: 8px/frame max
     walkMult:    0.52,    // walk: ~2.6px/frame
@@ -8571,7 +8600,7 @@ function startGameMode(silent) {
     friction:    0.78,    // snappy stops
     airFriction: 0.97,
   });
-  GM.physics.reset(TESTING.charX, 520);
+  GM.physics.reset(TESTING.charX, 460);
 
   // ── Load character animations from savedAnimations slot entries ─────────────
   loadGMAnims().then(() => {
