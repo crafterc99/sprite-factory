@@ -2656,3 +2656,16 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: server boots clean; / serves 200; removed APIs return Not found; Playwright — nav shows Dashboard/Studio/Video/Wardrobe/Testing/Deploy, page-prompts absent, pt*/pm* undefined, zero JS errors
 - Assumptions: R2-hosted prompt artifacts can't be touched from this environment (R2 not configured here); no prompt data files exist locally, so "unused prompts" cleanup = removing their only readers/writers so they cannot return
 - Next dependency: none
+
+## TASK-ADHOC-20260610C — Video tab: faster extraction/loading + higher-quality cutouts
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - lib/sprite-generator/video-extractor.js — frames now written as high-quality JPEG (-q:v 2) with input-side -ss/-t fast seek, -an -sn -dn, -threads 0; the same single decode pass also emits 200px thumb-*.jpg gallery thumbnails
+  - routes/video.js — frame handling is format-agnostic (IMG_RE png/jpg, thumbs excluded); /api/video/extract returns thumbUrl per frame; selection copies preserve source format; /api/video/strip builds the ref strip at targetHeight 1024 (was 720 default); both subject-extraction endpoints now key with softEdges and crop to 768x1024 with noUpscale (was hard-edged 384x512 downscale)
+  - lib/sprite-processor/index.js — removeBackground gains opts.softEdges (green de-spill + feathered alpha, skips the binary alpha snap meant for pixel art); cropToContent gains opts.noUpscale (content smaller than target is padded at native resolution instead of enlarged)
+  - index-v2.html — gallery renders ffmpeg thumbnails (thumbUrl) with decoding=async; subject cutouts run through a sliding worker pool (concurrency 4) instead of lock-step batches of 3
+- What changed: extraction encodes several times faster and gallery payload drops ~25x (66KB jpeg + 6.5KB thumb vs 179KB png per 720p frame; bigger gap on real 1080p footage); cutout throughput up via pool + concurrency; cutouts retain 2x the pixels with smooth de-spilled edges and are never upscaled
+- Validation: synthetic 720p clip — 20 frames + 20 thumbs in 284ms with correct fast-seek window; old PNG path benchmarked at 289ms/179KB frames (same time, ~2.7x size at 720p test pattern; JPEG advantage grows with photographic content); soft-edge pipeline on synthetic green-screen subject — 225ms, no green fringe, native-res content padded to 768x1024; modules require cleanly; Playwright page load with zero JS errors
+- Assumptions: Gemini subject output stays 1K (cost unchanged) — quality gain comes from no longer discarding pixels post-generation; old PNG sessions still work via the format-agnostic matchers
+- Next dependency: none

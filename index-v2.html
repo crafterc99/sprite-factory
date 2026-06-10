@@ -5343,9 +5343,11 @@ async function extractVideoFrames() {
 
 function renderVideoGallery() {
   const gallery = document.getElementById('videoFrameGallery');
+  // Browse with the small ffmpeg-generated thumbnails — full frames are only
+  // touched server-side (selection copies, cutouts), never downloaded here
   gallery.innerHTML = VID.frames.map((f, i) => `
     <div class="video-frame-thumb ${VID.selected.has(f.file) ? 'selected' : ''}" onclick="toggleVideoFrame(${i})">
-      <img src="${f.url}" loading="lazy" />
+      <img src="${f.thumbUrl || f.url}" loading="lazy" decoding="async" />
       <span class="video-frame-num">${i + 1}</span>
     </div>
   `).join('');
@@ -5474,8 +5476,8 @@ async function confirmVideoSelection() {
 
 async function extractVideoSubjects(frameFiles) {
   // Fire one request per frame — each slot updates the moment its result lands
-  // Max 3 concurrent to avoid rate-limiting the AI
-  const CONCURRENCY = 3;
+  // Max 4 concurrent to avoid rate-limiting the AI (503s retry with backoff)
+  const CONCURRENCY = 4;
   const RETRY_DELAYS = [2000, 5000, 10000]; // backoff for 503 / transient errors
 
   function _errMsg(data, httpStatus) {
@@ -5551,11 +5553,16 @@ async function extractVideoSubjects(frameFiles) {
     }
   }
 
-  // Process in batches of CONCURRENCY
-  for (let start = 0; start < frameFiles.length; start += CONCURRENCY) {
-    const batch = frameFiles.slice(start, start + CONCURRENCY);
-    await Promise.all(batch.map((file, offset) => extractOne(file, start + offset)));
+  // Sliding worker pool: as soon as any extraction finishes, the next frame
+  // starts — a slow frame no longer holds up a whole batch
+  let nextIdx = 0;
+  async function worker() {
+    while (nextIdx < frameFiles.length) {
+      const i = nextIdx++;
+      await extractOne(frameFiles[i], i);
+    }
   }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, frameFiles.length) }, worker));
 
   // Update section label once all done
   const label = document.querySelector('#videoSelectedStrip .vst-section-label');

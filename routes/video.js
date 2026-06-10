@@ -12,6 +12,11 @@ const { buildRefStrip } = require('../lib/sprite-generator/strip-builder');
 const { recordCost } = require('../middleware/cost-tracker');
 const { loadCustomAnimations, saveCustomAnimations } = require('./characters');
 
+// Extracted frames are JPEG since the fast-extraction change; older sessions
+// have PNGs. Match both, and never treat gallery thumbnails as frames.
+const IMG_RE = /\.(png|jpe?g)$/i;
+const isFrameFile = (f) => IMG_RE.test(f) && !f.startsWith('thumb-');
+
 function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serveImage, runWithConcurrency }) {
 
   // POST /api/video/upload — Upload video file (multipart binary)
@@ -104,7 +109,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       const framesDir = path.join(sessionDir, 'frames');
       // Clear previous extraction if re-extracting with new trim
       if (fs.existsSync(framesDir)) {
-        fs.readdirSync(framesDir).filter(f => f.endsWith('.png')).forEach(f => fs.unlinkSync(path.join(framesDir, f)));
+        fs.readdirSync(framesDir).filter(f => IMG_RE.test(f)).forEach(f => fs.unlinkSync(path.join(framesDir, f)));
       }
       fs.mkdirSync(framesDir, { recursive: true });
 
@@ -115,8 +120,20 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       }
 
       const result = await extract(path.join(sessionDir, videoFiles[0]), framesDir, extractOpts);
-      const frames = fs.readdirSync(framesDir).filter(f => f.endsWith('.png')).sort();
-      return json(res, { frameCount: frames.length, framesDir, sessionId, frames: frames.map(f => ({ file: f, fileName: f, url: `/api/video/frame/${sessionId}/${f}` })) });
+      const allFiles = fs.readdirSync(framesDir);
+      const frames = allFiles.filter(isFrameFile).sort();
+      const thumbs = new Set(allFiles.filter(f => f.startsWith('thumb-')));
+      return json(res, {
+        frameCount: frames.length, framesDir, sessionId,
+        frames: frames.map(f => {
+          const thumb = f.replace(/^frame-/, 'thumb-');
+          return {
+            file: f, fileName: f,
+            url: `/api/video/frame/${sessionId}/${f}`,
+            thumbUrl: thumbs.has(thumb) ? `/api/video/frame/${sessionId}/${thumb}` : undefined,
+          };
+        }),
+      });
     } catch (err) {
       return json(res, { error: err.message }, 500);
     }
@@ -136,16 +153,16 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     if (!fs.existsSync(framesDir)) return json(res, { error: 'Frames not found' }, 404);
 
     try {
-      const allFrames = fs.readdirSync(framesDir).filter(f => f.endsWith('.png')).sort().map(f => path.join(framesDir, f));
+      const allFrames = fs.readdirSync(framesDir).filter(isFrameFile).sort().map(f => path.join(framesDir, f));
       const result = await smartSelect(allFrames, count || 6, { moveType });
       const selectDir = path.join(TMP_DIR, sessionId, 'selected');
       fs.mkdirSync(selectDir, { recursive: true });
       result.selected.forEach((framePath, i) => {
-        fs.copyFileSync(framePath, path.join(selectDir, `frame-${String(i).padStart(2,'0')}.png`));
+        fs.copyFileSync(framePath, path.join(selectDir, `frame-${String(i).padStart(2,'0')}${path.extname(framePath).toLowerCase()}`));
       });
 
       // Also return the full frame file list for gallery pre-selection
-      const allFrameFiles = fs.readdirSync(framesDir).filter(f => f.endsWith('.png')).sort();
+      const allFrameFiles = fs.readdirSync(framesDir).filter(isFrameFile).sort();
       const selectedFileNames = result.selected.map(p => path.basename(p));
 
       return json(res, {
@@ -158,7 +175,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
             index: result.selectedIndices[i],
             file: path.basename(framePath),
             url: `/api/video/frame/${sessionId}/${path.basename(framePath)}`,
-            selectedUrl: `/api/video/selected/${sessionId}/frame-${String(i).padStart(2,'0')}.png`,
+            selectedUrl: `/api/video/selected/${sessionId}/frame-${String(i).padStart(2,'0')}${path.extname(framePath).toLowerCase()}`,
             scores: { ballFound: analysis.ball?.found || false, ballConfidence: analysis.ball?.confidence || 0, ballInflection: analysis.ballInflection || false, motion: analysis.motion || 0, sharpness: analysis.sharpness || 0, total: analysis.score || 0 },
           };
         }),
@@ -192,15 +209,15 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       }
       fs.mkdirSync(selectDir, { recursive: true });
 
-      // Copy selected frames in order
+      // Copy selected frames in order (preserve source format)
       frameFiles.forEach((file, i) => {
         const srcPath = path.join(framesDir, file);
         if (fs.existsSync(srcPath)) {
-          fs.copyFileSync(srcPath, path.join(selectDir, `frame-${String(i).padStart(2,'0')}.png`));
+          fs.copyFileSync(srcPath, path.join(selectDir, `frame-${String(i).padStart(2,'0')}${path.extname(file).toLowerCase()}`));
         }
       });
 
-      const selectedFiles = fs.readdirSync(selectDir).filter(f => f.endsWith('.png')).sort();
+      const selectedFiles = fs.readdirSync(selectDir).filter(f => IMG_RE.test(f)).sort();
       return json(res, {
         success: true,
         count: selectedFiles.length,
@@ -238,11 +255,13 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       if (subjectFiles.length > 0) {
         frames = subjectFiles;
       } else {
-        frames = fs.readdirSync(selectDir).filter(f => f.endsWith('.png')).sort().map(f => path.join(selectDir, f));
+        frames = fs.readdirSync(selectDir).filter(f => IMG_RE.test(f)).sort().map(f => path.join(selectDir, f));
       }
 
+      // Full subject height (1024) — the reference strip keeps every pixel the
+      // cutout produced instead of downscaling to the old 720px default
       const stripPath = path.join(TMP_DIR, sessionId, 'ref-strip.png');
-      await buildRefStrip(frames, stripPath);
+      await buildRefStrip(frames, stripPath, { targetHeight: 1024 });
       return json(res, {
         stripUrl: `/api/video/strip-image/${sessionId}`,
         frameCount: frames.length,
@@ -310,7 +329,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       return json(res, { error: 'No selected frames. Select frames first.' }, 400);
     }
 
-    const selectedFrames = fs.readdirSync(selectDir).filter(f => f.endsWith('.png')).sort();
+    const selectedFrames = fs.readdirSync(selectDir).filter(f => IMG_RE.test(f)).sort();
     if (!selectedFrames.length) {
       return json(res, { error: 'No selected frames found' }, 400);
     }
@@ -416,7 +435,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     // Find matching reference frame from session selected dir
     const selectDir = path.join(TMP_DIR, sessionId, 'selected');
     const selectedFiles = fs.existsSync(selectDir)
-      ? fs.readdirSync(selectDir).filter(f => f.endsWith('.png')).sort()
+      ? fs.readdirSync(selectDir).filter(f => IMG_RE.test(f)).sort()
       : [];
     const videoRefPath = selectedFiles[frameIndex]
       ? path.join(selectDir, selectedFiles[frameIndex])
@@ -534,11 +553,15 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
       const croppedPath = path.join(subjectsDir, `cropped-${frameIndex}.png`);
       fs.writeFileSync(rawPath, result.imageBuffer);
 
-      await removeBackground(rawPath, greenRemovedPath);
-      await cropToContent(greenRemovedPath, croppedPath, { width: 384, height: 512, padding: 6 });
+      // Soft-edged chroma key (de-spill + feathered alpha — these are
+      // photographic refs, not pixel art) and a 768x1024 canvas at native
+      // crop resolution: the old 384x512 target threw away half the pixels
+      // the AI produced.
+      await removeBackground(rawPath, greenRemovedPath, { softEdges: true });
+      await cropToContent(greenRemovedPath, croppedPath, { width: 768, height: 1024, padding: 8, noUpscale: true });
       const sharp = require('sharp');
-      await sharp({ create: { width: 384, height: 512, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 255 } } })
-        .composite([{ input: croppedPath }])
+      await sharp({ create: { width: 768, height: 1024, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 255 } } })
+        .composite([{ input: croppedPath, gravity: 'centre' }])
         .png()
         .toFile(path.join(subjectsDir, outFile));
 
@@ -607,11 +630,11 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
         const greenPath  = path.join(subjectsDir, `green-${i}.png`);
         const cropPath   = path.join(subjectsDir, `crop-${i}.png`);
         fs.writeFileSync(rawPath, result.imageBuffer);
-        await removeBg(rawPath, greenPath);
-        await cropToContent(greenPath, cropPath, { width: 384, height: 512, padding: 6 });
+        await removeBg(rawPath, greenPath, { softEdges: true });
+        await cropToContent(greenPath, cropPath, { width: 768, height: 1024, padding: 8, noUpscale: true });
         const sharp2 = require('sharp');
-        await sharp2({ create: { width: 384, height: 512, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 255 } } })
-          .composite([{ input: cropPath }])
+        await sharp2({ create: { width: 768, height: 1024, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 255 } } })
+          .composite([{ input: cropPath, gravity: 'centre' }])
           .png()
           .toFile(path.join(subjectsDir, outFile));
         recordCost('gemini-3-pro-image-preview', 'subject-extract', '1K', 1, { sessionId, frameIndex: i });
