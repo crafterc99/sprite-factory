@@ -171,8 +171,6 @@ require('./routes/evaluation').register(router, ctx);
 require('./routes/video').register(router, ctx);
 require('./routes/export').register(router, ctx);
 require('./routes/pipeline').register(router, ctx);
-require('./routes/prompts').register(router, ctx);
-require('./routes/prompt-pipeline').register(router, ctx);
 require('./routes/production').register(router, ctx);
 require('./routes/anchor').register(router, ctx);
 require('./routes/animation-contract').register(router, ctx);

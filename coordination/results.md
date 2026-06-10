@@ -2643,3 +2643,16 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: node smoke test (locomotion switch fired exactly at last frame 7; queued crossover fired at wrap with burst+lock; 2x speed doubled frame rate); Playwright on served studio — no JS errors, applicator select present, old editor controls and drawProceduralHoop absent; soul-jam reverts built clean with 23/23 tests passing
 - Assumptions: "remove the hoop" includes the soul-jam HoopRenderer overlay (reverted to stub; baked court hoop + image workflow remain); applicator "none" deletes custom movement so the anim falls back to its built-in preset
 - Next dependency: soul-jam gained game-wide permanent ANIM_SPEED (localStorage 'soulJam.animSpeed'), matching PLAYER_SCALE
+
+## TASK-ADHOC-20260610B — Remove Prompts tab + unused prompt code/stores
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - index-v2.html — removed Prompts nav button, page-prompts HTML, showPage hook, the PROMPT MANAGER JS block (dead legacy UI — its mount elements didn't exist anywhere) and the PROMPT PIPELINE (pt*) JS block, plus their CSS sections (~53.5KB total)
+  - server.js — removed registrations for routes/prompts and routes/prompt-pipeline
+  - routes/prompts.js, routes/prompt-pipeline.js — deleted (prompt-lab / prompt-manager / pipeline2 endpoints had no remaining consumers)
+  - prompt-system/ (PromptModule/PromptPipeline/PromptRenderer/PromptState) — deleted; only consumer was routes/prompt-pipeline.js; its data store (data/.prompt-pipelines.json) does not exist locally and now has no writer
+- Kept (still used by generation/studio): /api/char-pipeline/prompts + data/.char-prompts.json (character gen), data/frame-prompts.json + /api/frame-prompts (studio frame regen), lib/sprite-generator/prompts.js overrides (getActivePrompt used by routes/anchor.js + routes/generation.js), .training-data (routes/evaluation.js), and the Studio's angle/frame prompt editors
+- Validation: server boots clean; / serves 200; removed APIs return Not found; Playwright — nav shows Dashboard/Studio/Video/Wardrobe/Testing/Deploy, page-prompts absent, pt*/pm* undefined, zero JS errors
+- Assumptions: R2-hosted prompt artifacts can't be touched from this environment (R2 not configured here); no prompt data files exist locally, so "unused prompts" cleanup = removing their only readers/writers so they cannot return
+- Next dependency: none
