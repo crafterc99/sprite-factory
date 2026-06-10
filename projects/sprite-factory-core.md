@@ -50,6 +50,7 @@ None currently — pending Railway stability.
 
 | Date | What happened |
 |---|---|
+| 2026-06-10 | Video tab: multi-video session boxes (Studio-style) with background extract/cutout, parallel non-blocking processing (async ffmpeg/yt-dlp/curl), localStorage+server state restore with auto-resume |
 | 2026-06-10 | Video tab: JPEG+thumbnail extraction (single ffmpeg pass), format-agnostic frame routes, soft-edge de-spilled cutouts at 768x1024 native res (no upscale), 1024px ref strips, sliding cutout pool |
 | 2026-06-10 | Prompts tab removed (UI, prompt-lab/prompt-manager/pipeline2 routes, prompt-system engine); generation-facing prompt stores kept (char prompts, frame prompts, angle/ball overrides, training) |
 | 2026-06-10 | Testing tab: procedural hoop removed (hoop image upload auto-removes background); animation switches/moves now wait for the current anim's last frame (smooth transitions); movement editor replaced by a simple permanent crossover/stepback Soul Jam applicator; speed slider now drives Game Mode playback |

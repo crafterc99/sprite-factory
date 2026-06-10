@@ -48,10 +48,7 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     const sessionDir = path.join(TMP_DIR, sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });
     try {
-      const videoPath = await new Promise((resolve, reject) => {
-        try { resolve(require('../lib/sprite-generator/video-extractor').downloadYouTube(url, sessionDir)); }
-        catch (e) { reject(e); }
-      });
+      const videoPath = await require('../lib/sprite-generator/video-extractor').downloadYouTube(url, sessionDir);
       return json(res, { sessionId, videoPath, size: fs.statSync(videoPath).size });
     } catch (err) {
       return json(res, { error: err.message }, 500);
@@ -69,8 +66,9 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     const ext = (url.match(/\.(mp4|mov|webm|mkv)(\?|$)/i)?.[1] || 'mp4').toLowerCase();
     const videoPath = path.join(sessionDir, `input.${ext}`);
     try {
-      const { execSync } = require('child_process');
-      execSync(`curl -fsSL -o "${videoPath}" "${url}"`, { stdio: 'pipe', timeout: 120000 });
+      // Async download — concurrent sessions don't block each other or the server
+      const { run } = require('../lib/sprite-generator/video-extractor');
+      await run('curl', ['-fsSL', '-o', videoPath, url], { timeout: 120000 });
       if (!fs.existsSync(videoPath) || fs.statSync(videoPath).size < 1024) {
         throw new Error('Downloaded file is empty or too small');
       }
@@ -143,6 +141,40 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
   router.get('/api/video/frame/:session/:file', (req, res, params) => {
     const framePath = path.join(TMP_DIR, params.session, 'frames', params.file);
     return serveImage(res, framePath);
+  });
+
+  // GET /api/video/session/:sid — Restore a session's state (frames + finished
+  // subject cutouts) so the multi-video UI can rebuild its boxes after a reload
+  router.get('/api/video/session/:sid', (req, res, params) => {
+    const sid = params.sid;
+    const sessionDir = path.join(TMP_DIR, sid);
+    if (!fs.existsSync(sessionDir)) return json(res, { exists: false });
+
+    const framesDir = path.join(sessionDir, 'frames');
+    let frames = [];
+    if (fs.existsSync(framesDir)) {
+      const allFiles = fs.readdirSync(framesDir);
+      const thumbs = new Set(allFiles.filter(f => f.startsWith('thumb-')));
+      frames = allFiles.filter(isFrameFile).sort().map(f => {
+        const thumb = f.replace(/^frame-/, 'thumb-');
+        return {
+          file: f, fileName: f,
+          url: `/api/video/frame/${sid}/${f}`,
+          thumbUrl: thumbs.has(thumb) ? `/api/video/frame/${sid}/${thumb}` : undefined,
+        };
+      });
+    }
+
+    const subjectsDir = path.join(sessionDir, 'subjects');
+    const subjects = {};
+    if (fs.existsSync(subjectsDir)) {
+      for (const f of fs.readdirSync(subjectsDir)) {
+        const m = f.match(/^subject-(\d+)\.png$/);
+        if (m) subjects[m[1]] = `/api/video/subject/${sid}/${f}`;
+      }
+    }
+
+    return json(res, { exists: true, frames, frameCount: frames.length, subjects });
   });
 
   // POST /api/video/smart-select — Smart select key frames

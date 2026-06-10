@@ -317,6 +317,23 @@
   .video-sel-status.none { color:#50507a; }
 
   /* ─── SOURCES PAGE ─── */
+  /* ─── Video multi-session boxes ─── */
+  .video-session-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; margin-top:16px; }
+  .video-session-card { position:relative; background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; cursor:pointer; transition:border-color .15s, transform .15s; }
+  .video-session-card:hover { border-color:var(--border-hi); transform:translateY(-2px); }
+  .video-session-card .vsc-thumb { height:130px; background:var(--surface3); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .video-session-card .vsc-thumb img { width:100%; height:100%; object-fit:cover; }
+  .video-session-card .vsc-body { padding:10px 12px; }
+  .video-session-card .vsc-name { font-family:var(--mono); font-size:10px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:6px; }
+  .vid-badge { font-family:var(--mono); font-size:9px; padding:2px 8px; border-radius:10px; border:1px solid; white-space:nowrap; display:inline-block; }
+  .vid-badge.working { color:#ffcc00; border-color:rgba(255,204,0,.4); background:rgba(255,204,0,.08); }
+  .vid-badge.select { color:#66aaff; border-color:rgba(100,170,255,.4); background:rgba(100,170,255,.08); }
+  .vid-badge.ready { color:#00ff88; border-color:rgba(0,255,136,.35); background:rgba(0,255,136,.08); }
+  .vid-badge.error { color:#ff6666; border-color:rgba(255,80,80,.4); background:rgba(255,80,80,.08); }
+  .vsc-remove { position:absolute; top:6px; right:6px; width:20px; height:20px; border-radius:50%; background:rgba(0,0,0,.6); color:#888; border:1px solid #333; font-size:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:2; }
+  .vsc-remove:hover { color:#ff6666; border-color:#ff6666; }
+  .vsc-progress { height:3px; background:var(--surface3); border-radius:2px; overflow:hidden; margin-top:6px; }
+  .vsc-progress div { height:100%; background:var(--accent2); transition:width .3s; }
   .source-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px; }
   .source-slot { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; }
   .source-slot-label { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:#50507a; text-transform:uppercase; margin-bottom:12px; }
@@ -965,43 +982,56 @@
         <div class="section-header">
           <div>
             <div class="section-title">Video → Sprite</div>
-            <div class="section-sub" id="videoSub">Upload a clip, pick your frames, generate the animation</div>
+            <div class="section-sub" id="videoSub">Upload clips — every video gets its own box and keeps processing in the background</div>
           </div>
         </div>
 
-        <!-- Step 1: Upload + Trim + Extract -->
-        <div class="card" id="videoUploadCard">
-          <div class="card-title">1 — Upload Video</div>
+        <!-- ── LIST VIEW: upload + one box per video ── -->
+        <div id="videoListView">
+          <div class="card" id="videoUploadCard">
+            <div class="card-title">Upload Video</div>
 
-          <!-- URL input: paste a direct .mp4 link (HiggsField CDN, etc.) -->
-          <div style="display:flex;gap:8px;margin-bottom:10px">
-            <input class="input" id="videoUrlInput" type="text" placeholder="Paste video URL (HiggsField CDN link…)" style="flex:1;font-size:12px" />
-            <button class="btn btn-secondary" onclick="loadVideoFromUrl()" style="white-space:nowrap">Load URL</button>
-          </div>
-          <div style="text-align:center;color:#50507a;font-size:11px;margin-bottom:10px">— or upload file —</div>
+            <!-- URL input: paste a direct .mp4 link (HiggsField CDN, etc.) -->
+            <div style="display:flex;gap:8px;margin-bottom:10px">
+              <input class="input" id="videoUrlInput" type="text" placeholder="Paste video URL (HiggsField CDN link…)" style="flex:1;font-size:12px" />
+              <button class="btn btn-secondary" onclick="loadVideoFromUrl()" style="white-space:nowrap">Load URL</button>
+            </div>
+            <div style="text-align:center;color:#50507a;font-size:11px;margin-bottom:10px">— or upload file(s) —</div>
 
-          <!-- Drop zone -->
-          <div class="drop-zone" id="videoDropZone" style="margin-bottom:12px">
-            <div class="drop-icon">🎬</div>
-            <div>Drop video file here or click to browse</div>
-            <input type="file" id="videoFileInput" accept="video/*" onchange="handleVideoFile(this.files[0])" />
-          </div>
+            <!-- Drop zone: frames extract automatically, multiple files allowed -->
+            <div class="drop-zone" id="videoDropZone" style="margin-bottom:12px">
+              <div class="drop-icon">🎬</div>
+              <div>Drop video file(s) here or click to browse — frames extract automatically</div>
+              <input type="file" id="videoFileInput" accept="video/*" multiple onchange="handleVideoFiles(this.files)" />
+            </div>
 
-          <!-- FPS + Extract (shown after file picked or URL loaded) -->
-          <div id="videoPreExtract" style="display:none">
-            <div id="videoFileInfo" style="font-family:var(--mono);font-size:10px;color:#50507a;margin-bottom:10px"></div>
             <div style="display:flex;gap:8px;align-items:center">
-              <label class="form-label" style="margin:0;white-space:nowrap">FPS</label>
+              <label class="form-label" style="margin:0;white-space:nowrap">Extract FPS</label>
               <input class="input" type="number" id="videoFps" value="10" min="1" max="30" style="width:60px" />
-              <button class="btn btn-primary" id="videoExtractBtn" onclick="extractVideoFrames()">
-                <span class="spinner" id="videoExtractSpinner"></span>
-                Extract Frames
-              </button>
+              <span style="font-family:var(--mono);font-size:9px;color:#50507a">applies to the next upload</span>
+            </div>
+            <!-- Persistent inline error box -->
+            <div id="videoExtractError" style="display:none;margin-top:10px;padding:10px;background:#1a0505;border:1px solid #ff4444;border-radius:6px;color:#ff8888;font-size:12px;font-family:var(--mono);white-space:pre-wrap"></div>
+          </div>
+
+          <!-- One box per video session (Studio-style) -->
+          <div id="videoSessionGrid" class="video-session-grid"></div>
+        </div>
+
+        <!-- ── DETAIL VIEW: one open video session ── -->
+        <div id="videoDetailView" style="display:none">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" onclick="vidBackToList()">← All Videos</button>
+            <div id="videoDetailName" style="font-family:var(--mono);font-size:12px;color:var(--text)"></div>
+            <span id="videoDetailStatus" class="vid-badge select"></span>
+          </div>
+
+          <div class="card" id="videoDetailWaiting" style="display:none">
+            <div style="display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11px;color:#50507a">
+              <span class="spinner active"></span> Extracting frames — this keeps running if you go back and upload another video
             </div>
           </div>
-          <!-- Persistent inline error box -->
-          <div id="videoExtractError" style="display:none;margin-top:10px;padding:10px;background:#1a0505;border:1px solid #ff4444;border-radius:6px;color:#ff8888;font-size:12px;font-family:var(--mono);white-space:pre-wrap"></div>
-        </div>
+          <div class="card" id="videoDetailError" style="display:none;color:#ff8888;font-family:var(--mono);font-size:11px"></div>
 
         <!-- Step 2: Frame gallery -->
         <div class="card" id="videoGalleryCard" style="display:none;margin-top:16px">
@@ -1123,6 +1153,7 @@
             <button class="btn btn-secondary btn-sm" onclick="showPage('studio')">Go to Studio →</button>
             <button class="btn btn-secondary btn-sm" onclick="videoReset()">New Animation</button>
           </div>
+        </div>
         </div>
       </div>
 
@@ -5151,11 +5182,272 @@ const VIDEO_PRESETS = [
   { label: 'defense-backpedal', frames: 6,  fps: 8,  extractFps: 10, action: 'defensive backpedal' },
 ];
 
-const VID = { sessionId: null, frames: [], selected: new Set(), mode: 'strip', file: null, preset: null, duration: 0, savedAngles: [], lockedAnimName: '', lockedSlotId: null };
+// ═══════════════════════════════════════════════════════════════════════════
+// VIDEO → SPRITE — multi-session: every video is its own box, processing
+// (upload → extract → cutouts) runs in the background against per-session
+// STATE, so switching boxes/pages never interrupts it. Sessions persist to
+// localStorage and restore from the server after a reload (interrupted
+// cutouts auto-resume).
+// ═══════════════════════════════════════════════════════════════════════════
+const VID_SESSIONS = [];   // session objects, newest first
+let VID = null;            // session currently open in the detail view (null = list)
+let VID_NEXT_LOCK = null;  // animation slot carried into the next upload (Add Another Angle)
+let _vidRestored = false;
 
+function _vidDefaults(name) {
+  return {
+    uid: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    sessionId: null, name: name || 'video', size: 0,
+    status: 'uploading',   // uploading | extracting | select | cutting | ready | error
+    error: null,
+    frames: [], selected: new Set(),
+    ordered: [],           // confirmed frame files, in cutout order
+    subjects: {},          // index -> { file, status: pending|retrying|done|error, url, v, error, deleted }
+    savedAngles: [], lockedSlotId: null, lockedAnimName: '',
+    saveMeta: null,
+    fps: 10, createdAt: Date.now(), preset: null, duration: 0, file: null,
+  };
+}
+
+function _vidPersist() {
+  try {
+    localStorage.setItem('vid_sessions_v1', JSON.stringify(
+      VID_SESSIONS.filter(s => s.sessionId).map(s => ({
+        sessionId: s.sessionId, name: s.name, fps: s.fps, createdAt: s.createdAt,
+        selected: [...s.selected], ordered: s.ordered,
+        deleted: Object.entries(s.subjects).filter(([, v]) => v.deleted).map(([k]) => +k),
+        savedAngles: s.savedAngles, lockedSlotId: s.lockedSlotId,
+      }))
+    ));
+  } catch {}
+}
+
+function vidNewSession(name) {
+  const sess = _vidDefaults(name);
+  sess.fps = parseInt(document.getElementById('videoFps')?.value) || 10;
+  if (VID_NEXT_LOCK) { sess.lockedSlotId = VID_NEXT_LOCK; sess.lockedAnimName = VID_NEXT_LOCK; VID_NEXT_LOCK = null; }
+  VID_SESSIONS.unshift(sess);
+  renderVideoSessionGrid();
+  return sess;
+}
+
+// ─── Upload paths (all background — fire and keep browsing) ────────────────
+function handleVideoFiles(files) {
+  if (!files || !files.length) return;
+  document.getElementById('videoDropZone')?.classList.remove('dragover');
+  const errEl = document.getElementById('videoExtractError');
+  if (errEl) errEl.style.display = 'none';
+  for (const file of files) {
+    if (!file.type.startsWith('video/')) continue;
+    const sess = vidNewSession(file.name);
+    sess.size = file.size;
+    vidUploadAndExtract(sess, file); // no await — runs in background
+  }
+  const fi = document.getElementById('videoFileInput');
+  if (fi) fi.value = '';
+}
+function handleVideoFile(file) { handleVideoFiles(file ? [file] : []); } // legacy alias
+
+async function loadVideoFromUrl() {
+  const urlEl = document.getElementById('videoUrlInput');
+  const url = (urlEl?.value || '').trim();
+  if (!url) return toast('Paste a video URL first', true);
+  urlEl.value = '';
+  const sess = vidNewSession(url.split('/').pop().split('?')[0] || 'video-url');
+  try {
+    const res = await fetch(`${API}/api/video/from-direct-url`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Download failed');
+    sess.sessionId = data.sessionId;
+    sess.size = data.size;
+    vidUploadAndExtract(sess, null);
+  } catch (e) {
+    sess.status = 'error';
+    sess.error = 'URL load failed: ' + e.message;
+    vidRefresh(sess);
+  }
+}
+
+async function vidUploadAndExtract(sess, file) {
+  try {
+    if (file && !sess.sessionId) {
+      sess.status = 'uploading'; vidRefresh(sess);
+      const upRes = await fetch(`${API}/api/video/upload`, {
+        method: 'POST', body: file,
+        headers: { 'Content-Type': file.type || 'video/mp4' },
+      });
+      const upData = await upRes.json();
+      if (!upRes.ok) throw new Error('Upload failed: ' + (upData.error || upRes.status));
+      sess.sessionId = upData.sessionId;
+    }
+    sess.status = 'extracting'; vidRefresh(sess);
+    const exRes = await fetch(`${API}/api/video/extract`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: sess.sessionId, fps: sess.fps }),
+    });
+    const exData = await exRes.json();
+    if (!exRes.ok) throw new Error('Extract failed: ' + (exData.error || exRes.status));
+    if (!exData.frames || !exData.frames.length) throw new Error('Extract returned 0 frames');
+    sess.frames = exData.frames;
+    sess.status = 'select';
+    _vidPersist();
+    vidRefresh(sess);
+    toast(`${sess.name}: ${exData.frameCount} frames ready`);
+  } catch (e) {
+    sess.status = 'error';
+    sess.error = e.message;
+    vidRefresh(sess);
+    toast(`${sess.name}: ${e.message}`, true);
+  }
+}
+
+// ─── List view (Studio-style boxes) ─────────────────────────────────────────
+function _vidCutProgress(sess) {
+  const subs = Object.values(sess.subjects).filter(s => !s.deleted);
+  return { done: subs.filter(s => s.status === 'done').length, total: subs.length };
+}
+function _vidBadge(sess) {
+  switch (sess.status) {
+    case 'uploading':  return ['working', 'uploading…'];
+    case 'extracting': return ['working', 'extracting frames…'];
+    case 'select':     return ['select', `${sess.frames.length} frames — select`];
+    case 'cutting': {
+      const { done, total } = _vidCutProgress(sess);
+      return ['working', `cutting out ${done}/${total}`];
+    }
+    case 'ready':      return ['ready', 'refs ready ✓'];
+    case 'error':      return ['error', 'error'];
+    default:           return ['select', sess.status];
+  }
+}
+
+function renderVideoSessionGrid() {
+  const grid = document.getElementById('videoSessionGrid');
+  if (!grid) return;
+  if (!VID_SESSIONS.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#404060;font-family:var(--mono);font-size:10px;padding:30px 0">No videos yet — upload one above. Each video gets its own box and keeps processing in the background.</div>`;
+    return;
+  }
+  grid.innerHTML = VID_SESSIONS.map(sess => {
+    const [cls, label] = _vidBadge(sess);
+    const thumb = sess.frames[0]?.thumbUrl || sess.frames[0]?.url;
+    const { done, total } = _vidCutProgress(sess);
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    return `<div class="video-session-card" onclick="vidOpenSession('${sess.uid}')">
+      <button class="vsc-remove" onclick="event.stopPropagation();vidRemoveSession('${sess.uid}')" title="Remove video">✕</button>
+      <div class="vsc-thumb">${thumb ? `<img src="${thumb}" loading="lazy" decoding="async" />` : '<span class="spinner active"></span>'}</div>
+      <div class="vsc-body">
+        <div class="vsc-name" title="${sess.name}">${sess.name}</div>
+        <span class="vid-badge ${cls}">${label}</span>
+        ${sess.status === 'cutting' ? `<div class="vsc-progress"><div style="width:${pct}%"></div></div>` : ''}
+        ${sess.status === 'error' ? `<div style="font-size:9px;color:#ff8888;margin-top:5px;font-family:var(--mono)">${String(sess.error || '').slice(0, 80)}</div>` : ''}
+        ${sess.lockedSlotId ? `<div style="font-size:8px;color:#50507a;margin-top:4px;font-family:var(--mono)">slot: ${sess.lockedSlotId}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Refresh UI for a session: its box always, the detail view only if open
+function vidRefresh(sess) {
+  renderVideoSessionGrid();
+  if (VID === sess) vidRenderDetail(sess);
+}
+
+function vidOpenSession(uid) {
+  const sess = VID_SESSIONS.find(s => s.uid === uid);
+  if (!sess) return;
+  VID = sess;
+  document.getElementById('videoListView').style.display = 'none';
+  document.getElementById('videoDetailView').style.display = 'block';
+  vidRenderDetail(sess);
+}
+
+function vidBackToList() {
+  VID = null;
+  document.getElementById('videoDetailView').style.display = 'none';
+  document.getElementById('videoListView').style.display = 'block';
+  renderVideoSessionGrid();
+}
+
+function vidRemoveSession(uid) {
+  const i = VID_SESSIONS.findIndex(s => s.uid === uid);
+  if (i < 0) return;
+  if (!confirm(`Remove "${VID_SESSIONS[i].name}"?`)) return;
+  if (VID === VID_SESSIONS[i]) vidBackToList();
+  VID_SESSIONS.splice(i, 1);
+  _vidPersist();
+  renderVideoSessionGrid();
+}
+
+// ─── Detail view ─────────────────────────────────────────────────────────────
+function vidRenderDetail(sess) {
+  document.getElementById('videoDetailName').textContent = sess.name;
+  const [cls, label] = _vidBadge(sess);
+  const badge = document.getElementById('videoDetailStatus');
+  badge.className = 'vid-badge ' + cls;
+  badge.textContent = label;
+
+  document.getElementById('videoDetailWaiting').style.display =
+    (sess.status === 'uploading' || sess.status === 'extracting') ? 'block' : 'none';
+  const errCard = document.getElementById('videoDetailError');
+  errCard.style.display = sess.status === 'error' ? 'block' : 'none';
+  if (sess.status === 'error') errCard.textContent = sess.error || 'error';
+
+  // Frame gallery + selection
+  const galleryCard = document.getElementById('videoGalleryCard');
+  if (sess.frames.length) {
+    galleryCard.style.display = 'block';
+    document.getElementById('videoFrameTotal').textContent = `· ${sess.frames.length} frames`;
+    renderVideoGallery();
+    updateVideoSelCount();
+  } else {
+    galleryCard.style.display = 'none';
+  }
+
+  // Cutouts + save config
+  const configCard = document.getElementById('videoConfigCard');
+  if (sess.ordered.length) {
+    configCard.style.display = 'block';
+    renderSubjectGrid(sess);
+    const slotEl = document.getElementById('videoAnimSlot');
+    if (slotEl) {
+      if (sess.lockedSlotId) { slotEl.value = sess.lockedSlotId; slotEl.disabled = true; }
+      else slotEl.disabled = false;
+      videoOnSlotChange();
+    }
+    renderVideoAnglePills('videoConfigAnglePillsList');
+  } else {
+    configCard.style.display = 'none';
+  }
+
+  // Save result
+  const saveCard = document.getElementById('videoSaveResult');
+  if (sess.saveMeta) {
+    saveCard.style.display = 'block';
+    document.getElementById('videoSaveResultMeta').textContent = sess.saveMeta.text;
+    document.getElementById('videoSaveFrameStrip').innerHTML = sess.saveMeta.stripHtml;
+    renderVideoAnglePills('videoSavedAnglePills');
+  } else {
+    saveCard.style.display = 'none';
+  }
+}
+
+function _vidUpdateBadges(sess) {
+  renderVideoSessionGrid();
+  if (VID === sess) {
+    const [cls, label] = _vidBadge(sess);
+    const badge = document.getElementById('videoDetailStatus');
+    if (badge) { badge.className = 'vid-badge ' + cls; badge.textContent = label; }
+  }
+}
+
+// ─── Frame gallery + selection (operate on the OPEN session) ────────────────
 function renderVideoAnglePills(containerId) {
   const el = document.getElementById(containerId);
-  if (!el) return;
+  if (!el || !VID) return;
   const parent = el.parentElement;
   if (parent) parent.style.display = VID.savedAngles.length > 0 ? 'block' : 'none';
   el.innerHTML = VID.savedAngles.map(a => {
@@ -5164,184 +5456,8 @@ function renderVideoAnglePills(containerId) {
   }).join('');
 }
 
-function videoAddAngle() {
-  const slotId = VID.lockedSlotId || document.getElementById('videoAnimSlot')?.value;
-  VID.lockedSlotId = slotId;
-  VID.lockedAnimName = slotId;
-  VID.sessionId = null;
-  VID.frames = [];
-  VID.selected = new Set();
-  VID.file = null;
-  VID.duration = 0;
-  document.getElementById('videoGalleryCard').style.display = 'none';
-  document.getElementById('videoConfigCard').style.display = 'none';
-  document.getElementById('videoSaveResult').style.display = 'none';
-  document.getElementById('videoPreExtract').style.display = 'none';
-  const fi = document.getElementById('videoFileInput');
-  if (fi) fi.value = '';
-  document.getElementById('videoUploadCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
-  toast(`Upload video for next zone of "${slot?.label ?? slotId}"`);
-}
-
-function initVideoPage() {
-  // no-op: character select and preset grid removed from video flow
-}
-
-function applyVideoPreset(i) {
-  const p = VIDEO_PRESETS[i];
-  VID.preset = i;
-  // Update preset button active state
-  document.querySelectorAll('.video-preset-btn').forEach((btn, j) => {
-    btn.classList.toggle('active', j === i);
-  });
-  // Set extraction FPS
-  const fpsEl = document.getElementById('videoFps');
-  if (fpsEl) fpsEl.value = p.extractFps;
-  // Set smart select count
-  const smEl = document.getElementById('videoSmartCount');
-  if (smEl) smEl.value = p.frames;
-  // Set target frames
-  const tfEl = document.getElementById('videoTargetFrames');
-  if (tfEl) tfEl.value = p.frames;
-  // Set output FPS
-  const afEl = document.getElementById('videoAnimFps');
-  if (afEl) afEl.value = p.fps;
-  // Auto-select slot matching preset label if available
-  const slotEl = document.getElementById('videoAnimSlot');
-  if (slotEl && ANIMATION_SLOTS.some(s => s.id === p.label)) {
-    slotEl.value = p.label;
-    videoOnSlotChange();
-  }
-  // Set action (only if empty)
-  const actionEl = document.getElementById('videoAnimAction');
-  if (actionEl && !actionEl.value) actionEl.value = p.action;
-  updateVideoSelCount();
-}
-
-function handleVideoFile(file) {
-  if (!file) return;
-  VID.file = file;
-  VID.sessionId = null;
-  document.getElementById('videoDropZone').classList.remove('dragover');
-  document.getElementById('videoExtractError').style.display = 'none';
-
-  const info = document.getElementById('videoFileInfo');
-  if (info) info.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
-  document.getElementById('videoPreExtract').style.display = 'block';
-}
-
-async function loadVideoFromUrl() {
-  const urlEl = document.getElementById('videoUrlInput');
-  const url = (urlEl?.value || '').trim();
-  if (!url) return toast('Paste a video URL first', true);
-
-  const btn = document.querySelector('[onclick="loadVideoFromUrl()"]');
-  const origText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Downloading…';
-  document.getElementById('videoExtractError').style.display = 'none';
-
-  try {
-    const res = await fetch(`${API}/api/video/from-direct-url`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Download failed');
-
-    VID.sessionId = data.sessionId;
-    VID.file = null;
-    const info = document.getElementById('videoFileInfo');
-    if (info) info.textContent = `${url.split('/').pop().split('?')[0]} · ${(data.size / 1024 / 1024).toFixed(1)} MB (from URL)`;
-    document.getElementById('videoPreExtract').style.display = 'block';
-    toast('Video loaded — click Extract Frames');
-  } catch (e) {
-    const errEl = document.getElementById('videoExtractError');
-    errEl.textContent = 'URL load failed: ' + e.message;
-    errEl.style.display = 'block';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = origText;
-  }
-}
-
-
-// Drag and drop
-document.addEventListener('DOMContentLoaded', () => {
-  // Restore resize mode label from localStorage
-  const _rmlbl = document.getElementById('resizeModeLbl');
-  const _rmbtn = document.getElementById('resizeModeBtn');
-  if (_rmlbl) _rmlbl.textContent = SPRITE_RESIZE_MODE === 'high-quality' ? 'HQ ▾' : 'Pixel ▾';
-  if (_rmbtn) _rmbtn.style.color = SPRITE_RESIZE_MODE === 'high-quality' ? '#00ff88' : '#ffcc00';
-
-  const dz = document.getElementById('videoDropZone');
-  if (dz) {
-    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
-    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-    dz.addEventListener('drop', e => {
-      e.preventDefault();
-      const f = e.dataTransfer.files[0];
-      if (f && f.type.startsWith('video/')) handleVideoFile(f);
-    });
-  }
-});
-
-async function extractVideoFrames() {
-  if (!VID.file && !VID.sessionId) return toast('Upload a video first', true);
-  const btn = document.getElementById('videoExtractBtn');
-  const spinner = document.getElementById('videoExtractSpinner');
-  const errEl = document.getElementById('videoExtractError');
-  btn.disabled = true;
-  spinner.classList.add('active');
-  errEl.style.display = 'none';
-  document.getElementById('videoGalleryCard').style.display = 'none';
-  document.getElementById('videoConfigCard').style.display = 'none';
-  document.getElementById('videoSaveResult').style.display = 'none';
-
-  try {
-    // Upload video file if not already uploaded
-    if (!VID.sessionId) {
-      const upRes = await fetch(`${API}/api/video/upload`, {
-        method: 'POST',
-        body: VID.file,
-        headers: { 'Content-Type': VID.file.type },
-      });
-      const upData = await upRes.json();
-      if (!upRes.ok) throw new Error('Upload failed: ' + (upData.error || upRes.status));
-      VID.sessionId = upData.sessionId;
-    }
-
-    const fps = parseInt(document.getElementById('videoFps').value) || 10;
-
-    const exRes = await fetch(`${API}/api/video/extract`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: VID.sessionId, fps }),
-    });
-    const exData = await exRes.json();
-    if (!exRes.ok) throw new Error('Extract failed: ' + (exData.error || exRes.status));
-    if (!exData.frames || exData.frames.length === 0) throw new Error('Extract returned 0 frames — check server logs');
-
-    VID.frames = exData.frames;
-    VID.selected.clear();
-    renderVideoGallery();
-    document.getElementById('videoFrameTotal').textContent = `· ${exData.frameCount} frames`;
-    document.getElementById('videoGalleryCard').style.display = 'block';
-    updateVideoSelCount();
-    toast(`Extracted ${exData.frameCount} frames`);
-  } catch (e) {
-    errEl.textContent = e.message;
-    errEl.style.display = 'block';
-    toast('Extract failed', true);
-  } finally {
-    btn.disabled = false;
-    spinner.classList.remove('active');
-  }
-}
-
 function renderVideoGallery() {
+  if (!VID) return;
   const gallery = document.getElementById('videoFrameGallery');
   // Browse with the small ffmpeg-generated thumbnails — full frames are only
   // touched server-side (selection copies, cutouts), never downloaded here
@@ -5354,22 +5470,24 @@ function renderVideoGallery() {
 }
 
 function toggleVideoFrame(i) {
+  if (!VID) return;
   const f = VID.frames[i];
   if (VID.selected.has(f.file)) {
     VID.selected.delete(f.file);
   } else {
     VID.selected.add(f.file);
   }
-  // Update just the clicked thumb
   const thumbs = document.querySelectorAll('.video-frame-thumb');
-  thumbs[i].classList.toggle('selected', VID.selected.has(f.file));
+  thumbs[i]?.classList.toggle('selected', VID.selected.has(f.file));
   updateVideoSelCount();
+  _vidPersist();
 }
 
 function updateVideoSelCount() {
+  if (!VID) return;
   const n = VID.selected.size;
   const el = document.getElementById('videoSelCount');
-  const target = VID.preset !== null ? VIDEO_PRESETS[VID.preset].frames : null;
+  const target = VID.preset !== null ? VIDEO_PRESETS[VID.preset]?.frames : null;
   if (target) {
     const diff = n - target;
     if (n === 0) {
@@ -5393,33 +5511,36 @@ function updateVideoSelCount() {
 }
 
 function clearVideoSelection() {
+  if (!VID) return;
   VID.selected.clear();
   renderVideoGallery();
   updateVideoSelCount();
+  _vidPersist();
 }
 
 async function smartSelectVideoFrames() {
+  if (!VID) return;
+  const sess = VID;
   const btn = document.getElementById('videoSmartBtn');
   const spinner = document.getElementById('videoSmartSpinner');
   btn.disabled = true;
   spinner.classList.add('active');
   try {
-    const count = VID.preset !== null
-      ? VIDEO_PRESETS[VID.preset].frames
+    const count = sess.preset !== null
+      ? VIDEO_PRESETS[sess.preset]?.frames
       : (parseInt(document.getElementById('videoSmartCount').value) || 6);
     const res = await fetch(`${API}/api/video/smart-select`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: VID.sessionId, count }),
+      body: JSON.stringify({ sessionId: sess.sessionId, count }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Smart select failed');
 
-    // Apply selection
-    VID.selected.clear();
-    data.selectedFileNames.forEach(f => VID.selected.add(f));
-    renderVideoGallery();
-    updateVideoSelCount();
+    sess.selected.clear();
+    data.selectedFileNames.forEach(f => sess.selected.add(f));
+    _vidPersist();
+    if (VID === sess) { renderVideoGallery(); updateVideoSelCount(); }
     toast(`Smart selected ${data.count} frames`);
   } catch (e) {
     toast('Smart select failed: ' + e.message, true);
@@ -5429,21 +5550,47 @@ async function smartSelectVideoFrames() {
   }
 }
 
+// ─── Confirm selection → background cutouts ─────────────────────────────────
 async function confirmVideoSelection() {
-  const ordered = VID.frames.filter(f => VID.selected.has(f.file)).map(f => f.file);
+  const sess = VID;
+  if (!sess) return;
+  const ordered = sess.frames.filter(f => sess.selected.has(f.file)).map(f => f.file);
+  if (ordered.length < 2) return toast('Select at least 2 frames', true);
   try {
     const res = await fetch(`${API}/api/video/select-manual`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: VID.sessionId, frameFiles: ordered }),
+      body: JSON.stringify({ sessionId: sess.sessionId, frameFiles: ordered }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Selection failed');
 
-    // Show selected frames + subject extraction grid (cut out player+ball, remove background)
-    const strip = document.getElementById('videoSelectedStrip');
-    const thumbsHtml = ordered.map((file, i) => {
-      return `<div class="video-selected-thumb" data-frame-index="${i}" data-frame-file="${file.replace(/"/g,'&quot;')}">
+    sess.ordered = ordered;
+    sess.subjects = {};
+    ordered.forEach((file, i) => { sess.subjects[i] = { file, status: 'pending' }; });
+    sess.status = 'cutting';
+    sess.saveMeta = null;
+    _vidPersist();
+    vidRefresh(sess);
+    if (VID === sess) {
+      document.getElementById('videoConfigCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    extractVideoSubjects(sess); // background — keeps going if you leave
+  } catch (e) {
+    toast('Confirm failed: ' + e.message, true);
+  }
+}
+
+// ─── Subject cutout grid (rendered from per-session state) ──────────────────
+function renderSubjectGrid(sess) {
+  const strip = document.getElementById('videoSelectedStrip');
+  strip.innerHTML =
+    `<div class="vst-section-label" style="margin-bottom:8px"></div>` +
+    `<div id="vstSubjectGrid" class="video-selected-strip">` +
+    sess.ordered.map((file, i) => {
+      const sub = sess.subjects[i];
+      if (!sub || sub.deleted) return '';
+      return `<div class="video-selected-thumb" data-frame-index="${i}" data-frame-file="${file.replace(/"/g, '&quot;')}">
         <div class="vst-subject vst-pending"><span class="spinner active"></span></div>
         <div class="vst-actions" style="display:none">
           <button onclick="redoSubjectFrame(${i})">↻ redo</button>
@@ -5451,174 +5598,188 @@ async function confirmVideoSelection() {
         </div>
         <div class="vst-label">ref ${i + 1}</div>
       </div>`;
-    }).join('');
-    strip.innerHTML =
-      `<div class="vst-section-label" style="margin-bottom:8px">Cutting out player + basketball &amp; removing background…</div>` +
-      `<div id="vstSubjectGrid" class="video-selected-strip">${thumbsHtml}</div>`;
-
-    // Kick off subject extraction — updates each slot progressively as AI finishes
-    extractVideoSubjects(ordered);
-
-    // Pre-select slot if locked (multi-zone session)
-    if (VID.lockedSlotId) {
-      const slotEl = document.getElementById('videoAnimSlot');
-      if (slotEl) { slotEl.value = VID.lockedSlotId; slotEl.disabled = true; }
-    }
-    // Show already-captured angles if any
-    renderVideoAnglePills('videoConfigAnglePillsList');
-
-    document.getElementById('videoConfigCard').style.display = 'block';
-    document.getElementById('videoConfigCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  } catch (e) {
-    toast('Confirm failed: ' + e.message, true);
-  }
+    }).join('') +
+    `</div>`;
+  sess.ordered.forEach((_, i) => updateSubjectSlotDOM(sess, i));
+  _vidUpdateCutLabel(sess);
 }
 
-async function extractVideoSubjects(frameFiles) {
-  // Fire one request per frame — each slot updates the moment its result lands
-  // Max 4 concurrent to avoid rate-limiting the AI (503s retry with backoff)
-  const CONCURRENCY = 4;
-  const RETRY_DELAYS = [2000, 5000, 10000]; // backoff for 503 / transient errors
+function _vidUpdateCutLabel(sess) {
+  if (VID !== sess) return;
+  const label = document.querySelector('#videoSelectedStrip .vst-section-label');
+  if (!label) return;
+  const { done, total } = _vidCutProgress(sess);
+  label.textContent = sess.status === 'cutting'
+    ? `Cutting out player + basketball — ${done}/${total} (keeps running if you leave this page)`
+    : 'Sprite references ready — double-click any to edit, then save to library';
+}
 
-  function _errMsg(data, httpStatus) {
-    // Unwrap nested error objects — server sometimes returns {"error":{"code":503,"message":"..."}}
-    const raw = data?.error ?? data;
-    if (raw && typeof raw === 'object') {
-      const msg = raw.message ?? raw.msg ?? JSON.stringify(raw);
-      if (raw.code === 503 || httpStatus === 503) return '⏳ AI busy — retrying…';
-      return String(msg).slice(0, 120);
-    }
-    return String(raw ?? 'Unknown error').slice(0, 120);
+function _vstThumb(i) {
+  return document.querySelector(`#vstSubjectGrid [data-frame-index="${i}"]`);
+}
+
+// Paint one slot from state. No-op when this session isn't on screen —
+// background completions only touch state, the DOM catches up on re-open.
+function updateSubjectSlotDOM(sess, i) {
+  if (VID !== sess) return;
+  const sub = sess.subjects[i];
+  const thumb = _vstThumb(i);
+  if (!thumb) return;
+  if (sub?.deleted) { thumb.remove(); return; }
+  const slot = thumb.querySelector('.vst-subject');
+  const actBar = thumb.querySelector('.vst-actions');
+  if (!slot) return;
+
+  if (!sub || sub.status === 'pending') {
+    slot.classList.add('vst-pending');
+    slot.innerHTML = '<span class="spinner active"></span>';
+    if (actBar) actBar.style.display = 'none';
+  } else if (sub.status === 'retrying') {
+    slot.innerHTML = `<span style="font-size:9px;color:#888;text-align:center;padding:6px">AI busy<br>retrying…</span>`;
+  } else if (sub.status === 'done') {
+    slot.classList.remove('vst-pending');
+    slot.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = sub.url + '?t=' + (sub.v || 0);
+    slot.appendChild(img);
+    slot.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slot, i, sub.file); };
+    slot.title = 'Double-click to edit';
+    if (actBar) actBar.style.display = 'flex';
+  } else { // error
+    slot.classList.remove('vst-pending');
+    slot.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px">
+      <span style="font-size:9px;color:var(--danger);text-align:center">${String(sub.error || 'failed').slice(0, 120)}</span>
+      <button style="font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:4px;border:1px solid #333;background:#111;color:#aaa;cursor:pointer" onclick="redoSubjectFrame(${i})">retry</button>
+    </div>`;
+    if (actBar) actBar.style.display = 'flex';
   }
+  _vidUpdateCutLabel(sess);
+}
 
-  async function extractOne(file, i, attempt = 0) {
-    const thumb = document.querySelector(`#vstSubjectGrid [data-frame-index="${i}"]`);
-    const slot  = thumb?.querySelector('.vst-subject');
+function _vidErrMsg(data, httpStatus) {
+  const raw = data?.error ?? data;
+  if (raw && typeof raw === 'object') {
+    const msg = raw.message ?? raw.msg ?? JSON.stringify(raw);
+    if (raw.code === 503 || httpStatus === 503) return '⏳ AI busy — retrying…';
+    return String(msg).slice(0, 120);
+  }
+  return String(raw ?? 'Unknown error').slice(0, 120);
+}
 
+async function extractVideoSubjects(sess) {
+  // Per-session sliding worker pool — multiple sessions run their pools in
+  // parallel, so a second video adds no wait to the first
+  const CONCURRENCY = 4;
+  const RETRY_DELAYS = [2000, 5000, 10000];
+
+  const indices = Object.keys(sess.subjects).map(Number)
+    .filter(i => { const s = sess.subjects[i]; return s && !s.deleted && s.status !== 'done'; })
+    .sort((a, b) => a - b);
+  if (!indices.length) { sess.status = 'ready'; _vidUpdateBadges(sess); return; }
+
+  sess.status = 'cutting';
+  _vidUpdateBadges(sess);
+
+  async function extractOne(i, attempt = 0) {
+    const sub = sess.subjects[i];
+    if (!sub || sub.deleted) return;
     try {
-      const res  = await fetch(`${API}/api/video/extract-subject`, {
-        method:  'POST',
+      const res = await fetch(`${API}/api/video/extract-subject`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ sessionId: VID.sessionId, frameFile: file, frameIndex: i }),
+        body: JSON.stringify({ sessionId: sess.sessionId, frameFile: sub.file, frameIndex: i }),
       });
       const data = await res.json();
-
-      if (!slot) return;
-
-      // 503 / model overloaded — retry with backoff
       const is503 = res.status === 503
         || (data?.error && (data.error?.code === 503 || String(data.error).includes('503')));
       if (is503 && attempt < RETRY_DELAYS.length) {
-        const delay = RETRY_DELAYS[attempt];
-        slot.innerHTML = `<span style="font-size:9px;color:#888;text-align:center;padding:6px">AI busy<br>retry ${attempt + 1}/${RETRY_DELAYS.length}…</span>`;
-        await new Promise(r => setTimeout(r, delay));
-        return extractOne(file, i, attempt + 1);
+        sub.status = 'retrying';
+        updateSubjectSlotDOM(sess, i);
+        await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+        return extractOne(i, attempt + 1);
       }
-
       if (data.error) {
-        const msg = _errMsg(data, res.status);
-        slot.innerHTML = `
-          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px">
-            <span style="font-size:9px;color:var(--danger);text-align:center">${msg}</span>
-            <button style="font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:4px;
-              border:1px solid #333;background:#111;color:#aaa;cursor:pointer"
-              onclick="redoSubjectFrame(${i})">
-              retry
-            </button>
-          </div>`;
+        sub.status = 'error';
+        sub.error = _vidErrMsg(data, res.status);
       } else {
-        const img = document.createElement('img');
-        img.src   = data.url + '?t=' + Date.now();
-        slot.innerHTML = '';
-        slot.appendChild(img);
-        slot.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slot, i, file); };
-        slot.title = 'Double-click to edit';
-        const actBar = thumb?.querySelector('.vst-actions');
-        if (actBar) actBar.style.display = 'flex';
+        sub.status = 'done';
+        sub.url = data.url;
+        sub.v = Date.now();
       }
     } catch (e) {
-      if (slot) {
-        slot.innerHTML = `
-          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px">
-            <span style="font-size:9px;color:#666;text-align:center">network error</span>
-            <button style="font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:4px;
-              border:1px solid #333;background:#111;color:#aaa;cursor:pointer"
-              onclick="redoSubjectFrame(${i})">
-              retry
-            </button>
-          </div>`;
-      }
-    } finally {
-      slot?.classList.remove('vst-pending');
+      sub.status = 'error';
+      sub.error = 'network error';
     }
+    updateSubjectSlotDOM(sess, i);
+    _vidUpdateBadges(sess);
   }
 
-  // Sliding worker pool: as soon as any extraction finishes, the next frame
-  // starts — a slow frame no longer holds up a whole batch
   let nextIdx = 0;
   async function worker() {
-    while (nextIdx < frameFiles.length) {
-      const i = nextIdx++;
-      await extractOne(frameFiles[i], i);
+    while (nextIdx < indices.length) {
+      const k = nextIdx++;
+      await extractOne(indices[k]);
     }
   }
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, frameFiles.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, indices.length) }, worker));
 
-  // Update section label once all done
-  const label = document.querySelector('#videoSelectedStrip .vst-section-label');
-  if (label) label.textContent = 'Sprite references ready — double-click any to edit, then save to library';
+  sess.status = 'ready';
+  _vidPersist();
+  _vidUpdateBadges(sess);
+  _vidUpdateCutLabel(sess);
+  const { done, total } = _vidCutProgress(sess);
+  toast(`${sess.name}: ${done}/${total} refs ready`);
 }
 
 function redoSubjectFrame(i) {
-  const thumb = document.querySelector(`#vstSubjectGrid [data-frame-index="${i}"]`);
-  if (!thumb) return;
-  const file = thumb.dataset.frameFile;
-  if (!file || !VID.sessionId) return toast('No session — upload a video first', true);
-  const slot = thumb.querySelector('.vst-subject');
-  const actBar = thumb.querySelector('.vst-actions');
-  if (actBar) actBar.style.display = 'none';
-  if (slot) { slot.innerHTML = '<span class="spinner active"></span>'; slot.classList.add('vst-pending'); }
-
-  fetch(`${API}/api/video/extract-subject`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId: VID.sessionId, frameFile: file, frameIndex: i }),
-  }).then(r => r.json()).then(data => {
-    if (!slot) return;
-    if (data.error) {
-      slot.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px">
-        <span style="font-size:9px;color:var(--danger);text-align:center">${String(data.error).slice(0,100)}</span>
-        <button style="font-family:var(--mono);font-size:8px;padding:3px 8px;border-radius:4px;border:1px solid #333;background:#111;color:#aaa;cursor:pointer"
-          onclick="redoSubjectFrame(${i})">retry</button>
-      </div>`;
-    } else {
-      const img = document.createElement('img');
-      img.src = data.url + '?t=' + Date.now();
-      slot.innerHTML = '';
-      slot.appendChild(img);
-      slot.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slot, i, file); };
-      slot.title = 'Double-click to edit';
-      if (actBar) actBar.style.display = 'flex';
+  const sess = VID;
+  if (!sess) return;
+  const sub = sess.subjects[i];
+  if (!sub || !sess.sessionId) return toast('No session', true);
+  sub.status = 'pending';
+  sub.error = null;
+  updateSubjectSlotDOM(sess, i);
+  (async () => {
+    try {
+      const res = await fetch(`${API}/api/video/extract-subject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sess.sessionId, frameFile: sub.file, frameIndex: i }),
+      });
+      const data = await res.json();
+      if (data.error) { sub.status = 'error'; sub.error = _vidErrMsg(data, res.status); }
+      else { sub.status = 'done'; sub.url = data.url; sub.v = Date.now(); }
+    } catch (e) {
+      sub.status = 'error';
+      sub.error = 'network error';
     }
-    slot.classList.remove('vst-pending');
-  }).catch(e => {
-    if (slot) { slot.innerHTML = `<div style="padding:8px;font-size:9px;color:#666">error</div>`; slot.classList.remove('vst-pending'); }
-    if (actBar) actBar.style.display = 'flex';
-    toast('Redo failed: ' + e.message, true);
-  });
+    updateSubjectSlotDOM(sess, i);
+    _vidPersist();
+    _vidUpdateBadges(sess);
+  })();
 }
 
 function deleteSubjectFrame(i) {
-  const thumb = document.querySelector(`#vstSubjectGrid [data-frame-index="${i}"]`);
-  if (!thumb) return;
-  const file = thumb.dataset.frameFile;
-  if (file && VID.selected) VID.selected.delete(file);
-  thumb.style.transition = 'opacity 0.15s';
-  thumb.style.opacity = '0';
-  setTimeout(() => thumb.remove(), 150);
+  const sess = VID;
+  if (!sess) return;
+  const sub = sess.subjects[i];
+  if (!sub) return;
+  sub.deleted = true;
+  sess.selected.delete(sub.file);
+  const thumb = _vstThumb(i);
+  if (thumb) {
+    thumb.style.transition = 'opacity 0.15s';
+    thumb.style.opacity = '0';
+    setTimeout(() => thumb.remove(), 150);
+  }
+  _vidPersist();
+  updateVideoSelCount();
+  _vidUpdateBadges(sess);
 }
 
 function openSubjectEditor(slotEl, frameIndex, frameFile) {
+  const sess = VID; // capture — regen finishes against this session even if you navigate away
+  if (!sess) return;
   const { pop, close } = _createPopover();
   pop.innerHTML =
     `<div class="angle-prompt-popover-label">Edit pose reference frame ${frameIndex + 1}</div>` +
@@ -5637,33 +5798,32 @@ function openSubjectEditor(slotEl, frameIndex, frameFile) {
   pop.querySelector('#_subjectRegenBtn').onclick = async () => {
     const customPrompt = ta.value.trim();
     close();
-
-    const prevHTML = slotEl.innerHTML;
-    slotEl.innerHTML = '<span class="spinner active"></span>';
-    slotEl.classList.add('vst-pending');
-
+    const sub = sess.subjects[frameIndex];
+    if (!sub) return;
+    sub.status = 'pending';
+    updateSubjectSlotDOM(sess, frameIndex);
     try {
       const res = await fetch(`${API}/api/video/extract-subjects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: VID.sessionId, frameFiles: [frameFile], customPrompt }),
+        body: JSON.stringify({ sessionId: sess.sessionId, frameFiles: [frameFile], customPrompt }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Extraction failed');
       const subject = data.subjects[0];
       if (subject.error) throw new Error(subject.error);
-      const img = document.createElement('img');
-      img.src = subject.url + '?t=' + Date.now();
-      slotEl.innerHTML = '';
-      slotEl.appendChild(img);
-      slotEl.ondblclick = (e) => { e.stopPropagation(); openSubjectEditor(slotEl, frameIndex, frameFile); };
-      slotEl.title = 'Double-click to edit';
+      // extract-subjects writes subject-0.png for a single-file call; the slot
+      // keeps its own index, so use the returned url directly
+      sub.status = 'done';
+      sub.url = subject.url;
+      sub.v = Date.now();
     } catch (e) {
-      slotEl.innerHTML = prevHTML;
+      sub.status = 'error';
+      sub.error = String(e.message).slice(0, 120);
       toast('Regen failed: ' + e.message, true);
-    } finally {
-      slotEl.classList.remove('vst-pending');
     }
+    updateSubjectSlotDOM(sess, frameIndex);
+    _vidUpdateBadges(sess);
   };
 }
 
@@ -5702,6 +5862,8 @@ function videoOnSlotChange() {
 }
 
 async function saveAnimToLibrary() {
+  const sess = VID;
+  if (!sess) return;
   const slotEl = document.getElementById('videoAnimSlot');
   const zoneEl = document.querySelector('input[name="videoAnimZone"]:checked');
   const fps = parseInt(document.getElementById('videoAnimFps').value) || 8;
@@ -5713,25 +5875,22 @@ async function saveAnimToLibrary() {
   const zone = ANIMATION_ZONES.find(z => z.id === zoneId);
 
   if (!slotId || !slot) return toast('Select an animation slot', true);
-  if (!VID.sessionId) return toast('No video session', true);
+  if (!sess.sessionId) return toast('No video session', true);
 
-  // Build the anim-lib name from slot+zone
   const animName = `${slotId}_z${zoneId}`;
   const angle = zone?.label ?? 'Front';
 
-  const orderedFrames = VID.frames.filter(f => VID.selected.has(f.file)).map(f => f.file);
+  // Frames + cutouts come from per-session STATE, not the DOM
+  const activeIdx = sess.ordered.map((_, i) => i).filter(i => !sess.subjects[i]?.deleted);
+  const orderedFrames = activeIdx.map(i => sess.ordered[i]);
   if (orderedFrames.length === 0) return toast('No frames selected', true);
 
-  // Collect any subject-extracted frames already in the DOM (non-blocking — skip pending ones)
-  const slots = document.querySelectorAll('#vstSubjectGrid .vst-subject');
   const frameBase64Array = [];
-  const selectedFiles = VID.frames.filter(f => VID.selected.has(f.file));
-  for (let i = 0; i < selectedFiles.length; i++) {
-    const slot = slots[i];
-    const img = slot ? slot.querySelector('img') : null;
-    if (img && img.complete && img.naturalWidth > 0) {
+  for (const i of activeIdx) {
+    const sub = sess.subjects[i];
+    if (sub?.status === 'done' && sub.url) {
       try {
-        const resp = await fetch(img.src);
+        const resp = await fetch(sub.url + '?t=' + (sub.v || 0));
         if (resp.ok) {
           const buf = await resp.arrayBuffer();
           frameBase64Array.push('data:image/png;base64,' + _bufToBase64(buf));
@@ -5749,11 +5908,10 @@ async function saveAnimToLibrary() {
   const moveDir = document.querySelector('input[name="videoMoveDir"]:checked')?.value || 'left';
   const hasDirection = slotId === 'cross' || slotId === 'stepback';
 
-  // Always include sessionId+frameFiles so server can read from disk if base64 incomplete
   const payload = {
     name: animName, angle, fps, loop,
     ...(hasDirection ? { moveType: slotId === 'cross' ? 'crossover' : 'stepback', moveDirection: moveDir } : {}),
-    sessionId: VID.sessionId,
+    sessionId: sess.sessionId,
     frameFiles: orderedFrames,
     ...(frameBase64Array.length > 0 ? { frameBase64Array } : {}),
   };
@@ -5769,22 +5927,23 @@ async function saveAnimToLibrary() {
   .then(data => {
     if (data.error) throw new Error(data.error);
     const anim = data.animation;
-    document.getElementById('videoSaveResultMeta').textContent =
-      `${slot.label} · ${zone?.label ?? ''} · ${anim.frameCount} frames · ${anim.fps}fps`;
-    const frameStrip = document.getElementById('videoSaveFrameStrip');
-    frameStrip.innerHTML = Array.from({ length: anim.frameCount }, (_, i) =>
-      `<img src="${API}/api/anim-lib/frame/${anim.name}/${i}?t=${Date.now()}" style="width:56px;height:56px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14" />`
-    ).join('');
-    // Track saved zones
-    VID.lockedSlotId = slotId;
-    VID.lockedAnimName = animName;
-    if (!VID.savedAngles.find(a => a.zoneId === zoneId)) {
-      VID.savedAngles.push({ zoneId, label: zone?.label ?? zoneId, frameCount: anim.frameCount });
+    sess.lockedSlotId = slotId;
+    sess.lockedAnimName = animName;
+    if (!sess.savedAngles.find(a => a.zoneId === zoneId)) {
+      sess.savedAngles.push({ zoneId, label: zone?.label ?? zoneId, frameCount: anim.frameCount });
     }
-    renderVideoAnglePills('videoSavedAnglePills');
-    renderVideoAnglePills('videoConfigAnglePillsList');
-    document.getElementById('videoSaveResult').style.display = 'block';
-    document.getElementById('videoSaveResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    sess.saveMeta = {
+      text: `${slot.label} · ${zone?.label ?? ''} · ${anim.frameCount} frames · ${anim.fps}fps`,
+      stripHtml: Array.from({ length: anim.frameCount }, (_, i) =>
+        `<img src="${API}/api/anim-lib/frame/${anim.name}/${i}?t=${Date.now()}" style="width:56px;height:56px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14" />`
+      ).join(''),
+    };
+    _vidPersist();
+    if (VID === sess) {
+      vidRenderDetail(sess);
+      document.getElementById('videoSaveResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    renderVideoSessionGrid();
     toast(`${slot.label} ${zone?.short ?? ''} saved to library`);
     studioLoadAnimLib();
   })
@@ -5795,23 +5954,90 @@ async function saveAnimToLibrary() {
   });
 }
 
-function videoReset() {
-  VID.sessionId = null;
-  VID.frames = [];
-  VID.selected = new Set();
-  VID.file = null;
-  VID.duration = 0;
-  VID.savedAngles = [];
-  VID.lockedAnimName = '';
-  VID.lockedSlotId = null;
-  document.getElementById('videoGalleryCard').style.display = 'none';
-  document.getElementById('videoConfigCard').style.display = 'none';
-  document.getElementById('videoSaveResult').style.display = 'none';
-  document.getElementById('videoPreExtract').style.display = 'none';
-  const fi = document.getElementById('videoFileInput');
-  if (fi) fi.value = '';
-  document.getElementById('videoUploadCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+function videoAddAngle() {
+  const sess = VID;
+  const slotId = sess?.lockedSlotId || document.getElementById('videoAnimSlot')?.value;
+  VID_NEXT_LOCK = slotId || null;
+  vidBackToList();
+  const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
+  toast(`Upload the next video for "${slot?.label ?? slotId}" — it will lock to that slot`);
 }
+
+function videoReset() { vidBackToList(); }
+
+// Legacy preset hook (preset grid removed from the upload flow)
+function applyVideoPreset(i) {
+  const p = VIDEO_PRESETS[i];
+  if (!p) return;
+  if (VID) VID.preset = i;
+  const fpsEl = document.getElementById('videoFps');
+  if (fpsEl) fpsEl.value = p.extractFps;
+  const smEl = document.getElementById('videoSmartCount');
+  if (smEl) smEl.value = p.frames;
+  const afEl = document.getElementById('videoAnimFps');
+  if (afEl) afEl.value = p.fps;
+  if (VID) updateVideoSelCount();
+}
+
+// ─── Init + restore sessions after a reload ─────────────────────────────────
+async function initVideoPage() {
+  renderVideoSessionGrid();
+  if (_vidRestored) return;
+  _vidRestored = true;
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem('vid_sessions_v1') || '[]'); } catch {}
+  for (const meta of saved) {
+    if (!meta.sessionId || VID_SESSIONS.some(s => s.sessionId === meta.sessionId)) continue;
+    try {
+      const r = await fetch(`${API}/api/video/session/${meta.sessionId}`);
+      const d = await r.json();
+      if (!d.exists || !d.frames?.length) continue;
+      const sess = _vidDefaults(meta.name);
+      sess.sessionId = meta.sessionId;
+      sess.fps = meta.fps || 10;
+      sess.createdAt = meta.createdAt || Date.now();
+      sess.frames = d.frames;
+      sess.selected = new Set(meta.selected || []);
+      sess.ordered = meta.ordered || [];
+      sess.savedAngles = meta.savedAngles || [];
+      sess.lockedSlotId = meta.lockedSlotId || null;
+      sess.lockedAnimName = sess.lockedSlotId || '';
+      const deleted = new Set(meta.deleted || []);
+      sess.ordered.forEach((file, i) => {
+        sess.subjects[i] = d.subjects?.[i]
+          ? { file, status: 'done', url: d.subjects[i], v: 0 }
+          : { file, status: 'pending' };
+        if (deleted.has(i)) sess.subjects[i].deleted = true;
+      });
+      const missing = Object.values(sess.subjects).filter(x => !x.deleted && x.status !== 'done').length;
+      sess.status = !sess.ordered.length ? 'select' : (missing ? 'cutting' : 'ready');
+      VID_SESSIONS.push(sess);
+      // Resume cutouts that were interrupted by the reload
+      if (sess.status === 'cutting') extractVideoSubjects(sess);
+    } catch {}
+  }
+  VID_SESSIONS.sort((a, b) => b.createdAt - a.createdAt);
+  renderVideoSessionGrid();
+}
+
+// Drag and drop
+document.addEventListener('DOMContentLoaded', () => {
+  // Restore resize mode label from localStorage
+  const _rmlbl = document.getElementById('resizeModeLbl');
+  const _rmbtn = document.getElementById('resizeModeBtn');
+  if (_rmlbl) _rmlbl.textContent = SPRITE_RESIZE_MODE === 'high-quality' ? 'HQ ▾' : 'Pixel ▾';
+  if (_rmbtn) _rmbtn.style.color = SPRITE_RESIZE_MODE === 'high-quality' ? '#00ff88' : '#ffcc00';
+
+  const dz = document.getElementById('videoDropZone');
+  if (dz) {
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault();
+      handleVideoFiles(e.dataTransfer.files);
+    });
+  }
+});
 
 function openVideoFrameEditor(thumbEl, frameIndex) {
   const { pop, close } = _createPopover();

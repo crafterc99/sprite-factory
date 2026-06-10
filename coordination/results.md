@@ -2669,3 +2669,15 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: synthetic 720p clip — 20 frames + 20 thumbs in 284ms with correct fast-seek window; old PNG path benchmarked at 289ms/179KB frames (same time, ~2.7x size at 720p test pattern; JPEG advantage grows with photographic content); soft-edge pipeline on synthetic green-screen subject — 225ms, no green fringe, native-res content padded to 768x1024; modules require cleanly; Playwright page load with zero JS errors
 - Assumptions: Gemini subject output stays 1K (cost unchanged) — quality gain comes from no longer discarding pixels post-generation; old PNG sessions still work via the format-agnostic matchers
 - Next dependency: none
+
+## TASK-ADHOC-20260610D — Video tab: multi-video boxes with background processing
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - lib/sprite-generator/video-extractor.js — all child processes (ffmpeg, yt-dlp, curl) now run via async spawn with a shared run() helper; extractFrames/downloadYouTube/extract are async. Critical for parallelism: the old spawnSync froze the entire Node event loop during extraction, so concurrent videos would have serialized and stalled every request
+  - routes/video.js — from-url/from-direct-url use the async helpers; new GET /api/video/session/:sid returns a session's frames + finished subject cutouts for state restore
+  - index-v2.html — Video page rebuilt as multi-session UI: list view (upload card + Studio-style box grid, one box per video w/ thumbnail, status badge, cut progress bar, remove button) and detail view (back button + the existing gallery/cutout/save cards). All processing state lives in per-session objects (VID_SESSIONS; VID = open session): upload→extract auto-runs on drop (multi-file supported), cutouts run via per-session sliding pools (4 concurrent each) writing to state and only painting DOM when that session is on screen. Sessions persist to localStorage and restore via the new endpoint on reload; interrupted cutouts auto-resume. saveAnimToLibrary now reads cutouts from state instead of scraping the DOM
+- What changed: upload any number of videos; each gets a box that extracts, loads, and cuts out the player in the background; switching boxes/pages or reloading never loses state; sessions process fully in parallel (independent pools + non-blocking server)
+- Validation: Playwright end-to-end on a live server — two videos uploaded in one action extracted in parallel (20+30 frames), boxes/badges rendered, selection+confirm started cutting (3 subjects), navigating to list mid-cut kept badges live, subject grid re-rendered from state on reopen with retry slots, full page reload restored both sessions (frames, ordered refs, cut state) and auto-resumed; zero page errors. Subject calls erred locally only because no Gemini key is configured in this environment — error/retry path exercised instead
+- Assumptions: per-session cutout concurrency stays at 4 (two parallel videos = 8 concurrent AI calls; 503 backoff handles rate limits); old single-session flow's preset grid remains retired
+- Next dependency: none
