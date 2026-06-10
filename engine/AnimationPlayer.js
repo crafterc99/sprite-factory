@@ -68,7 +68,9 @@ class AnimationPlayer {
     this.currentFrame   = 0;
     this.lastFrameTime  = 0;
     this.actionTimer    = 0;      // ms remaining in current action
-    this._pendingAction = null;   // queued action name
+    this.speed          = opts.speed ?? 1; // global playback speed multiplier
+    this._pendingAnim   = null;   // queued locomotion anim — switches on last frame
+    this._pendingTrigger = null;  // queued action {anim, movementData} — fires on last frame
     this._sprintActive  = false;  // sprint fps boost flag
   }
 
@@ -97,15 +99,37 @@ class AnimationPlayer {
         : (anim.movementData ?? null);
     }
 
+    // Smooth transitions: the move starts once the current animation finishes
+    // its pass — queue it for the frame-advance loop to fire on wrap.
+    if (!this._atLastFrame()) {
+      this._pendingTrigger = { anim, movementData };
+      this._pendingAnim = null;
+      return;
+    }
+    this._startAction(anim, movementData);
+  }
+
+  _startAction(anim, movementData) {
+    this._pendingTrigger = null;
+    this._pendingAnim = null;
     this._setAnim(anim.name);
     this.state = PLAYER_STATES.ACTION;
-    this.actionTimer = movementData?.duration ?? (anim.frameCount / anim.fps) * 1000;
+    const fps = (anim.fps ?? 8) * (this.speed || 1);
+    this.actionTimer = movementData?.duration ?? (anim.frameCount / fps) * 1000;
 
     // Apply physics burst
     if (this.physics && movementData) {
       this.physics.applyBurst(movementData, this.physics.facingRight);
       if (movementData.lockMovement) this.physics.lock();
     }
+  }
+
+  /** True when there's no current animation or it's sitting on its final frame */
+  _atLastFrame() {
+    const anim = this._findAnim(this.currentAnim);
+    if (!anim) return true;
+    const count = anim.frameCount ?? 1;
+    return count <= 1 || this.currentFrame >= count - 1;
   }
 
   /**
@@ -130,7 +154,6 @@ class AnimationPlayer {
       if (this.actionTimer <= 0) {
         this.physics?.unlock();
         this.state = PLAYER_STATES.IDLE;
-        this._pendingAction = null;
       }
     }
 
@@ -169,14 +192,23 @@ class AnimationPlayer {
       // Falls back to zone-agnostic anims, then first available.
       const desired = this._findBestForZone(candidates, positionZone) ?? this.availableAnims[0];
       if (desired && desired.name !== this.currentAnim) {
-        this._setAnim(desired.name);
+        // Smooth transitions: switch immediately only when the current anim is
+        // already on its last frame; otherwise queue for the wrap point.
+        if (this._atLastFrame()) {
+          this._setAnim(desired.name);
+          this._pendingAnim = null;
+        } else {
+          this._pendingAnim = desired.name;
+        }
+      } else {
+        this._pendingAnim = null;
       }
     }
 
     // ── Frame advance ────────────────────────────────────────────────────────
     const anim = this._findAnim(this.currentAnim);
     if (anim && timestamp) {
-      let fps  = anim.fps ?? 8;
+      let fps  = (anim.fps ?? 8) * (this.speed || 1); // global playback speed
       // Sprint fps boost for locomotion animations
       if (this._sprintActive && ['dribble', 'walk', 'jog-dribble', 'sprint-dribble'].includes(anim.name)) {
         fps = fps * SPRINT_FPS_MULT;
@@ -187,7 +219,16 @@ class AnimationPlayer {
       if (timestamp - this.lastFrameTime >= frameDuration) {
         const next = this.currentFrame + 1;
         if (next >= anim.frameCount) {
-          this.currentFrame = loop ? 0 : anim.frameCount - 1;
+          // Full pass complete — fire any queued transition here so switches
+          // always land on the animation boundary (smooth move-to-move flow)
+          if (this._pendingTrigger && this.state !== PLAYER_STATES.ACTION) {
+            this._startAction(this._pendingTrigger.anim, this._pendingTrigger.movementData);
+          } else if (this._pendingAnim && this.state !== PLAYER_STATES.ACTION) {
+            this._setAnim(this._pendingAnim);
+            this._pendingAnim = null;
+          } else {
+            this.currentFrame = loop ? 0 : anim.frameCount - 1;
+          }
         } else {
           this.currentFrame = next;
         }
@@ -211,6 +252,8 @@ class AnimationPlayer {
   forceAnim(animName) {
     if (animName !== this.currentAnim) this._setAnim(animName);
     this.state = PLAYER_STATES.IDLE;
+    this._pendingAnim = null;
+    this._pendingTrigger = null;
     this.physics?.unlock();
   }
 

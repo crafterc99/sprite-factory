@@ -2631,3 +2631,15 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: node smoke test of burst physics (70px decay displacement, state/lock cleanup); Playwright load of served studio — no JS errors, presets resolve, end-to-end burst displacement verified in-page; Testing tab screenshot confirms procedural hoop at NET anchor
 - Assumptions: default ratings (handle 75 / defense 50) for the separation movement bonus in the tester; hoop image upload still takes precedence over the procedural hoop
 - Next dependency: none — soul-jam repo received the matching HoopRenderer + global PLAYER_SCALE in the same session
+
+## TASK-ADHOC-20260610 — Testing tab refinements (hoop, transitions, applicator, speed)
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - index-v2.html — removed the procedural vector hoop (function, state, render call); hoop image upload now auto-runs background+glass removal and places the hoop on the court (button kept as "Re-run BG removal"); movement editor (type/velX/velY/duration/curve/lock + save/reset) replaced by a Movement applicator (none | crossover | stepback, persisted via PATCH/DELETE /api/anim-lib/:name/movement with an `applicator` tag that also drives burst direction); gmTick no longer force-loads strips at trigger time (queued actions load via onAnimChange when they start) and feeds the speed slider into the player
+  - engine/AnimationPlayer.js — transitions are frame-boundary gated: locomotion switches and triggered actions queue until the current animation completes its pass (fires at the wrap point); movement bursts/locks apply when the action actually starts; new `speed` multiplier scales playback fps and action fallback duration
+  - scripts/render-hoop-preview.cjs — deleted (procedural hoop removed)
+- What changed: smooth move-to-move animation flow, simpler permanent movement assignment, working speed control in Game Mode, image-based hoop workflow restored with automatic BG removal
+- Validation: node smoke test (locomotion switch fired exactly at last frame 7; queued crossover fired at wrap with burst+lock; 2x speed doubled frame rate); Playwright on served studio — no JS errors, applicator select present, old editor controls and drawProceduralHoop absent; soul-jam reverts built clean with 23/23 tests passing
+- Assumptions: "remove the hoop" includes the soul-jam HoopRenderer overlay (reverted to stub; baked court hoop + image workflow remain); applicator "none" deletes custom movement so the anim falls back to its built-in preset
+- Next dependency: soul-jam gained game-wide permanent ANIM_SPEED (localStorage 'soulJam.animSpeed'), matching PLAYER_SCALE

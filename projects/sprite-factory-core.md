@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | IN_PROGRESS |
-| **Last Updated** | 2026-06-09 |
+| **Last Updated** | 2026-06-10 |
 | **Owner** | Claude Code |
 
 ## Goal
@@ -50,6 +50,7 @@ None currently — pending Railway stability.
 
 | Date | What happened |
 |---|---|
+| 2026-06-10 | Testing tab: procedural hoop removed (hoop image upload auto-removes background); animation switches/moves now wait for the current anim's last frame (smooth transitions); movement editor replaced by a simple permanent crossover/stepback Soul Jam applicator; speed slider now drives Game Mode playback |
 | 2026-06-09 | Game Mode movement fixed: actions now resolve movement data (saved editor values > presets); added Soul Jam burst physics (linear-decay separation bursts) with stepback/crossover direction applicators; procedural vector hoop replaces image overlay in Testing tab |
 | 2026-03-31 | Default model changed to gemini-3-pro-image-preview across all 5 generation endpoints |
 | 2026-03-31 | Fixed chalk ESM crash in strip-builder.js and smart-selector.js |

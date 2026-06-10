@@ -1674,56 +1674,24 @@
                   </label>
                   <div id="hoopBgPreview" style="display:none;margin-top:4px">
                     <canvas id="hoopBgCanvas" style="width:100%;border:1px solid #1a1a30;border-radius:3px;background:repeating-conic-gradient(#111 0% 25%,#191928 0% 50%) 0 0/12px 12px"></canvas>
-                    <button class="btn btn-secondary btn-sm" onclick="hoopBgProcess()" style="font-size:9px;width:100%;margin-top:4px;color:#ffcc00">Remove BG + Transparent Glass</button>
+                    <button class="btn btn-secondary btn-sm" onclick="hoopBgProcess()" style="font-size:9px;width:100%;margin-top:4px;color:#ffcc00">Re-run BG removal</button>
                     <button class="btn btn-secondary btn-sm" id="hoopBgDownloadBtn" onclick="hoopBgDownload()" style="font-size:9px;width:100%;margin-top:3px;display:none">↓ Download PNG</button>
                   </div>
                   <div id="hoopBgStatus" style="font-family:var(--mono);font-size:8px;color:#404060;text-align:center;margin-top:2px"></div>
                 </div>
-                <!-- Movement data editor (revealed when anim selected in game mode) -->
+                <!-- Movement applicator (revealed when anim selected in game mode) -->
                 <div id="gmMoveEditor" class="gm-move-section" style="display:none">
-                  <div class="gm-move-label">Movement data</div>
+                  <div class="gm-move-label">Movement applicator</div>
                   <div class="gm-move-row">
-                    <span>Type</span>
-                    <select id="gmMoveType" class="input" style="font-size:9px;padding:2px 4px;height:22px;flex:1" onchange="gmUpdateMovePreview()">
-                      <option value="stationary">stationary</option>
-                      <option value="vertical">vertical (jump)</option>
-                      <option value="horizontal">horizontal</option>
-                      <option value="combo">combo</option>
+                    <span>Move</span>
+                    <select id="gmMoveApplicator" class="input" style="font-size:9px;padding:2px 4px;height:22px;flex:1">
+                      <option value="">none (anim default)</option>
+                      <option value="crossover">crossover (soul jam)</option>
+                      <option value="stepback">stepback (soul jam)</option>
                     </select>
-                  </div>
-                  <div class="gm-move-row">
-                    <span>Vel X</span>
-                    <input type="range" id="gmVelX" min="-10" max="10" value="0" step="0.5" oninput="gmUpdateMovePreview()" />
-                    <span class="gm-val" id="gmVelXVal">0</span>
-                  </div>
-                  <div class="gm-move-row">
-                    <span>Vel Y</span>
-                    <input type="range" id="gmVelY" min="-15" max="5" value="0" step="0.5" oninput="gmUpdateMovePreview()" />
-                    <span class="gm-val" id="gmVelYVal">0</span>
-                  </div>
-                  <div class="gm-move-row">
-                    <span>Duration</span>
-                    <input type="range" id="gmDuration" min="100" max="1500" value="500" step="50" oninput="gmUpdateMovePreview()" />
-                    <span class="gm-val" id="gmDurationVal">500ms</span>
-                  </div>
-                  <div class="gm-move-row">
-                    <span>Curve</span>
-                    <select id="gmCurve" class="input" style="font-size:9px;padding:2px 4px;height:22px;flex:1">
-                      <option value="linear">linear</option>
-                      <option value="ease-in">ease-in</option>
-                      <option value="ease-out">ease-out</option>
-                      <option value="arc">arc</option>
-                      <option value="burst">burst (soul jam)</option>
-                    </select>
-                  </div>
-                  <div class="gm-move-row">
-                    <label style="font-size:9px;color:#60608a;display:flex;align-items:center;gap:4px;cursor:pointer">
-                      <input type="checkbox" id="gmLockMovement" /> Lock movement
-                    </label>
                   </div>
                   <div style="display:flex;gap:4px;margin-top:6px">
-                    <button class="btn btn-secondary btn-sm" style="font-size:9px;flex:1" onclick="gmResetMovement()">Reset</button>
-                    <button class="btn btn-primary btn-sm" style="font-size:9px;flex:1" onclick="gmSaveMovement()">Save</button>
+                    <button class="btn btn-primary btn-sm" style="font-size:9px;flex:1" onclick="gmApplyMovement()">Apply permanently</button>
                   </div>
                   <div id="gmMoveSaveStatus" style="font-size:9px;color:#50507a;margin-top:4px;font-family:var(--mono)"></div>
                 </div>
@@ -2930,18 +2898,13 @@ function gmOnScreenAction(type) {
     steal:     ['steal'],
     dribble:   ['static-dribble', 'dribble'],
   };
-  const candidates = SCREEN_ACTIONS[type] ?? [];
-  const anim = GM.charAnims.find(a => candidates.includes(a.name));
-  const md = anim?.movementData ?? (typeof resolveMovementData === 'function' ? resolveMovementData(type, null) : null);
-
-  // Crossover: flip direction on each tap
-  if (type === 'crossover') {
-    GM.physics.facingRight = !GM.physics.facingRight;
-    const directedMd = md ? { ...md, velocityX: Math.abs(md.velocityX ?? 5) * (GM.physics.facingRight ? 1 : -1) } : md;
-    GM.player.triggerAction(type, directedMd);
-  } else {
-    GM.player.triggerAction(type, md);
-  }
+  // Crossover: flip direction on each tap; the Soul Jam applicator picks the
+  // burst direction (stepback away from hoop, crossover lateral via facing).
+  if (type === 'crossover') GM.physics.facingRight = !GM.physics.facingRight;
+  const md = (type === 'crossover' || type === 'stepback')
+    ? gmActionMoveData(type, null)
+    : null; // triggerAction self-resolves from the chosen animation
+  GM.player.triggerAction(type, md);
 
   // Flash button
   const btn = document.querySelector(`.tv2-action[data-act="${type}"]`);
@@ -7088,130 +7051,6 @@ function drawNetMarker(ctx) {
   ctx.restore();
 }
 
-// ── Procedural hoop (vector port of the reference art — no image overlay) ───
-// Draws the full goal in code: gooseneck pole, support struts, perspective
-// backboard with glass + shooter's square, mount bracket, orange rim ring and
-// the diamond-lattice net. Geometry lives in HOOP_REF (1920x1080 reference
-// space, anchored at the rim center) and is mapped onto NET_ANCHOR, so the
-// whole structure scales/moves with the editable net handle. Every part is a
-// parameterized shape — TESTING.hoopFx (rimTilt, rimDip, netSway, netBulge)
-// animates the rim and net without touching the geometry.
-const HOOP_REF = { rimX: 1148, rimY: 430, rimRX: 96, rimRY: 36 };
-const HOOP_COLORS = {
-  poleFill: '#5d6470', poleDark: '#3a3f48', poleLight: '#7a818d',
-  boardBorder: '#e0512f', boardDark: '#b53e22',
-  glass: '#cfe9f5', glassShade: '#aed6e9',
-  square: '#e8772a', rim: '#e8772a', rimDark: '#c75d18',
-  net: '#ffffff', netShade: '#c8cdd4',
-};
-
-function drawProceduralHoop(ctx, anchor, fx = {}) {
-  const C = HOOP_COLORS;
-  const s = anchor.w / (HOOP_REF.rimRX * 2);            // rim width = anchor.w
-  const rimCX = anchor.x;
-  const rimCY = anchor.y - anchor.h / 4 + 6;            // matches the net marker's rim oval
-  const px = (x) => rimCX + (x - HOOP_REF.rimX) * s;
-  const py = (y) => rimCY + (y - HOOP_REF.rimY) * s;
-
-  const poly = (pts, fill, alpha = 1, stroke = null, lw = 2) => {
-    ctx.beginPath();
-    pts.forEach(([x, y], i) => i ? ctx.lineTo(px(x), py(y)) : ctx.moveTo(px(x), py(y)));
-    ctx.closePath();
-    ctx.globalAlpha = alpha;
-    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.stroke(); }
-    ctx.globalAlpha = 1;
-  };
-
-  ctx.save();
-
-  // ── Pole: vertical shaft + horizontal arm with mitred elbow ──
-  poly([[668,1060],[668,490],[700,430],[905,430],[905,478],[730,478],[718,500],[718,1060]],
-    C.poleFill, 1, C.poleDark, Math.max(1.5, 6 * s));
-  poly([[700,1060],[700,505],[718,505],[718,1060]], C.poleLight, 0.55);
-  poly([[730,478],[905,478],[905,462],[730,462]], C.poleDark, 0.45);
-
-  // ── Support struts (elbow → back of the backboard top) ──
-  ctx.strokeStyle = C.poleDark;
-  ctx.lineWidth = Math.max(1.5, 11 * s);
-  ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(px(762), py(432)); ctx.lineTo(px(884), py(196)); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(px(790), py(448)); ctx.lineTo(px(892), py(252)); ctx.stroke();
-
-  // ── Backboard (3/4 view — right edge nearest the viewer) ──
-  poly([[880,170],[858,182],[860,556],[882,540]], C.boardDark);
-  poly([[882,540],[860,556],[1086,608],[1105,590]], C.boardDark);
-  poly([[1095,45],[1123,62],[1133,575],[1105,590]], C.boardBorder);
-  poly([[1095,45],[1123,62],[1133,575],[1105,590]], '#000000', 0.18);
-  poly([[880,170],[1095,45],[1105,590],[882,540]], C.boardBorder);
-  poly([[901,180],[1074,80],[1083,560],[903,520]], C.glass);
-  poly([[901,180],[1074,80],[1080,300],[902,330]], C.glassShade, 0.5);
-  poly([[955,170],[990,150],[935,505],[915,500]], '#ffffff', 0.65);
-  poly([[1010,140],[1026,131],[975,512],[962,509]], '#ffffff', 0.5);
-  // inner shooter's square
-  poly([[962,302],[1042,262],[1046,468],[966,452]], null, 1, C.square, Math.max(2, 14 * s));
-
-  // ── Rim mount bracket ──
-  poly([[1046,420],[1076,408],[1076,468],[1046,470]], C.rim, 1, C.rimDark, Math.max(1, 5 * s));
-  ctx.fillStyle = C.rimDark;
-  ctx.beginPath(); ctx.arc(px(1061), py(442), Math.max(1.5, 9 * s), 0, Math.PI * 2); ctx.fill();
-
-  // ── Net: diamond lattice hanging from the rim ──
-  const rimRX = HOOP_REF.rimRX * s;
-  const rimRY = HOOP_REF.rimRY * s;
-  const rimDip = fx.rimDip ?? 0;
-  const sway = fx.netSway ?? 0;
-  const bulge = fx.netBulge ?? 0;
-  const netLen = Math.max(16, anchor.h * 0.75 - 6);
-  const COLS = 6, ROWS = 4;
-  const netPt = (u, v) => {
-    const fu = u / COLS, fv = v / ROWS;
-    const side = (fu - 0.5) * 2;
-    const halfW = (rimRX * 0.94) * (1 - fv) + (rimRX * 0.42) * fv + bulge * fv * (1 - fv) * 4;
-    const sag = Math.sin(fv * Math.PI) * netLen * 0.02;
-    const x = rimCX + side * halfW + sway * (1 - fv * 0.85);
-    const y = v === 0
-      ? rimCY + rimDip + Math.sqrt(Math.max(0, 1 - side * side)) * rimRY
-      : rimCY + rimDip + rimRY * 0.55 + fv * netLen + sag;
-    return [x, y];
-  };
-  const netSegs = [];
-  for (let v = 0; v < ROWS; v++) {
-    for (let u = 0; u < COLS; u++) {
-      netSegs.push([netPt(u, v), netPt(u + 1, v + 1)]);
-      netSegs.push([netPt(u + 1, v), netPt(u, v + 1)]);
-    }
-  }
-  const strokeNet = (color, lw, alpha) => {
-    ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.globalAlpha = alpha; ctx.lineCap = 'round';
-    ctx.beginPath();
-    for (const [[x1, y1], [x2, y2]] of netSegs) { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  strokeNet(C.netShade, Math.max(1.5, 9 * s), 0.9);
-  strokeNet(C.net, Math.max(1, 5.5 * s), 1);
-  // bottom rim of the net
-  ctx.strokeStyle = C.net; ctx.lineWidth = Math.max(1, 6 * s);
-  ctx.beginPath();
-  for (let u = 0; u <= COLS; u++) {
-    const [x, y] = netPt(u, ROWS);
-    u ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-  }
-  ctx.stroke();
-
-  // ── Rim ring (over the net top) ──
-  const tilt = ((fx.rimTilt ?? -7) * Math.PI) / 180;
-  ctx.beginPath();
-  ctx.ellipse(rimCX, rimCY + rimDip, rimRX, rimRY, tilt, 0, Math.PI * 2);
-  ctx.strokeStyle = C.rimDark; ctx.lineWidth = Math.max(2.5, 22 * s); ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(rimCX, rimCY + rimDip, rimRX, rimRY, tilt, 0, Math.PI * 2);
-  ctx.strokeStyle = C.rim; ctx.lineWidth = Math.max(1.5, 14 * s); ctx.stroke();
-
-  ctx.restore();
-}
-
 // ── Out-of-bounds boundary ──────────────────────────────────────────────────
 // Editable trapezoid (4 corners). Persisted to R2 via /api/testing-config.
 let OOB_BOUNDS = {
@@ -7460,8 +7299,6 @@ const TESTING = {
   courtPreset: null,
   hoopImg: null,
   hoopLoaded: false,
-  // Animatable parameters for the procedural (code-drawn) hoop
-  hoopFx: { rimTilt: -7, rimDip: 0, netSway: 0, netBulge: 0 },
   sandboxOverlays: {
     polygonZones: true,
     directions: true,
@@ -8098,6 +7935,9 @@ function hoopBgLoadImage(input) {
       canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
+      // Auto-remove background + glass and place the hoop on the court —
+      // any image works without pressing the process button
+      hoopBgProcess();
     };
     img.src = e.target.result;
   };
@@ -8634,16 +8474,13 @@ function testingRenderLoop(timestamp) {
     }
   }
 
-  // ── Hoop over character (front of net when player walks behind) ───────────
+  // ── Hoop image over character (front of net when player walks behind) ─────
   if (TESTING.hoopLoaded && TESTING.hoopImg) {
     const { x: nx, y: ny, w: nw } = NET_ANCHOR;
     const scale = nw / TESTING.hoopImg.naturalWidth;
     const dw = TESTING.hoopImg.naturalWidth  * scale;
     const dh = TESTING.hoopImg.naturalHeight * scale;
     ctx.drawImage(TESTING.hoopImg, nx - dw / 2, ny - NET_ANCHOR.h / 4, dw, dh);
-  } else {
-    // No uploaded hoop image — draw the procedural vector hoop instead
-    drawProceduralHoop(ctx, NET_ANCHOR, TESTING.hoopFx);
   }
 
   // ── Sandbox: update debug panel (throttled via rAF — every frame is fine) ──
@@ -8890,7 +8727,9 @@ function gmActionMoveData(slotId, input) {
   const hl = Math.hypot(hx, hy) || 1;
   const toHoop = { x: hx / hl, y: hy / hl };
 
-  if (slotId === 'stepback') {
+  // A saved applicator tag overrides the slot's default direction style
+  const moveKind = md.applicator ?? (slotId === 'stepback' ? 'stepback' : 'crossover');
+  if (moveKind === 'stepback') {
     out.dirX = -toHoop.x;
     out.dirY = -toHoop.y;
   } else {
@@ -8929,25 +8768,17 @@ function gmTick(timestamp) {
   let _triggeredAction = null; // tracks what action fired this tick (for HUD flash)
 
   // ── Action button handling ────────────────────────────────────────────────
+  // Strips load via the player's onAnimChange callback when the queued action
+  // actually starts (transitions wait for the current anim's last frame).
   if (GM.player.state !== 'ACTION') {
-
-    // Find best slot entry for current zone (zone-variant strip loading)
-    const _gmFindSlot = (slotId) => {
-      const curZoneId = getZoneForPos(TESTING.charX, TESTING.charY)?.id ?? 1;
-      return GM.charAnims.find(a => a.name === slotId && a.zoneId === curZoneId)
-          ?? GM.charAnims.find(a => a.name === slotId)
-          ?? null;
-    };
 
     // SQUARE — Jumpshot (always) OR Steal (defense)
     if (input.justSquare) {
       if (inDefense) {
         GM.player.triggerAction('steal', null);
-        const e = _gmFindSlot('steal'); if (e) gmLoadStrip(e);
         _triggeredAction = 'steal';
       } else {
         GM.player.triggerAction('jumpshot', null);
-        const e = _gmFindSlot('jumpshot'); if (e) gmLoadStrip(e);
         _triggeredAction = 'jump shot';
       }
     }
@@ -8956,19 +8787,15 @@ function gmTick(timestamp) {
     else if (inDribble && !inDefense) {
       if (input.justCross) {
         GM.player.triggerAction('cross', gmActionMoveData('cross', input));
-        const e = _gmFindSlot('cross'); if (e) gmLoadStrip(e);
         _triggeredAction = 'crossover';
       } else if (input.justTriangle) {
         GM.player.triggerAction('tween', null);
-        const e = _gmFindSlot('tween'); if (e) gmLoadStrip(e);
         _triggeredAction = 'between legs';
       } else if (input.justBehind) {
         GM.player.triggerAction('behind', null);
-        const e = _gmFindSlot('behind'); if (e) gmLoadStrip(e);
         _triggeredAction = 'behind back';
       } else if (input.justCircle) {
         GM.player.triggerAction('stepback', gmActionMoveData('stepback', input));
-        const e = _gmFindSlot('stepback'); if (e) gmLoadStrip(e);
         _triggeredAction = 'step back';
       }
     }
@@ -8981,14 +8808,12 @@ function gmTick(timestamp) {
       }
       else if (input.justCircle) {
         GM.player.triggerAction('stepback', gmActionMoveData('stepback', input));
-        const e = _gmFindSlot('stepback'); if (e) gmLoadStrip(e);
         _triggeredAction = 'step back';
       }
       else if (input.justCrossoverLeft || input.justCrossoverRight) {
         if (input.justCrossoverLeft)  GM.physics.facingRight = false;
         if (input.justCrossoverRight) GM.physics.facingRight = true;
         GM.player.triggerAction('cross', gmActionMoveData('cross', input));
-        const e = _gmFindSlot('cross'); if (e) gmLoadStrip(e);
         _triggeredAction = 'crossover';
       }
     }
@@ -9025,6 +8850,8 @@ function gmTick(timestamp) {
     : 'arc';
 
   // Update animation player (sprint + direction → correct locomotion slot)
+  // Speed slider drives Game Mode playback too (persisted in localStorage)
+  GM.player.speed = TESTING.speed || 1;
   const animState = GM.player.update(timestamp, input, dt, inDefense, GM._positionZone);
   TESTING.currentFrame = animState.frame;
 
@@ -9045,76 +8872,57 @@ function gmTick(timestamp) {
   GM._sprintMode  = animState.sprint;
 }
 
-// ── Show movement editor when animation selected in testing ────────────────
+// ── Movement applicator (shown when an animation is selected in testing) ───
+// Replaces the old per-field movement editor: pick a Soul Jam separation move
+// (crossover or stepback burst) and permanently attach its motion to the
+// selected animation. Persisted via /api/anim-lib/:name/movement, so it
+// survives reloads and drives Game Mode bursts through gmActionMoveData.
 function gmShowMoveEditor(animName) {
+  const box = document.getElementById('gmMoveEditor');
   if (!animName) {
-    document.getElementById('gmMoveEditor').style.display = 'none';
+    box.style.display = 'none';
     return;
   }
-  const preset = getMovementPreset(animName);
+  box.style.display = 'block';
+  box.dataset.anim = animName;
   const custom = GM.charAnims?.find(a => a.name === animName)?.movementData ?? null;
-  const data   = Object.assign({}, preset ?? {}, custom ?? {});
-
-  document.getElementById('gmMoveEditor').style.display = 'block';
-  document.getElementById('gmMoveEditor').dataset.anim   = animName;
-  document.getElementById('gmMoveType').value = data.type ?? 'stationary';
-  document.getElementById('gmVelX').value = data.velocityX ?? 0;
-  document.getElementById('gmVelY').value = data.velocityY ?? 0;
-  document.getElementById('gmDuration').value = data.duration ?? 500;
-  document.getElementById('gmCurve').value = data.curve ?? 'linear';
-  document.getElementById('gmLockMovement').checked = !!data.lockMovement;
-  gmUpdateMovePreview();
-  document.getElementById('gmMoveSaveStatus').textContent = custom ? '● custom data saved' : '○ using preset';
+  document.getElementById('gmMoveApplicator').value = custom?.applicator ?? '';
+  document.getElementById('gmMoveSaveStatus').textContent = custom?.applicator
+    ? `● ${custom.applicator} movement applied`
+    : '○ no applicator (anim default)';
 }
 
-function gmUpdateMovePreview() {
-  document.getElementById('gmVelXVal').textContent = parseFloat(document.getElementById('gmVelX').value).toFixed(1);
-  document.getElementById('gmVelYVal').textContent = parseFloat(document.getElementById('gmVelY').value).toFixed(1);
-  document.getElementById('gmDurationVal').textContent = document.getElementById('gmDuration').value + 'ms';
-}
-
-async function gmSaveMovement() {
+async function gmApplyMovement() {
   const animName = document.getElementById('gmMoveEditor').dataset.anim;
   if (!animName) return;
-  const data = {
-    type:         document.getElementById('gmMoveType').value,
-    velocityX:    parseFloat(document.getElementById('gmVelX').value),
-    velocityY:    parseFloat(document.getElementById('gmVelY').value),
-    duration:     parseInt(document.getElementById('gmDuration').value),
-    curve:        document.getElementById('gmCurve').value,
-    lockMovement: document.getElementById('gmLockMovement').checked,
-  };
+  const choice = document.getElementById('gmMoveApplicator').value;
+  const status = document.getElementById('gmMoveSaveStatus');
   try {
-    const r = await fetch(`${API}/api/anim-lib/${animName}/movement`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const d = await r.json();
-    if (d.error) throw new Error(d.error);
-    document.getElementById('gmMoveSaveStatus').textContent = '✓ saved';
-    document.getElementById('gmMoveSaveStatus').style.color = '#00cc44';
-    // Update local cache
     const entry = GM.charAnims?.find(a => a.name === animName);
-    if (entry) entry.movementData = data;
-    setTimeout(() => { document.getElementById('gmMoveSaveStatus').style.color = '#50507a'; }, 2000);
+    if (!choice) {
+      // Remove the applicator — animation falls back to its built-in preset
+      await fetch(`${API}/api/anim-lib/${animName}/movement`, { method: 'DELETE' });
+      if (entry) entry.movementData = null;
+      status.textContent = '✓ applicator removed (anim default)';
+    } else {
+      // Soul Jam burst preset for the chosen move, tagged so direction logic
+      // (stepback away from hoop / crossover lateral) follows the applicator
+      const data = Object.assign({}, getMovementPreset(choice), { applicator: choice });
+      const r = await fetch(`${API}/api/anim-lib/${animName}/movement`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      if (entry) entry.movementData = data;
+      status.textContent = `✓ ${choice} movement applied permanently`;
+    }
+    status.style.color = '#00cc44';
+    setTimeout(() => { status.style.color = '#50507a'; }, 2000);
   } catch (e) {
-    document.getElementById('gmMoveSaveStatus').textContent = '✗ ' + e.message;
-    document.getElementById('gmMoveSaveStatus').style.color = '#cc3333';
-  }
-}
-
-async function gmResetMovement() {
-  const animName = document.getElementById('gmMoveEditor').dataset.anim;
-  if (!animName) return;
-  try {
-    await fetch(`${API}/api/anim-lib/${animName}/movement`, { method: 'DELETE' });
-    const entry = GM.charAnims?.find(a => a.name === animName);
-    if (entry) delete entry.movementData;
-    gmShowMoveEditor(animName); // reload from preset
-    toast('Movement data reset to preset', false);
-  } catch (e) {
-    toast('Reset failed: ' + e.message, true);
+    status.textContent = '✗ ' + e.message;
+    status.style.color = '#cc3333';
   }
 }
 
