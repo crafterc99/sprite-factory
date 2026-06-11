@@ -22,27 +22,37 @@ const { scaleToHeight, BASELINE_Y, DEFAULT_FRAME_SIZE } = require('../lib/sprite
 const ANIM_LIB_DIR  = path.resolve(__dirname, '../data/anim-lib');
 const ANIM_LIB_INDEX = path.join(ANIM_LIB_DIR, 'index.json');
 
-const DEFAULT_STUDIO_PROMPT =
-  `Keep the exact pixelated character from Image 1. Copy only the exact pose and limb/body position from Image 2.
-Do not mix faces or identities. make sure the characters face does not change at all.
-Do not change body shape, skin tone, hairstyle, or facial structure.
-Match Image 2's full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.
-natural anatomy, no distortions.
-Pure green (#00FF00) background. with correct character angle body depending on the animation angle...
- Keep the exact animated character from Image 1. Copy only the exact pose and limb/body position from Image 2.
-Do not mix faces or identities. make sure the characters face does not change at all.
-Do not change body shape, skin tone, hairstyle, or facial structure.
-Match Image 2's full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.
-natural anatomy, no distortions.
-Change the background to Pure green (#00FF00) background.`;
+// Single clean anime-style prompt. The old default opened with "Keep the
+// exact pixelated character…" (two drafts from the pixel-art era concatenated
+// together) — that word was a style instruction, and Gemini would
+// intermittently honor it by rendering frames as pixel/arcade art.
+const DEFAULT_STUDIO_PROMPT = [
+  'Keep the exact anime style character from Image 1. Copy only the exact pose and limb/body position from Image 2.',
+  'Do not mix faces or identities. Make sure the character\'s face does not change at all.',
+  'Do not change body shape, skin tone, hairstyle, or facial structure.',
+  'Match Image 2\'s full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.',
+  'Natural anatomy, no distortions.',
+  'ART STYLE: render in the exact same clean anime art style as Image 1. Do NOT use pixel art, 16-bit, retro, arcade, or low-resolution styles. No pixelation, no dithering, no black pixel outlines.',
+  'Pure green (#00FF00) background.',
+].join('\n');
 
 const PROMPTS_FILE = path.resolve(__dirname, '../data/.char-prompts.json');
+
+// Saved overrides written back when the project was pixel-art styled would
+// silently bring the old look back — treat them as stale and use the default.
+const STALE_STYLE_RE = /pixelated|pixel art|16-bit|GBA|arcade/i;
 
 function loadStudioPrompt() {
   try {
     if (fs.existsSync(PROMPTS_FILE)) {
       const d = JSON.parse(fs.readFileSync(PROMPTS_FILE, 'utf8'));
-      if (d.studio) return d.studio;
+      if (d.studio) {
+        if (STALE_STYLE_RE.test(d.studio)) {
+          console.warn('[studio-gen] saved studio prompt contains pixel-art era wording — ignoring it, using the anime-style default');
+        } else {
+          return d.studio;
+        }
+      }
     }
   } catch {}
   return DEFAULT_STUDIO_PROMPT;

@@ -2724,3 +2724,18 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: synthetic green-screen frames through the module's own functions — per-frame outputs kept native size (220x850–970), strip cells uniform at exactly 112px character height with feet at y=169 in all cells; syntax + server boot clean
 - Assumptions: nothing requires -frames/ assets to be 180×180 squares (verified: result grid uses object-fit:contain, regen already wrote native sizes, anchor.js uses a separate naming scheme); game strip contract unchanged
 - Next dependency: none
+
+## TASK-ADHOC-20260611E — Studio frames intermittently pixel-art/arcade styled
+- Task ID: ADHOC (user report: some studio frames generate pixelated/arcade like the old prompts)
+- Status: DONE
+- Root cause (three leftovers from the pixel-art era):
+  1. routes/studio-gen.js DEFAULT_STUDIO_PROMPT opened with "Keep the exact pixelated character from Image 1" (two old prompt drafts concatenated) — "pixelated" is a style instruction Gemini intermittently honors, flipping frames to pixel/arcade style
+  2. any studio prompt override saved in data/.char-prompts.json (R2 _meta/char-prompts.json) during the pixel era would still be loaded verbatim
+  3. Bulk Generate (/api/animation/apply-bulk → lib/auto-pipeline.js FBF_PROMPT) explicitly demanded "16-bit pixel art style. GBA resolution. Black outlines."
+- Files changed:
+  - routes/studio-gen.js — clean single anime-style default with explicit "Do NOT use pixel art, 16-bit, retro, arcade…"; loadStudioPrompt ignores saved overrides containing pixel-era wording (pixelated/pixel art/16-bit/GBA/arcade) with a warning, while custom non-pixel overrides are still respected
+  - lib/auto-pipeline.js — bulk FBF prompt's 16-bit line replaced with the same anime-style + anti-pixel instruction
+  - routes/char-pipeline.js — displayed studio default aligned with the same ART STYLE line
+- Validation: sandboxed loadStudioPrompt — stale pixel override → anime default used (with warning); custom non-pixel override → respected; no override → anime default; syntax checks pass
+- Assumptions: current art direction is anime (per char-pipeline's own newer default); legacy pixel-art prompt builders in lib/sprite-generator/prompts.js left untouched (only used by old endpoints, not the Studio/Bulk flows)
+- Next dependency: none

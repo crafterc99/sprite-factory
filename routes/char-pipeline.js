@@ -593,6 +593,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         'Do not change body shape, skin tone, hairstyle, or facial structure.',
         'Match Image 2\'s full-body position exactly: head tilt, shoulders, arms, torso, hips, legs, feet, and camera framing.',
         'natural anatomy, no distortions.',
+        'ART STYLE: render in the exact same clean anime art style as Image 1. Do NOT use pixel art, 16-bit, retro, arcade, or low-resolution styles. No pixelation, no dithering, no black pixel outlines.',
         'Pure green (#00FF00) background.',
       ].join('\n');
       p.studio = DEFAULT_STUDIO;

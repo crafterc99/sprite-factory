@@ -50,6 +50,7 @@ None currently — pending Railway stability.
 
 | Date | What happened |
 |---|---|
+| 2026-06-11 | Fixed intermittent pixel/arcade-styled studio frames: "pixelated" wording in default studio prompt, stale pixel-era prompt overrides now ignored, Bulk Generate prompt de-pixeled |
 | 2026-06-11 | Studio first-gen keeps native-res frames (was crushing to 180px strip cells); strip fallback crops to content — no more tiny/blurry first-gen sprites |
 | 2026-06-11 | Testing scale/speed sliders sync globally via testing-config (R2) — same values on every device |
 | 2026-06-11 | Starting-hand toggle on video save + studio settings editor (fps/loop/hand via meta PATCH); ?w= asset thumbnails fix slow dashboard/studio character loading; video boxes restore their save settings for editing |
