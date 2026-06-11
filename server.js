@@ -93,10 +93,20 @@ function serveStatic(res, filePath, contentType) {
     const stat = fs.statSync(filePath);
     const etag = `"${stat.mtimeMs.toString(36)}-${stat.size.toString(36)}"`;
     const isHtml = contentType === 'text/html';
+
+    // Conditional GET — repeat visits get a tiny 304 instead of re-downloading
+    // the (large) body when nothing changed
+    if (res.req?.headers?.['if-none-match'] === etag) {
+      res.writeHead(304, { 'ETag': etag });
+      return res.end();
+    }
+
     res.writeHead(200, {
       'Content-Type': contentType,
       'Content-Length': stat.size,
-      'Cache-Control': isHtml ? 'no-cache' : 'public, max-age=300',
+      // HTML always revalidates (ETag turns that into a 304); scripts/assets
+      // are used from cache instantly and refreshed in the background
+      'Cache-Control': isHtml ? 'no-cache' : 'public, max-age=300, stale-while-revalidate=86400',
       'ETag': etag,
     });
     fs.createReadStream(filePath).pipe(res);
@@ -129,10 +139,17 @@ function serveImage(res, imagePath) {
     const ext = path.extname(imagePath).toLowerCase();
     const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : 'image/png';
     const etag = `"${stat.mtimeMs.toString(36)}-${stat.size.toString(36)}"`;
+
+    // Conditional GET — gallery re-renders revalidate instead of re-downloading
+    if (res.req?.headers?.['if-none-match'] === etag) {
+      res.writeHead(304, { 'ETag': etag });
+      return res.end();
+    }
+
     res.writeHead(200, {
       'Content-Type': mime,
       'Content-Length': stat.size,
-      'Cache-Control': 'public, max-age=60',
+      'Cache-Control': 'public, max-age=60, stale-while-revalidate=3600',
       'ETag': etag,
     });
     fs.createReadStream(imagePath).pipe(res);
@@ -369,8 +386,16 @@ router.post('/api/debug/r2-write-test', async (req, res) => {
 // ─── Database Health / Debug Endpoint ───────────────────────────────────────
 // Drives the red "DATA PERSISTENCE BROKEN" banner in index-v2.html.
 // Returns ok:true when R2 is reachable; ok:false → banner shows.
+// /api/debug/db drives the persistence banner on every page load but costs
+// 4 R2 round-trips (~2s) — cache the verdict for 60s
+let _dbHealthCache = { t: 0, result: null };
+
 router.get('/api/debug/db', async (req, res) => {
   const { verifyConnection, isAvailable, downloadFile } = require('./lib/r2-storage');
+
+  if (_dbHealthCache.result && Date.now() - _dbHealthCache.t < 60000) {
+    return json(res, _dbHealthCache.result);
+  }
 
   const bucket = process.env.R2_BUCKET || 'sprite-factory';
   const endpointPreview = process.env.R2_ENDPOINT
@@ -443,6 +468,7 @@ router.get('/api/debug/db', async (req, res) => {
       }
     } catch { result.wardrobe = 'parse-error'; }
 
+    _dbHealthCache = { t: Date.now(), result };
     json(res, result);
   } catch (e) {
     json(res, { ok: false, configured: true, error: e.message });
@@ -614,14 +640,12 @@ async function handler(req, res) {
     }
   }
 
-  // Serve engine JS modules (/engine/*.js)
+  // Serve engine JS modules (/engine/*.js) — ETag/304 + background revalidation
   if (pathname.startsWith('/engine/')) {
     const file = pathname.replace('/engine/', '');
     const enginePath = path.join(__dirname, 'engine', file);
     if (fs.existsSync(enginePath) && enginePath.endsWith('.js')) {
-      const src = fs.readFileSync(enginePath);
-      res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache', 'Content-Length': src.length });
-      return res.end(src);
+      return serveStatic(res, enginePath, 'application/javascript');
     }
     res.writeHead(404); return res.end('Not found');
   }

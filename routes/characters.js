@@ -626,8 +626,15 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
 
   // ─── Roster ──────────────────────────────────────────────────────────
 
+  // Several pages request the roster on load; the asset-dir scan + sprite map
+  // is rebuilt at most once per 10s
+  let _rosterCache = { t: 0, payload: null };
+
   // GET /api/roster
   router.get('/api/roster', (req, res) => {
+    if (_rosterCache.payload && Date.now() - _rosterCache.t < 10000) {
+      return json(res, _rosterCache.payload);
+    }
     // .characters.json is the source of truth — chars exist even if portrait file is missing
     const registry = loadCharacters();
     const deletedSet = new Set(Array.isArray(registry._deleted) ? registry._deleted : []);
@@ -685,7 +692,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       });
     }
 
-    return json(res, { roster, totalCharacters: roster.length });
+    _rosterCache = { t: Date.now(), payload: { roster, totalCharacters: roster.length } };
+    return json(res, _rosterCache.payload);
   });
 
   // ─── Custom Animations CRUD ──────────────────────────────────────────

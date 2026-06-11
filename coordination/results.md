@@ -2681,3 +2681,15 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: Playwright end-to-end on a live server — two videos uploaded in one action extracted in parallel (20+30 frames), boxes/badges rendered, selection+confirm started cutting (3 subjects), navigating to list mid-cut kept badges live, subject grid re-rendered from state on reopen with retry slots, full page reload restored both sessions (frames, ordered refs, cut state) and auto-resumed; zero page errors. Subject calls erred locally only because no Gemini key is configured in this environment — error/retry path exercised instead
 - Assumptions: per-session cutout concurrency stays at 4 (two parallel videos = 8 concurrent AI calls; 503 backoff handles rate limits); old single-session flow's preset grid remains retired
 - Next dependency: none
+
+## TASK-ADHOC-20260611 — Deploy verification, load speed, sharp frames, studio reference delete
+- Task ID: ADHOC (user requests via remote session)
+- Status: DONE
+- Files changed:
+  - server.js — serveStatic/serveImage answer conditional GETs with 304 (no more re-downloading the 433KB HTML on every visit); static assets get stale-while-revalidate caching; /engine/*.js now served through serveStatic (was no-cache, full body every load); /api/debug/db result cached 60s (was 4 R2 round-trips ≈2s on every page load for the persistence banner)
+  - routes/characters.js — /api/roster response micro-cached 10s
+  - lib/sprite-generator/video-extractor.js — gallery thumbnails were the blur source: 200px bicubic thumbs upscaled into ~300px retina cells. Now 480px lanczos (-q:v 3, ~32KB); full frames bumped to -q:v 1 (max-quality JPEG) since they feed the cutout AI
+  - index-v2.html — Studio animation reference cards get a hover ✕ delete button (confirm → DELETE /api/anim-lib/:name → grid refresh, closes the gen panel if the deleted anim was selected)
+- Validation: production checked live — HTTP 200, latest multi-video code deployed, Railway edge gzips to 97KB; Playwright prod profile (load event 1.1s; roster/debug-db identified at ~2s each → now cached); local: HTML and engine JS return 304 on revalidation, engine cache-control has swr; extractor outputs 854x480 lanczos thumbs + q1 frames; browser test — studio delete removes the reference from server and UI with zero JS errors; video page unaffected
+- Assumptions: 10s/60s cache TTLs are acceptable staleness for roster/persistence banner; old sessions keep their old 200px thumbs until re-extracted
+- Next dependency: none
