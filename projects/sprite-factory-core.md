@@ -50,6 +50,7 @@ None currently — pending Railway stability.
 
 | Date | What happened |
 |---|---|
+| 2026-06-11 | Testing scale/speed sliders sync globally via testing-config (R2) — same values on every device |
 | 2026-06-11 | Starting-hand toggle on video save + studio settings editor (fps/loop/hand via meta PATCH); ?w= asset thumbnails fix slow dashboard/studio character loading; video boxes restore their save settings for editing |
 | 2026-06-11 | Perf: 304 conditional GETs + swr caching (HTML/engine/images), roster + R2-health micro-caches; video thumbs 480px lanczos (blur fix) + max-quality frames; Studio anim reference delete button |
 | 2026-06-10 | Video tab: multi-video session boxes (Studio-style) with background extract/cutout, parallel non-blocking processing (async ffmpeg/yt-dlp/curl), localStorage+server state restore with auto-resume |

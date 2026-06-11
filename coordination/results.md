@@ -2705,3 +2705,12 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: thumbnail endpoint returns 360x540 5KB (from 34KB test PNG) and serves repeats from disk cache in ~2ms; startingHand/moveDirection round-trip verified through POST → list → PATCH meta; Playwright — studio editor populates from saved values, UI save persists and updates the grid, video form restores all six saved settings on box reopen, zero JS errors
 - Assumptions: starting hand semantics (which hand the move begins on in-game) stored as 'left'/'right' on the anim-lib entry for soul-jam export/consumption; hero portrait at 768px wide is sufficient display quality
 - Next dependency: none
+
+## TASK-ADHOC-20260611C — Testing scale/speed are global (cross-device)
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - index-v2.html — Testing scale + speed sliders now persist into /api/testing-config (same store as zones/OOB/net anchor, synced to R2) with an 800ms debounce; loadTestingConfig applies the cloud values to state, sliders, labels, and localStorage on page open, overriding the device-local copy
+- Validation: Playwright with two isolated browser contexts — context A set scale 4.5 / speed 2, server config reflected both, context B (clean profile, no localStorage) loaded the testing page and showed scale 4.5 / speed 2 in state, sliders, and labels; zero JS errors
+- Assumptions: cloud copy wins over localStorage on load (localStorage remains the offline fallback); settings ride along with any zone/OOB save too
+- Next dependency: none

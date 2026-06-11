@@ -6335,6 +6335,20 @@ async function loadTestingConfig() {
         h: Math.max(20, Math.min(300, d.netAnchor.h ?? 72)),
       };
     }
+    // Scale + speed are global settings — the cloud copy wins over this
+    // device's localStorage so every device sees the same values
+    if (Number.isFinite(d.scale) && d.scale > 0) {
+      TESTING.scale = d.scale;
+      localStorage.setItem('testing_scale', d.scale);
+      const el = document.getElementById('testingScale');
+      if (el) { el.value = d.scale; document.getElementById('testingScaleLabel').textContent = d.scale + 'x'; }
+    }
+    if (Number.isFinite(d.speed) && d.speed > 0) {
+      TESTING.speed = d.speed;
+      localStorage.setItem('testing_speed', d.speed);
+      const el = document.getElementById('testingSpeed');
+      if (el) { el.value = d.speed; document.getElementById('testingSpeedLabel').textContent = d.speed + 'x'; }
+    }
   } catch {}
 }
 
@@ -6349,7 +6363,7 @@ async function saveTestingConfig() {
     const r = await fetch(`${API}/api/testing-config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS, netAnchor: NET_ANCHOR }),
+      body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS, netAnchor: NET_ANCHOR, scale: TESTING.scale, speed: TESTING.speed }),
     });
     const d = await r.json();
     if (d.savedToCloud) {
@@ -6622,15 +6636,23 @@ function initTestingPage() {
   if (_scaleEl) { _scaleEl.value = _savedScale; document.getElementById('testingScaleLabel').textContent = _savedScale + 'x'; }
   if (_speedEl) { _speedEl.value = _savedSpeed; document.getElementById('testingSpeedLabel').textContent = _savedSpeed + 'x'; }
 
+  // Debounced cloud save — dragging a slider fires once, ~800ms after release
+  let _tcSettingsTimer = null;
+  const _tcSaveSettings = () => {
+    clearTimeout(_tcSettingsTimer);
+    _tcSettingsTimer = setTimeout(() => saveTestingConfig(), 800);
+  };
   document.getElementById('testingScale').oninput = (e) => {
     TESTING.scale = parseFloat(e.target.value);
     document.getElementById('testingScaleLabel').textContent = TESTING.scale + 'x';
     localStorage.setItem('testing_scale', TESTING.scale);
+    _tcSaveSettings(); // persist globally — other devices pick it up on load
   };
   document.getElementById('testingSpeed').oninput = (e) => {
     TESTING.speed = parseFloat(e.target.value);
     document.getElementById('testingSpeedLabel').textContent = TESTING.speed + 'x';
     localStorage.setItem('testing_speed', TESTING.speed);
+    _tcSaveSettings(); // persist globally — other devices pick it up on load
   };
   document.getElementById('testingFPS').oninput = (e) => {
     TESTING.fps = parseInt(e.target.value);
