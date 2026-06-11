@@ -2,19 +2,21 @@
  * ControllerInput.js — Unified keyboard + Gamepad API input manager
  *
  * PS4/PS5/Xbox controller layout:
- *   Left stick            → movement (walk/run)
- *   Left stick flick L/R  → crossover in that direction (velocity threshold)
+ *   Left stick            → movement (walk/run) — 8-way facing for locomotion
+ *   Right stick flick L   → Crossover (to the left)
+ *   Right stick flick R   → Crossover (to the right)
+ *   Right stick flick Up  → Behind Back
+ *   Right stick flick Down→ Between Legs / Tween
  *   Square  (btn 2)       → Jumpshot (offense) / Steal (when L2 held = defense)
- *   Cross   (btn 0)       → Dribble action / Crossover (when R2 held)
+ *   Cross   (btn 0)       → Dribble action
  *   Circle  (btn 1)       → Stepback
- *   Triangle(btn 3)       → Between Legs / Tween (when R2 held)
  *   L2      (btn 6)       → Defense mode — hold for defensive sliding
- *   R2      (btn 7)       → Dribble moves mode — hold to enable cross/tween/behind/stepback
+ *   R2      (btn 7)       → (legacy) dribble-moves modifier — still works as a fallback
  *   L1      (btn 4)       → Sprint
  *   R1      (btn 5)       → Sprint
  *   D-pad                 → movement fallback
  *
- * Keyboard equivalents:
+ * Keyboard equivalents (no second stick — moves stay on the R-held modifier):
  *   WASD / Arrows    → movement
  *   Q / E            → crossover left / right (flick)
  *   I / Shift        → Jumpshot / Steal (when F held)
@@ -32,6 +34,10 @@
 const FLICK_THRESHOLD = 0.65;
 const FLICK_WINDOW    = 180; // ms
 
+// Right-stick dribble-move flick: magnitude must reach this, then re-center
+const RS_FLICK_THRESHOLD = 0.7;
+const RS_REARM_THRESHOLD = 0.3; // stick must return below this to allow the next flick
+
 class ControllerInput {
   constructor() {
     this._keys      = new Set();
@@ -43,6 +49,9 @@ class ControllerInput {
     this._flickStartTime = 0;
     this._flickStartX    = 0;
 
+    // Right-stick dribble-move flick: armed when centered, fires once on flick
+    this._rsArmed        = true;
+
     this._onKeyDown = this._onKeyDown.bind(this);
     this._onKeyUp   = this._onKeyUp.bind(this);
   }
@@ -52,6 +61,13 @@ class ControllerInput {
       // Movement
       moveX: 0, moveY: 0,
       stickLX: 0, stickLY: 0,
+      stickRX: 0, stickRY: 0,
+
+      // Right-stick dribble-move flicks (one-shot per flick)
+      rsCrossLeft:  false,  // → crossover left
+      rsCrossRight: false,  // → crossover right
+      rsBehind:     false,  // → behind back (flick up)
+      rsTween:      false,  // → between legs (flick down)
 
       // Buttons (current frame state)
       btnSquare:   false,   // Jumpshot (offense) or Steal (defense)
@@ -156,6 +172,25 @@ class ControllerInput {
       s.stickLY = ly;
       if (Math.abs(lx) > 0.15) s.moveX += lx;
       if (Math.abs(ly) > 0.15) s.moveY += ly;
+
+      // ── Right stick — dribble-move flicks (replaces holding R2) ──────────
+      // axes[2]/[3] = right stick on the standard gamepad mapping. A flick is
+      // one move: the stick must reach RS_FLICK_THRESHOLD, then return to
+      // center before another can fire. The dominant axis picks the move.
+      const rx = gp.axes[2] ?? 0;
+      const ry = gp.axes[3] ?? 0;
+      s.stickRX = rx;
+      s.stickRY = ry;
+      const rsMag = Math.hypot(rx, ry);
+      if (rsMag < RS_REARM_THRESHOLD) this._rsArmed = true;
+      if (this._rsArmed && rsMag >= RS_FLICK_THRESHOLD) {
+        this._rsArmed = false;
+        if (Math.abs(rx) >= Math.abs(ry)) {
+          if (rx < 0) s.rsCrossLeft = true; else s.rsCrossRight = true;
+        } else {
+          if (ry < 0) s.rsBehind = true; else s.rsTween = true; // ry+ = down
+        }
+      }
 
       // D-pad fallback
       if (gp.buttons[12]?.pressed) s.moveY -= 1;

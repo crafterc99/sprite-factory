@@ -2815,11 +2815,8 @@ function gmUpdateCtrlHud(input, inDefense, inDribble, lastTriggeredAction) {
     if (inDefense) {
       banner.textContent = 'defense (L2)';
       banner.className = 'ctrl-mode-banner def';
-    } else if (inDribble) {
-      banner.textContent = 'dribble moves (R2)';
-      banner.className = 'ctrl-mode-banner r2';
     } else {
-      banner.textContent = 'free movement';
+      banner.textContent = 'right stick = dribble moves';
       banner.className = 'ctrl-mode-banner';
     }
   }
@@ -2844,7 +2841,7 @@ function gmUpdateCtrlHud(input, inDefense, inDribble, lastTriggeredAction) {
     sqL.classList.toggle('active', input.btnSquare ?? false);
   }
   if (crL) {
-    crL.textContent = inDribble ? 'crossover' : 'dribble';
+    crL.textContent = 'dribble';
     crL.classList.toggle('active', input.btnCross ?? false);
   }
   if (ciL) {
@@ -2852,8 +2849,9 @@ function gmUpdateCtrlHud(input, inDefense, inDribble, lastTriggeredAction) {
     ciL.classList.toggle('active', input.btnCircle ?? false);
   }
   if (trL) {
-    trL.textContent = inDribble ? 'between legs' : '—';
-    trL.classList.toggle('active', input.btnTriangle ?? false);
+    trL.textContent = 'R-stick: moves';
+    const rsActive = !!(input.rsCrossLeft || input.rsCrossRight || input.rsBehind || input.rsTween);
+    trL.classList.toggle('active', rsActive);
   }
 
   // ── Action flash ────────────────────────────────────────────────────────
@@ -7787,9 +7785,33 @@ const GM = {
   charAnims: [],       // current character's anim list (from anim-lib)
   selectedChar: null,
   _facingRight: true,
+  _facingZoneId: 1,    // camera-angle zone from the left stick (1–5)
+  _loadedZoneId: null, // which zone variant's strip is currently loaded
   _defenseMode: false,
   _sprintMode: false,
 };
+
+// 8-way left-stick facing → camera-angle zone variant (1–5) + horizontal flip.
+// Decouples locomotion direction from court position (was getZoneForPos).
+// Octant order from atan2(moveY, moveX) with screen Y down (moveY+ = toward
+// camera = front). Zones: 1 Front, 2 Front-Left, 3 Left, 4 Back-Left, 5 Back;
+// the three right-side directions reuse the left-side art mirrored (flip).
+const _OCTANT_FACING = [
+  { zone: 3, flip: true  }, // 0  → right        (mirror of Left)
+  { zone: 2, flip: true  }, // 1  → front-right  (mirror of Front-Left)
+  { zone: 1, flip: false }, // 2  → front
+  { zone: 2, flip: false }, // 3  → front-left
+  { zone: 3, flip: false }, // 4  → left
+  { zone: 4, flip: false }, // 5  → back-left
+  { zone: 5, flip: false }, // 6  → back
+  { zone: 4, flip: true  }, // 7  → back-right   (mirror of Back-Left)
+];
+function gmFacingFromStick(mx, my) {
+  if (Math.hypot(mx, my) < 0.35) return null; // deadzone — keep current facing
+  let oct = Math.round(Math.atan2(my, mx) / (Math.PI / 4));
+  oct = ((oct % 8) + 8) % 8;
+  return _OCTANT_FACING[oct];
+}
 
 // ── Toggle Game Mode ────────────────────────────────────────────────────────
 function toggleGameMode() {
@@ -7806,6 +7828,8 @@ function startGameMode(silent) {
 
   GM.active = true;
   GM.selectedChar = TESTING.selectedChar;
+  GM._facingZoneId = 1; // start facing the camera (Front)
+  GM._loadedZoneId = null;
 
   // Clear manual-selection state — Game Mode owns TESTING.stripImg/hdFrames
   TESTING.angleStrips = {};
@@ -7839,11 +7863,12 @@ function startGameMode(silent) {
         TESTING.currentFrame = 0;
         TESTING.lastFrameTime = 0;
         TESTING.hdFrames = null; // strip-only rendering in game mode
-        // Load zone-correct strip for the new slot
-        const curZoneId = getZoneForPos(TESTING.charX, TESTING.charY)?.id ?? 1;
+        // Load the strip for the current FACING zone (left-stick direction)
+        const curZoneId = GM._facingZoneId ?? 1;
         const entry = GM.charAnims.find(a => a.name === name && a.zoneId === curZoneId)
                    ?? GM.charAnims.find(a => a.name === name);
         if (entry) gmLoadStrip(entry);
+        GM._loadedZoneId = curZoneId;
         // Reflect active move in left panel
         if (TESTING.selectedChar) renderMovesPanel(TESTING.selectedChar);
       },
@@ -8026,9 +8051,11 @@ function gmTick(timestamp) {
 
   let _triggeredAction = null; // tracks what action fired this tick (for HUD flash)
 
-  // ── Action button handling ────────────────────────────────────────────────
-  // Strips load via the player's onAnimChange callback when the queued action
-  // actually starts (transitions wait for the current anim's last frame).
+  // ── Action handling ────────────────────────────────────────────────────────
+  // Dribble moves are driven by the RIGHT stick now (flick a direction) instead
+  // of holding R2. The legacy R2-held + face-button combo and the keyboard
+  // R-held modifier still work as fallbacks. Strips load via the player's
+  // onAnimChange callback once the queued action starts.
   if (GM.player.state !== 'ACTION') {
 
     // SQUARE — Jumpshot (always) OR Steal (defense)
@@ -8042,7 +8069,28 @@ function gmTick(timestamp) {
       }
     }
 
-    // R2 HELD — Dribble moves
+    // RIGHT STICK flicks — dribble moves (no R2 needed)
+    else if (!inDefense && (input.rsCrossLeft || input.rsCrossRight)) {
+      GM.physics.facingRight = !input.rsCrossLeft; // flick left → face left
+      GM.player.triggerAction('cross', gmActionMoveData('cross', input));
+      _triggeredAction = 'crossover';
+    }
+    else if (!inDefense && input.rsBehind) {
+      GM.player.triggerAction('behind', null);
+      _triggeredAction = 'behind back';
+    }
+    else if (!inDefense && input.rsTween) {
+      GM.player.triggerAction('tween', null);
+      _triggeredAction = 'between legs';
+    }
+
+    // CIRCLE — Stepback (works with or without R2)
+    else if (input.justCircle) {
+      GM.player.triggerAction('stepback', gmActionMoveData('stepback', input));
+      _triggeredAction = 'step back';
+    }
+
+    // Legacy R2-held + face buttons (keyboard R-modifier path)
     else if (inDribble && !inDefense) {
       if (input.justCross) {
         GM.player.triggerAction('cross', gmActionMoveData('cross', input));
@@ -8053,27 +8101,20 @@ function gmTick(timestamp) {
       } else if (input.justBehind) {
         GM.player.triggerAction('behind', null);
         _triggeredAction = 'behind back';
-      } else if (input.justCircle) {
-        GM.player.triggerAction('stepback', gmActionMoveData('stepback', input));
-        _triggeredAction = 'step back';
       }
     }
 
-    // R2 NOT HELD — standard actions
+    // Left-stick flick crossover (keyboard Q/E) + plain Cross = dribble
     else {
-      if (input.justCross) {
-        GM.player.triggerAction('dribble', null);
-        _triggeredAction = 'dribble';
-      }
-      else if (input.justCircle) {
-        GM.player.triggerAction('stepback', gmActionMoveData('stepback', input));
-        _triggeredAction = 'step back';
-      }
-      else if (input.justCrossoverLeft || input.justCrossoverRight) {
+      if (input.justCrossoverLeft || input.justCrossoverRight) {
         if (input.justCrossoverLeft)  GM.physics.facingRight = false;
         if (input.justCrossoverRight) GM.physics.facingRight = true;
         GM.player.triggerAction('cross', gmActionMoveData('cross', input));
         _triggeredAction = 'crossover';
+      }
+      else if (input.justCross) {
+        GM.player.triggerAction('dribble', null);
+        _triggeredAction = 'dribble';
       }
     }
   }
@@ -8087,18 +8128,23 @@ function gmTick(timestamp) {
   TESTING.charX = phys.x;
   TESTING.charY = phys.y;
 
-  // Track current court zone for zone-variant strip selection
-  const newCourtZone = (typeof getZoneForPos === 'function')
-    ? getZoneForPos(TESTING.charX, TESTING.charY)
-    : null;
-  const newZoneId = newCourtZone?.id ?? 1;
+  // Locomotion facing comes from the LEFT stick's 8-way direction, not the
+  // court position. The stick angle picks one of the 5 camera-angle variants
+  // (zones) plus a horizontal flip for the mirrored right-side directions, so
+  // jog/dribble/sprint can face any of the 8 directions anywhere on the court.
+  const facing = gmFacingFromStick(input.moveX, input.moveY);
+  if (facing && GM.player.state !== 'ACTION') {
+    GM._facingZoneId = facing.zone;
+    GM.physics.facingRight = !facing.flip; // gmApplyFacingFlip mirrors when false
+  }
+  const faceZoneId = GM._facingZoneId ?? 1;
 
-  // When zone changes, reload strip for current locomotion slot (zone variant)
-  if (GM._positionZoneId !== newZoneId && GM.player.state !== 'ACTION') {
-    GM._positionZoneId = newZoneId;
+  // Reload the strip when the FACING zone changes (left-stick direction)
+  if (GM._loadedZoneId !== faceZoneId && GM.player.state !== 'ACTION') {
+    GM._loadedZoneId = faceZoneId;
     const curSlot = GM.player.currentAnim;
     if (curSlot) {
-      const entry = GM.charAnims.find(a => a.name === curSlot && a.zoneId === newZoneId)
+      const entry = GM.charAnims.find(a => a.name === curSlot && a.zoneId === faceZoneId)
                  ?? GM.charAnims.find(a => a.name === curSlot);
       if (entry) gmLoadStrip(entry);
     }

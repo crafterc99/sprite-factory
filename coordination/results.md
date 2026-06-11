@@ -2739,3 +2739,14 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: sandboxed loadStudioPrompt — stale pixel override → anime default used (with warning); custom non-pixel override → respected; no override → anime default; syntax checks pass
 - Assumptions: current art direction is anime (per char-pipeline's own newer default); legacy pixel-art prompt builders in lib/sprite-generator/prompts.js left untouched (only used by old endpoints, not the Studio/Bulk flows)
 - Next dependency: none
+
+## TASK-ADHOC-20260611F — Right-stick dribble moves + left-stick 8-way locomotion facing
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - engine/ControllerInput.js — right stick (axes[2]/[3]) now drives dribble moves via one-shot flicks (armed/re-arm latch): flick Left/Right → crossover (that direction), Up → behind back, Down → between legs. Replaces holding R2; R2-held and keyboard R-modifier kept as fallbacks. New state: stickRX/stickRY, rsCrossLeft/rsCrossRight/rsBehind/rsTween
+  - index-v2.html — gmTick action handling reworked: right-stick flicks trigger crossover/behind/tween (no R2), Circle still = stepback, legacy R2/keyboard paths retained. New gmFacingFromStick() maps the left stick's 8-way angle to a camera-angle zone variant (1–5) + horizontal flip; locomotion strip variant + facing now come from that, not getZoneForPos(court position). onAnimChange and the per-frame strip reload use GM._facingZoneId; startGameMode resets facing to Front. HUD: mode banner shows "right stick = dribble moves", triangle label shows R-stick hint
+- What changed: jog/dribble/sprint face whichever of the 8 directions the left stick points, anywhere on the court (zone-independent); crossover/behind/between-legs are flicked on the right stick instead of held-R2 combos
+- Validation: node — facing octant mapping correct for all 8 directions + deadzone; right-stick flick detection fires the right move one-shot (no re-fire while held, weak inputs ignored); Playwright — gmFacingFromStick present and correct, GM._facingZoneId present, ControllerInput exposes the rs* fields, zero JS errors
+- Assumptions: standard gamepad mapping (right stick = axes 2/3); the 5 saved camera-angle zone variants + flip cover all 8 facings; keyboard has no 2nd stick so its R-held move modifier stays
+- Next dependency: none
