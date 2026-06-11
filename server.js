@@ -158,8 +158,26 @@ function serveImage(res, imagePath) {
   }
 }
 
-async function runWithConcurrency(tasks, concurrency = 2, delayMs = 2000) {
-  const results = [];
+// Downscaled asset thumbnails, generated once per (file mtime, width) and
+// cached on disk — keeps roster/studio grids light without touching originals
+const THUMB_CACHE_DIR = path.join(__dirname, '.thumb-cache');
+async function serveAssetThumb(res, imagePath, w) {
+  try {
+    const stat = fs.statSync(imagePath);
+    const key = `${path.basename(imagePath).replace(/[^a-zA-Z0-9._-]/g, '_')}-${stat.mtimeMs.toString(36)}-w${w}.png`;
+    const thumbPath = path.join(THUMB_CACHE_DIR, key);
+    if (!fs.existsSync(thumbPath)) {
+      fs.mkdirSync(THUMB_CACHE_DIR, { recursive: true });
+      const sharp = require('sharp');
+      await sharp(imagePath).resize({ width: w, withoutEnlargement: true }).png().toFile(thumbPath);
+    }
+    return serveImage(res, thumbPath);
+  } catch {
+    return serveImage(res, imagePath); // resize failed — fall back to original
+  }
+}
+
+async function runWithConcurrency(tasks, concurrency = 2, delayMs = 2000) {  const results = [];
   let index = 0;
   async function worker() {
     while (index < tasks.length) {
@@ -654,13 +672,20 @@ async function handler(req, res) {
   if (pathname.startsWith('/assets/')) {
     const file = decodeURIComponent(pathname.replace('/assets/', ''));
     const localPath = path.join(ASSETS_DIR, file);
-    if (fs.existsSync(localPath)) return serveImage(res, localPath);
+    // ?w=256 → downscaled, disk-cached thumbnail. Roster grids render dozens
+    // of multi-MB portraits into ~180px cells — full files killed page loads.
+    const thumbW = Math.min(1024, parseInt(url.searchParams.get('w')) || 0);
+    if (fs.existsSync(localPath)) {
+      if (thumbW > 0) return serveAssetThumb(res, localPath, thumbW);
+      return serveImage(res, localPath);
+    }
     // Not on disk — try R2 and cache locally
     const { downloadFile, isAvailable } = require('./lib/r2-storage');
     if (isAvailable()) {
       const buf = await downloadFile(file);
       if (buf) {
         try { fs.mkdirSync(path.dirname(localPath), { recursive: true }); fs.writeFileSync(localPath, buf); } catch {}
+        if (thumbW > 0 && fs.existsSync(localPath)) return serveAssetThumb(res, localPath, thumbW);
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=300', 'Content-Length': buf.length });
         return res.end(buf);
       }

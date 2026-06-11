@@ -89,6 +89,9 @@ function register(router, ctx) {
       angleIndex: a.angleIndex,
       fps: a.fps,
       loop: a.loop,
+      startingHand: a.startingHand ?? null,
+      moveType: a.moveType ?? null,
+      moveDirection: a.moveDirection ?? null,
       frameCount: a.frameCount,
       createdAt: a.createdAt,
       movementData: a.movementData ?? null,
@@ -112,7 +115,7 @@ function register(router, ctx) {
   // frameBase64Array takes priority per-slot; missing slots filled from session disk files.
   router.post('/api/anim-lib', async (req, res) => {
     const body = await parseBody(req);
-    const { name, angle, fps, loop, sessionId, frameFiles, frameBase64Array } = body;
+    const { name, angle, fps, loop, sessionId, frameFiles, frameBase64Array, startingHand, moveType, moveDirection } = body;
     if (!name) return json(res, { error: 'name required' }, 400);
     if (!angle) return json(res, { error: 'angle required' }, 400);
     if (!frameBase64Array?.length && !sessionId) {
@@ -171,6 +174,9 @@ function register(router, ctx) {
         angleIndex: angleIndex >= 0 ? angleIndex : 0,
         fps: parseInt(fps) || 8,
         loop: loop === true || loop === 'true',
+        startingHand: startingHand || null,   // which hand the move begins on in-game
+        moveType: moveType || null,
+        moveDirection: moveDirection || null,
         frameCount: framesBase64.length,
         createdAt: new Date().toISOString(),
         framesBase64,
@@ -230,7 +236,7 @@ function register(router, ctx) {
       const index = loadIndex();
       if (!index[name]) return json(res, { error: 'not found' }, 404);
       const a = index[name];
-      const META_FIELDS = ['validZones','preferredZones','blockedZones','fallbackAnimationId','facingAngle','movementProfileId','tags','category','notes','legacy','displayName','fps','loop','angleIndex','angle'];
+      const META_FIELDS = ['validZones','preferredZones','blockedZones','fallbackAnimationId','facingAngle','movementProfileId','tags','category','notes','legacy','displayName','fps','loop','angleIndex','angle','startingHand','moveType','moveDirection'];
       for (const f of META_FIELDS) {
         if (body[f] !== undefined) a[f] = body[f];
       }

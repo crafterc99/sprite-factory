@@ -925,6 +925,27 @@
                     <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Pose Reference Frames</div>
                     <div id="studioPoseFrames" style="display:flex;gap:6px;flex-wrap:wrap"></div>
                     <div style="margin-top:10px;font-family:var(--mono);font-size:10px;color:#50507a" id="studioAnimMeta"></div>
+                    <!-- Editable saved-animation settings -->
+                    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+                      <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#50507a;text-transform:uppercase;margin-bottom:8px">Animation Settings</div>
+                      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                        <label style="font-size:10px;font-family:var(--mono);color:#60608a;display:flex;align-items:center">FPS
+                          <input class="input" type="number" id="studioEditFps" min="1" max="30" style="width:54px;margin-left:5px" />
+                        </label>
+                        <label style="font-size:10px;font-family:var(--mono);color:#60608a;display:flex;align-items:center">Loop
+                          <select class="input" id="studioEditLoop" style="width:64px;margin-left:5px">
+                            <option value="false">No</option><option value="true">Yes</option>
+                          </select>
+                        </label>
+                        <label style="font-size:10px;font-family:var(--mono);color:#60608a;display:flex;align-items:center">Start hand
+                          <select class="input" id="studioEditHand" style="width:78px;margin-left:5px">
+                            <option value="">—</option><option value="right">Right</option><option value="left">Left</option>
+                          </select>
+                        </label>
+                        <button class="btn btn-secondary btn-sm" onclick="studioSaveAnimSettings()" style="font-size:9px">Save Settings</button>
+                      </div>
+                      <div id="studioEditStatus" style="font-family:var(--mono);font-size:9px;color:#50507a;margin-top:6px"></div>
+                    </div>
                   </div>
                   <!-- Right: character angle + generate -->
                   <div>
@@ -1087,6 +1108,17 @@
                 <option value="jumpshot">Jump Shot (Square)</option>
               </optgroup>
             </select>
+          </div>
+          <div style="margin-bottom:14px">
+            <label class="form-label">Starting Hand <span style="color:#50507a;font-weight:400">— hand the move begins on when played in-game</span></label>
+            <div style="display:flex;gap:12px;margin-top:6px">
+              <label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px">
+                <input type="radio" name="videoStartHand" value="right" checked> Right
+              </label>
+              <label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px">
+                <input type="radio" name="videoStartHand" value="left"> Left
+              </label>
+            </div>
           </div>
           <div style="margin-bottom:14px">
             <label class="form-label">Court Zone / Camera Angle</label>
@@ -2165,7 +2197,7 @@ function renderDashboard() {
     if (inProgressNames.has(char.name)) return '';
     const isSelected = STATE.dashSelected === char.name;
     const portrait = char.portrait
-      ? `<img class="dash-portrait" src="${char.portrait}" onerror="this.style.display='none'" />`
+      ? `<img class="dash-portrait" src="${char.portrait}?w=360" loading="lazy" decoding="async" onerror="this.style.display='none'" />`
       : `<div class="dash-portrait-empty">🏀</div>`;
     const bCount = char.bodyAnglesCount ?? 0;
     const hCount = char.headAnglesCount ?? 0;
@@ -2202,7 +2234,7 @@ function selectDashChar(name) {
   STATE.dashSelected = name;
 
   document.getElementById('heroPortraitWrap').innerHTML = char.portrait
-    ? `<img src="${char.portrait}" onerror="this.style.display='none'" />`
+    ? `<img src="${char.portrait}?w=768" onerror="this.style.display='none'" />`
     : `<div class="hero-portrait-empty">🏀</div>`;
   document.getElementById('heroName').textContent = name;
 
@@ -2897,7 +2929,7 @@ function renderStudioRoster() {
   const activeName = STATE.selectedChar?.name;
   list.innerHTML = STATE.roster.map(char => {
     const thumb = char.portrait
-      ? `<img class="studio-roster-thumb" src="${char.portrait}" onerror="this.style.display='none'" />`
+      ? `<img class="studio-roster-thumb" src="${char.portrait}?w=160" loading="lazy" decoding="async" onerror="this.style.display='none'" />`
       : `<div class="studio-roster-thumb-empty">🏀</div>`;
     return `<div class="studio-roster-item ${activeName === char.name ? 'active' : ''}" onclick="selectChar('${char.name}')">
       ${thumb}
@@ -2946,7 +2978,7 @@ function studioRenderAnimGrid() {
       <button class="anim-cell-del" onclick="studioDeleteAnim('${a.name}', event)" title="Delete this animation reference">✕</button>
       <img src="${a.thumbUrl}?t=1" style="width:100%;height:80px;object-fit:contain;image-rendering:pixelated;border-radius:4px;background:#0a0a14" onerror="this.style.opacity=0.2" />
       <div class="anim-cell-name" style="margin-top:6px">${a.displayName || a.name}</div>
-      <div class="anim-cell-meta">${a.frameCount}f · ${a.fps}fps · ${a.angle || ''}</div>
+      <div class="anim-cell-meta">${a.frameCount}f · ${a.fps}fps · ${a.angle || ''}${a.startingHand ? ' · ' + (a.startingHand === 'left' ? 'LH' : 'RH') : ''}</div>
     </div>`;
   }).join('');
 }
@@ -2982,6 +3014,12 @@ async function studioSelectAnim(animName) {
   document.getElementById('studioGenTitle').textContent = anim.displayName || anim.name;
   document.getElementById('studioAnimMeta').textContent = `${anim.frameCount} frames · ${anim.fps} fps`;
 
+  // Populate the editable settings from the saved animation
+  document.getElementById('studioEditFps').value = anim.fps ?? 8;
+  document.getElementById('studioEditLoop').value = String(!!anim.loop);
+  document.getElementById('studioEditHand').value = anim.startingHand ?? '';
+  document.getElementById('studioEditStatus').textContent = '';
+
   renderStudioAngleSelector(defaultAngle);
 
   const poseDiv = document.getElementById('studioPoseFrames');
@@ -2997,6 +3035,36 @@ async function studioSelectAnim(animName) {
 
   document.getElementById('studioProgress').style.display = 'none';
   document.getElementById('studioResultCard').style.display = 'none';
+}
+
+async function studioSaveAnimSettings() {
+  const animName = STUDIO.selectedAnim;
+  if (!animName) return;
+  const status = document.getElementById('studioEditStatus');
+  const fields = {
+    fps: parseInt(document.getElementById('studioEditFps').value) || 8,
+    loop: document.getElementById('studioEditLoop').value === 'true',
+    startingHand: document.getElementById('studioEditHand').value || null,
+  };
+  try {
+    const r = await fetch(`${API}/api/anim-lib/${encodeURIComponent(animName)}/meta`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    const entry = STUDIO.animLib.find(a => a.name === animName);
+    if (entry) Object.assign(entry, fields);
+    document.getElementById('studioAnimMeta').textContent = `${entry?.frameCount ?? '?'} frames · ${fields.fps} fps`;
+    studioRenderAnimGrid();
+    status.textContent = '✓ settings saved';
+    status.style.color = '#00cc44';
+    setTimeout(() => { status.style.color = '#50507a'; }, 2000);
+  } catch (e) {
+    status.textContent = '✗ ' + e.message;
+    status.style.color = '#cc3333';
+  }
 }
 
 function studioClosePanel() {
@@ -5108,7 +5176,7 @@ async function fetchCharactersForBulk() {
 
       const portrait = document.createElement('img');
       portrait.className = 'bulk-char-portrait';
-      portrait.src = portraitUrl;
+      portrait.src = portraitUrl + '?w=120';
       portrait.alt = name;
       portrait.onerror = function() {
         const ph = document.createElement('div');
@@ -5235,7 +5303,7 @@ function _vidPersist() {
         sessionId: s.sessionId, name: s.name, fps: s.fps, createdAt: s.createdAt,
         selected: [...s.selected], ordered: s.ordered,
         deleted: Object.entries(s.subjects).filter(([, v]) => v.deleted).map(([k]) => +k),
-        savedAngles: s.savedAngles, lockedSlotId: s.lockedSlotId,
+        savedAngles: s.savedAngles, lockedSlotId: s.lockedSlotId, saveCfg: s.saveCfg,
       }))
     ));
   } catch {}
@@ -5436,6 +5504,21 @@ function vidRenderDetail(sess) {
       if (sess.lockedSlotId) { slotEl.value = sess.lockedSlotId; slotEl.disabled = true; }
       else slotEl.disabled = false;
       videoOnSlotChange();
+    }
+    // Restore this session's previously chosen save settings (editable + re-savable)
+    const cfg = sess.saveCfg;
+    if (cfg) {
+      if (slotEl && !sess.lockedSlotId && cfg.slotId) { slotEl.value = cfg.slotId; videoOnSlotChange(); }
+      const zoneRadio = document.querySelector(`input[name="videoAnimZone"][value="${cfg.zoneId}"]`);
+      if (zoneRadio) zoneRadio.checked = true;
+      const fpsEl = document.getElementById('videoAnimFps');
+      if (fpsEl && cfg.fps) fpsEl.value = cfg.fps;
+      const loopEl = document.getElementById('videoAnimLoop');
+      if (loopEl) loopEl.value = String(!!cfg.loop);
+      const dirRadio = document.querySelector(`input[name="videoMoveDir"][value="${cfg.moveDir}"]`);
+      if (dirRadio) dirRadio.checked = true;
+      const handRadio = document.querySelector(`input[name="videoStartHand"][value="${cfg.startingHand}"]`);
+      if (handRadio) handRadio.checked = true;
     }
     renderVideoAnglePills('videoConfigAnglePillsList');
   } else {
@@ -5925,10 +6008,14 @@ async function saveAnimToLibrary() {
 
   // Direction for crossover/stepback — mirrors Soul Jam's lateral burst direction
   const moveDir = document.querySelector('input[name="videoMoveDir"]:checked')?.value || 'left';
+  const startingHand = document.querySelector('input[name="videoStartHand"]:checked')?.value || 'right';
   const hasDirection = slotId === 'cross' || slotId === 'stepback';
 
+  // Remember this session's save settings so reopening the box restores them
+  sess.saveCfg = { slotId, zoneId, fps, loop, moveDir, startingHand };
+
   const payload = {
-    name: animName, angle, fps, loop,
+    name: animName, angle, fps, loop, startingHand,
     ...(hasDirection ? { moveType: slotId === 'cross' ? 'crossover' : 'stepback', moveDirection: moveDir } : {}),
     sessionId: sess.sessionId,
     frameFiles: orderedFrames,
@@ -6021,6 +6108,7 @@ async function initVideoPage() {
       sess.savedAngles = meta.savedAngles || [];
       sess.lockedSlotId = meta.lockedSlotId || null;
       sess.lockedAnimName = sess.lockedSlotId || '';
+      sess.saveCfg = meta.saveCfg || null;
       const deleted = new Set(meta.deleted || []);
       sess.ordered.forEach((file, i) => {
         sess.subjects[i] = d.subjects?.[i]
@@ -6743,7 +6831,7 @@ function renderTestingCharGrid() {
   if (!grid) return;
   grid.innerHTML = TESTING.roster.map(c => `
     <div class="testing-char-card ${TESTING.selectedChar === c.name ? 'active' : ''}" onclick="testingSelectChar('${c.name}')">
-      <img src="${c.portrait}" alt="${c.name}" onerror="this.style.display='none'" />
+      <img src="${c.portrait}?w=240" loading="lazy" decoding="async" alt="${c.name}" onerror="this.style.display='none'" />
       <div class="testing-char-name">${c.name}</div>
     </div>
   `).join('');
@@ -8800,7 +8888,7 @@ function renderDeployCharCard(char, liveChar) {
 
   const totalSaved = savedKeys.length;
   const portrait = char.portrait
-    ? '<img class="deploy-portrait" src="' + char.portrait + '" onerror="this.style.opacity=\'0.15\'" />'
+    ? '<img class="deploy-portrait" src="' + char.portrait + '?w=160" loading="lazy" onerror="this.style.opacity=\'0.15\'" />'
     : '<div class="deploy-portrait" style="display:flex;align-items:center;justify-content:center;font-size:26px">🏀</div>';
 
   const liveBtn = isLive

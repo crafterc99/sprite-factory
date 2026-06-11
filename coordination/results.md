@@ -2693,3 +2693,15 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: production checked live — HTTP 200, latest multi-video code deployed, Railway edge gzips to 97KB; Playwright prod profile (load event 1.1s; roster/debug-db identified at ~2s each → now cached); local: HTML and engine JS return 304 on revalidation, engine cache-control has swr; extractor outputs 854x480 lanczos thumbs + q1 frames; browser test — studio delete removes the reference from server and UI with zero JS errors; video page unaffected
 - Assumptions: 10s/60s cache TTLs are acceptable staleness for roster/persistence banner; old sessions keep their old 200px thumbs until re-extracted
 - Next dependency: none
+
+## TASK-ADHOC-20260611B — Starting hand, fast character loading, editable saved settings
+- Task ID: ADHOC (user requests via remote session)
+- Status: DONE
+- Files changed:
+  - server.js — /assets/<file>?w=N serves a downscaled thumbnail (sharp, withoutEnlargement), generated once per (file mtime, width) into .thumb-cache/ and served with ETag/304 + swr headers. Root cause of slow character loading: dashboard/studio grids rendered full multi-MB portrait PNGs into 180px cells (with R2 fallback on cold instances)
+  - index-v2.html — dashboard cards (?w=360), hero portrait (?w=768), studio roster sidebar (?w=160), testing char grid (?w=240), deploy cards (?w=160), bulk list (?w=120) all use thumbnails with lazy/async loading; Video save form gains a Starting Hand toggle (right/left) beside the Animation Slot; per-session saveCfg (slot/zone/fps/loop/direction/hand) is captured on save, persisted to localStorage, and restored into the form when reopening a video box so settings are editable and re-savable; Studio gen panel gains an "Animation Settings" editor (FPS / Loop / Start hand → PATCH /api/anim-lib/:name/meta), populated when a reference is clicked; anim cards show LH/RH tag
+  - routes/anim-lib.js — POST stores startingHand + moveType/moveDirection (moveType/moveDirection were previously sent by the client but silently dropped); list response returns them; META_FIELDS extended so they're PATCHable
+  - .gitignore — .thumb-cache/
+- Validation: thumbnail endpoint returns 360x540 5KB (from 34KB test PNG) and serves repeats from disk cache in ~2ms; startingHand/moveDirection round-trip verified through POST → list → PATCH meta; Playwright — studio editor populates from saved values, UI save persists and updates the grid, video form restores all six saved settings on box reopen, zero JS errors
+- Assumptions: starting hand semantics (which hand the move begins on in-game) stored as 'left'/'right' on the anim-lib entry for soul-jam export/consumption; hero portrait at 768px wide is sufficient display quality
+- Next dependency: none
