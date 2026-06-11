@@ -2714,3 +2714,13 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: Playwright with two isolated browser contexts — context A set scale 4.5 / speed 2, server config reflected both, context B (clean profile, no localStorage) loaded the testing page and showed scale 4.5 / speed 2 in state, sliders, and labels; zero JS errors
 - Assumptions: cloud copy wins over localStorage on load (localStorage remains the offline fallback); settings ride along with any zone/OOB save too
 - Next dependency: none
+
+## TASK-ADHOC-20260611D — Studio first-gen frames no longer downscaled
+- Task ID: ADHOC (user report: sprites resized/blurry in first generation, screenshot showed mixed tiny/large frames)
+- Status: DONE
+- Root cause: /api/studio/generate extracted per-frame assets from the 180×180 game strip (character ≈112px tall), while regen-frame stored native-resolution content crops — so first-gen frames were tiny/degraded and redone frames were sharp, mixed in one grid. buildStrip's failure fallback also contained the whole uncropped 1K canvas, producing the extra-tiny players
+- Files changed:
+  - routes/studio-gen.js — first generation now processes frames exactly like regen (green removal + exact content crop, zero resize) and stores those native-resolution images as the per-frame assets; only the game strip (180×180, 112px baseline contract for PlayerRenderer) is downscaled. buildStrip fallback crops to content before containing so a height-scaler failure can no longer shrink the player
+- Validation: synthetic green-screen frames through the module's own functions — per-frame outputs kept native size (220x850–970), strip cells uniform at exactly 112px character height with feet at y=169 in all cells; syntax + server boot clean
+- Assumptions: nothing requires -frames/ assets to be 180×180 squares (verified: result grid uses object-fit:contain, regen already wrote native sizes, anchor.js uses a separate naming scheme); game strip contract unchanged
+- Next dependency: none

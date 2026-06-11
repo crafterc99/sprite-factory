@@ -123,11 +123,24 @@ async function buildStrip(framePaths, outputPath, opts = {}) {
       try { fs.unlinkSync(tmpPath); } catch {}
       return buf;
     } catch (err) {
-      console.warn(`[studio-gen] buildStrip scale failed for frame ${i}, using simple resize:`, err.message);
-      return sharp(p)
-        .resize(frameSize, frameSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 }, kernel: 'lanczos3' })
-        .png({ compressionLevel: 0, effort: 1 })
-        .toBuffer();
+      console.warn(`[studio-gen] buildStrip scale failed for frame ${i}, using crop+contain:`, err.message);
+      // Fallback: crop to the character first so it still fills the cell —
+      // containing the whole uncropped canvas made the player tiny
+      try {
+        const b = await getContentBounds(p);
+        const src = (b && b.w > 0 && b.h > 0)
+          ? await sharp(p).extract({ left: b.minX, top: b.minY, width: b.w, height: b.h }).png({ compressionLevel: 0, effort: 1 }).toBuffer()
+          : p;
+        return await sharp(src)
+          .resize(frameSize, frameSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 }, kernel: 'lanczos3' })
+          .png({ compressionLevel: 0, effort: 1 })
+          .toBuffer();
+      } catch {
+        return sharp(p)
+          .resize(frameSize, frameSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 }, kernel: 'lanczos3' })
+          .png({ compressionLevel: 0, effort: 1 })
+          .toBuffer();
+      }
     }
   }));
 
@@ -302,11 +315,15 @@ function register(router, ctx) {
           })
         );
 
-        // Remove green background only — no crop or resize
+        // Process each raw frame: green removal + exact crop to content —
+        // native resolution, zero resize. This matches what regen-frame
+        // already did; first-gen frames previously got crushed to 180×180
+        // cells (112px-tall character), which is why redone frames looked
+        // sharp while first-gen frames looked tiny and degraded.
         const processedPaths = await Promise.all(
           rawPaths.map(async (rawPath, i) => {
             const outPath = path.join(genDir, `frame-${i}.png`);
-            await removeGreenBackground(rawPath, outPath, { feather: 0 });
+            await processFrame(rawPath, outPath);
             return outPath;
           })
         );
@@ -317,16 +334,14 @@ function register(router, ctx) {
         await buildStrip(processedPaths, stripPath, { pixelHeight: charPixelHeight });
         sbUpload(`${charName}-${animName}.png`, stripPath).catch(e => console.warn(`[studio-gen] strip upload failed for ${charName}-${animName}:`, e.message));
 
-        // Extract individual 180×180 frames from the strip — HD mode in testing requires square frames
+        // Store the native-resolution frames as the per-frame assets — the
+        // result grid, frame editor, and regen flow all read these. Only the
+        // game strip is downscaled; individual frames keep every pixel.
         const framesOutDir = path.join(ASSETS_DIR, `${charName}-${animName}-frames`);
         fs.mkdirSync(framesOutDir, { recursive: true });
-        const FRAME_SIZE = 180;
-        await Promise.all(processedPaths.map(async (_, i) => {
+        await Promise.all(processedPaths.map(async (p, i) => {
           const dest = path.join(framesOutDir, `frame-${i}.png`);
-          await sharp(stripPath)
-            .extract({ left: i * FRAME_SIZE, top: 0, width: FRAME_SIZE, height: FRAME_SIZE })
-            .png({ compressionLevel: 0, effort: 1 })
-            .toFile(dest);
+          fs.copyFileSync(p, dest);
           sbUpload(`${charName}-${animName}-frames/frame-${i}.png`, dest).catch(e => console.warn(`[studio-gen] frame ${i} upload failed:`, e.message));
         }));
 
