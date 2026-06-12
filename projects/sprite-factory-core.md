@@ -50,6 +50,7 @@ None currently — pending Railway stability.
 
 | Date | What happened |
 |---|---|
+| 2026-06-12 | Per-animation speed persists game-wide (FPS slider PATCHes all slot variants server-side); net-line hand swap verified in all 5 zones with velocity fallback |
 | 2026-06-12 | Parallel L/R saves (hand always in slot key + studio hand picker) and net-relative ball-hand rule (lateral movement vs character→net line switches hands) |
 | 2026-06-12 | Ball-hand state machine: L/R variants per move (hand-suffixed keys through video save + studio assign), hand-aware strip selection, auto hand flip on cross/behind/tween, crossover burst removed pending redesign |
 | 2026-06-11 | Testing game mode: dribble moves on the right stick (flick) instead of held-R2; jog/dribble/sprint face the left stick's 8-way direction, decoupled from court zone |

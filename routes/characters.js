@@ -578,6 +578,29 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
     return json(res, { success: true, animation: registry[params.name].savedAnimations[animId] });
   });
 
+  // PATCH /api/character/:name/anim-speed — persist a per-animation playback
+  // speed (fps) game-wide. Applies to ALL saved variants of the slot (every
+  // zone and hand share one speed) so the animation feels identical anywhere.
+  // Body: { slotId, fps }
+  router.patch('/api/character/:name/anim-speed', async (req, res, params) => {
+    const body = await parseBody(req);
+    const { slotId, fps } = body;
+    const fpsVal = Math.max(1, Math.min(60, parseInt(fps)));
+    if (!slotId || !Number.isFinite(fpsVal)) return json(res, { error: 'slotId and fps required' }, 400);
+    const registry = loadCharacters();
+    const saved = registry[params.name]?.savedAnimations;
+    if (!saved) return json(res, { error: 'character has no saved animations' }, 404);
+    const re = new RegExp(`^${slotId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(_z\\d+(_left|_right)?|_a\\d+)?$`);
+    const updated = [];
+    for (const [key, sa] of Object.entries(saved)) {
+      if (re.test(key)) { sa.fps = fpsVal; updated.push(key); }
+    }
+    if (!updated.length) return json(res, { error: `no saved animations match slot "${slotId}"` }, 404);
+    await saveCharacters(registry);
+    scheduleSync();
+    return json(res, { success: true, slotId, fps: fpsVal, updated });
+  });
+
   // DELETE /api/character/:name — Remove a character
   router.delete('/api/character/:name', async (req, res, params) => {
     const name = params.name;

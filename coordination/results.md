@@ -2777,3 +2777,13 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: live API — left+right saves for the same slot+zone coexist (keys idle-dribble_z1_left + _right); browser — net-line rule correct below the net (screen-left→left hand, screen-right→right, straight→keep) AND to the side of the net (line rotates: up-screen→left, down→right); hand radios render with correct default; zero JS errors
 - Assumptions: hand is now mandatory on new studio saves (default right); pre-existing un-suffixed saves remain as hand-agnostic fallbacks; the user's overwritten left-hand idle needs one re-save
 - Next dependency: none
+
+## TASK-ADHOC-20260612C — Per-animation persistent speed + per-zone L/R hand swap
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - routes/characters.js — PATCH /api/character/:name/anim-speed { slotId, fps }: updates fps on every saved variant of the slot (all zones + hands share one speed), persisted to the registry + R2 sync — per-animation speed is game-wide and cross-device
+  - index-v2.html — Testing FPS slider is now the per-animation speed control: while an animation plays it live-updates all in-memory variants of that slot and debounce-PATCHes the server; gmLoadStrip syncs the slider to the active animation's own saved speed; manual saved-anim selection uses the server fps as source of truth (localStorage override removed); net-line hand rule falls back to physics velocity when the stick is idle so burst tails still update the hand
+- Validation: live API — anim-speed PATCH updated exactly the 4 idle-dribble variants (z1/z3 × L/R) and left jog untouched; browser — all 5 zones swap left/right variants with GM.ballHand via gmFindEntry; slider set 13fps → all in-memory jog variants live at 13 and the server recorded 13 after the debounce; zero JS errors
+- Assumptions: one speed per slot (all zone/hand variants of a move share it) — keeps a move's feel identical across facings; clamp 1–60fps
+- Next dependency: none
