@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | IN_PROGRESS |
-| **Last Updated** | 2026-06-11 |
+| **Last Updated** | 2026-06-12 |
 | **Owner** | Claude Code |
 
 ## Goal
@@ -50,6 +50,7 @@ None currently — pending Railway stability.
 
 | Date | What happened |
 |---|---|
+| 2026-06-12 | Ball-hand state machine: L/R variants per move (hand-suffixed keys through video save + studio assign), hand-aware strip selection, auto hand flip on cross/behind/tween, crossover burst removed pending redesign |
 | 2026-06-11 | Testing game mode: dribble moves on the right stick (flick) instead of held-R2; jog/dribble/sprint face the left stick's 8-way direction, decoupled from court zone |
 | 2026-06-11 | Fixed intermittent pixel/arcade-styled studio frames: "pixelated" wording in default studio prompt, stale pixel-era prompt overrides now ignored, Bulk Generate prompt de-pixeled |
 | 2026-06-11 | Studio first-gen keeps native-res frames (was crushing to 180px strip cells); strip fallback crops to content — no more tiny/blurry first-gen sprites |

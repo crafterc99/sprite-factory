@@ -2725,12 +2725,17 @@ function gmOnScreenAction(type) {
     steal:     ['steal'],
     dribble:   ['static-dribble', 'dribble'],
   };
-  // Crossover: flip direction on each tap; the Soul Jam applicator picks the
-  // burst direction (stepback away from hoop, crossover lateral via facing).
+  // Crossover: flip facing on each tap. Movement burst removed for crossover
+  // (stationary payload); stepback keeps its Soul Jam burst. The hand the move
+  // starts with is pinned here; onAnimChange flips the live ball hand for
+  // hand-switching moves when the animation actually begins.
   if (type === 'crossover') GM.physics.facingRight = !GM.physics.facingRight;
-  const md = (type === 'crossover' || type === 'stepback')
-    ? gmActionMoveData(type, null)
-    : null; // triggerAction self-resolves from the chosen animation
+  const md = type === 'crossover'
+    ? { type: 'stationary' }
+    : type === 'stepback'
+      ? gmActionMoveData(type, null)
+      : null; // triggerAction self-resolves from the chosen animation
+  GM._actionHand = GM.ballHand;
   GM.player.triggerAction(type, md);
 
   // Flash button
@@ -2809,14 +2814,15 @@ function gmUpdateCtrlHud(input, inDefense, inDribble, lastTriggeredAction) {
   if (l1) l1.classList.toggle('active', input.sprint ?? false);
   if (r1) r1.classList.toggle('active', input.sprint ?? false);
 
-  // ── Mode banner ─────────────────────────────────────────────────────────
+  // ── Mode banner (includes live ball hand) ────────────────────────────────
   const banner = document.getElementById('ctrlModeBanner');
   if (banner) {
+    const handTag = GM.ballHand === 'left' ? 'ball: LEFT' : 'ball: RIGHT';
     if (inDefense) {
       banner.textContent = 'defense (L2)';
       banner.className = 'ctrl-mode-banner def';
     } else {
-      banner.textContent = 'right stick = dribble moves';
+      banner.textContent = `R-stick = moves · ${handTag}`;
       banner.className = 'ctrl-mode-banner';
     }
   }
@@ -3248,7 +3254,10 @@ async function studioAssignSlot(slotId, zoneId) {
   const zone = ANIMATION_ZONES.find(z => z.id === zoneId);
   if (!zone) return;
 
-  const animId = `${slotId}_z${zoneId}`;
+  // Hand variants of the same move coexist: the starting hand recorded on the
+  // source animation becomes part of the slot key (e.g. cross_z1_left)
+  const startingHand = STUDIO.animLib.find(a => a.name === r.animName)?.startingHand || null;
+  const animId = `${slotId}_z${zoneId}` + (startingHand ? `_${startingHand}` : '');
   const statusEl = document.getElementById('studioSlotStatus');
 
   document.querySelectorAll('#studioSlotBtns button').forEach(b => b.disabled = true);
@@ -3260,7 +3269,7 @@ async function studioAssignSlot(slotId, zoneId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         animId,
-        animName: `${slot.label} — ${zone.label}`,
+        animName: `${slot.label} — ${zone.label}${startingHand ? ` (${startingHand})` : ''}`,
         spriteUrl: r.spriteUrl,
         fps: r.fps,
         frameCount: r.frameCount,
@@ -3268,6 +3277,7 @@ async function studioAssignSlot(slotId, zoneId) {
         angleIndex: COURT_ZONES.find(c => c.id === zoneId)?.angleIdx ?? 0,
         slotId,
         zoneId,
+        startingHand,
       }),
     });
     const data = await res.json();
@@ -5977,7 +5987,10 @@ async function saveAnimToLibrary() {
   if (!slotId || !slot) return toast('Select an animation slot', true);
   if (!sess.sessionId) return toast('No video session', true);
 
-  const animName = `${slotId}_z${zoneId}`;
+  // Starting hand is part of the animation identity — left and right variants
+  // of the same move coexist in the library instead of overwriting each other
+  const startingHandEarly = document.querySelector('input[name="videoStartHand"]:checked')?.value || 'right';
+  const animName = `${slotId}_z${zoneId}_${startingHandEarly}`;
   const angle = zone?.label ?? 'Front';
 
   // Frames + cutouts come from per-session STATE, not the DOM
@@ -6936,11 +6949,11 @@ function renderMovesPanel(charName) {
       lastGroup = m.group;
     }
 
-    // Slot-based: find all zone variants saved (both _z and legacy _a formats)
-    const filledZoneIds = Object.keys(savedAnims)
+    // Slot-based: find all zone variants saved (_z, _z..._left/right, legacy _a)
+    const filledZoneIds = [...new Set(Object.keys(savedAnims)
       .filter(k => k.startsWith(m.id + '_z'))
-      .map(k => parseInt(k.match(/_z(\d+)$/)?.[1]))
-      .filter(n => !isNaN(n));
+      .map(k => parseInt(k.match(/_z(\d+)(?:_(?:left|right))?$/)?.[1]))
+      .filter(n => !isNaN(n)))];
     const filledAngles = Object.keys(savedAnims)
       .filter(k => k.startsWith(m.id + '_a'))
       .map(k => parseInt(k.match(/_a(\d+)$/)?.[1]))
@@ -6953,7 +6966,9 @@ function renderMovesPanel(charName) {
       // Prefer zone format, fall back to angle format
       let firstKey, sa;
       if (filledZoneIds.length > 0) {
-        firstKey = `${m.id}_z${filledZoneIds[0]}`;
+        // Match plain or hand-suffixed keys for the first filled zone
+        firstKey = Object.keys(savedAnims).find(k =>
+          k === `${m.id}_z${filledZoneIds[0]}` || k.startsWith(`${m.id}_z${filledZoneIds[0]}_`));
         sa = savedAnims[firstKey];
       } else {
         firstKey = `${m.id}_a${filledAngles[0]}`;
@@ -6972,7 +6987,7 @@ function renderMovesPanel(charName) {
       : '—';
 
     const isActive = curAnim === m.id
-      || filledZoneIds.some(z => curAnim === `${m.id}_z${z}`)
+      || filledZoneIds.some(z => curAnim != null && String(curAnim).startsWith(`${m.id}_z${z}`))
       || filledAngles.some(i => curAnim === `${m.id}_a${i}`);
 
     const dotColor = hasSprite ? '#00cc66' : '#252540';
@@ -7787,9 +7802,38 @@ const GM = {
   _facingRight: true,
   _facingZoneId: 1,    // camera-angle zone from the left stick (1–5)
   _loadedZoneId: null, // which zone variant's strip is currently loaded
+  ballHand: 'right',   // which hand the ball is in — drives L/R anim variants
+  _actionHand: null,   // hand pinned at action trigger (pre-flip) for its strip
   _defenseMode: false,
   _sprintMode: false,
 };
+
+// Slots that are one-shot actions (their strips use the hand the move STARTED
+// with); everything else is locomotion and follows the live ball hand.
+const GM_ACTION_SLOTS = new Set([
+  'cross', 'crossover', 'tween', 'tween-cross', 'behind', 'stepback',
+  'jumpshot', 'ac-jumpshot', 'tween-tween', 'steal', 'hand-switch', 'ac-cgs',
+]);
+// Dribble moves that move the ball to the other hand when performed
+const GM_HAND_SWITCH_SLOTS = new Set(['cross', 'crossover', 'tween', 'tween-cross', 'behind', 'hand-switch']);
+
+// Hand-aware variant picker: exact hand match first, then a hand-agnostic
+// (legacy) entry, then anything for the slot. Zone preferred, any-zone fallback.
+function gmFindEntry(slotId, zoneId, hand) {
+  const all = GM.charAnims.filter(a => a.name === slotId);
+  if (!all.length) return null;
+  const pick = (arr) => arr.find(a => a.startingHand === hand)
+    ?? arr.find(a => !a.startingHand)
+    ?? arr[0];
+  const inZone = all.filter(a => a.zoneId === zoneId);
+  return inZone.length ? pick(inZone) : pick(all);
+}
+
+// Which hand should a given slot's strip use right now?
+function gmHandFor(slotId) {
+  if (GM_ACTION_SLOTS.has(slotId) && GM._actionHand) return GM._actionHand;
+  return GM.ballHand;
+}
 
 // 8-way left-stick facing → camera-angle zone variant (1–5) + horizontal flip.
 // Decouples locomotion direction from court position (was getZoneForPos).
@@ -7830,6 +7874,9 @@ function startGameMode(silent) {
   GM.selectedChar = TESTING.selectedChar;
   GM._facingZoneId = 1; // start facing the camera (Front)
   GM._loadedZoneId = null;
+  GM.ballHand = 'right'; // possession starts in the right hand
+  GM._actionHand = null;
+  GM._loadedHand = null;
 
   // Clear manual-selection state — Game Mode owns TESTING.stripImg/hdFrames
   TESTING.angleStrips = {};
@@ -7863,10 +7910,21 @@ function startGameMode(silent) {
         TESTING.currentFrame = 0;
         TESTING.lastFrameTime = 0;
         TESTING.hdFrames = null; // strip-only rendering in game mode
-        // Load the strip for the current FACING zone (left-stick direction)
+        // Strip = facing zone (left stick) + ball hand. Actions play the
+        // variant for the hand they STARTED with; hand-switching moves
+        // (cross/behind/tween) flip the live ball hand the moment they begin,
+        // so the return to idle/jog lands on the OTHER hand's variant — and
+        // the state persists through any combo chain.
         const curZoneId = GM._facingZoneId ?? 1;
-        const entry = GM.charAnims.find(a => a.name === name && a.zoneId === curZoneId)
-                   ?? GM.charAnims.find(a => a.name === name);
+        const entry = gmFindEntry(name, curZoneId, gmHandFor(name));
+        if (GM_ACTION_SLOTS.has(name)) {
+          if (GM_HAND_SWITCH_SLOTS.has(name)) {
+            const startHand = GM._actionHand ?? GM.ballHand;
+            GM.ballHand = startHand === 'left' ? 'right' : 'left';
+          }
+        } else {
+          GM._actionHand = null;
+        }
         if (entry) gmLoadStrip(entry);
         GM._loadedZoneId = curZoneId;
         // Reflect active move in left panel
@@ -7913,24 +7971,27 @@ async function loadGMAnims() {
     const savedAnims = char.savedAnimations || {};
     GM.charAnims = [];
 
-    // Pull saved movement data from the anim library so the Movement data
-    // editor's values actually drive Game Mode bursts (was always null before).
+    // Pull saved movement data + starting hand from the anim library
     let libMove = {};
+    let libHand = {};
     try {
       const r = await fetch(`${API}/api/anim-lib`);
       const d = await r.json();
       for (const a of (d.animations ?? [])) {
         if (a.movementData) libMove[a.name] = a.movementData;
+        if (a.startingHand) libHand[a.name] = a.startingHand;
       }
     } catch { /* anim-lib unavailable — presets still apply */ }
 
     for (const [key, sa] of Object.entries(savedAnims)) {
-      let slotId, zoneId;
+      let slotId, zoneId, hand = null;
 
-      const mz = key.match(/^(.+)_z(\d+)$/);
+      // Key formats: slot_z3 (legacy, hand-agnostic) or slot_z3_left / slot_z3_right
+      const mz = key.match(/^(.+)_z(\d+)(?:_(left|right))?$/);
       if (mz) {
         slotId = mz[1];
         zoneId = parseInt(mz[2]);
+        hand = mz[3] ?? null;
       } else {
         // Legacy _a format — map angle index to nearest zone id
         const ma = key.match(/^(.+)_a(\d+)$/);
@@ -7949,11 +8010,12 @@ async function loadGMAnims() {
         name: slotId,
         animKey: key,
         zoneId,
+        startingHand: hand ?? sa.startingHand ?? libHand[key] ?? null,
         fps: sa.fps ?? 8,
         loop: slot.loop,
         frameCount: sa.frameCount ?? 1,
         stripUrl: sa.spriteUrl,
-        movementData: libMove[slotId] ?? null,
+        movementData: libMove[key] ?? libMove[slotId] ?? null,
         _img: null,
       };
       // Preload image so zone transitions are instant (no blank frame gap)
@@ -8052,55 +8114,56 @@ function gmTick(timestamp) {
   let _triggeredAction = null; // tracks what action fired this tick (for HUD flash)
 
   // ── Action handling ────────────────────────────────────────────────────────
-  // Dribble moves are driven by the RIGHT stick now (flick a direction) instead
-  // of holding R2. The legacy R2-held + face-button combo and the keyboard
-  // R-held modifier still work as fallbacks. Strips load via the player's
-  // onAnimChange callback once the queued action starts.
+  // Dribble moves are driven by the RIGHT stick (flick a direction); the legacy
+  // R2-held combo and keyboard R-modifier remain as fallbacks. Each move plays
+  // the variant matching the CURRENT ball hand, and hand-switching moves
+  // (cross/behind/tween) flip the hand for everything that follows.
+  // Crossover movement burst intentionally removed (re-added later by user) —
+  // a bare stationary payload suppresses the preset burst without locking.
+  const gmTriggerMove = (slotId, actionKey, movementData, label) => {
+    // Pin the hand the move will START with; the actual hand flip happens in
+    // onAnimChange when the (possibly queued) action animation really begins
+    GM._actionHand = GM.ballHand;
+    GM.player.triggerAction(actionKey, movementData);
+    _triggeredAction = label;
+  };
+
   if (GM.player.state !== 'ACTION') {
 
     // SQUARE — Jumpshot (always) OR Steal (defense)
     if (input.justSquare) {
       if (inDefense) {
-        GM.player.triggerAction('steal', null);
-        _triggeredAction = 'steal';
+        gmTriggerMove('steal', 'steal', null, 'steal');
       } else {
-        GM.player.triggerAction('jumpshot', null);
-        _triggeredAction = 'jump shot';
+        gmTriggerMove('jumpshot', 'jumpshot', null, 'jump shot');
       }
     }
 
     // RIGHT STICK flicks — dribble moves (no R2 needed)
     else if (!inDefense && (input.rsCrossLeft || input.rsCrossRight)) {
       GM.physics.facingRight = !input.rsCrossLeft; // flick left → face left
-      GM.player.triggerAction('cross', gmActionMoveData('cross', input));
-      _triggeredAction = 'crossover';
+      gmTriggerMove('cross', 'cross', { type: 'stationary' }, 'crossover');
     }
     else if (!inDefense && input.rsBehind) {
-      GM.player.triggerAction('behind', null);
-      _triggeredAction = 'behind back';
+      gmTriggerMove('behind', 'behind', null, 'behind back');
     }
     else if (!inDefense && input.rsTween) {
-      GM.player.triggerAction('tween', null);
-      _triggeredAction = 'between legs';
+      gmTriggerMove('tween', 'tween', null, 'between legs');
     }
 
-    // CIRCLE — Stepback (works with or without R2)
+    // CIRCLE — Stepback (keeps the ball in the same hand)
     else if (input.justCircle) {
-      GM.player.triggerAction('stepback', gmActionMoveData('stepback', input));
-      _triggeredAction = 'step back';
+      gmTriggerMove('stepback', 'stepback', gmActionMoveData('stepback', input), 'step back');
     }
 
     // Legacy R2-held + face buttons (keyboard R-modifier path)
     else if (inDribble && !inDefense) {
       if (input.justCross) {
-        GM.player.triggerAction('cross', gmActionMoveData('cross', input));
-        _triggeredAction = 'crossover';
+        gmTriggerMove('cross', 'cross', { type: 'stationary' }, 'crossover');
       } else if (input.justTriangle) {
-        GM.player.triggerAction('tween', null);
-        _triggeredAction = 'between legs';
+        gmTriggerMove('tween', 'tween', null, 'between legs');
       } else if (input.justBehind) {
-        GM.player.triggerAction('behind', null);
-        _triggeredAction = 'behind back';
+        gmTriggerMove('behind', 'behind', null, 'behind back');
       }
     }
 
@@ -8109,8 +8172,7 @@ function gmTick(timestamp) {
       if (input.justCrossoverLeft || input.justCrossoverRight) {
         if (input.justCrossoverLeft)  GM.physics.facingRight = false;
         if (input.justCrossoverRight) GM.physics.facingRight = true;
-        GM.player.triggerAction('cross', gmActionMoveData('cross', input));
-        _triggeredAction = 'crossover';
+        gmTriggerMove('cross', 'cross', { type: 'stationary' }, 'crossover');
       }
       else if (input.justCross) {
         GM.player.triggerAction('dribble', null);
@@ -8139,13 +8201,13 @@ function gmTick(timestamp) {
   }
   const faceZoneId = GM._facingZoneId ?? 1;
 
-  // Reload the strip when the FACING zone changes (left-stick direction)
-  if (GM._loadedZoneId !== faceZoneId && GM.player.state !== 'ACTION') {
+  // Reload the strip when the FACING zone or the BALL HAND changes
+  if ((GM._loadedZoneId !== faceZoneId || GM._loadedHand !== GM.ballHand) && GM.player.state !== 'ACTION') {
     GM._loadedZoneId = faceZoneId;
+    GM._loadedHand = GM.ballHand;
     const curSlot = GM.player.currentAnim;
     if (curSlot) {
-      const entry = GM.charAnims.find(a => a.name === curSlot && a.zoneId === faceZoneId)
-                 ?? GM.charAnims.find(a => a.name === curSlot);
+      const entry = gmFindEntry(curSlot, faceZoneId, gmHandFor(curSlot));
       if (entry) gmLoadStrip(entry);
     }
   }

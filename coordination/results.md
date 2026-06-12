@@ -2750,3 +2750,18 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: node — facing octant mapping correct for all 8 directions + deadzone; right-stick flick detection fires the right move one-shot (no re-fire while held, weak inputs ignored); Playwright — gmFacingFromStick present and correct, GM._facingZoneId present, ControllerInput exposes the rs* fields, zero JS errors
 - Assumptions: standard gamepad mapping (right stick = axes 2/3); the 5 saved camera-angle zone variants + flip cover all 8 facings; keyboard has no 2nd stick so its R-held move modifier stays
 - Next dependency: none
+
+## TASK-ADHOC-20260612 — Ball-hand state machine + L/R animation variants (Testing game mode)
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - routes/characters.js — save-animation persists startingHand on savedAnimations entries
+  - index-v2.html —
+    - Hand variants coexist: video save names anims `${slot}_z${zone}_${hand}` (Starting Hand radio), studio slot-assign appends `_${hand}` to the savedAnimations key (hand read from the source anim-lib entry) and passes startingHand through; legacy un-suffixed keys remain valid as hand-agnostic
+    - loadGMAnims parses `_z(\d+)(_left|_right)?` keys and carries startingHand (key suffix > saved field > anim-lib record); movement lookup uses the full key first
+    - Game Mode hand state: GM.ballHand ('right' at start), GM._actionHand pins the hand a move STARTED with; gmFindEntry picks hand-exact > hand-agnostic > any, zone-first; locomotion strips reload when facing zone OR ball hand changes; onAnimChange flips ballHand when a hand-switch move (cross/behind/tween, not stepback/jumpshot/steal) actually begins, so idle/jog returns on the other hand's variant and the state persists through combos; HUD banner shows live "ball: LEFT/RIGHT"
+    - Crossover movement burst removed per request (stationary payload suppresses the preset; stepback keeps its Soul Jam burst); on-screen buttons mirrored
+    - Moves panel parses hand-suffixed keys (deduped zone badges, first-key lookup, active highlight)
+- Validation: Playwright against live server — right-hand idle picks _right variant; cross plays right-hand variant then ball flips left and idle returns _left; second cross plays left variant and flips back; jog after combo lands right; stepback doesn't flip; hand-agnostic legacy entries still picked; zero JS errors. routes syntax clean
+- Assumptions: cross/behind-back/between-legs switch hands, stepback/jumpshot/steal keep the hand; possession starts right-handed; hand flips when the (possibly frame-boundary-queued) move animation actually starts
+- Next dependency: user will re-add crossover movement later
