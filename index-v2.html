@@ -3225,12 +3225,26 @@ function studioPickSlot(slotId) {
   STUDIO.pendingSlotId = slotId;
   const slot = ANIMATION_SLOTS.find(s => s.id === slotId);
   const el = document.getElementById('studioSlotAngleLabel');
-  if (el) el.textContent = slot?.label + ' — pick zone:';
+  if (el) el.textContent = slot?.label + ' — pick hand + zone:';
 
   const container = document.getElementById('studioSlotBtns');
   if (!container) return;
 
-  let html = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">`;
+  // Hand picker — every save is hand-keyed so left and right variants of the
+  // same slot+zone save in PARALLEL instead of replacing each other.
+  // Default = the starting hand recorded on the source animation.
+  const srcHand = STUDIO.animLib.find(a => a.name === STUDIO.lastResult?.animName)?.startingHand || 'right';
+  let html = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;font-family:var(--mono);font-size:11px;color:#9a9ab8">
+    <span style="font-size:9px;letter-spacing:1px;color:#50507a;text-transform:uppercase">Ball hand</span>
+    <label style="cursor:pointer;display:flex;align-items:center;gap:5px">
+      <input type="radio" name="studioAssignHand" value="right" ${srcHand !== 'left' ? 'checked' : ''}> Right
+    </label>
+    <label style="cursor:pointer;display:flex;align-items:center;gap:5px">
+      <input type="radio" name="studioAssignHand" value="left" ${srcHand === 'left' ? 'checked' : ''}> Left
+    </label>
+  </div>`;
+
+  html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">`;
   for (const z of ANIMATION_ZONES) {
     html += `<button onclick="studioAssignSlot('${slotId}', ${z.id})"
       style="flex:1;min-width:60px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;
@@ -3254,10 +3268,13 @@ async function studioAssignSlot(slotId, zoneId) {
   const zone = ANIMATION_ZONES.find(z => z.id === zoneId);
   if (!zone) return;
 
-  // Hand variants of the same move coexist: the starting hand recorded on the
-  // source animation becomes part of the slot key (e.g. cross_z1_left)
-  const startingHand = STUDIO.animLib.find(a => a.name === r.animName)?.startingHand || null;
-  const animId = `${slotId}_z${zoneId}` + (startingHand ? `_${startingHand}` : '');
+  // Hand is ALWAYS part of the slot key (e.g. cross_z1_left) so left and right
+  // variants of the same slot+zone save in parallel — never replacing each
+  // other. The picker defaults to the source animation's recorded hand.
+  const startingHand = document.querySelector('input[name="studioAssignHand"]:checked')?.value
+    || STUDIO.animLib.find(a => a.name === r.animName)?.startingHand
+    || 'right';
+  const animId = `${slotId}_z${zoneId}_${startingHand}`;
   const statusEl = document.getElementById('studioSlotStatus');
 
   document.querySelectorAll('#studioSlotBtns button').forEach(b => b.disabled = true);
@@ -8200,6 +8217,22 @@ function gmTick(timestamp) {
     GM.physics.facingRight = !facing.flip; // gmApplyFacingFlip mirrors when false
   }
   const faceZoneId = GM._facingZoneId ?? 1;
+
+  // ── Net-line ball hand ─────────────────────────────────────────────────────
+  // Invisible line from the net to the character (the handler faces the net):
+  // moving to THEIR left of that line puts the ball in the left hand, moving
+  // to their right puts it in the right hand. Deadband keeps small wiggles
+  // from flickering hands; dribble moves still flip it at their start.
+  if (GM.player.state !== 'ACTION' && (Math.abs(input.moveX) > 0.1 || Math.abs(input.moveY) > 0.1)) {
+    const nx = NET_ANCHOR.x - TESTING.charX;
+    const ny = NET_ANCHOR.y - TESTING.charY;
+    const nl = Math.hypot(nx, ny) || 1;
+    // Character's LEFT while facing the net (screen coords, y down)
+    const leftX = ny / nl, leftY = -nx / nl;
+    const lateral = input.moveX * leftX + input.moveY * leftY;
+    if (lateral > 0.35) GM.ballHand = 'left';
+    else if (lateral < -0.35) GM.ballHand = 'right';
+  }
 
   // Reload the strip when the FACING zone or the BALL HAND changes
   if ((GM._loadedZoneId !== faceZoneId || GM._loadedHand !== GM.ballHand) && GM.player.state !== 'ACTION') {

@@ -2765,3 +2765,15 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: Playwright against live server — right-hand idle picks _right variant; cross plays right-hand variant then ball flips left and idle returns _left; second cross plays left variant and flips back; jog after combo lands right; stepback doesn't flip; hand-agnostic legacy entries still picked; zero JS errors. routes syntax clean
 - Assumptions: cross/behind-back/between-legs switch hands, stepback/jumpshot/steal keep the hand; possession starts right-handed; hand flips when the (possibly frame-boundary-queued) move animation actually starts
 - Next dependency: user will re-add crossover movement later
+
+## TASK-ADHOC-20260612B — Parallel L/R saves + net-line ball hand
+- Task ID: ADHOC (user report: right-hand idle dribble save replaced the left-hand one; requested net-relative hand logic)
+- Status: DONE
+- Root cause of the replacement: studio slot-assign only suffixed the savedAnimations key when the SOURCE anim-lib entry had startingHand recorded — with no hand on the source, both saves collapsed onto the un-suffixed `slot_zN` key and overwrote each other
+- Files changed:
+  - index-v2.html —
+    - Studio slot picker gains an explicit Ball hand selector (Right/Left, defaulting to the source animation's recorded hand); studioAssignSlot ALWAYS hand-suffixes the key (`idle-dribble_z1_left` / `_right`) so left and right variants save in parallel, never replacing each other
+    - Net-line hand rule in gmTick: invisible line from the net to the character (handler faces the net) — movement toward the character's LEFT of that line puts the ball in the left hand, their RIGHT puts it in the right hand, with a 0.35 deadband so wiggles don't flicker; computed via the perpendicular of the character→net vector so it rotates correctly anywhere on the court; dribble moves still flip the hand at their start, and strips hot-reload on hand change (existing _loadedHand tracking)
+- Validation: live API — left+right saves for the same slot+zone coexist (keys idle-dribble_z1_left + _right); browser — net-line rule correct below the net (screen-left→left hand, screen-right→right, straight→keep) AND to the side of the net (line rotates: up-screen→left, down→right); hand radios render with correct default; zero JS errors
+- Assumptions: hand is now mandatory on new studio saves (default right); pre-existing un-suffixed saves remain as hand-agnostic fallbacks; the user's overwritten left-hand idle needs one re-save
+- Next dependency: none
