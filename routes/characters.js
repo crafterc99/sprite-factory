@@ -573,6 +573,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       startingHand: startingHand || null,
       savedAt: new Date().toISOString(),
     };
+    _rosterCache = { t: 0, payload: null };
     await saveCharacters(registry);
     scheduleSync();
     return json(res, { success: true, animation: registry[params.name].savedAnimations[animId] });
@@ -596,9 +597,40 @@ function register(router, { ASSETS_DIR, TMP_DIR, runWithConcurrency, json, parse
       if (re.test(key)) { sa.fps = fpsVal; updated.push(key); }
     }
     if (!updated.length) return json(res, { error: `no saved animations match slot "${slotId}"` }, 404);
+    _rosterCache = { t: 0, payload: null };
     await saveCharacters(registry);
     scheduleSync();
     return json(res, { success: true, slotId, fps: fpsVal, updated });
+  });
+
+  // PATCH /api/character/:name/anim-hand — set which hand a saved animation
+  // variant starts in. Re-keys slot_zN / slot_zN_hand → slot_zN_newHand so the
+  // hand is part of the variant's identity (left+right coexist per zone).
+  // Body: { animKey, startingHand: 'left'|'right' }
+  router.patch('/api/character/:name/anim-hand', async (req, res, params) => {
+    const body = await parseBody(req);
+    const { animKey, startingHand } = body;
+    if (!animKey || !['left', 'right'].includes(startingHand)) {
+      return json(res, { error: 'animKey and startingHand (left|right) required' }, 400);
+    }
+    const registry = loadCharacters();
+    const saved = registry[params.name]?.savedAnimations;
+    if (!saved || !saved[animKey]) return json(res, { error: 'saved animation not found' }, 404);
+    const m = animKey.match(/^(.+_z\d+)(?:_(left|right))?$/);
+    if (!m) return json(res, { error: 'animKey is not zone-keyed' }, 400);
+    const newKey = `${m[1]}_${startingHand}`;
+    if (newKey !== animKey && saved[newKey]) {
+      return json(res, { error: `a ${startingHand}-hand variant already exists for this zone` }, 409);
+    }
+    const entry = saved[animKey];
+    delete saved[animKey];
+    entry.animId = newKey;
+    entry.startingHand = startingHand;
+    saved[newKey] = entry;
+    _rosterCache = { t: 0, payload: null };
+    await saveCharacters(registry);
+    scheduleSync();
+    return json(res, { success: true, oldKey: animKey, newKey, startingHand });
   });
 
   // DELETE /api/character/:name — Remove a character

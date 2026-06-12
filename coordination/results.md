@@ -2787,3 +2787,14 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: live API — anim-speed PATCH updated exactly the 4 idle-dribble variants (z1/z3 × L/R) and left jog untouched; browser — all 5 zones swap left/right variants with GM.ballHand via gmFindEntry; slider set 13fps → all in-memory jog variants live at 13 and the server recorded 13 after the debounce; zero JS errors
 - Assumptions: one speed per slot (all zone/hand variants of a move share it) — keeps a move's feel identical across facings; clamp 1–60fps
 - Next dependency: none
+
+## TASK-ADHOC-20260612D — Per-animation settings editor in moves panel + net-line idle hand
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE
+- Files changed:
+  - routes/characters.js — PATCH /api/character/:name/anim-hand { animKey, startingHand } re-keys a saved variant (slot_zN[_hand] → slot_zN_newHand, 409 if the target hand variant already exists); roster micro-cache invalidated on all savedAnimations writes (save-animation / anim-speed / anim-hand) so edits are visible immediately
+  - index-v2.html — clicking a move in the Testing section's left panel now opens an inline settings editor under it: Speed (fps, 1–30) saved game-wide via anim-speed (live playback update + per-variant fan-out), and a per-variant "ball starts" hand selector (either/right/left) per zone that re-keys the save via anim-hand and refreshes roster/GM/moves panel. Editor is toggled by gmToggleAnimSettings; clicks inside it don't re-trigger selection
+- Net-line idle-hand check: rule validated against the PRODUCTION net anchor (182,106 — top-left, court running down-right): at a typical play position (600,420) facing the net, moving to the character's left (screen down-left) → left hand, their right (up-right) → right hand, straight at the net keeps the hand; strafes resolve correctly; the hand persists into idle and the idle strip hot-swaps on hand change (existing _loadedHand reload)
+- Validation: Playwright — editor opens with speed input + 2 variant selects; speed 15 + legacy z1→left re-key updated local state, GM entries and the server (post-cache-bust read shows idle-dribble_z1_left fps 15 hand left immediately); zero JS errors
+- Assumptions: "either" leaves legacy keys hand-agnostic; one speed per slot across variants (established)
+- Next dependency: none

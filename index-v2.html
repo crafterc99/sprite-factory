@@ -621,6 +621,13 @@
   .testing-char-card .testing-char-name { font-family:var(--mono); font-size:6px; letter-spacing:0.5px; color:#50507a; text-transform:uppercase; white-space:nowrap; }
   .testing-char-card.active .testing-char-name { color:#00cc44; }
   /* Moves list */
+  .tv2-anim-settings { margin:2px 6px 8px; padding:9px 10px; background:#0a0a16; border:1px solid #22223a; border-radius:7px; font-family:var(--mono); }
+  .tv2-anim-settings .tas-row { display:flex; align-items:center; gap:7px; font-size:9px; color:#8a8aa8; margin-bottom:6px; }
+  .tv2-anim-settings .tas-row:last-child { margin-bottom:0; }
+  .tv2-anim-settings input[type=number] { width:50px; background:#11111e; border:1px solid #26263e; border-radius:4px; color:#e8e8f8; font-family:var(--mono); font-size:10px; padding:3px 5px; }
+  .tv2-anim-settings select { background:#11111e; border:1px solid #26263e; border-radius:4px; color:#e8e8f8; font-family:var(--mono); font-size:9px; padding:2px 4px; }
+  .tv2-anim-settings .tas-hdr { font-size:8px; letter-spacing:1.5px; text-transform:uppercase; color:#50507a; margin:8px 0 5px; }
+  .tv2-anim-settings .tas-status { font-size:8px; color:#404060; margin-top:5px; }
   .tv2-moves-list { flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1a30 transparent; }
   .tv2-section-hdr { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:#252540; text-transform:uppercase; padding:8px 10px 3px; }
   .tv2-move-item { display:flex; flex-direction:column; padding:6px 10px; cursor:pointer; border-left:2px solid transparent; transition:background .1s; }
@@ -6969,6 +6976,106 @@ function _moveZoneInfo(animName) {
   return { label: 'All zones', color: 'rgba(140,100,255,0.6)' };
 }
 
+// ─── Per-animation settings (opens under a move in the left panel) ──────────
+// Speed (fps) persists game-wide via the anim-speed PATCH (one speed for all
+// zone/hand variants of the move); each saved variant's starting hand can be
+// set/changed here — re-keying it so left and right versions coexist.
+function gmToggleAnimSettings(slotId) {
+  TESTING._animSettingsSlot = TESTING._animSettingsSlot === slotId ? null : slotId;
+  if (TESTING.selectedChar) renderMovesPanel(TESTING.selectedChar);
+}
+
+function gmAnimSettingsHtml(moveDef, savedAnims) {
+  const keys = Object.keys(savedAnims).filter(k => k.startsWith(moveDef.id + '_z')).sort();
+  const fps = savedAnims[keys[0]]?.fps ?? 8;
+  const variants = keys.map(k => {
+    const vm = k.match(/_z(\d+)(?:_(left|right))?$/);
+    const zone = vm?.[1] ?? '?';
+    const hand = vm?.[2] ?? savedAnims[k]?.startingHand ?? '';
+    return `<div class="tas-row">
+      <span style="color:#00cc66;min-width:22px">Z${zone}</span>
+      <span style="flex:1;color:#50507a">ball starts</span>
+      <select onchange="gmAnimSettingsHand('${k}', this.value)" onclick="event.stopPropagation()">
+        <option value="" ${!hand ? 'selected' : ''}>either</option>
+        <option value="right" ${hand === 'right' ? 'selected' : ''}>right</option>
+        <option value="left" ${hand === 'left' ? 'selected' : ''}>left</option>
+      </select>
+    </div>`;
+  }).join('');
+
+  return `<div class="tv2-anim-settings" onclick="event.stopPropagation()">
+    <div class="tas-row">
+      <span style="flex:1">Speed</span>
+      <input type="number" min="1" max="30" value="${fps}" onchange="gmAnimSettingsSpeed('${moveDef.id}', this.value)" />
+      <span>fps · game-wide</span>
+    </div>
+    <div class="tas-hdr">Variants — starting hand</div>
+    ${variants || '<div class="tas-row" style="color:#404060">no saved variants</div>'}
+    <div class="tas-status" id="tasStatus-${moveDef.id}"></div>
+  </div>`;
+}
+
+function _tasStatus(slotId, msg, ok) {
+  const el = document.getElementById('tasStatus-' + slotId);
+  if (el) { el.textContent = msg; el.style.color = ok ? '#00cc66' : '#cc4444'; }
+}
+
+async function gmAnimSettingsSpeed(slotId, value) {
+  const fps = Math.max(1, Math.min(30, parseInt(value) || 8));
+  if (!TESTING.selectedChar) return;
+  // Live update first so playback responds immediately
+  for (const a of (GM.charAnims || [])) if (a.name === slotId) a.fps = fps;
+  const char = TESTING.roster.find(c => c.name === TESTING.selectedChar);
+  if (char?.savedAnimations) {
+    for (const [k, sa] of Object.entries(char.savedAnimations)) {
+      if (k.startsWith(slotId + '_')) sa.fps = fps;
+    }
+  }
+  if (GM.active && GM.player?.currentAnim === slotId) TESTING.fps = fps;
+  try {
+    const r = await fetch(`${API}/api/character/${encodeURIComponent(TESTING.selectedChar)}/anim-speed`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slotId, fps }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    _tasStatus(slotId, `✓ ${fps}fps saved game-wide (${d.updated.length} variants)`, true);
+  } catch (e) {
+    _tasStatus(slotId, '✗ ' + e.message, false);
+  }
+}
+
+async function gmAnimSettingsHand(animKey, hand) {
+  if (!hand) return; // 'either' = leave as-is (legacy keys stay hand-agnostic)
+  if (!TESTING.selectedChar) return;
+  const slotId = animKey.replace(/_z\d+(_left|_right)?$/, '');
+  try {
+    const r = await fetch(`${API}/api/character/${encodeURIComponent(TESTING.selectedChar)}/anim-hand`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ animKey, startingHand: hand }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    // Re-key locally + refresh everything that selects by hand
+    const char = TESTING.roster.find(c => c.name === TESTING.selectedChar);
+    if (char?.savedAnimations?.[d.oldKey]) {
+      const entry = char.savedAnimations[d.oldKey];
+      delete char.savedAnimations[d.oldKey];
+      entry.startingHand = d.startingHand;
+      char.savedAnimations[d.newKey] = entry;
+    }
+    if (GM.active) await loadGMAnims();
+    renderMovesPanel(TESTING.selectedChar);
+    _tasStatus(slotId, `✓ ${d.newKey} — starts ${hand}-handed`, true);
+    toast(`${d.newKey}: starting hand ${hand}`);
+  } catch (e) {
+    _tasStatus(slotId, '✗ ' + e.message, false);
+    toast('Hand change failed: ' + e.message, true);
+  }
+}
+
 function renderMovesPanel(charName) {
   const panel = document.getElementById('tvMovesPanel');
   if (!panel) return;
@@ -7005,6 +7112,7 @@ function renderMovesPanel(charName) {
 
     let clickAttr = '';
     if (hasSprite) {
+      // Clicking a move both selects it and opens its settings editor
       // Prefer zone format, fall back to angle format
       let firstKey, sa;
       if (filledZoneIds.length > 0) {
@@ -7016,7 +7124,7 @@ function renderMovesPanel(charName) {
         firstKey = `${m.id}_a${filledAngles[0]}`;
         sa = savedAnims[firstKey];
       }
-      clickAttr = `onclick="testingSelectSavedAnim('${firstKey}','${sa?.spriteUrl}',${sa?.frameCount ?? 4},${sa?.fps ?? 8},0)"`;
+      clickAttr = `onclick="testingSelectSavedAnim('${firstKey}','${sa?.spriteUrl}',${sa?.frameCount ?? 4},${sa?.fps ?? 8},0);gmToggleAnimSettings('${m.id}')"`;
     }
 
     const fillLabel = filledZoneIds.length > 0
@@ -7042,6 +7150,11 @@ function renderMovesPanel(charName) {
       </div>
       ${fillLabel ? `<div class="tv2-move-sub" style="color:#00cc66;font-size:8px">${fillLabel}</div>` : ''}
     </div>`;
+
+    // Inline per-animation settings editor (speed + per-variant starting hand)
+    if (hasSprite && TESTING._animSettingsSlot === m.id) {
+      html += gmAnimSettingsHtml(m, savedAnims);
+    }
   }
   panel.innerHTML = html;
 }
