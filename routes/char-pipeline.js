@@ -1433,6 +1433,16 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     const portraitPath = path.join(ASSETS_DIR, `${name}full.png`);
     if (!fs.existsSync(portraitPath)) return json(res, { error: 'Portrait not found' }, 400);
 
+    // Load clothing description from wardrobe index
+    let clothingDescription = '';
+    try {
+      const wardrobeIndex = path.resolve(__dirname, '../data/wardrobe.json');
+      if (fs.existsSync(wardrobeIndex)) {
+        const wardrobeItems = JSON.parse(fs.readFileSync(wardrobeIndex, 'utf8'));
+        clothingDescription = wardrobeItems.find(i => i.id === itemId)?.description || '';
+      }
+    } catch {}
+
     try {
       const modelId = model || 'gemini-3-pro-image-preview';
       const client = new NanaBananaClient({ model: modelId });
@@ -1443,12 +1453,15 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         if (!fs.existsSync(bodyFramePath)) continue;
 
         const angleLabel = ANGLE_LABELS_8[i];
+        const wearingClause = clothingDescription
+          ? `wearing the exact "${clothingDescription}" from Image 3`
+          : 'wearing the clothing from Image 3';
         const prompt = [
           `Image 1 is the character body at the ${angleLabel} angle.`,
           `Image 2 is the character portrait.`,
           `Image 3 is the clothing item to apply.`,
           '',
-          `Redraw the character at the ${angleLabel} angle wearing the clothing from Image 3.`,
+          `Redraw the character at the ${angleLabel} angle ${wearingClause}.`,
           'Keep all other features identical — face, hair, skin tone, proportions, pose.',
           'Anime style. Bold black outlines. Clean linework. Green (#00FF00) background.',
         ].join('\n');

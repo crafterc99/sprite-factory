@@ -602,6 +602,7 @@
   .wd-angle-zone { border:1.5px dashed var(--border); border-radius:6px; width:52px; height:58px; cursor:pointer; display:flex; align-items:center; justify-content:center; overflow:hidden; background:var(--surface); transition:border-color 0.15s; }
   .wd-angle-zone:hover { border-color:var(--accent); }
   .wardrobe-item-subcategory { font-family:var(--mono); font-size:7px; color:#50507a; text-align:center; margin-top:-2px; }
+  .wardrobe-item-desc { font-family:var(--mono); font-size:7px; color:#35354e; text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; }
   .wardrobe-empty { font-family:var(--mono); font-size:10px; color:#30304a; padding:16px 0; }
 
   /* ─── TESTING PAGE ─── */
@@ -1234,12 +1235,17 @@
                   <select class="input" id="wdType" style="width:100%" onchange="wdUpdateSubcategories()">
                     <option value="top">Top</option>
                     <option value="bottom">Bottom</option>
+                    <option value="shoes">Shoes</option>
                   </select>
                 </div>
                 <div style="flex:1">
                   <label style="font-family:var(--mono);font-size:8px;color:#50507a;display:block;margin-bottom:4px">CATEGORY</label>
                   <select class="input" id="wdSubcategory" style="width:100%"></select>
                 </div>
+              </div>
+              <div>
+                <label style="font-family:var(--mono);font-size:8px;color:#50507a;display:block;margin-bottom:4px">CLOTHING DESCRIPTION <span style="opacity:0.5">(used in AI prompt)</span></label>
+                <textarea class="input" id="wdDescription" rows="2" placeholder="e.g. bright orange hoodie with a white drawstring and front kangaroo pocket" style="width:100%;resize:vertical;font-size:11px"></textarea>
               </div>
               <!-- Optional angle uploads -->
               <div>
@@ -1286,6 +1292,12 @@
         <div class="wardrobe-section-heading">BOTTOMS</div>
         <div id="wardrobeBottomsGrid" class="wardrobe-grid">
           <div class="wardrobe-empty">No bottoms saved yet.</div>
+        </div>
+
+        <!-- Shoes section -->
+        <div class="wardrobe-section-heading">SHOES</div>
+        <div id="wardrobeShoesGrid" class="wardrobe-grid">
+          <div class="wardrobe-empty">No shoes saved yet.</div>
         </div>
 
       </div><!-- /page-wardrobe -->
@@ -3885,7 +3897,7 @@ async function dashSaveRatings(name) {
 }
 
 // Subcategory options from server (loaded on page open)
-let WD_SUBCATS = { top: ['hoodie','t-shirt','long sleeve','tank top','jersey','jacket','sweatshirt','polo'], bottom: ['pants','shorts','three-quarter','leggings','joggers','sweatpants','jeans'] };
+let WD_SUBCATS = { top: ['hoodie','t-shirt','long sleeve','tank top','jersey','jacket','sweatshirt','polo'], bottom: ['pants','shorts','three-quarter','leggings','joggers','sweatpants','jeans'], shoes: ['sneakers','basketball shoes','high tops','low tops','boots','slides','sandals'] };
 
 function wdUpdateSubcategories() {
   const type = document.getElementById('wdType').value;
@@ -4914,6 +4926,7 @@ async function loadWardrobePage() {
     WARDROBE_ITEMS = d.items || [];
     if (d.topSubcategories) WD_SUBCATS.top = d.topSubcategories;
     if (d.bottomSubcategories) WD_SUBCATS.bottom = d.bottomSubcategories;
+    if (d.shoesSubcategories) WD_SUBCATS.shoes = d.shoesSubcategories;
     wdUpdateSubcategories(); // init subcategory select
     renderWardrobePage();
   } catch (e) {
@@ -4922,8 +4935,9 @@ async function loadWardrobePage() {
 }
 
 function renderWardrobePage() {
-  const tops = WARDROBE_ITEMS.filter(i => i.type === 'top');
+  const tops   = WARDROBE_ITEMS.filter(i => i.type === 'top');
   const bottoms = WARDROBE_ITEMS.filter(i => i.type === 'bottom');
+  const shoes  = WARDROBE_ITEMS.filter(i => i.type === 'shoes');
 
   document.getElementById('wardrobeTopsGrid').innerHTML = tops.length === 0
     ? '<div class="wardrobe-empty">No tops saved yet.</div>'
@@ -4932,14 +4946,19 @@ function renderWardrobePage() {
   document.getElementById('wardrobeBottomsGrid').innerHTML = bottoms.length === 0
     ? '<div class="wardrobe-empty">No bottoms saved yet.</div>'
     : bottoms.map(item => wardrobeCardHtml(item)).join('');
+
+  document.getElementById('wardrobeShoesGrid').innerHTML = shoes.length === 0
+    ? '<div class="wardrobe-empty">No shoes saved yet.</div>'
+    : shoes.map(item => wardrobeCardHtml(item)).join('');
 }
 
 function wardrobeCardHtml(item) {
   const subcat = item.subcategory ? `<div class="wardrobe-item-subcategory">${item.subcategory}</div>` : '';
+  const desc   = item.description ? `<div class="wardrobe-item-desc" title="${item.description.replace(/"/g,'&quot;')}">${item.description}</div>` : '';
   return `<div class="wardrobe-item-card">
     <img src="${API}/api/wardrobe/image/${item.id}" alt="${item.name}" />
     <div class="wardrobe-item-label">${item.name}</div>
-    ${subcat}
+    ${subcat}${desc}
     <button class="wardrobe-delete-btn" onclick="wdDelete('${item.id}')" title="Remove">×</button>
   </div>`;
 }
@@ -4972,9 +4991,10 @@ function wdHandleAngle(side, file) {
 }
 
 async function wdAdd() {
-  const name       = document.getElementById('wdName').value.trim();
-  const type       = document.getElementById('wdType').value;
+  const name        = document.getElementById('wdName').value.trim();
+  const type        = document.getElementById('wdType').value;
   const subcategory = document.getElementById('wdSubcategory').value;
+  const description = document.getElementById('wdDescription').value.trim();
   if (!name) return toast('Name required', true);
   if (!WD.photo) return toast('Upload a front image first', true);
 
@@ -4982,7 +5002,7 @@ async function wdAdd() {
     const r = await fetch(`${API}/api/wardrobe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, type, subcategory, imageBase64: WD.photo, anglesBase64: WD.angles }),
+      body: JSON.stringify({ name, type, subcategory, description, imageBase64: WD.photo, anglesBase64: WD.angles }),
     });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
@@ -4990,6 +5010,7 @@ async function wdAdd() {
     renderWardrobePage();
     // Reset form
     document.getElementById('wdName').value = '';
+    document.getElementById('wdDescription').value = '';
     WD.photo = null;
     WD.angles = {};
     document.getElementById('wdPhotoThumb').style.display = 'none';

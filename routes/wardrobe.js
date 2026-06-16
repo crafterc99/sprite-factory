@@ -1,7 +1,7 @@
 /**
  * Wardrobe Routes — Clothing library for character outfit application
  *
- * Items: { id, name, type: 'top'|'bottom', subcategory, imageData, angles: { front?, back?, left?, right? }, createdAt }
+ * Items: { id, name, type: 'top'|'bottom', subcategory, description, imageData, angles: { front?, back?, left?, right? }, createdAt }
  * Index (with embedded image data) stored in: data/wardrobe.json
  */
 'use strict';
@@ -17,6 +17,7 @@ const SB_META_KEY = '_meta/wardrobe.json';
 
 const TOP_SUBCATEGORIES    = ['hoodie', 't-shirt', 'long sleeve', 'tank top', 'jersey', 'jacket', 'sweatshirt', 'polo'];
 const BOTTOM_SUBCATEGORIES = ['pants', 'shorts', 'three-quarter', 'leggings', 'joggers', 'sweatpants', 'jeans'];
+const SHOES_SUBCATEGORIES  = ['sneakers', 'basketball shoes', 'high tops', 'low tops', 'boots', 'slides', 'sandals'];
 
 function loadIndex() {
   try {
@@ -80,17 +81,18 @@ function register(router) {
   router.get('/api/wardrobe', (req, res) => {
     const items = loadIndex().map(({ imageData, angles, ...rest }) => ({
       ...rest,
+      description: rest.description || '',
       hasAngles: angles ? Object.keys(angles).filter(k => !!angles[k]) : [],
     }));
-    json(res, { items, topSubcategories: TOP_SUBCATEGORIES, bottomSubcategories: BOTTOM_SUBCATEGORIES });
+    json(res, { items, topSubcategories: TOP_SUBCATEGORIES, bottomSubcategories: BOTTOM_SUBCATEGORIES, shoesSubcategories: SHOES_SUBCATEGORIES });
   });
 
   // POST /api/wardrobe — add a new wardrobe item
   router.post('/api/wardrobe', async (req, res) => {
     const body = await parseBody(req);
-    const { name, type, subcategory, imageBase64, anglesBase64 } = body;
+    const { name, type, subcategory, description, imageBase64, anglesBase64 } = body;
     if (!name || !type || !imageBase64) return json(res, { error: 'name, type, imageBase64 required' }, 400);
-    if (!['top', 'bottom'].includes(type)) return json(res, { error: 'type must be "top" or "bottom"' }, 400);
+    if (!['top', 'bottom', 'shoes'].includes(type)) return json(res, { error: 'type must be "top", "bottom", or "shoes"' }, 400);
 
     try {
       const imageData = await resizeImage(imageBase64);
@@ -109,7 +111,8 @@ function register(router) {
       const items = loadIndex();
       const item = {
         id, name, type,
-        subcategory: subcategory || (type === 'top' ? 't-shirt' : 'pants'),
+        subcategory: subcategory || (type === 'top' ? 't-shirt' : type === 'bottom' ? 'pants' : 'sneakers'),
+        description: description || '',
         imageData,
         angles: Object.keys(angles).length > 0 ? angles : undefined,
         createdAt: new Date().toISOString(),
@@ -118,7 +121,7 @@ function register(router) {
       saveIndex(items);
       scheduleSync();
 
-      json(res, { success: true, item: { id, name, type, subcategory: item.subcategory, createdAt: item.createdAt } });
+      json(res, { success: true, item: { id, name, type, subcategory: item.subcategory, description: item.description, createdAt: item.createdAt } });
     } catch (err) {
       json(res, { error: err.message }, 500);
     }
