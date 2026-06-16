@@ -7970,6 +7970,16 @@ const GM_ACTION_SLOTS = new Set([
 ]);
 // Dribble moves that move the ball to the other hand when performed
 const GM_HAND_SWITCH_SLOTS = new Set(['cross', 'crossover', 'tween', 'tween-cross', 'behind', 'hand-switch']);
+// Locomotion slots use stick-facing for zone; idle/actions use court position.
+const GM_LOCOMOTION_SLOTS = new Set(['jog-dribble', 'sprint-dribble', 'backpedal-dribble', 'side-dribble-l', 'side-dribble-r']);
+
+// Returns the zone ID to use for strip selection, depending on slot type:
+// - Locomotion (jog/sprint/side/backpedal): stick-facing zone (8-way direction)
+// - Idle + action moves: court position zone (which zone the player is standing in)
+function gmEffectiveZoneId(slotId) {
+  if (GM_LOCOMOTION_SLOTS.has(slotId)) return GM._facingZoneId ?? 1;
+  return getZoneForPos(TESTING.charX, TESTING.charY)?.id ?? 1;
+}
 
 // Hand-aware variant picker: exact hand match first, then a hand-agnostic
 // (legacy) entry, then anything for the slot. Zone preferred, any-zone fallback.
@@ -8064,12 +8074,8 @@ function startGameMode(silent) {
         TESTING.currentFrame = 0;
         TESTING.lastFrameTime = 0;
         TESTING.hdFrames = null; // strip-only rendering in game mode
-        // Strip = facing zone (left stick) + ball hand. Actions play the
-        // variant for the hand they STARTED with; hand-switching moves
-        // (cross/behind/tween) flip the live ball hand the moment they begin,
-        // so the return to idle/jog lands on the OTHER hand's variant — and
-        // the state persists through any combo chain.
-        const curZoneId = GM._facingZoneId ?? 1;
+        // Idle + action moves use court position; locomotion uses stick facing.
+        const curZoneId = gmEffectiveZoneId(name);
         const entry = gmFindEntry(name, curZoneId, gmHandFor(name));
         if (GM_ACTION_SLOTS.has(name)) {
           if (GM_HAND_SWITCH_SLOTS.has(name)) {
@@ -8086,11 +8092,12 @@ function startGameMode(silent) {
       },
     });
 
-    // Load initial strip for the first idle animation
-    const idleEntry = GM.charAnims.find(a => a.name === 'idle-dribble') ?? GM.charAnims[0];
-    if (idleEntry) {
-      TESTING.selectedAnim = idleEntry.name;
-      gmLoadStrip(idleEntry);
+    // Load initial idle strip — use court position zone
+    const _initZoneId = getZoneForPos(TESTING.charX, TESTING.charY)?.id ?? 1;
+    const _initIdle = gmFindEntry('idle-dribble', _initZoneId, GM.ballHand) ?? GM.charAnims[0];
+    if (_initIdle) {
+      TESTING.selectedAnim = _initIdle.name;
+      gmLoadStrip(_initIdle);
     }
 
     // ── Initialise controller input ────────────────────────────────────
@@ -8388,13 +8395,15 @@ function gmTick(timestamp) {
     }
   }
 
-  // Reload the strip when the FACING zone or the BALL HAND changes
-  if ((GM._loadedZoneId !== faceZoneId || GM._loadedHand !== GM.ballHand) && GM.player.state !== 'ACTION') {
-    GM._loadedZoneId = faceZoneId;
+  // Reload the strip when the effective zone or ball hand changes.
+  // Locomotion slots → facing zone; idle/action slots → court position zone.
+  const curSlot = GM.player.currentAnim;
+  const effectiveZoneId = curSlot ? gmEffectiveZoneId(curSlot) : faceZoneId;
+  if ((GM._loadedZoneId !== effectiveZoneId || GM._loadedHand !== GM.ballHand) && GM.player.state !== 'ACTION') {
+    GM._loadedZoneId = effectiveZoneId;
     GM._loadedHand = GM.ballHand;
-    const curSlot = GM.player.currentAnim;
     if (curSlot) {
-      const entry = gmFindEntry(curSlot, faceZoneId, gmHandFor(curSlot));
+      const entry = gmFindEntry(curSlot, effectiveZoneId, gmHandFor(curSlot));
       if (entry) gmLoadStrip(entry);
     }
   }
