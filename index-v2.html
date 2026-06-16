@@ -770,6 +770,10 @@
   .testing-anim-item .anim-dot.missing { background:#252540; }
   .testing-anim-item .anim-label { flex:1; font-family:var(--mono); font-size:9px; }
   .testing-anim-item .anim-cat { font-family:var(--mono); font-size:8px; color:#35355a; }
+  .testing-anim-fps-row { display:flex; align-items:center; gap:6px; padding:2px 8px 5px 21px; }
+  .testing-anim-fps-row input[type=number] { width:42px; background:#11111e; border:1px solid #26263e; border-radius:4px; color:#e8e8f8; font-family:var(--mono); font-size:10px; padding:2px 5px; text-align:center; }
+  .testing-anim-fps-row .fps-label { font-family:var(--mono); font-size:8px; color:#50507a; }
+  .testing-anim-fps-row .fps-status { font-family:var(--mono); font-size:8px; flex:1; text-align:right; }
 
   /* Action bar */
   .tv2-action-bar { display:flex; flex-shrink:0; background:#080810; border-top:1px solid #131325; height:70px; gap:1px; }
@@ -7076,6 +7080,38 @@ async function gmAnimSettingsHand(animKey, hand) {
   }
 }
 
+// Inline fps editor in the testing anim list — saves game-wide via server
+async function testingAnimSetSpeed(slotId, value, inputEl) {
+  const fps = Math.max(1, Math.min(30, parseInt(value) || 8));
+  TESTING.fps = fps;
+  const fpsEl = document.getElementById('testingFPS');
+  if (fpsEl) { fpsEl.value = fps; document.getElementById('testingFPSLabel').textContent = fps + 'fps'; }
+  localStorage.setItem('testing_fps_' + TESTING.selectedChar + '_' + slotId, fps);
+  // Live-update in-memory fps
+  for (const a of (GM.charAnims || [])) if (a.name === slotId) a.fps = fps;
+  const char = TESTING.roster.find(c => c.name === TESTING.selectedChar);
+  if (char?.savedAnimations) {
+    for (const [k, sa] of Object.entries(char.savedAnimations)) {
+      if (k === slotId || k.startsWith(slotId + '_')) sa.fps = fps;
+    }
+  }
+  const statusEl = document.getElementById('tai-fps-status-' + slotId);
+  if (statusEl) { statusEl.textContent = 'saving…'; statusEl.style.color = '#50507a'; }
+  try {
+    const r = await fetch(`${API}/api/character/${encodeURIComponent(TESTING.selectedChar)}/anim-speed`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slotId, fps }),
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    if (statusEl) { statusEl.textContent = `✓ saved`; statusEl.style.color = '#00cc66'; }
+    setTimeout(() => renderTestingAnimList(TESTING.selectedChar), 800);
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '✗ ' + e.message; statusEl.style.color = '#cc4444'; }
+  }
+}
+
 function renderMovesPanel(charName) {
   const panel = document.getElementById('tvMovesPanel');
   if (!panel) return;
@@ -7197,13 +7233,22 @@ function renderTestingAnimList(charName) {
   if (saved.length > 0) {
     html += `<div style="font-family:var(--mono);font-size:8px;letter-spacing:1px;color:#30304a;text-transform:uppercase;margin:8px 0 4px;padding:0 10px">Saved</div>`;
     for (const anim of saved) {
-      const activeClass = TESTING.selectedAnim === `__saved__${anim.animId}` ? 'active' : '';
+      const selKey = `__saved__${anim.animId}`;
+      const activeClass = TESTING.selectedAnim === selKey ? 'active' : '';
+      const slotId = anim.animId.replace(/_z\d+(_left|_right)?$|_a\d+$/, '');
+      const curFps = (GM.active && GM.charAnims?.find(a => a.name === slotId)?.fps) || anim.fps || 8;
       html += `
         <div class="testing-anim-item ${activeClass}" onclick="testingSelectSavedAnim('${anim.animId}','${anim.spriteUrl}',${anim.frameCount},${anim.fps},${anim.angleIndex ?? 'null'})">
           <div class="anim-dot exists"></div>
           <span class="anim-label">${anim.animName || anim.animId}</span>
-          <span class="anim-cat">${anim.frameCount}f${anim.angle ? ' · ' + anim.angle : ''}</span>
-        </div>`;
+          <span class="anim-cat">${anim.frameCount}f · ${curFps}fps${anim.angle ? ' · ' + anim.angle : ''}</span>
+        </div>
+        ${TESTING.selectedAnim === selKey ? `
+        <div class="testing-anim-fps-row" onclick="event.stopPropagation()">
+          <span class="fps-label">fps</span>
+          <input type="number" min="1" max="30" value="${curFps}" onchange="testingAnimSetSpeed('${slotId}', this.value, this)" />
+          <span class="fps-status" id="tai-fps-status-${slotId}"></span>
+        </div>` : ''}`;
     }
   }
 
@@ -7220,11 +7265,23 @@ function renderTestingAnimList(charName) {
     for (const anim of anims) {
       const activeClass = TESTING.selectedAnim === anim.name ? 'active' : '';
       const disabledClass = !anim.exists ? 'disabled' : '';
+      const curFps = anim.exists
+        ? ((GM.active && GM.charAnims?.find(a => a.name === anim.name)?.fps)
+            || parseInt(localStorage.getItem('testing_fps_' + TESTING.selectedChar + '_' + anim.name) || '')
+            || anim.fps || 8)
+        : (anim.fps || 8);
       html += `
         <div class="testing-anim-item ${activeClass} ${disabledClass}" onclick="${anim.exists ? `testingSelectAnim('${anim.name}')` : ''}">
           <div class="anim-dot ${anim.exists ? 'exists' : 'missing'}"></div>
           <span class="anim-label">${anim.name}</span>
-        </div>`;
+          ${anim.exists ? `<span class="anim-cat">${curFps}fps</span>` : ''}
+        </div>
+        ${anim.exists && TESTING.selectedAnim === anim.name ? `
+        <div class="testing-anim-fps-row" onclick="event.stopPropagation()">
+          <span class="fps-label">fps</span>
+          <input type="number" min="1" max="30" value="${curFps}" onchange="testingAnimSetSpeed('${anim.name}', this.value, this)" />
+          <span class="fps-status" id="tai-fps-status-${anim.name}"></span>
+        </div>` : ''}`;
     }
   }
   list.innerHTML = html;
