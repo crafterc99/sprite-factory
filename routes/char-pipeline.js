@@ -161,88 +161,14 @@ const BODY_ANGLE_PROMPTS = [
   ].join('\n'),
 ];
 
-// Per-angle headshot prompts — head and neck only, specific visibility per rotation
-const HEAD_ANGLE_PROMPTS = [
-  // 0: Front (0°)
-  [
-    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
-    'Generate a single HEADSHOT from the FRONT (0°) — facing directly toward the viewer.',
-    'VISIBLE: Full face — both eyes, nose, mouth, chin. Hair as seen from the front.',
-    'HEAD AND NECK ONLY — no shoulders, no shirt or collar visible.',
-    'STYLE: Exact anime style. Bold black outlines. Clean linework.',
-    'FRAMING: Head centered with slight padding. White background. Square 1:1 frame.',
-  ].join('\n'),
-  // 1: Front Right (45°)
-  [
-    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
-    'Generate a single HEADSHOT from the FRONT-RIGHT 3/4 VIEW (45°).',
-    'VISIBLE: Right eye prominent, right cheek, partial left face visible, right side of hair dominant.',
-    'Head is turned so the right side faces the viewer at 45°.',
-    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
-    'STYLE: Exact anime style. Bold black outlines.',
-    'FRAMING: Head centered. White background. Square 1:1 frame.',
-  ].join('\n'),
-  // 2: Right (90°)
-  [
-    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
-    'Generate a single HEADSHOT from the PURE RIGHT SIDE — strict profile (90°).',
-    'VISIBLE: Right side of face ONLY — right eye, right ear, nose in profile, right jaw line. Right side of hair.',
-    'NOT VISIBLE: Left eye is completely hidden. This is a strict profile with exactly one eye showing.',
-    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
-    'STYLE: Exact anime style. Bold black outlines.',
-    'FRAMING: Head centered. White background. Square 1:1 frame.',
-  ].join('\n'),
-  // 3: Back Right (135°)
-  [
-    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
-    'Generate a single HEADSHOT from the BACK-RIGHT 3/4 VIEW (135°).',
-    'VISIBLE: Back-right of skull, back and right side of hair. Character is mostly facing away.',
-    'NOT VISIBLE: Face is completely hidden — zero facial features.',
-    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
-    'STYLE: Exact anime style. Bold black outlines.',
-    'FRAMING: Head centered. White background. Square 1:1 frame.',
-  ].join('\n'),
-  // 4: Back (180°)
-  [
-    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
-    'Generate a single HEADSHOT from the BACK — directly behind the character (180°).',
-    'VISIBLE: Back of head, back of hair only.',
-    'NOT VISIBLE: Zero facial features. No face at all — purely the back of the head and hairstyle.',
-    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
-    'STYLE: Exact anime style. Bold black outlines.',
-    'FRAMING: Head centered. White background. Square 1:1 frame.',
-  ].join('\n'),
-  // 5: Back Left (225°)
-  [
-    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
-    'Generate a single HEADSHOT from the BACK-LEFT 3/4 VIEW (225°).',
-    'VISIBLE: Back-left of skull, back and left side of hair.',
-    'NOT VISIBLE: Face is completely hidden — zero facial features.',
-    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
-    'STYLE: Exact anime style. Bold black outlines.',
-    'FRAMING: Head centered. White background. Square 1:1 frame.',
-  ].join('\n'),
-  // 6: Left (270°)
-  [
-    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
-    'Generate a single HEADSHOT from the PURE LEFT SIDE — strict profile (270°).',
-    'VISIBLE: Left side of face ONLY — left eye, left ear, nose in profile, left jaw line. Left side of hair.',
-    'NOT VISIBLE: Right eye is completely hidden. This is a strict profile with exactly one eye showing.',
-    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
-    'STYLE: Exact anime style. Bold black outlines.',
-    'FRAMING: Head centered. White background. Square 1:1 frame.',
-  ].join('\n'),
-  // 7: Front Left (315°)
-  [
-    'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
-    'Generate a single HEADSHOT from the FRONT-LEFT 3/4 VIEW (315°).',
-    'VISIBLE: Left eye prominent, left cheek, partial right face visible, left side of hair dominant.',
-    'Head is turned so the left side faces the viewer at 315°.',
-    'HEAD AND NECK ONLY — no shoulders, no shirt visible.',
-    'STYLE: Exact anime style. Bold black outlines.',
-    'FRAMING: Head centered. White background. Square 1:1 frame.',
-  ].join('\n'),
-];
+// Chest-up portrait prompt — single front-facing image used as the character portrait
+const CHEST_UP_PORTRAIT_PROMPT = [
+  'Use the uploaded character as the EXACT reference. Do not change face, skin tone, hairstyle, or features.',
+  'Generate a CHEST-UP PORTRAIT from the FRONT — character faces directly toward the viewer.',
+  'VISIBLE: Full face, neck, shoulders, and upper chest (cropped just below the chest). Natural relaxed pose.',
+  'STYLE: Exact anime style. Bold black outlines. Clean linework.',
+  'FRAMING: Character centered with slight padding. White background. Portrait 3:4 frame.',
+].join('\n');
 
 // ── Prompt builders ─────────────────────────────────────────────────────────
 
@@ -1108,7 +1034,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     return json(res, { jobId, status: 'started' });
   });
 
-  // POST /api/char-pipeline/generate-head-angles — Start async: generate head sheet + slice
+  // POST /api/char-pipeline/generate-head-angles — Start async: generate single chest-up portrait
   router.post('/api/char-pipeline/generate-head-angles', async (req, res) => {
     const body = await parseBody(req);
     const { name, promptOverride } = body;
@@ -1121,35 +1047,27 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const prompt = promptOverride?.trim() || loadCharPrompts().headSheet;
+        const prompt = promptOverride?.trim() || CHEST_UP_PORTRAIT_PROMPT;
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
 
-        // Generate all 8 headshot angles in parallel
-        const charDir = path.join(TMP_DIR, 'characters', name);
-        fs.mkdirSync(charDir, { recursive: true });
+        const result = await client.generate(prompt, {
+          referenceImages: [portraitPath],
+          aspectRatio: '3:4',
+          resolution: '2K',
+          model: modelId,
+          maxRetries: 2,
+          timeoutMs: 150000,
+        });
 
-        const frames = await Promise.all(ANGLE_LABELS_8.map(async (angleLabel, i) => {
-          const anglePrompt = HEAD_ANGLE_PROMPTS[i];
+        const framePath = path.join(ASSETS_DIR, `${name}-headshot-0.png`);
+        fs.writeFileSync(framePath, result.imageBuffer);
+        sbUpload(`${name}-headshot-0.png`, framePath);
+        recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: 'chest-up-portrait' });
 
-          const result = await client.generate(anglePrompt, {
-            referenceImages: [portraitPath],
-            aspectRatio: '1:1',
-            resolution: '2K',
-            model: modelId,
-            maxRetries: 2,
-            timeoutMs: 150000,
-          });
+        const frames = [{ index: 0, label: 'front', url: `/assets/${name}-headshot-0.png` }];
 
-          const framePath = path.join(ASSETS_DIR, `${name}-headshot-${i}.png`);
-          fs.writeFileSync(framePath, result.imageBuffer);
-          sbUpload(`${name}-headshot-${i}.png`, framePath);
-          recordCost(modelId, 'char_pipeline', '2K', 1, { character: name, step: `head-angle-${i}` });
-
-          return { index: i, label: angleLabel, url: `/assets/${name}-headshot-${i}.png` };
-        }));
-
-        // Persist headshot base64 in .characters.json
+        // Persist in .characters.json
         const registry = loadCharacters();
         if (!registry[name]) {
           registry[name] = {
@@ -1163,11 +1081,7 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
             status: 'portrait_done',
           };
         }
-        registry[name].headshots = {};
-        for (const f of frames) {
-          const p = path.join(ASSETS_DIR, `${name}-headshot-${f.index}.png`);
-          if (fs.existsSync(p)) registry[name].headshots[f.index] = fs.readFileSync(p).toString('base64');
-        }
+        registry[name].headshots = { 0: fs.readFileSync(framePath).toString('base64') };
         await saveCharacters(registry);
         scheduleSync();
         finishJob(jobId, { success: true, name, frames });
