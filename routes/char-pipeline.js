@@ -1207,28 +1207,13 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
 
     setImmediate(async () => {
       try {
-        const angleLabel = ANGLE_LABELS_8[index] || `angle_${index}`;
         const isHead = type === 'head';
 
-        // Use angle-specific prompts (not the sheet prompts which ask for a grid layout)
-        const basePrompt = isHead ? HEAD_ANGLE_PROMPTS[index] : BODY_ANGLE_PROMPTS[index];
-        const prompt = basePrompt + `\n\nKeep everything the exact same but apply this change: ${modifier.trim()}`;
+        // Prompt is exactly what the user typed — no base prompt prepended
+        const prompt = modifier.trim();
 
-        // For headshots: use the selected reference headshot (if provided) instead of the portrait.
-        // This lets the user pick their best headshot as the identity anchor for regen.
-        let referenceImages;
-        if (isHead && referenceHeadshotIndex !== undefined && referenceHeadshotIndex !== null) {
-          const refHeadPath = path.join(ASSETS_DIR, `${name}-headshot-${referenceHeadshotIndex}.png`);
-          if (fs.existsSync(refHeadPath)) {
-            referenceImages = [refHeadPath]; // selected headshot is the only reference
-          } else {
-            referenceImages = [portraitPath]; // fallback to portrait if selected headshot missing
-          }
-        } else if (isHead) {
-          referenceImages = [portraitPath]; // default: portrait as reference for head regen
-        } else {
-          referenceImages = [portraitPath, framePath]; // body: portrait + existing frame
-        }
+        // Reference is only the current generated frame — no portrait, no other images
+        const referenceImages = [framePath];
 
         const modelId = 'gemini-3-pro-image-preview';
         const client = new NanaBananaClient({ model: modelId });
@@ -1402,14 +1387,14 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
     }
   });
 
-  // POST /api/char-pipeline/apply-outfit — Apply top and/or bottom garments to a portrait
-  // Runs sequentially: top first, then bottom applied to the top result.
+  // POST /api/char-pipeline/apply-outfit — Apply top, bottom, and/or shoes to a portrait
+  // Runs sequentially: top → bottom → shoes, each applied to the previous result.
   // Returns a new portrait base64 with the outfit swapped in.
   router.post('/api/char-pipeline/apply-outfit', async (req, res) => {
     const body = await parseBody(req);
-    const { portraitBase64, topId, bottomId, topSubcategory, bottomSubcategory } = body;
+    const { portraitBase64, topId, bottomId, shoesId, topSubcategory, bottomSubcategory, shoesSubcategory } = body;
     if (!portraitBase64) return json(res, { error: 'portraitBase64 required' }, 400);
-    if (!topId && !bottomId) return json(res, { error: 'topId or bottomId required' }, 400);
+    if (!topId && !bottomId && !shoesId) return json(res, { error: 'topId, bottomId, or shoesId required' }, 400);
 
     const WARDROBE_DIR = path.resolve(__dirname, '../data/wardrobe');
     const WARDROBE_INDEX = path.resolve(__dirname, '../data/wardrobe.json');
@@ -1448,8 +1433,9 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
         const genOpts = { aspectRatio: '3:4', resolution: '1K', model: modelId, maxRetries: 3, timeoutMs: 120000 };
 
         // Resolve subcategory labels for precise prompts
-        const topLabel    = topSubcategory    || 'top garment';
+        const topLabel   = topSubcategory   || 'top garment';
         const bottomLabel = bottomSubcategory || 'bottom garment';
+        const shoesLabel  = shoesSubcategory  || 'shoes';
 
         if (topId) {
           const topPath = wardrobeItemPath(topId);
@@ -1473,6 +1459,18 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
           fs.writeFileSync(outPath, result.imageBuffer);
           currentPortraitPath = outPath;
           recordCost(modelId, 'char_pipeline', '1K', 2, { step: 'apply-bottom' });
+        }
+
+        if (shoesId) {
+          const shoesPath = wardrobeItemPath(shoesId);
+          const result = await client.generate(
+            `Keep everything about this anime style character exactly the same. Replace only their ${shoesLabel} with the ones shown in the second image. Match the style, color and fit exactly.`,
+            { referenceImages: [currentPortraitPath, shoesPath], ...genOpts }
+          );
+          const outPath = path.join(tmpDir, `after-shoes-${tmpId}.png`);
+          fs.writeFileSync(outPath, result.imageBuffer);
+          currentPortraitPath = outPath;
+          recordCost(modelId, 'char_pipeline', '1K', 2, { step: 'apply-shoes' });
         }
 
         const imageBase64 = 'data:image/png;base64,' + fs.readFileSync(currentPortraitPath).toString('base64');

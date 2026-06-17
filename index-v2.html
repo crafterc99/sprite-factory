@@ -1785,7 +1785,7 @@
 
         <!-- Outfit picker — shown after portrait confirmed, before angle generation -->
         <div id="cpOutfitPicker" style="display:none;margin-top:16px">
-          <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:12px">OUTFIT — DRAG TOP &amp; BOTTOM ONTO CHARACTER</div>
+          <div style="font-family:var(--mono);font-size:9px;color:#50507a;letter-spacing:1px;margin-bottom:12px">OUTFIT — DRAG ITEMS ONTO CHARACTER</div>
 
           <!-- Three-column layout: tops | character drop zone | bottoms -->
           <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start">
@@ -1803,7 +1803,7 @@
               <div id="cpOutfitDropZone" class="cp-outfit-drop-zone"
                    ondragover="cpOutfitDragOver(event)" ondragleave="cpOutfitDragLeave(event)" ondrop="cpOutfitDrop(event)">
                 <img id="cpDressedPreview" style="max-height:180px;image-rendering:pixelated;display:none" />
-                <div class="cp-outfit-drop-hint" id="cpOutfitDropHint">Drop top or bottom<br>onto character</div>
+                <div class="cp-outfit-drop-hint" id="cpOutfitDropHint">Drop outfit<br>onto character</div>
               </div>
               <!-- Applied outfit badges -->
               <div id="cpAppliedTop" style="display:none" class="cp-outfit-badge">
@@ -1813,6 +1813,10 @@
               <div id="cpAppliedBottom" style="display:none" class="cp-outfit-badge">
                 <span id="cpAppliedBottomName"></span>
                 <button onclick="cpClearOutfitPiece('bottom')" title="Remove bottom">×</button>
+              </div>
+              <div id="cpAppliedShoes" style="display:none" class="cp-outfit-badge">
+                <span id="cpAppliedShoesName"></span>
+                <button onclick="cpClearOutfitPiece('shoes')" title="Remove shoes">×</button>
               </div>
               <!-- Spinner while applying -->
               <div id="cpOutfitApplyStatus" style="display:none;font-family:var(--mono);font-size:9px;color:var(--accent3)">
@@ -1831,6 +1835,14 @@
               </div>
             </div>
 
+          </div>
+
+          <!-- Shoes row — full width below the 3-column grid -->
+          <div style="margin-top:10px">
+            <div style="font-family:var(--mono);font-size:8px;color:#50507a;letter-spacing:1px;margin-bottom:6px">SHOES</div>
+            <div id="cpShoesPanel" class="cp-outfit-panel" style="max-height:80px;overflow-x:auto;flex-direction:row;flex-wrap:nowrap">
+              <div style="color:#30304a;font-family:var(--mono);font-size:9px;padding:8px 0">Loading…</div>
+            </div>
           </div>
         </div>
 
@@ -1857,8 +1869,8 @@
       <div style="font-family:var(--mono);font-size:9px;color:#50507a;margin-bottom:6px">REFERENCE HEADSHOT — select one to use as identity anchor:</div>
       <div id="cpRegenHeadRefGrid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
     </div>
-    <div style="font-family:var(--mono);font-size:10px;color:#8888aa">Keep everything the exact same but:</div>
-    <textarea id="cpRegenModifier" placeholder="e.g. make the jersey blue, add a hat, etc."></textarea>
+    <div style="font-family:var(--mono);font-size:10px;color:#8888aa">Prompt — exactly what you type is sent to the AI:</div>
+    <textarea id="cpRegenModifier" placeholder="e.g. Keep everything the same but make the jersey blue"></textarea>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary" style="flex:1" onclick="cpDoRegenAngle()">Regenerate →</button>
       <button class="btn btn-secondary" onclick="cpCloseRegen()">Cancel</button>
@@ -4236,13 +4248,15 @@ async function cpUsePortrait() {
   // Reset applied badges
   document.getElementById('cpAppliedTop').style.display = 'none';
   document.getElementById('cpAppliedBottom').style.display = 'none';
+  document.getElementById('cpAppliedShoes').style.display = 'none';
 
   // Load wardrobe into panels
   try {
     const r = await fetch(`${API}/api/wardrobe`);
     const data = await r.json();
-    const tops = (data.items || []).filter(i => i.type === 'top');
+    const tops   = (data.items || []).filter(i => i.type === 'top');
     const bottoms = (data.items || []).filter(i => i.type === 'bottom');
+    const shoes  = (data.items || []).filter(i => i.type === 'shoes');
 
     const makeCard = item => `
       <div class="cp-wardrobe-item" draggable="true"
@@ -4261,6 +4275,10 @@ async function cpUsePortrait() {
     document.getElementById('cpBottomsPanel').innerHTML = bottoms.length === 0
       ? '<div style="color:#30304a;font-family:var(--mono);font-size:9px;width:100%;text-align:center;padding:12px 0">No bottoms in wardrobe</div>'
       : bottoms.map(makeCard).join('');
+
+    document.getElementById('cpShoesPanel').innerHTML = shoes.length === 0
+      ? '<div style="color:#30304a;font-family:var(--mono);font-size:9px;padding:8px 0">No shoes in wardrobe</div>'
+      : shoes.map(makeCard).join('');
 
     // Touch drag support for iPad
     cpInitTouchDrag();
@@ -4340,8 +4358,10 @@ async function cpApplyOutfitItem(id, type, name, subcategory) {
         portraitBase64: currentPortrait,
         topId:           type === 'top'    ? id : undefined,
         bottomId:        type === 'bottom' ? id : undefined,
+        shoesId:         type === 'shoes'  ? id : undefined,
         topSubcategory:    type === 'top'    ? (subcategory || undefined) : undefined,
         bottomSubcategory: type === 'bottom' ? (subcategory || undefined) : undefined,
+        shoesSubcategory:  type === 'shoes'  ? (subcategory || undefined) : undefined,
       }),
     });
     const d = await r.json();
@@ -4356,8 +4376,8 @@ async function cpApplyOutfitItem(id, type, name, subcategory) {
     preview.style.display = 'block';
     document.getElementById('cpOutfitDropHint').style.display = 'none';
 
-    const badgeEl = document.getElementById(type === 'top' ? 'cpAppliedTop' : 'cpAppliedBottom');
-    const nameEl  = document.getElementById(type === 'top' ? 'cpAppliedTopName' : 'cpAppliedBottomName');
+    const badgeEl = document.getElementById(type === 'top' ? 'cpAppliedTop' : type === 'bottom' ? 'cpAppliedBottom' : 'cpAppliedShoes');
+    const nameEl  = document.getElementById(type === 'top' ? 'cpAppliedTopName' : type === 'bottom' ? 'cpAppliedBottomName' : 'cpAppliedShoesName');
     nameEl.textContent = `${subcategory ? subcategory+': ' : ''}${name}`;
     badgeEl.style.display = 'flex';
 
@@ -4425,7 +4445,7 @@ function cpClearOutfitPiece(type) {
   CP.dressedPortraitBase64 = base;
   if (CPJobs[charName]) CPJobs[charName].dressedPortraitBase64 = base;
   document.getElementById('cpDressedPreview').src = base;
-  document.getElementById(type === 'top' ? 'cpAppliedTop' : 'cpAppliedBottom').style.display = 'none';
+  document.getElementById(type === 'top' ? 'cpAppliedTop' : type === 'bottom' ? 'cpAppliedBottom' : 'cpAppliedShoes').style.display = 'none';
   cpLog(`${type} removed — reverted to original portrait`);
 }
 
