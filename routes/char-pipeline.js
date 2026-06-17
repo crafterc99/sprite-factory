@@ -1209,8 +1209,8 @@ function register(router, { ASSETS_DIR, TMP_DIR, json, parseBody, serveImage }) 
       try {
         const isHead = type === 'head';
 
-        // Prompt is exactly what the user typed — no base prompt prepended
-        const prompt = modifier.trim();
+        // Prompt wraps the user's text with the standard modifier prefix
+        const prompt = `Keep everything the exact same but apply this change: ${modifier.trim()}`;
 
         // Reference is only the current generated frame — no portrait, no other images
         const referenceImages = [framePath];
