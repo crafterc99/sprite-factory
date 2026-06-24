@@ -805,6 +805,96 @@
   .gm-controls-ref { display:none!important; }
   .testing-court-hint { display:none!important; }
   .gm-state-ACTION { background:#2a1a00;color:#ff9900; }
+
+  /* ─── RECORD PAGE ─── */
+  .rec-layout { display:grid; grid-template-columns:260px 1fr 270px; height:calc(100vh - 52px); overflow:hidden; background:#07070f; }
+
+  /* Left — animation list */
+  .rec-sidebar { display:flex; flex-direction:column; background:#0b0b18; border-right:1px solid #151528; overflow:hidden; }
+  .rec-sidebar-hdr { flex-shrink:0; padding:10px 10px 6px; border-bottom:1px solid #151528; }
+  .rec-sidebar-title { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:#252540; text-transform:uppercase; margin-bottom:8px; }
+  .rec-filter-row { display:flex; gap:5px; align-items:center; margin-bottom:8px; }
+  .rec-filter-btn { font-family:var(--mono); font-size:8px; letter-spacing:.5px; padding:3px 8px; border-radius:4px; border:1px solid #252540; background:#0e0e1c; color:#50507a; cursor:pointer; transition:all .15s; }
+  .rec-filter-btn.active { background:#1a1a30; border-color:#5050a0; color:#c0c0f0; }
+  .rec-char-row { display:flex; align-items:center; gap:6px; }
+  .rec-char-label { font-family:var(--mono); font-size:8px; color:#404060; }
+  .rec-char-sel { flex:1; background:#0e0e1c; border:1px solid #252540; border-radius:4px; color:#c0c0e0; font-family:var(--mono); font-size:9px; padding:3px 5px; }
+  .rec-anim-list { flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1a30 transparent; }
+  .rec-cat-hdr { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:#252540; text-transform:uppercase; padding:8px 10px 3px; }
+  .rec-anim-item { display:flex; align-items:center; gap:6px; padding:6px 10px 6px 12px; cursor:pointer; border-left:2px solid transparent; transition:background .1s; }
+  .rec-anim-item:hover { background:#0e0e1a; }
+  .rec-anim-item.active { background:#0a0a16; border-left-color:#00cc66; }
+  .rec-anim-label { font-family:var(--mono); font-size:10px; color:#60608a; flex:1; }
+  .rec-anim-item.active .rec-anim-label { color:#c8c8e8; }
+  .rec-zone-pips { display:flex; gap:2px; }
+  .rec-pip { width:5px; height:5px; border-radius:50%; background:#1a1a30; }
+  .rec-pip.done { background:#00cc66; }
+  .rec-mvp-star { font-size:7px; color:#f0b020; flex-shrink:0; }
+
+  /* Center — camera + controls */
+  .rec-center { display:flex; flex-direction:column; overflow:hidden; background:#08080f; }
+  .rec-zone-bar { flex-shrink:0; display:flex; align-items:center; gap:6px; padding:10px 14px; border-bottom:1px solid #111124; }
+  .rec-zone-label { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:#252540; text-transform:uppercase; margin-right:4px; }
+  .rec-zone-btn { font-family:var(--mono); font-size:8px; padding:4px 10px; border-radius:5px; border:1px solid #252540; background:#0e0e1c; color:#50507a; cursor:pointer; transition:all .15s; white-space:nowrap; }
+  .rec-zone-btn.active { background:#1a2a1a; border-color:#00cc66; color:#00cc66; }
+  .rec-zone-btn.done { border-color:#224422; color:#447744; }
+  .rec-cam-wrap { flex:1; position:relative; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#000; min-height:0; }
+  .rec-cam-wrap video { width:100%; height:100%; object-fit:cover; }
+  .rec-cam-label { position:absolute; top:12px; left:14px; font-family:var(--mono); font-size:9px; color:rgba(255,255,255,.5); background:rgba(0,0,0,.5); padding:3px 8px; border-radius:4px; letter-spacing:.5px; }
+  .rec-rec-dot { position:absolute; top:12px; right:14px; display:none; width:10px; height:10px; border-radius:50%; background:#ff3333; box-shadow:0 0 0 0 rgba(255,51,51,.5); animation:recpulse 1.2s infinite; }
+  @keyframes recpulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,51,51,.5)} 50%{box-shadow:0 0 0 7px rgba(255,51,51,0)} }
+  .rec-rec-dot.active { display:block; }
+  .rec-no-cam { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px; color:#303050; font-family:var(--mono); font-size:11px; }
+  .rec-bottom { flex-shrink:0; display:flex; flex-direction:column; gap:0; border-top:1px solid #111124; }
+  .rec-ctrl-row { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid #0d0d20; }
+  .rec-ctrl-label { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:#252540; text-transform:uppercase; min-width:30px; }
+  .rec-hand-btn { font-family:var(--mono); font-size:8px; padding:3px 9px; border-radius:4px; border:1px solid #252540; background:#0e0e1c; color:#50507a; cursor:pointer; }
+  .rec-hand-btn.active { background:#1a1a30; border-color:#5050a0; color:#c0c0f0; }
+  .rec-main-btns { display:flex; align-items:center; gap:10px; padding:10px 14px; }
+  .rec-big-btn { font-family:var(--mono); font-size:11px; letter-spacing:1.5px; padding:9px 24px; border-radius:7px; border:none; cursor:pointer; transition:all .15s; }
+  .rec-big-btn.rec { background:#cc2222; color:#fff; }
+  .rec-big-btn.rec:hover { background:#ee3333; }
+  .rec-big-btn.stop { background:#1a1a30; border:1px solid #404080; color:#c0c0f0; }
+  .rec-big-btn.stop:hover { background:#222240; }
+  .rec-big-btn:disabled { opacity:0.4; cursor:default; }
+  .rec-timer { font-family:var(--mono); font-size:14px; color:#00cc66; min-width:48px; }
+  .rec-fps-input { width:48px; background:#0e0e1c; border:1px solid #252540; border-radius:4px; color:#c0c0e0; font-family:var(--mono); font-size:10px; padding:3px 5px; text-align:center; }
+
+  /* Frame gallery */
+  .rec-frames-wrap { flex-shrink:0; max-height:230px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1a30 transparent; border-top:1px solid #111124; padding:10px 14px; display:none; }
+  .rec-frames-wrap.visible { display:block; }
+  .rec-frames-hdr { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:#252540; text-transform:uppercase; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+  .rec-frames-count { color:#00cc66; }
+  .rec-frame-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(60px,1fr)); gap:4px; }
+  .rec-frame-thumb { position:relative; aspect-ratio:1; border:2px solid #1a1a30; border-radius:4px; cursor:pointer; overflow:hidden; background:#0a0a14; transition:border-color .1s; }
+  .rec-frame-thumb img { width:100%; height:100%; object-fit:cover; }
+  .rec-frame-thumb.sel { border-color:#00cc66; }
+  .rec-frame-thumb .rec-frame-num { position:absolute; bottom:2px; right:3px; font-family:var(--mono); font-size:7px; color:rgba(255,255,255,.5); }
+  .rec-frame-thumb .rec-frame-check { position:absolute; top:3px; left:3px; width:12px; height:12px; border-radius:3px; background:#00cc66; display:none; font-size:8px; text-align:center; line-height:12px; color:#000; font-weight:700; }
+  .rec-frame-thumb.sel .rec-frame-check { display:block; }
+
+  /* Export bar */
+  .rec-export-bar { flex-shrink:0; display:none; align-items:center; gap:10px; padding:10px 14px; border-top:1px solid #111124; }
+  .rec-export-bar.visible { display:flex; }
+  .rec-export-info { font-family:var(--mono); font-size:8px; color:#50507a; flex:1; }
+  .rec-export-btn { font-family:var(--mono); font-size:9px; letter-spacing:1px; padding:7px 16px; border-radius:6px; border:none; background:#00aa44; color:#fff; cursor:pointer; }
+  .rec-export-btn:hover { background:#00cc55; }
+  .rec-export-btn:disabled { opacity:.4; cursor:default; }
+  .rec-slot-pill { font-family:var(--mono); font-size:8px; padding:3px 8px; background:#111124; border:1px solid #252550; border-radius:12px; color:#5070c0; }
+
+  /* Right — session progress */
+  .rec-progress-panel { display:flex; flex-direction:column; background:#0a0a16; border-left:1px solid #151528; overflow:hidden; }
+  .rec-prog-hdr { flex-shrink:0; padding:10px 12px 8px; border-bottom:1px solid #151528; }
+  .rec-prog-title { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:#252540; text-transform:uppercase; margin-bottom:6px; }
+  .rec-prog-summary { font-family:var(--mono); font-size:9px; color:#00cc66; }
+  .rec-prog-list { flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#1a1a30 transparent; }
+  .rec-prog-item { display:flex; flex-direction:column; padding:6px 12px; border-bottom:1px solid #0d0d1a; }
+  .rec-prog-item.has-any { border-left:2px solid #00aa44; }
+  .rec-prog-name { font-family:var(--mono); font-size:9px; color:#50507a; margin-bottom:3px; }
+  .rec-prog-item.has-any .rec-prog-name { color:#c0c0e0; }
+  .rec-prog-zones { display:flex; gap:3px; flex-wrap:wrap; }
+  .rec-prog-zone { font-family:var(--mono); font-size:7px; padding:1px 5px; border-radius:3px; background:#0d0d1a; color:#303050; }
+  .rec-prog-zone.done { background:#0a2a14; color:#00aa44; }
 </style>
 </head>
 <body>
@@ -822,6 +912,7 @@
       <button class="nav-btn" onclick="showPage('wardrobe')">Wardrobe</button>
       <button class="nav-btn" onclick="showPage('testing')">Testing</button>
       <button class="nav-btn" onclick="showPage('deploy')">Deploy</button>
+      <button class="nav-btn" onclick="showPage('record')">Record</button>
     </nav>
     <div class="header-right">
       <div class="cost-pill" id="costPill">spend: <span>$0.00</span></div>
@@ -1661,6 +1752,107 @@
         </div>
       </div><!-- /page-deploy -->
 
+      <!-- PAGE: Record -->
+      <div class="page" id="page-record">
+        <div class="rec-layout">
+
+          <!-- ① Left — animation list -->
+          <div class="rec-sidebar">
+            <div class="rec-sidebar-hdr">
+              <div class="rec-sidebar-title">Soul Jam Animations</div>
+              <div class="rec-filter-row">
+                <button class="rec-filter-btn active" id="recFilterAll" onclick="recSetFilter('all')">All</button>
+                <button class="rec-filter-btn" id="recFilterMvp" onclick="recSetFilter('mvp')">★ MVP 20</button>
+              </div>
+              <div class="rec-char-row">
+                <span class="rec-char-label">char</span>
+                <select class="rec-char-sel" id="recCharSel" onchange="REC.charName=this.value">
+                  <option value="">— no char —</option>
+                </select>
+              </div>
+            </div>
+            <div class="rec-anim-list" id="recAnimList"></div>
+          </div>
+
+          <!-- ② Center — camera + controls -->
+          <div class="rec-center">
+            <!-- Zone selector -->
+            <div class="rec-zone-bar">
+              <span class="rec-zone-label">Zone</span>
+              <button class="rec-zone-btn active" data-zone="1" onclick="recSetZone(1)">Z1 Front</button>
+              <button class="rec-zone-btn" data-zone="2" onclick="recSetZone(2)">Z2 F-Left 45°</button>
+              <button class="rec-zone-btn" data-zone="3" onclick="recSetZone(3)">Z3 Side-Left</button>
+              <button class="rec-zone-btn" data-zone="4" onclick="recSetZone(4)">Z4 B-Left 135°</button>
+              <button class="rec-zone-btn" data-zone="5" onclick="recSetZone(5)">Z5 Back</button>
+              <div style="flex:1"></div>
+              <span class="rec-slot-pill" id="recSlotPill">—</span>
+            </div>
+
+            <!-- Camera preview -->
+            <div class="rec-cam-wrap" id="recCamWrap">
+              <div class="rec-no-cam" id="recNoCam">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                <span>Select animation to start camera</span>
+              </div>
+              <video id="recPreview" autoplay muted playsinline style="display:none"></video>
+              <div class="rec-cam-label" id="recCamLabel"></div>
+              <div class="rec-rec-dot" id="recDot"></div>
+            </div>
+
+            <!-- Controls bar -->
+            <div class="rec-bottom">
+              <div class="rec-ctrl-row">
+                <span class="rec-ctrl-label">Hand</span>
+                <button class="rec-hand-btn active" id="recHandR" onclick="recSetHand('right')">Right</button>
+                <button class="rec-hand-btn" id="recHandL" onclick="recSetHand('left')">Left</button>
+                <div style="flex:1"></div>
+                <span class="rec-ctrl-label">FPS</span>
+                <input type="number" class="rec-fps-input" id="recFpsInput" value="8" min="1" max="30" onchange="REC.fps=parseInt(this.value)||8" />
+              </div>
+              <div class="rec-main-btns">
+                <button class="rec-big-btn rec" id="recStartBtn" onclick="recStartRec()" disabled>● REC</button>
+                <button class="rec-big-btn stop" id="recStopBtn" onclick="recStopRec()" disabled>■ STOP</button>
+                <div class="rec-timer" id="recTimer">0:00</div>
+                <div style="flex:1"></div>
+                <button class="btn btn-secondary btn-sm" onclick="recStartCamera()" id="recCamBtn" style="font-family:var(--mono);font-size:8px">Start Camera</button>
+              </div>
+
+              <!-- Frame gallery (shown after extraction) -->
+              <div class="rec-frames-wrap" id="recFramesWrap">
+                <div class="rec-frames-hdr">
+                  Frames — click to select
+                  <span class="rec-frames-count" id="recFramesSel">0 selected</span>
+                  <div style="flex:1"></div>
+                  <button class="btn btn-secondary btn-sm" onclick="recSmartSelect()" id="recSmartBtn" style="font-family:var(--mono);font-size:7px;padding:2px 8px">
+                    <span class="spinner" id="recSmartSpinner"></span>
+                    Auto-Pick
+                  </button>
+                  <button class="btn btn-secondary btn-sm" onclick="recClearFrames()" style="font-family:var(--mono);font-size:7px;padding:2px 8px">Clear</button>
+                  <button class="btn btn-primary btn-sm" id="recConfirmBtn" onclick="recConfirmFrames()" disabled style="font-family:var(--mono);font-size:7px;padding:2px 8px">Confirm →</button>
+                </div>
+                <div class="rec-frame-grid" id="recFrameGrid"></div>
+              </div>
+
+              <!-- Export bar (shown after cutout) -->
+              <div class="rec-export-bar" id="recExportBar">
+                <span class="rec-export-info" id="recExportInfo">Ready to export</span>
+                <button class="rec-export-btn" id="recExportBtn" onclick="recExportToLibrary()">Export to Library ↗</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ③ Right — session progress -->
+          <div class="rec-progress-panel">
+            <div class="rec-prog-hdr">
+              <div class="rec-prog-title">Session Progress</div>
+              <div class="rec-prog-summary" id="recProgSummary">0 recorded</div>
+            </div>
+            <div class="rec-prog-list" id="recProgList"></div>
+          </div>
+
+        </div>
+      </div><!-- /page-record -->
+
 
     </div>
   </main>
@@ -2161,6 +2353,7 @@ function showPage(name) {
   if (name === 'wardrobe') loadWardrobePage();
   if (name === 'testing') initTestingPage();
   if (name === 'deploy') loadDeployStatus();
+  if (name === 'record') initRecordPage();
   if (name === 'studio') {
     if (STATE.selectedChar) {
       selectChar(STATE.selectedChar.name);
@@ -9362,6 +9555,563 @@ async function deployCharacter(charId, btn) {
     toast('Deploy error: ' + err.message, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Deploy'; }
   }
+}
+
+// ─── RECORD PAGE ──────────────────────────────────────────────────────────────
+
+const SOUL_JAM_ANIMATIONS = [
+  // Locomotion (zone from stick-facing direction)
+  { id: 'idle-dribble',      label: 'Idle Dribble',          cat: 'Locomotion',    mvp: true,  hand: 'both' },
+  { id: 'jog-dribble',       label: 'Jog Dribble',           cat: 'Locomotion',    mvp: true,  hand: 'both' },
+  { id: 'sprint-dribble',    label: 'Sprint Dribble',        cat: 'Locomotion',    mvp: true,  hand: 'both' },
+  { id: 'backpedal-dribble', label: 'Backpedal Dribble',     cat: 'Locomotion',    mvp: true,  hand: 'both' },
+  { id: 'side-dribble-l',    label: 'Sidestep Left',         cat: 'Locomotion',    mvp: true,  hand: 'left' },
+  { id: 'side-dribble-r',    label: 'Sidestep Right',        cat: 'Locomotion',    mvp: true,  hand: 'right' },
+  { id: 'idle-no-ball',      label: 'Idle (No Ball)',         cat: 'Locomotion',    mvp: false, hand: 'none' },
+  { id: 'jog-no-ball',       label: 'Jog (No Ball)',          cat: 'Locomotion',    mvp: true,  hand: 'none' },
+  { id: 'sprint-no-ball',    label: 'Sprint (No Ball)',       cat: 'Locomotion',    mvp: true,  hand: 'none' },
+  // Dribble Moves (zone from court position)
+  { id: 'cross',             label: 'Crossover',             cat: 'Dribble Moves', mvp: true,  hand: 'both' },
+  { id: 'tween',             label: 'Between Legs',          cat: 'Dribble Moves', mvp: true,  hand: 'both' },
+  { id: 'behind',            label: 'Behind Back',           cat: 'Dribble Moves', mvp: true,  hand: 'both' },
+  { id: 'stepback',          label: 'Step Back',             cat: 'Dribble Moves', mvp: true,  hand: 'both' },
+  { id: 'hesitation',        label: 'Hesitation',            cat: 'Dribble Moves', mvp: false, hand: 'both' },
+  { id: 'spin-move',         label: 'Spin Move',             cat: 'Dribble Moves', mvp: false, hand: 'both' },
+  { id: 'in-out',            label: 'In & Out',              cat: 'Dribble Moves', mvp: false, hand: 'both' },
+  { id: 'euro-step',         label: 'Euro Step',             cat: 'Dribble Moves', mvp: false, hand: 'both' },
+  // Shooting
+  { id: 'jumpshot',          label: 'Jump Shot',             cat: 'Shooting',      mvp: true,  hand: 'right' },
+  { id: 'layup-r',           label: 'Layup Right',           cat: 'Shooting',      mvp: true,  hand: 'right' },
+  { id: 'layup-l',           label: 'Layup Left',            cat: 'Shooting',      mvp: true,  hand: 'left' },
+  { id: 'floater',           label: 'Floater',               cat: 'Shooting',      mvp: false, hand: 'right' },
+  { id: 'pullup-mid',        label: 'Pull-Up Mid',           cat: 'Shooting',      mvp: false, hand: 'right' },
+  { id: 'three-point',       label: 'Three Pointer',         cat: 'Shooting',      mvp: false, hand: 'right' },
+  { id: 'hook-shot-r',       label: 'Hook Shot Right',       cat: 'Shooting',      mvp: false, hand: 'right' },
+  { id: 'hook-shot-l',       label: 'Hook Shot Left',        cat: 'Shooting',      mvp: false, hand: 'left' },
+  // Defense
+  { id: 'idle-defense',      label: 'Defensive Stance',      cat: 'Defense',       mvp: true,  hand: 'none' },
+  { id: 'jog-defense',       label: 'Defensive Jog',         cat: 'Defense',       mvp: false, hand: 'none' },
+  { id: 'slide-def-l',       label: 'Defensive Slide Left',  cat: 'Defense',       mvp: false, hand: 'none' },
+  { id: 'slide-def-r',       label: 'Defensive Slide Right', cat: 'Defense',       mvp: false, hand: 'none' },
+  { id: 'steal-attempt',     label: 'Steal Attempt',         cat: 'Defense',       mvp: true,  hand: 'none' },
+  { id: 'block-attempt',     label: 'Block Attempt',         cat: 'Defense',       mvp: false, hand: 'none' },
+  { id: 'contest-shot',      label: 'Contest Shot',          cat: 'Defense',       mvp: false, hand: 'none' },
+  // Post Play
+  { id: 'post-up',           label: 'Post Up',               cat: 'Post',          mvp: false, hand: 'none' },
+  { id: 'post-spin-l',       label: 'Post Spin Left',        cat: 'Post',          mvp: false, hand: 'both' },
+  { id: 'post-spin-r',       label: 'Post Spin Right',       cat: 'Post',          mvp: false, hand: 'both' },
+  { id: 'post-hook-r',       label: 'Post Hook Right',       cat: 'Post',          mvp: false, hand: 'right' },
+  { id: 'post-hook-l',       label: 'Post Hook Left',        cat: 'Post',          mvp: false, hand: 'left' },
+  { id: 'drop-step',         label: 'Drop Step',             cat: 'Post',          mvp: false, hand: 'both' },
+  // Passing
+  { id: 'pass-chest',        label: 'Chest Pass',            cat: 'Passing',       mvp: false, hand: 'both' },
+  { id: 'pass-bounce',       label: 'Bounce Pass',           cat: 'Passing',       mvp: false, hand: 'both' },
+  { id: 'pass-overhead',     label: 'Overhead Pass',         cat: 'Passing',       mvp: false, hand: 'both' },
+  { id: 'catch-ball',        label: 'Catch',                 cat: 'Passing',       mvp: false, hand: 'both' },
+  // Reactions & Events
+  { id: 'foul-called',       label: 'Foul Called',           cat: 'Reactions',     mvp: false, hand: 'none' },
+  { id: 'celebration',       label: 'Celebration',           cat: 'Reactions',     mvp: false, hand: 'none' },
+  { id: 'jump-ball',         label: 'Jump Ball',             cat: 'Reactions',     mvp: false, hand: 'none' },
+  { id: 'inbound-pass',      label: 'Inbound Pass',          cat: 'Reactions',     mvp: false, hand: 'both' },
+  { id: 'tech-foul',         label: 'Tech Foul Reaction',    cat: 'Reactions',     mvp: false, hand: 'none' },
+];
+
+const REC_ZONES = [
+  { id: 1, label: 'Front',        short: 'Z1' },
+  { id: 2, label: 'Front-Left 45°', short: 'Z2' },
+  { id: 3, label: 'Side-Left 90°',  short: 'Z3' },
+  { id: 4, label: 'Back-Left 135°', short: 'Z4' },
+  { id: 5, label: 'Back 180°',    short: 'Z5' },
+];
+
+const REC = {
+  // Context
+  animId: null, zoneId: 1, hand: 'right', fps: 8,
+  charName: null, filterMvp: false,
+  // Camera
+  stream: null, recorder: null,
+  chunks: [], blob: null,
+  recStartTime: null, _timerIv: null,
+  // Session
+  sessionId: null, frames: [], selected: new Set(),
+  ordered: [], subjects: {},
+  status: 'idle', // idle | recording | recorded | uploading | extracting | select | cutting | ready
+  // Progress: { animId: Set of "zoneId_hand" strings }
+  saved: {},
+};
+
+function _recAnimName() {
+  if (!REC.animId) return null;
+  const anim = SOUL_JAM_ANIMATIONS.find(a => a.id === REC.animId);
+  const hand = anim?.hand === 'none' ? '' : `_${REC.hand}`;
+  return `${REC.animId}_z${REC.zoneId}${hand}`;
+}
+
+function _recHandForAnim(animId) {
+  const anim = SOUL_JAM_ANIMATIONS.find(a => a.id === animId);
+  if (!anim || anim.hand === 'none') return 'none';
+  if (anim.hand === 'left') return 'left';
+  if (anim.hand === 'right') return 'right';
+  return 'right'; // 'both' default to right initially
+}
+
+function initRecordPage() {
+  // Populate character select
+  const sel = document.getElementById('recCharSel');
+  if (sel && STATE.roster) {
+    const prev = REC.charName || '';
+    sel.innerHTML = '<option value="">— no char —</option>' +
+      STATE.roster.map(c => `<option value="${c.name}" ${c.name === prev ? 'selected' : ''}>${c.name}</option>`).join('');
+    if (!REC.charName && STATE.selectedChar) {
+      sel.value = STATE.selectedChar.name;
+      REC.charName = STATE.selectedChar.name;
+    }
+  }
+  recRenderAnimList();
+  recRenderProgress();
+  // Restore zone UI
+  document.querySelectorAll('.rec-zone-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.zone) === REC.zoneId);
+  });
+}
+
+function recSetFilter(mode) {
+  REC.filterMvp = mode === 'mvp';
+  document.getElementById('recFilterAll').classList.toggle('active', !REC.filterMvp);
+  document.getElementById('recFilterMvp').classList.toggle('active', REC.filterMvp);
+  recRenderAnimList();
+}
+
+function recRenderAnimList() {
+  const list = document.getElementById('recAnimList');
+  if (!list) return;
+  const anims = REC.filterMvp ? SOUL_JAM_ANIMATIONS.filter(a => a.mvp) : SOUL_JAM_ANIMATIONS;
+  const cats = [...new Set(anims.map(a => a.cat))];
+  list.innerHTML = cats.map(cat => {
+    const items = anims.filter(a => a.cat === cat);
+    return `<div class="rec-cat-hdr">${cat}</div>` +
+      items.map(a => {
+        const savedZones = REC.saved[a.id] || new Set();
+        const pips = REC_ZONES.map(z => {
+          const key = a.hand === 'none' ? `${z.id}_` : `${z.id}_right`;
+          const keyL = `${z.id}_left`;
+          const done = savedZones.has(key) || savedZones.has(keyL);
+          return `<div class="rec-pip ${done ? 'done' : ''}" title="${z.label}"></div>`;
+        }).join('');
+        const hasAny = savedZones.size > 0;
+        return `<div class="rec-anim-item ${REC.animId === a.id ? 'active' : ''}" onclick="recSelectAnim('${a.id}')">
+          ${a.mvp ? '<span class="rec-mvp-star">★</span>' : '<span style="width:9px;display:inline-block"></span>'}
+          <span class="rec-anim-label">${a.label}</span>
+          <div class="rec-zone-pips">${pips}</div>
+        </div>`;
+      }).join('');
+  }).join('');
+}
+
+function recSelectAnim(animId) {
+  REC.animId = animId;
+  const anim = SOUL_JAM_ANIMATIONS.find(a => a.id === animId);
+  // Set default hand for this animation
+  const defaultHand = _recHandForAnim(animId);
+  if (defaultHand !== 'none') {
+    REC.hand = defaultHand;
+    recRenderHandBtns();
+  }
+  // Show/hide hand buttons
+  const ctrlRow = document.querySelector('.rec-ctrl-row');
+  if (ctrlRow) ctrlRow.style.display = (anim?.hand === 'none') ? 'none' : 'flex';
+
+  recRenderAnimList();
+  recUpdateSlotPill();
+  recUpdateZoneBtnDoneState();
+
+  // Start camera if not already running
+  if (!REC.stream) recStartCamera();
+  // Reset session state for new animation
+  recResetSession();
+}
+
+function recSetZone(zoneId) {
+  REC.zoneId = zoneId;
+  document.querySelectorAll('.rec-zone-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.zone) === zoneId);
+  });
+  recUpdateSlotPill();
+  recUpdateZoneBtnDoneState();
+  // Reset session if we change zone mid-session
+  if (REC.status !== 'idle') recResetSession();
+}
+
+function recSetHand(hand) {
+  REC.hand = hand;
+  recRenderHandBtns();
+  recUpdateSlotPill();
+  if (REC.status !== 'idle') recResetSession();
+}
+
+function recRenderHandBtns() {
+  document.getElementById('recHandR').classList.toggle('active', REC.hand === 'right');
+  document.getElementById('recHandL').classList.toggle('active', REC.hand === 'left');
+}
+
+function recUpdateSlotPill() {
+  const pill = document.getElementById('recSlotPill');
+  if (pill) pill.textContent = _recAnimName() || '—';
+}
+
+function recUpdateZoneBtnDoneState() {
+  if (!REC.animId) return;
+  const savedZones = REC.saved[REC.animId] || new Set();
+  const anim = SOUL_JAM_ANIMATIONS.find(a => a.id === REC.animId);
+  document.querySelectorAll('.rec-zone-btn').forEach(b => {
+    const z = parseInt(b.dataset.zone);
+    const key = anim?.hand === 'none' ? `${z}_` : `${z}_${REC.hand}`;
+    const keyAlt = `${z}_${REC.hand === 'right' ? 'left' : 'right'}`;
+    const done = savedZones.has(key) || (anim?.hand === 'both' && savedZones.has(keyAlt));
+    b.classList.toggle('done', done && parseInt(b.dataset.zone) !== REC.zoneId);
+  });
+}
+
+function recResetSession() {
+  REC.sessionId = null;
+  REC.frames = [];
+  REC.selected = new Set();
+  REC.ordered = [];
+  REC.subjects = {};
+  REC.blob = null;
+  REC.chunks = [];
+  REC.status = 'idle';
+  document.getElementById('recFramesWrap').classList.remove('visible');
+  document.getElementById('recExportBar').classList.remove('visible');
+  document.getElementById('recFrameGrid').innerHTML = '';
+  document.getElementById('recFramesSel').textContent = '0 selected';
+  document.getElementById('recConfirmBtn').disabled = true;
+  document.getElementById('recExportBtn').disabled = true;
+  document.getElementById('recStartBtn').disabled = !REC.stream;
+  document.getElementById('recStopBtn').disabled = true;
+  _recSetTimer(0);
+}
+
+async function recStartCamera() {
+  try {
+    if (REC.stream) { REC.stream.getTracks().forEach(t => t.stop()); REC.stream = null; }
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+    REC.stream = stream;
+    const vid = document.getElementById('recPreview');
+    const noCam = document.getElementById('recNoCam');
+    vid.srcObject = stream;
+    vid.style.display = '';
+    noCam.style.display = 'none';
+    document.getElementById('recCamLabel').textContent = REC.animId
+      ? `${SOUL_JAM_ANIMATIONS.find(a=>a.id===REC.animId)?.label ?? REC.animId} · ${REC_ZONES.find(z=>z.id===REC.zoneId)?.label}`
+      : 'Camera ready';
+    if (REC.animId) document.getElementById('recStartBtn').disabled = false;
+  } catch (e) {
+    toast('Camera error: ' + e.message, true);
+  }
+}
+
+function recStartRec() {
+  if (!REC.stream || !REC.animId) return;
+  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+    ? 'video/webm;codecs=vp9'
+    : MediaRecorder.isTypeSupported('video/webm')
+    ? 'video/webm'
+    : 'video/mp4';
+  REC.chunks = [];
+  REC.blob = null;
+  REC.recorder = new MediaRecorder(REC.stream, { mimeType });
+  REC.recorder.ondataavailable = e => { if (e.data.size > 0) REC.chunks.push(e.data); };
+  REC.recorder.onstop = _recOnStop;
+  REC.recorder.start(100);
+
+  REC.status = 'recording';
+  REC.recStartTime = Date.now();
+  REC._timerIv = setInterval(_recTickTimer, 250);
+
+  document.getElementById('recDot').classList.add('active');
+  document.getElementById('recStartBtn').disabled = true;
+  document.getElementById('recStopBtn').disabled = false;
+  document.getElementById('recCamLabel').textContent = '● RECORDING';
+}
+
+function recStopRec() {
+  if (REC.recorder && REC.recorder.state !== 'inactive') REC.recorder.stop();
+  clearInterval(REC._timerIv);
+  document.getElementById('recDot').classList.remove('active');
+  document.getElementById('recStopBtn').disabled = true;
+  REC.status = 'recorded';
+}
+
+async function _recOnStop() {
+  REC.blob = new Blob(REC.chunks, { type: REC.recorder.mimeType });
+  REC.chunks = [];
+  toast('Recording done — uploading…');
+  document.getElementById('recCamLabel').textContent = 'Uploading…';
+  document.getElementById('recStartBtn').disabled = true;
+  await recUploadAndExtract();
+}
+
+async function recUploadAndExtract() {
+  try {
+    REC.status = 'uploading';
+    const upRes = await fetch(`${API}/api/video/upload`, {
+      method: 'POST', body: REC.blob,
+      headers: { 'Content-Type': REC.blob.type || 'video/webm' },
+    });
+    const upData = await upRes.json();
+    if (!upRes.ok) throw new Error('Upload failed: ' + (upData.error || upRes.status));
+    REC.sessionId = upData.sessionId;
+
+    REC.status = 'extracting';
+    document.getElementById('recCamLabel').textContent = 'Extracting frames…';
+    const exRes = await fetch(`${API}/api/video/extract`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: REC.sessionId, fps: REC.fps }),
+    });
+    const exData = await exRes.json();
+    if (!exRes.ok) throw new Error('Extract failed: ' + (exData.error || exRes.status));
+    if (!exData.frames?.length) throw new Error('No frames extracted');
+
+    REC.frames = exData.frames;
+    REC.status = 'select';
+    REC.selected = new Set();
+    document.getElementById('recCamLabel').textContent =
+      `${SOUL_JAM_ANIMATIONS.find(a=>a.id===REC.animId)?.label ?? REC.animId} · ${REC_ZONES.find(z=>z.id===REC.zoneId)?.label}`;
+    document.getElementById('recStartBtn').disabled = false;
+    recRenderFrameGrid();
+    document.getElementById('recFramesWrap').classList.add('visible');
+    toast(`${exData.frameCount} frames ready — select key frames`);
+    // Auto smart-select for speed
+    recSmartSelect();
+  } catch (e) {
+    REC.status = 'idle';
+    document.getElementById('recCamLabel').textContent = 'Error — try again';
+    toast('Extract failed: ' + e.message, true);
+    document.getElementById('recStartBtn').disabled = false;
+  }
+}
+
+function recRenderFrameGrid() {
+  const grid = document.getElementById('recFrameGrid');
+  if (!grid) return;
+  grid.innerHTML = REC.frames.map((f, i) => {
+    const src = f.thumbUrl || f.url;
+    const sel = REC.selected.has(f.file);
+    return `<div class="rec-frame-thumb ${sel ? 'sel' : ''}" onclick="recToggleFrame(${i})" title="${f.file}">
+      <img src="${src}" loading="lazy" />
+      <div class="rec-frame-check">✓</div>
+      <div class="rec-frame-num">${i+1}</div>
+    </div>`;
+  }).join('');
+  recUpdateFrameCount();
+}
+
+function recToggleFrame(idx) {
+  const f = REC.frames[idx];
+  if (!f) return;
+  if (REC.selected.has(f.file)) REC.selected.delete(f.file);
+  else REC.selected.add(f.file);
+  const thumb = document.querySelector(`#recFrameGrid .rec-frame-thumb:nth-child(${idx+1})`);
+  if (thumb) thumb.classList.toggle('sel', REC.selected.has(f.file));
+  recUpdateFrameCount();
+}
+
+function recUpdateFrameCount() {
+  const n = REC.selected.size;
+  document.getElementById('recFramesSel').textContent = `${n} selected`;
+  document.getElementById('recConfirmBtn').disabled = n < 2;
+}
+
+function recClearFrames() {
+  REC.selected = new Set();
+  document.querySelectorAll('#recFrameGrid .rec-frame-thumb').forEach(t => t.classList.remove('sel'));
+  recUpdateFrameCount();
+}
+
+async function recSmartSelect() {
+  if (!REC.sessionId || !REC.frames.length) return;
+  const btn = document.getElementById('recSmartBtn');
+  const sp = document.getElementById('recSmartSpinner');
+  btn.disabled = true; sp.classList.add('active');
+  try {
+    const count = Math.min(8, Math.max(4, Math.ceil(REC.frames.length / 3)));
+    const res = await fetch(`${API}/api/video/smart-select`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: REC.sessionId, count }),
+    });
+    const data = await res.json();
+    if (res.ok && data.selected?.length) {
+      REC.selected = new Set(data.selected.map(f => f.file || f));
+      recRenderFrameGrid();
+    }
+  } catch {}
+  btn.disabled = false; sp.classList.remove('active');
+}
+
+async function recConfirmFrames() {
+  const ordered = REC.frames.filter(f => REC.selected.has(f.file)).map(f => f.file);
+  if (ordered.length < 2) return toast('Select at least 2 frames', true);
+  try {
+    const res = await fetch(`${API}/api/video/select-manual`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: REC.sessionId, frameFiles: ordered }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Selection failed');
+    REC.ordered = ordered;
+    REC.subjects = {};
+    ordered.forEach((file, i) => { REC.subjects[i] = { file, status: 'pending' }; });
+    REC.status = 'cutting';
+    document.getElementById('recFramesWrap').classList.remove('visible');
+    document.getElementById('recExportBar').classList.add('visible');
+    document.getElementById('recExportInfo').textContent = `Cutting out ${ordered.length} frames…`;
+    document.getElementById('recExportBtn').disabled = true;
+    recRunCutouts();
+  } catch (e) { toast('Confirm failed: ' + e.message, true); }
+}
+
+async function recRunCutouts() {
+  const total = REC.ordered.length;
+  let done = 0;
+  const jobs = REC.ordered.map((file, i) => async () => {
+    try {
+      const res = await fetch(`${API}/api/video/extract-subject`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: REC.sessionId, frameFile: file, frameIndex: i }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'cutout error');
+      REC.subjects[i] = { file, status: 'done', url: data.url };
+    } catch (e) {
+      REC.subjects[i] = { file, status: 'error', error: e.message };
+    }
+    done++;
+    document.getElementById('recExportInfo').textContent = `Cutting out player… ${done}/${total}`;
+    if (done === total) _recCutoutsDone();
+  });
+  // Run up to 3 concurrent
+  const run = async () => { while (jobs.length) await jobs.shift()(); };
+  await Promise.all([run(), run(), run()]);
+}
+
+function _recCutoutsDone() {
+  const errors = Object.values(REC.subjects).filter(s => s.status === 'error').length;
+  const ok = Object.values(REC.subjects).filter(s => s.status === 'done').length;
+  REC.status = 'ready';
+  document.getElementById('recExportInfo').textContent = `${ok} sprite refs ready${errors ? ` (${errors} errors)` : ''} · ${_recAnimName()}`;
+  document.getElementById('recExportBtn').disabled = ok === 0;
+}
+
+async function recExportToLibrary() {
+  const animName = _recAnimName();
+  if (!animName) return toast('Select an animation first', true);
+  if (REC.status !== 'ready') return toast('Wait for cutout to finish', true);
+
+  const btn = document.getElementById('recExportBtn');
+  btn.disabled = true;
+  document.getElementById('recExportInfo').textContent = 'Saving to library…';
+
+  const anim = SOUL_JAM_ANIMATIONS.find(a => a.id === REC.animId);
+  const zone = REC_ZONES.find(z => z.id === REC.zoneId);
+  const fps = REC.fps;
+  const startingHand = anim?.hand === 'none' ? null : REC.hand;
+
+  // Collect cutout base64
+  const activeIdx = Object.keys(REC.subjects)
+    .map(Number)
+    .filter(i => REC.subjects[i]?.status === 'done');
+  const frameBase64Array = [];
+  for (const i of activeIdx) {
+    const sub = REC.subjects[i];
+    try {
+      const resp = await fetch(sub.url);
+      if (resp.ok) {
+        const buf = await resp.arrayBuffer();
+        frameBase64Array.push('data:image/png;base64,' + _bufToBase64(buf));
+      }
+    } catch {}
+  }
+
+  const payload = {
+    name: animName,
+    angle: zone?.label ?? 'Front',
+    fps, loop: true,
+    ...(startingHand ? { startingHand } : {}),
+    sessionId: REC.sessionId,
+    frameFiles: activeIdx.map(i => REC.subjects[i].file),
+    ...(frameBase64Array.length ? { frameBase64Array } : {}),
+  };
+
+  try {
+    const res = await fetch(`${API}/api/anim-lib`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // Mark as saved in progress tracker
+    if (!REC.saved[REC.animId]) REC.saved[REC.animId] = new Set();
+    const key = anim?.hand === 'none' ? `${REC.zoneId}_` : `${REC.zoneId}_${REC.hand}`;
+    REC.saved[REC.animId].add(key);
+
+    toast(`✓ Saved ${animName} — ${data.animation?.frameCount ?? activeIdx.length} frames`);
+    document.getElementById('recExportInfo').textContent =
+      `✓ Saved · ${data.animation?.frameCount ?? activeIdx.length} frames · ${fps}fps`;
+    recRenderProgress();
+    recRenderAnimList();
+    recUpdateZoneBtnDoneState();
+
+    // Auto-advance to next zone
+    const nextZone = REC.zoneId < 5 ? REC.zoneId + 1 : null;
+    if (nextZone) {
+      setTimeout(() => { recSetZone(nextZone); recResetSession(); }, 600);
+    }
+  } catch (e) {
+    toast('Export failed: ' + e.message, true);
+    btn.disabled = false;
+  }
+}
+
+function recRenderProgress() {
+  const list = document.getElementById('recProgList');
+  const summary = document.getElementById('recProgSummary');
+  if (!list) return;
+
+  const anims = REC.filterMvp ? SOUL_JAM_ANIMATIONS.filter(a => a.mvp) : SOUL_JAM_ANIMATIONS;
+  let totalSaved = 0;
+
+  list.innerHTML = anims.map(a => {
+    const savedZones = REC.saved[a.id] || new Set();
+    const hasAny = savedZones.size > 0;
+    if (hasAny) totalSaved++;
+    const zonePills = REC_ZONES.map(z => {
+      const keyR = a.hand === 'none' ? `${z.id}_` : `${z.id}_right`;
+      const keyL = `${z.id}_left`;
+      const done = savedZones.has(keyR) || savedZones.has(keyL);
+      return `<span class="rec-prog-zone ${done ? 'done' : ''}">${z.short}</span>`;
+    }).join('');
+    return `<div class="rec-prog-item ${hasAny ? 'has-any' : ''}" onclick="recSelectAnim('${a.id}')" style="cursor:pointer">
+      <div class="rec-prog-name">${a.mvp ? '★ ' : ''}${a.label}</div>
+      <div class="rec-prog-zones">${zonePills}</div>
+    </div>`;
+  }).join('');
+
+  if (summary) summary.textContent = `${totalSaved} / ${anims.length} recorded`;
+}
+
+function _recTickTimer() {
+  if (!REC.recStartTime) return;
+  const elapsed = Math.floor((Date.now() - REC.recStartTime) / 1000);
+  _recSetTimer(elapsed);
+}
+
+function _recSetTimer(secs) {
+  const m = Math.floor(secs / 60);
+  const s = String(secs % 60).padStart(2, '0');
+  const el = document.getElementById('recTimer');
+  if (el) el.textContent = `${m}:${s}`;
 }
 </script>
 </body>
