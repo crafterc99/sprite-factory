@@ -189,8 +189,9 @@ class AnimationPlayer {
         candidates = JOG_ANIMS;
       }
       // Zone-aware pick: prefer anims valid for this zone, exclude blocked ones.
-      // Falls back to zone-agnostic anims, then first available.
-      const desired = this._findBestForZone(candidates, positionZone) ?? this.availableAnims[0];
+      // Falls back to zone-agnostic anims. No hard fallback — if nothing matches the
+      // character has no locomotion anim loaded and we leave the current anim alone.
+      const desired = this._findBestForZone(candidates, positionZone);
       if (desired && desired.name !== this.currentAnim) {
         // Smooth transitions: switch immediately only when the current anim is
         // already on its last frame; otherwise queue for the wrap point.

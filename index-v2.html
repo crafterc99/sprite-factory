@@ -8278,7 +8278,10 @@ function gmFindEntry(slotId, zoneId, hand) {
     ?? arr.find(a => !a.startingHand)
     ?? arr[0];
   const inZone = all.filter(a => a.zoneId === zoneId);
-  return inZone.length ? pick(inZone) : pick(all);
+  if (inZone.length) return pick(inZone);
+  // Nearest zone fallback: pick the entry whose zone is closest numerically
+  const nearest = [...all].sort((a, b) => Math.abs((a.zoneId ?? 99) - zoneId) - Math.abs((b.zoneId ?? 99) - zoneId));
+  return pick(nearest);
 }
 
 // Which hand should a given slot's strip use right now?
@@ -8420,15 +8423,17 @@ async function loadGMAnims() {
     const savedAnims = char.savedAnimations || {};
     GM.charAnims = [];
 
-    // Pull saved movement data + starting hand from the anim library
+    // Pull saved movement data + starting hand + authoritative frameCount from anim library
     let libMove = {};
     let libHand = {};
+    let libFrameCount = {};
     try {
       const r = await fetch(`${API}/api/anim-lib`);
       const d = await r.json();
       for (const a of (d.animations ?? [])) {
         if (a.movementData) libMove[a.name] = a.movementData;
         if (a.startingHand) libHand[a.name] = a.startingHand;
+        if (a.frameCount) libFrameCount[a.name] = a.frameCount;
       }
     } catch { /* anim-lib unavailable — presets still apply */ }
 
@@ -8462,8 +8467,8 @@ async function loadGMAnims() {
         startingHand: hand ?? sa.startingHand ?? libHand[key] ?? null,
         fps: sa.fps ?? 8,
         loop: slot.loop,
-        frameCount: sa.frameCount ?? 1,
-        stripUrl: sa.spriteUrl,
+        frameCount: libFrameCount[key] ?? libFrameCount[slotId] ?? sa.frameCount ?? 1,
+        stripUrl: sa.spriteUrl || (libFrameCount[key] ? `/api/anim-lib/strip/${key}` : null),
         movementData: libMove[key] ?? libMove[slotId] ?? null,
         _img: null,
       };

@@ -270,6 +270,32 @@ function register(router, ctx) {
     json(res, { success: true });
   });
 
+  // GET /api/anim-lib/strip/:name — serve all frames as a horizontal sprite strip PNG
+  // Used by the game mode when an animation only exists in anim-lib (no spriteUrl in char.savedAnimations)
+  router.get('/api/anim-lib/strip/:name', async (req, res, params) => {
+    const index = loadIndex();
+    const anim = index[params.name];
+    if (!anim || !anim.framesBase64?.length) {
+      res.writeHead(404); res.end(); return;
+    }
+    try {
+      const sharp = require('sharp');
+      const buffers = anim.framesBase64.map(b64 => Buffer.from(b64, 'base64'));
+      const meta = await sharp(buffers[0]).metadata();
+      const fw = meta.width || 128;
+      const fh = meta.height || 128;
+      const composites = buffers.map((buf, i) => ({ input: buf, left: i * fw, top: 0 }));
+      const strip = await sharp({ create: { width: fw * buffers.length, height: fh, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+        .composite(composites)
+        .png()
+        .toBuffer();
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=60', 'Content-Length': strip.length });
+      res.end(strip);
+    } catch (err) {
+      res.writeHead(500); res.end(err.message);
+    }
+  });
+
   // GET /api/anim-lib/frame/:name/:index — serve a single pose frame
   router.get('/api/anim-lib/frame/:name/:index', (req, res, params) => {
     const index = loadIndex();
