@@ -712,6 +712,9 @@ async function handler(req, res) {
   if (pathname === '/v2' || pathname === '/v2/') {
     return serveStatic(res, path.join(__dirname, 'index-v2.html'), 'text/html');
   }
+  if (pathname === '/skeleton-viewer' || pathname === '/skeleton-viewer.html') {
+    return serveStatic(res, path.join(__dirname, 'skeleton-viewer.html'), 'text/html');
+  }
 
   res.writeHead(404);
   res.end('Not found');
