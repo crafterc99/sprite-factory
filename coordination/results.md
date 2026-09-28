@@ -2922,3 +2922,9 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: vs SAM 3D Body's posed body on 65 frames: mean vertex error 1.8 cm, rigid matrices (test); npm test 26/26; headless court PASS with the MHR rig (0 cm slide, run, stop, swish); side-by-side renders legacy vs MHR (idle, crossover, run, shot).
 - Take: IMG_6552 chosen (whole body in frame, less blur) → motion mo-mulndux8cn31 "move-spin-layup-r-t01" (role move-spin, △). Frames 65–91 (layup finish) failed: fal "Exhausted balance"; the feet also leave the bottom of the frame near the end.
 - Next: top up fal.ai, re-analyse IMG_6552 (~$2) for the layup tail.
+
+## MOCAP-13 — Recorded clips play as filmed: capture layer (hands, fingers, arms), ball in the captured hand, replay-vs-video
+- Status: DONE (local) — deployed with this commit
+- Files changed: lib/mocap/mhr-rots.js (new), lib/mocap/motion-builder.js (rotations through cleanup; ball kept on re-made frames; feet cut at the bottom no longer drop the frame), lib/mocap/clip-builder.js (rots / srcFrames / viewDirRoot in clips), lib/mocap/game-clips.js (BUILDER_REV), lib/mocap/pipeline.js (frames ≤ 2560 px to SAM, fps ≤ 60), engine3d/anim3d.mjs (clip rots, rotSrc, exports), engine3d/mhr-skin.mjs (capture layer, mirror, held-ball offset, jointWorld), court3d.html (capture layer, ball in mesh hand, ?replay=, ?capture=0), mocap.html (60 fps), tests/anim3d.test.js, docs/ANIMATION-3D.md, docs/RECORDING.md
+- Validation: rotations through the pipeline match the clip's keypoints (arms 1–3°, head 0.5°); tests: captured wrist/finger/head relative to chest < 0.5° from the capture, mirror exact; replay grid vs video on the spin take (8 frames) matches incl. outstretched arms and the ball in the right hand; spin take now uses all 65 frames (was 19 interpolated).
+- Limits: body model has no clothes (baggy shorts render tight); finger accuracy = SAM 3D Body's hand accuracy at the filmed resolution.

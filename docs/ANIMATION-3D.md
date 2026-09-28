@@ -57,6 +57,10 @@ Served by `lib/mocap/game-clips.js`: built on demand, cached in memory, on disk 
 
 Why the older scan rigs looked mangled: one frame per bone built from noisy keypoints (thigh twist taken from the foot direction), only 2 influences per vertex, no clavicle or twist joints, and a bind pose taken from a video frame. They remain available with `/court3d?legacy=1` for comparison.
 
+**Capture layer (recorded clips play as filmed).** The cleanup (`motion-builder`) and clip builder carry SAM 3D Body's own per-frame joint rotations through every step the keypoints take (levelled, faced forward, gaps slerped, smoothed on quaternions, root space) into the game clip (`rots`: F × 127 Int16 quaternions, plus `srcFrames` and `viewDirRoot`). The runtime reports what it plays (`result().rotSrc`: clip, time, weight); the court poses arms, forearm twist, hands, fingers and head with the capture's rotations relative to the chest (so runtime lean, turns and root motion stay), and pelvis / spine / legs with the solver (foot locks and IK). Mirrored clips use the partner joint's rotation reflected across the midplane; the layer fades in over ~0.1 s whenever the clip changes. A held ball rides the character's own captured hand (per-frame ball offset in the captured wrist frame). `/court3d?capture=0` turns it off.
+
+**Replay vs video**: `/court3d?replay=<motionId>` plays a recorded clip exactly as the game has it, from the filming camera's angle, next to the source frame (play / pause, frame step, ¼ speed, capture on/off).
+
 ### Scan rigs (v3, legacy) — `lib/mocap/character-rig.js`
 
 One scan frame (the one with the limbs clearest of the body) is bound with the mesh guide's surface skinning: every vertex follows two of 47 bone segments. That is exactly linear-blend skinning:

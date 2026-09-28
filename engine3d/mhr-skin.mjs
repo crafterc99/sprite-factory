@@ -118,7 +118,12 @@ export function prepareMhr(json, kpNames) {
   // keypoints that sit on a joint (joint target positions): offset < 1.5 cm
   const target = new Int16Array(n).fill(-1);
   m.kpJoint.forEach((j, k) => { const o = m.kpOffset[k]; if (Math.hypot(o[0], o[1], o[2]) < 0.015 && target[j] < 0) target[j] = k; });
-  return { names, parents, children, JI, K, b, R0, K0, n, target, kpJoint: m.kpJoint, kpOffset: m.kpOffset };
+  // mirror partner (l_ ↔ r_) and the upper body (everything below the chest)
+  const partner = names.map((nm, i) => { const o = nm.startsWith('l_') ? 'r_' + nm.slice(2) : nm.startsWith('r_') ? 'l_' + nm.slice(2) : nm; return JI[o] ?? i; });
+  const upper = new Uint8Array(n);
+  const chest = JI.c_spine3;
+  for (let i = 0; i < n; i++) { let q = parents[i]; while (q >= 0 && q !== chest) q = parents[q]; if (q === chest) upper[i] = 1; }
+  return { names, parents, children, JI, K, b, R0, K0, n, target, kpJoint: m.kpJoint, kpOffset: m.kpOffset, partner, upper, chest };
 }
 
 /**
@@ -267,6 +272,98 @@ export function mhrBoneMatrices(P, rig, out = new Float32Array(rig.n * 16)) {
     out[o + 12] = t[0]; out[o + 13] = t[1]; out[o + 14] = t[2]; out[o + 15] = 1;
   }
   return out;
+}
+
+// ── the capture's own rotations (recorded clips) ─────────────────────────────
+const S_ = [[-1, 0, 0], [0, 1, 0], [0, 0, 1]];
+const mirrorM = (Q) => mm(S_, mm(Q, S_));
+/** Captured bind-relative rotations Q_j = G_j · B_jᵀ of one clip at time t (root space). */
+function clipRots(src, rig) {
+  const c = src.clip, F = c.F, J = c.rotsJoints;
+  let t = src.t;
+  if (c.loop) t = ((t % F) + F) % F; else t = Math.min(Math.max(t, 0), F - 1);
+  const i0 = Math.floor(t), i1 = c.loop ? (i0 + 1) % F : Math.min(F - 1, i0 + 1), u = t - i0;
+  const out = new Array(rig.n);
+  for (let j = 0; j < rig.n; j++) {
+    const a = (i0 * J + j) * 4, bb = (i1 * J + j) * 4, k = 1 / 32767;
+    const qa = [c.rots[a] * k, c.rots[a + 1] * k, c.rots[a + 2] * k, c.rots[a + 3] * k];
+    const qb = [c.rots[bb] * k, c.rots[bb + 1] * k, c.rots[bb + 2] * k, c.rots[bb + 3] * k];
+    out[j] = mm(quatToMat(slerpQ(qa, qb, u)), tr(rig.R0[j]));
+  }
+  if (!c.mirror) return out;
+  // mirrored copy: the partner's rotation reflected across the body's midplane
+  const m = new Array(rig.n);
+  for (let j = 0; j < rig.n; j++) m[rig.partner[j]] = mirrorM(out[j]);
+  return m;
+}
+
+/**
+ * Skinning matrices with the recorded clip's own upper-body rotations mixed in.
+ * srcs: [{ clip (prepared, with .rots), t, w }] from Player.result().rotSrc;
+ * w: 0 → solver only, 1 → capture for arms, hands, fingers, head (relative to
+ * the chest, so the runtime's lean / turns stay). Legs, pelvis and spine stay
+ * on the solver (foot locks, IK, root motion).
+ */
+export function mhrBoneMatricesCaptured(P, rig, srcs, w, out = new Float32Array(rig.n * 16)) {
+  const sol = solveMhr(P, rig);
+  const use = (srcs || []).filter((s) => s.clip?.rots && s.clip.rotsJoints === rig.n && s.w > 0.001);
+  if (w > 0.001 && use.length) {
+    // weighted mix of the sources (quaternion average per joint)
+    let Qc;
+    if (use.length === 1) Qc = clipRots(use[0], rig);
+    else {
+      const sets = use.map((s) => clipRots(s, rig)), ws = use.map((s) => s.w), wsum = ws.reduce((a, x) => a + x, 0);
+      Qc = sets[0].map((_, j) => { let q = matToQuat(sets[0][j]); let acc = ws[0]; for (let k = 1; k < sets.length; k++) { acc += ws[k]; q = slerpQ(q, matToQuat(sets[k][j]), ws[k] / acc); } void wsum; return quatToMat(q); });
+    }
+    const D = mm(sol.Q[rig.chest], tr(Qc[rig.chest]));   // clip root space → where the runtime put the chest
+    const { Q, p } = sol;
+    for (let i = 0; i < rig.n; i++) {
+      if (!rig.upper[i]) continue;
+      Q[i] = slerpM(Q[i], mm(D, Qc[i]), w);
+      const pi = rig.parents[i];
+      const fk = add(p[pi], mv(Q[pi], sub(rig.b[i], rig.b[pi])));
+      p[i] = lerp(p[i], fk, w);
+    }
+  }
+  return writeMats(sol, rig, out);
+}
+function writeMats({ Q, p }, rig, out) {
+  for (let i = 0; i < rig.n; i++) {
+    const q = Q[i], t = sub(p[i], mv(q, rig.b[i])), o = i * 16;
+    out[o] = q[0][0]; out[o + 1] = q[1][0]; out[o + 2] = q[2][0]; out[o + 3] = 0;
+    out[o + 4] = q[0][1]; out[o + 5] = q[1][1]; out[o + 6] = q[2][1]; out[o + 7] = 0;
+    out[o + 8] = q[0][2]; out[o + 9] = q[1][2]; out[o + 10] = q[2][2]; out[o + 11] = 0;
+    out[o + 12] = t[0]; out[o + 13] = t[1]; out[o + 14] = t[2]; out[o + 15] = 1;
+  }
+  return out;
+}
+
+/** World position + rotation of joint j from its skinning matrix (M = [Q | p − Q·b]). */
+export function jointWorld(mats, rig, j) {
+  const o = j * 16, b = rig.b[j];
+  const Q = [[mats[o], mats[o + 4], mats[o + 8]], [mats[o + 1], mats[o + 5], mats[o + 9]], [mats[o + 2], mats[o + 6], mats[o + 10]]];
+  const p = [mats[o + 12] + Q[0][0] * b[0] + Q[0][1] * b[1] + Q[0][2] * b[2], mats[o + 13] + Q[1][0] * b[0] + Q[1][1] * b[1] + Q[1][2] * b[2], mats[o + 14] + Q[2][0] * b[0] + Q[2][1] * b[1] + Q[2][2] * b[2]];
+  return { p, G: mm(Q, rig.R0[j]) };
+}
+
+/**
+ * Where a held ball sits in the hand, from the capture: the ball's offset in
+ * the captured wrist's own frame at clip time t (null if the ball is not held).
+ * `kp` = the clip's root-space keypoints at t (anim3d samplePose).
+ */
+export function heldBallOffset(src, rig, kp, kpIndex) {
+  const c = src.clip;
+  if (!c.rots || !c.ball) return null;
+  const fi = Math.max(0, Math.min(c.F - 1, Math.round(c.loop ? ((src.t % c.F) + c.F) % c.F : src.t)));
+  const bl = c.ball[fi];
+  if (!bl || !bl.held) return null;
+  const side = bl.hand === 'left' ? 'l' : 'r';
+  const j = rig.JI[side + '_wrist'];
+  const Q = clipRots({ clip: c, t: fi }, rig)[j];
+  const G = mm(Q, rig.R0[j]);
+  const w = kpIndex[`${bl.hand}-wrist`] * 3;
+  const d = [bl.p[0] - kp[w], bl.p[1] - kp[w + 1], bl.p[2] - kp[w + 2]];
+  return { joint: j, off: mv(tr(G), d) };
 }
 
 /** CPU skinning (tests / previews): rest verts + skin (4 idx/weights) → posed verts. */

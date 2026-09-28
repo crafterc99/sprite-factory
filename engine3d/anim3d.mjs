@@ -56,7 +56,7 @@ export const J = Object.fromEntries(MHR70.map((n, i) => [n, i]));
 export const PELVIS = 70;
 export const NJ = 71;                 // 70 keypoints + the virtual pelvis
 const BALL = NJ;                      // the ball rides along as slot 71 in pose buffers
-const NP = NJ + 1;                    // points per pose buffer
+export const NP = NJ + 1;                    // points per pose buffer
 export const MIRROR = MHR70.map((n) => (n.startsWith('left-') ? J['right-' + n.slice(5)] : n.startsWith('right-') ? J['left-' + n.slice(6)] : J[n])).concat([PELVIS]);
 
 const SIDES = ['left', 'right'];
@@ -308,6 +308,8 @@ export function prepareClip(json, rig, { mirror = false } = {}) {
   const loop = json.type === 'loop';
   const clip = {
     json, name: json.name, role: json.role, type: json.type, loop, mirror, fps: json.fps, F, k,
+    // the capture's own joint rotations (MHR, root space, Int16 quats) — the skin layer replays them
+    rots: json.rots && json.rotsJoints ? b64(json.rots, Int16Array) : null, rotsJoints: json.rotsJoints || 0,
     frames, traj, contacts, markers, ball, hand, endHand, shot,
     entry: json.entry || { min: 0, max: 0 },
     speed: Math.hypot(x, z) / (F / json.fps),                    // character m/s over one cycle / the clip
@@ -400,7 +402,7 @@ function contactAt(clip, side, t) {
 }
 
 /** Transform a root-space pose by (x, z, yaw) into `out` (points 0..n-1). */
-function placePose(P, x, z, yaw, out, n = NP) {
+export function placePose(P, x, z, yaw, out, n = NP) {
   const c = Math.cos(yaw), s = Math.sin(yaw);
   for (let k = 0; k < n; k++) {
     const px = P[k * 3], pz = P[k * 3 + 2];
@@ -950,7 +952,7 @@ export class Player {
 
   result() {
     const b = this.hasBall && !this.ballFree ? get3(this.world, BALL) : null;
-    return { pose: this.world, ball: b, events: this.events, mode: this.mode, source: this.source, action: this.action?.clip.role || null };
+    return { pose: this.world, ball: b, events: this.events, mode: this.mode, source: this.source, action: this.action?.clip.role || null, rotSrc: this.rotSrc || null };
   }
 
   // ── locomotion ──
@@ -1076,6 +1078,7 @@ export class Player {
     P.fill(0);
     const tmp = new Float32Array(NJ * 3);
     const cw = { left: 0, right: 0 };
+    this.rotSrc = items.map((q) => ({ clip: q.c, t: phaseToTime(q.c.phaseMap, (this.gaitCycle || 0) + this.gaitPhase), w: q.w }));
     let dirS = 0, dirC = 0;
     const u = (this.gaitCycle || 0) + this.gaitPhase;
     for (const q of items) {
@@ -1106,6 +1109,7 @@ export class Player {
     this.dribbleT = (this.dribbleT + dt * idle.fps * rate) % idle.F;
     const P = this.base;
     const tmp = samplePose(idle, this.dribbleT, new Float32Array(NJ * 3));
+    this.rotSrc = [{ clip: idle, t: this.dribbleT, w: 1 }];
     const tr = sampleTraj(idle, this.dribbleT);
     placePose(tmp, tr[0], tr[1], tr[2], P, NJ);
     this.planner.update(dt);
@@ -1261,6 +1265,7 @@ export class Player {
     const a = this.action, clip = a.clip;
     this.source = 'action:' + clip.role;
     const tPrev = a.t;
+    this.rotSrc = null; // set below once a.t has advanced
     a.t = Math.min(clip.F - 1, a.t + dt * clip.fps);
     // root motion (clip start frame → character), scaled already
     const tr = sampleTraj(clip, a.t);
@@ -1289,6 +1294,7 @@ export class Player {
     a.last = tr;
     // pose (root space at t) — the capsule carries position + yaw
     samplePose(clip, a.t, this.base);
+    this.rotSrc = [{ clip, t: a.t, w: 1 }];
     this.contactW = { left: contactAt(clip, 'left', a.t), right: contactAt(clip, 'right', a.t) };
     if (!a.released && this.hasBall) this.ballFromClip(this.base, clip, a.t);
     else set3(this.base, BALL, gx(this.out, BALL), gy(this.out, BALL), gz(this.out, BALL));

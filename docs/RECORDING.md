@@ -230,6 +230,16 @@ The **Clip type** buttons on the Capture step set these for you. Then set the tr
 
 ---
 
+## 11b · For hands that match the video exactly
+
+The game replays SAM 3D Body's own hand and finger rotations, so hands are as good as what the camera sees:
+
+- **4K at 60 fps**, shutter ≥ 1/500 (sports mode). Frames go to the analysis up to 2560 px wide, and 60 fps is selectable on /mocap. The hands are a few % of the picture; more pixels and less blur are what fixes fingers.
+- **Closer**: the whole body, head to feet, filling ~70 % of the frame height. The head must never leave the picture (such frames are dropped). Feet slightly cut at the bottom are kept but lose foot data.
+- **Hands visible**: film from the side the ball hand is on, never with the hands hidden behind the body for long. For two-hand moves, film two takes from both sides.
+- **Start and end in a held stance** (1 s), move across the frame rather than toward the camera.
+- Check the result in `/court3d?replay=<motionId>`: the clip beside each source frame.
+
 ## 12 · Import, step by step
 
 1. **/mocap → Capture:** choose the video and name it with the convention. Press the clip-type button, trim to the action plus its holds, and press **Analyze motion**.

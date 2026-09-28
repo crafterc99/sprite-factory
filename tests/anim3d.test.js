@@ -408,3 +408,36 @@ test('MHR rig: solver poses the body model like SAM 3D Body did (rigid bones, cm
   const meanCm = (sum / cnt) * 100;
   assert.ok(meanCm < 2.5, `mean vertex error vs SAM 3D Body ${meanCm.toFixed(2)} cm`);
 });
+
+test('capture layer: recorded clips replay the capture\'s own arm / hand / finger rotations (mirrored exactly)', async () => {
+  const zlib = require('zlib'), fs = require('fs'), path = require('path');
+  const M = await import('../engine3d/mhr-skin.mjs'), An = await A;
+  const MR = require('../lib/mocap/mhr-rots');
+  const rig = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, '../lib/mocap/mhr-rigs/ankh.json.gz'))));
+  const R = M.prepareMhr(rig, An.MHR70);
+  const f = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/mhr-frames.json'), 'utf8')).frames[2];
+  const q = []; for (let j = 0; j < 127; j++) q.push(MR.matToQuat(f.rots, j * 9));
+  const packed = Buffer.from(MR.packQuats([q]), 'base64');
+  const rots = new Int16Array(packed.buffer.slice(packed.byteOffset, packed.byteOffset + packed.byteLength));
+  const clip = { F: 1, loop: false, mirror: false, rots, rotsJoints: 127 };
+  const P = f.kp3d.flatMap((p) => [p[0], -p[1], -p[2]]);
+  const { quatToMat } = M._internal;
+  const mm = (a, b) => a.map((r) => [0, 1, 2].map((c) => r[0] * b[0][c] + r[1] * b[1][c] + r[2] * b[2][c]));
+  const tr = (m) => [[m[0][0], m[1][0], m[2][0]], [m[0][1], m[1][1], m[2][1]], [m[0][2], m[1][2], m[2][2]]];
+  const ang = (a, b) => { const m = mm(a, tr(b)); return Math.acos(Math.max(-1, Math.min(1, (m[0][0] + m[1][1] + m[2][2] - 1) / 2))) * 180 / Math.PI; };
+  const rel = (mats, j) => { const c = M.jointWorld(mats, R, R.chest).G, g = M.jointWorld(mats, R, j).G; return mm(tr(c), g); };
+  const capRel = (j) => mm(tr(quatToMat(q[R.chest])), quatToMat(q[j]));
+  const mats = M.mhrBoneMatricesCaptured(P, R, [{ clip, t: 0, w: 1 }], 1, new Float32Array(127 * 16));
+  for (const nm of ['r_wrist', 'l_wrist', 'r_index2', 'l_thumb2', 'r_lowarm', 'c_head']) {
+    assert.ok(ang(rel(mats, R.JI[nm]), capRel(R.JI[nm])) < 0.5, `${nm} relative to the chest = capture`);
+  }
+  const solo = M.mhrBoneMatrices(P, R);
+  assert.ok(ang(rel(solo, R.JI.r_index2), capRel(R.JI.r_index2)) > ang(rel(mats, R.JI.r_index2), capRel(R.JI.r_index2)), 'closer to the capture than the solver alone');
+  // mirrored copy: the right hand takes the left hand's rotation reflected across the midplane
+  const mir = M.mhrBoneMatricesCaptured(P, R, [{ clip: { ...clip, mirror: true }, t: 0, w: 1 }], 1, new Float32Array(127 * 16));
+  const S = [[-1, 0, 0], [0, 1, 0], [0, 0, 1]], refl = (m) => mm(S, mm(m, S));
+  const Qm = (mats2, j) => mm(M.jointWorld(mats2, R, j).G, tr(R.R0[j]));
+  const expect = mm(refl(mm(tr(mm(quatToMat(q[R.chest]), tr(R.R0[R.chest]))), mm(quatToMat(q[R.JI.l_wrist]), tr(R.R0[R.JI.l_wrist])))), [[1, 0, 0], [0, 1, 0], [0, 0, 1]]);
+  const got = mm(tr(Qm(mir, R.chest)), Qm(mir, R.JI.r_wrist));
+  assert.ok(ang(got, expect) < 0.5, 'mirrored hand = reflected partner');
+});

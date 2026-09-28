@@ -107,6 +107,16 @@
 </div>
 <div id="dbg"><b>feet</b> · slide max <span id="dbgSlide"></span> <button id="dbgReset" type="button">reset</button><br><span id="dbgBody"></span></div>
 <div id="toast"></div>
+<div id="replay" style="display:none;position:fixed;right:12px;top:110px;z-index:6;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;width:min(42vw,420px)">
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="color:#fff">Replay vs video</b><span id="rpInfo" style="color:var(--dim);font-size:12px"></span></div>
+  <img id="rpImg" alt="source frame" style="width:100%;border-radius:8px;display:block;background:#000">
+  <input id="rpSlider" type="range" min="0" max="1" step="1" value="0" style="width:100%;margin-top:6px">
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+    <button id="rpPlay" type="button">Pause</button><button id="rpPrev" type="button">◀ frame</button><button id="rpNext" type="button">frame ▶</button>
+    <button id="rpSlow" type="button">¼ speed</button><button id="rpCap" type="button">capture: on</button>
+  </div>
+  <div style="color:var(--dim);font-size:12px;margin-top:4px">Left: the game clip, seen from the filming camera. Right: the frame it came from. Space play/pause · ←/→ step.</div>
+</div>
 
 <div id="stickZone"></div>
 <div id="stickBase"><div id="stickKnob"></div></div>
@@ -315,7 +325,21 @@ function buildCharacter(rig) {
   charMesh = mesh;
 }
 const boneTmp = new Float32Array(A.NSEG * 16);
-function poseCharacter(rig, pose) { if (mhrRig) MS.mhrBoneMatrices(pose, mhrRig, boneMats); else A.boneMatrices(pose, rig.restInv, boneMats, boneTmp); }
+// Recorded clips carry the capture's own joint rotations: arms, hands, fingers
+// and head replay them exactly (faded in over ~0.1 s whenever the clip changes,
+// so transitions stay on the runtime's inertialized pose). ?capture=0 → solver only.
+const CAPTURE = QS.get('capture') !== '0';
+const capState = { key: '', w: 0 };
+function poseCharacter(rig, pose, r = null, dt = 0) {
+  if (!mhrRig) { A.boneMatrices(pose, rig.restInv, boneMats, boneTmp); return; }
+  const srcs = CAPTURE && r?.rotSrc ? r.rotSrc.filter((q) => q.clip?.rots) : [];
+  const key = r ? `${r.source}|${srcs.map((q) => q.clip.name + (q.clip.mirror ? '~' : '')).join(',')}` : '';
+  if (key !== capState.key) { capState.key = key; capState.w = 0; }
+  const target = srcs.length ? srcs.reduce((a, q) => a + q.w, 0) : 0;
+  capState.w += (Math.min(1, target) - capState.w) * (1 - Math.exp(-dt / 0.05));
+  if (capState.w > 0.002) MS.mhrBoneMatricesCaptured(pose, mhrRig, srcs, capState.w, boneMats);
+  else MS.mhrBoneMatrices(pose, mhrRig, boneMats);
+}
 
 // foot-plant debug markers
 const plantMarks = { left: null, right: null };
@@ -502,6 +526,7 @@ function step(now) {
     if (LITE && f < 45 && pixelRatio > 1) { slowFor += fpsAcc; if (slowFor > 2) { pixelRatio = 1; renderer.setPixelRatio(1); resize(); } } else slowFor = 0;
     fpsAcc = 0; fpsN = 0;
   }
+  if (S.replay) { replayStep(rdt); return; }
   const inp = readInput();
   const P = S.player;
   if (!P) return;
@@ -536,7 +561,7 @@ function step(now) {
     if (e.type === 'action') { S.lastAction = e.role; S.lastPick = e; }
     if (e.type === 'skid') S.skidAt = now;
   }
-  poseCharacter(S.rig, r.pose);
+  poseCharacter(S.rig, r.pose, r, rdt);
 
   // ── Ball
   if (S.freeBall) {
@@ -557,6 +582,8 @@ function step(now) {
     if (fb.bounces >= 3 || fb.t > 4.5) { S.freeBall = null; P.giveBall(); }
   } else if (r.ball) {
     const w = new THREE.Vector3(r.ball[0], r.ball[1], r.ball[2]);
+    const hb = heldInMeshHand(r);
+    if (hb) w.lerp(hb, capState.w);
     ballSpin.subVectors(w, ball.position).multiplyScalar(1 / Math.max(dt, 1e-3));
     ball.position.copy(w);
     S.lastBall.copy(w);
@@ -588,6 +615,69 @@ function step(now) {
   } else { plantMarks.left.visible = plantMarks.right.visible = false; }
 
   updateCamera(rdt, inp);
+  renderer.render(scene, camera);
+}
+
+// A held ball rides the character's own (captured) hand: the offset from the
+// captured wrist, per clip frame, applied to the mesh wrist — ball and fingers match the video.
+function heldInMeshHand(r) {
+  if (!mhrRig || !(capState.w > 0.01) || !r?.rotSrc?.length) return null;
+  const top = r.rotSrc.reduce((m, q) => (q.w > m.w ? q : m), r.rotSrc[0]);
+  if (!top.clip?.rots) return null;
+  const o = MS.heldBallOffset(top, mhrRig, A.samplePose(top.clip, top.t), A.J);
+  if (!o) return null;
+  const jw = MS.jointWorld(boneMats, mhrRig, o.joint), G = jw.G, d = o.off;
+  return new THREE.Vector3(jw.p[0] + G[0][0] * d[0] + G[0][1] * d[1] + G[0][2] * d[2], jw.p[1] + G[1][0] * d[0] + G[1][1] * d[1] + G[1][2] * d[2], jw.p[2] + G[2][0] * d[0] + G[2][1] * d[1] + G[2][2] * d[2]);
+}
+
+// ═══ Replay: a recorded clip exactly as the game plays it, next to its video ═══
+async function startReplay(id) {
+  const json = await getJSON(`/api/mocap3d/clip/${encodeURIComponent(id)}`, { label: 'clip' });
+  const clip = A.prepareClip(json, S.rig);
+  S.replay = { id, clip, json, t: 0, playing: true, speed: 1, lastImg: -1, cap: true, pos: [0, 6] };
+  $('replay').style.display = 'block';
+  $('help')?.remove();
+  const sl = $('rpSlider'); sl.max = String(clip.F - 1);
+  const pause = () => { S.replay.playing = false; $('rpPlay').textContent = 'Play'; };
+  sl.oninput = () => { S.replay.t = +sl.value; pause(); };
+  $('rpPlay').onclick = () => { S.replay.playing = !S.replay.playing; $('rpPlay').textContent = S.replay.playing ? 'Pause' : 'Play'; };
+  $('rpPrev').onclick = () => { pause(); S.replay.t = Math.max(0, Math.round(S.replay.t) - 1); };
+  $('rpNext').onclick = () => { pause(); S.replay.t = Math.min(clip.F - 1, Math.round(S.replay.t) + 1); };
+  $('rpSlow').onclick = () => { S.replay.speed = S.replay.speed === 1 ? 0.25 : 1; $('rpSlow').textContent = S.replay.speed === 1 ? '¼ speed' : 'full speed'; };
+  $('rpCap').onclick = () => { S.replay.cap = !S.replay.cap; $('rpCap').textContent = 'capture: ' + (S.replay.cap ? 'on' : 'off'); };
+  window.addEventListener('keydown', (e) => {
+    if (!S.replay) return;
+    if (e.code === 'Space') $('rpPlay').click();
+    if (e.code === 'ArrowLeft') $('rpPrev').click();
+    if (e.code === 'ArrowRight') $('rpNext').click();
+  });
+}
+const rpPose = new Float32Array(A.NP * 3);
+function replayStep(rdt) {
+  const R = S.replay, c = R.clip;
+  if (R.playing) { R.t += rdt * c.fps * R.speed; if (R.t > c.F - 1) R.t = 0; }
+  const fi = Math.round(R.t);
+  $('rpSlider').value = String(fi);
+  const P = A.samplePose(c, R.t);
+  const tr = A.sampleTraj(c, R.t);
+  A.placePose(P, R.pos[0] + tr[0], R.pos[1] + tr[1], tr[2], rpPose, A.NJ);
+  if (mhrRig && R.cap && c.rots) MS.mhrBoneMatricesCaptured(rpPose, mhrRig, [{ clip: c, t: R.t, w: 1 }], 1, boneMats);
+  else poseCharacter(S.rig, rpPose);
+  // ball from the clip (root space of the clip → court)
+  const b = c.ball[Math.min(c.F - 1, fi)];
+  const hb = R.cap ? (capState.w = 1, heldInMeshHand({ rotSrc: [{ clip: c, t: R.t, w: 1 }] })) : null;
+  if (hb) { ball.position.copy(hb); ball.visible = true; }
+  else if (b) { const cs = Math.cos(tr[2]), sn = Math.sin(tr[2]); ball.position.set(R.pos[0] + tr[0] + cs * b.p[0] + sn * b.p[2], b.p[1], R.pos[1] + tr[1] - sn * b.p[0] + cs * b.p[2]); ball.visible = true; }
+  // the video frame this clip frame came from
+  const src = R.json.srcFrames?.[fi];
+  if (src != null && src !== R.lastImg) { R.lastImg = src; $('rpImg').src = `/api/mocap/motion/${encodeURIComponent(R.id)}/frame/${src}?w=480`; }
+  setText($('rpInfo'), `frame ${fi + 1}/${c.F}${src != null ? ` · video frame ${src + 1}` : ''}`);
+  // camera where the phone stood (the clip's view axis), aimed at the pelvis
+  const pel = [rpPose[A.PELVIS * 3], rpPose[A.PELVIS * 3 + 1], rpPose[A.PELVIS * 3 + 2]];
+  const d = R.json.viewDirRoot || [0, 0, -1];
+  const dist = R.dist || 4.2;
+  camera.position.set(pel[0] - d[0] * dist, pel[1] + 0.2, pel[2] - d[2] * dist);
+  camera.lookAt(pel[0], pel[1] - 0.05, pel[2]);
   renderer.render(scene, camera);
 }
 
@@ -695,6 +785,7 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     renderer.render(scene, camera);
     $('loading').style.display = 'none';
     window.__c3dReady = true;
+    if (QS.get('replay')) startReplay(QS.get('replay')).catch((e) => toast(`Replay failed: ${esc(e.message)}`, 6000));
     window.__court3d = S; // for automated checks
     window.__ballProbe = () => ball.position.y;
     const showLib = () => {
