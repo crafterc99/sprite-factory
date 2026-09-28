@@ -85,6 +85,16 @@ fs.mkdirSync(OUT, { recursive: true });
   await court.scrollIntoViewIfNeeded();
   await page.mouse.click(5, 5); // focus the page, not an input
 
+  // Playground: standing still = idle (never the move), controls visible
+  const idleSeq = [];
+  for (let i = 0; i < 15; i++) { idleSeq.push(await page.evaluate(() => `${GM.player.currentAnim}|${GM.player.state}`)); await page.waitForTimeout(200); }
+  const pg = await page.evaluate(() => {
+    const vis = (id) => { const e = document.getElementById(id); return !!e && e.offsetParent !== null && e.getBoundingClientRect().width > 0; };
+    return { sizeBar: vis('pbSize'), speedBar: vis('pbSpeed'), scale: TESTING.scale, speed: TESTING.speed, sizeLabel: document.getElementById('pbSizeLbl')?.textContent, speedLabel: document.getElementById('pbSpeedLbl')?.textContent };
+  });
+  const playground = { ...pg, idleWhileStanding: idleSeq.every((q) => q.startsWith('idle-dribble|')), idleSeq: [...new Set(idleSeq)] };
+  console.log('playground', JSON.stringify(playground));
+
   // One spot per zone (flip false), plus one behind the hoop line (flip true)
   const spots = await page.evaluate(() => {
     const out = [];
@@ -110,7 +120,7 @@ fs.mkdirSync(OUT, { recursive: true });
   });
   console.log('spots', JSON.stringify(spots));
 
-  const report = { base: BASE, char: CHAR, spots: [] };
+  const report = { base: BASE, char: CHAR, playground, spots: [] };
   for (const [si, sp] of spots.entries()) {
     await page.evaluate(({ x, y }) => { GM.physics.x = x; GM.physics.y = y; GM.physics.vx = 0; GM.physics.vy = 0; GM._shotBall = null; }, sp);
     await page.waitForTimeout(1400);
@@ -154,7 +164,7 @@ fs.mkdirSync(OUT, { recursive: true });
     const samples = [];
     const t0 = Date.now();
     let shots = 0;
-    while (Date.now() - t0 < 3600) {
+    while (Date.now() - t0 < 6500) {
       const s = await page.evaluate(() => ({
         anim: GM.player.currentAnim, state: GM.player.state, key: GM._loadedAnimKey, frame: TESTING.currentFrame,
         x: TESTING.charX, y: TESTING.charY, mirrored: !GM.physics.facingRight,
@@ -174,23 +184,27 @@ fs.mkdirSync(OUT, { recursive: true });
     const dStart = Math.hypot(start.x - hoop.x, start.y - hoop.y);
     const dEnd = shot.length ? Math.hypot(shot[shot.length - 1].x - hoop.x, shot[shot.length - 1].y - hoop.y) : null;
     const firstBall = samples.find((q) => q.ball);
+    const lastIdx = (r0) => r0;
+    const heldFollow = samples.some((q) => q.anim === 'stepback-jumpshot' && q.ball && q.ball.t >= 0.95);
     const r = {
       ...sp, idle, shotKey: shot[0]?.key ?? null, shotFrames: shown.length ? Math.max(...shown) + 1 : 0, framesShown: shown.length,
       shotMirrored: shot[0]?.mirrored ?? null, movedAwayPx: dEnd != null ? Math.round(dEnd - dStart) : null,
       ballLaunched: !!firstBall, releaseFrame: firstBall?.frame ?? null, release: firstBall ? [Math.round(firstBall.ball.x0), Math.round(firstBall.ball.y0)] : null,
       meta: shot.find((q) => q.meta)?.meta ?? null, backToIdle: samples[samples.length - 1].anim,
     };
+    r.followThrough = heldFollow;
     r.expectFrames = await page.evaluate((k) => GM.charAnims.find((a) => a.animKey === k)?.frameCount ?? null, r.shotKey);
     r.shotZone = start.zone?.id; r.shotZoneFlip = !!start.zone?.flip;
     r.walkFacesHoop = walk.filter((w) => w.anim === 'idle-dribble').every((w) => w.mirrored === w.flip);
     r.pass = r.idle.key === `idle-dribble_z${sp.zone}_right` && r.idle.mirrored === sp.flip
       && r.shotKey === `stepback-jumpshot_z${r.shotZone}_right` && r.shotMirrored === r.shotZoneFlip
-      && r.movedAwayPx > 5 && r.ballLaunched && r.framesShown === r.shotFrames && r.shotFrames === (r.meta ? r.expectFrames : r.shotFrames) && r.backToIdle === 'idle-dribble' && r.walkFacesHoop;
+      && r.movedAwayPx > 5 && r.ballLaunched && r.framesShown === r.shotFrames && r.shotFrames === (r.meta ? r.expectFrames : r.shotFrames) && r.backToIdle === 'idle-dribble' && r.walkFacesHoop && r.followThrough;
     report.spots.push(r);
     console.log(JSON.stringify(r));
   }
   report.errors = errors;
-  report.pass = report.spots.length >= 5 && report.spots.every((s) => s.pass) && !errors.length;
+  report.pass = report.spots.length >= 5 && report.spots.every((s) => s.pass) && !errors.length
+    && playground.idleWhileStanding && playground.sizeBar && playground.speedBar;
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 1));
   const video = page.video();
   await ctx.close();

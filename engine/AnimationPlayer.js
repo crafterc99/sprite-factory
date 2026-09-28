@@ -122,6 +122,7 @@ class AnimationPlayer {
     // advance is per display refresh — a slow/throttled display must not cut
     // the landing frames off); the timer is only a generous safety net
     this._untilLastFrame = !!movementData?.untilLastFrame;
+    this._holdWhile = typeof movementData?.holdWhile === 'function' ? movementData.holdWhile : null;
     if (this._untilLastFrame) this.actionTimer = Math.max(this.actionTimer, (anim.frameCount / fps) * 1000) * 3;
 
     // Apply physics burst
@@ -226,9 +227,14 @@ class AnimationPlayer {
       if (!this.lastFrameTime) this.lastFrameTime = timestamp;
       if (timestamp - this.lastFrameTime >= frameDuration) {
         const next = this.currentFrame + 1;
-        if (next >= anim.frameCount && this.state === PLAYER_STATES.ACTION && this._untilLastFrame) {
+        if (next >= anim.frameCount && this.state === PLAYER_STATES.ACTION && this._untilLastFrame && this._holdWhile && this._holdWhile()) {
+          // follow-through: stay on the last frame (e.g. until the shot lands)
+          this.currentFrame = anim.frameCount - 1;
+          this.actionTimer = Math.max(this.actionTimer, 1000);
+        } else if (next >= anim.frameCount && this.state === PLAYER_STATES.ACTION && this._untilLastFrame) {
           // last frame shown for a full frame time → the action is over
           this._untilLastFrame = false;
+          this._holdWhile = null;
           this.physics?.unlock();
           this.state = PLAYER_STATES.IDLE;
           this.actionTimer = 0;

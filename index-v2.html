@@ -653,6 +653,11 @@
   .tv2-court-wrap canvas { image-rendering:pixelated; cursor:crosshair; max-width:100%; max-height:100%; }
 
   /* Live status HUD — top-left pill */
+  .tv2-play-bar { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:11; display:flex; align-items:center; gap:14px; background:rgba(5,5,16,0.86); border:1px solid #2a2a52; border-radius:20px; padding:5px 14px; font-family:var(--mono); font-size:10px; color:#9a9ad0; white-space:nowrap; }
+  .tv2-play-bar label { display:flex; align-items:center; gap:6px; }
+  .tv2-play-bar input[type=range] { width:120px; accent-color:#ff6a1a; }
+  .tv2-play-bar b { color:#e8e8ff; min-width:40px; font-weight:600; }
+  .tv2-play-bar .pb-saved { color:#00cc66; min-width:60px; }
   .tv2-live-hud { position:absolute; top:10px; left:10px; display:flex; align-items:center; gap:6px; pointer-events:none; z-index:10; }
   .tv2-state-badge { font-family:var(--mono); font-size:10px; letter-spacing:1px; background:rgba(5,5,16,0.88); border:1px solid #25254a; border-radius:20px; padding:4px 12px; color:#00ff88; transition:color .2s; }
   .tv2-state-badge.def  { color:#4488ff; border-color:#224488; }
@@ -1420,6 +1425,13 @@
           <div class="tv2-court-wrap" id="tv2CourtWrap">
             <canvas id="testingCourt" width="960" height="540"></canvas>
 
+            <!-- Playground controls: size + speed, saved for every device -->
+            <div class="tv2-play-bar" id="tv2PlayBar">
+              <label title="Character size on the court. 100% = the real Soul Jam size.">Size <input type="range" id="pbSize" min="0.4" max="2.5" step="0.025" value="1"><b id="pbSizeLbl">121%</b></label>
+              <label title="Playback speed for every animation. 1.00× = the speed you filmed it.">Speed <input type="range" id="pbSpeed" min="0.25" max="1.5" step="0.05" value="0.8"><b id="pbSpeedLbl">0.80×</b></label>
+              <span class="pb-saved" id="pbSaved"></span>
+            </div>
+
             <!-- Live status pill (top-left) -->
             <div class="tv2-live-hud">
               <span class="tv2-state-badge" id="gmHudState">IDLE</span>
@@ -1565,13 +1577,13 @@
                 <!-- Scale -->
                 <div class="tv2-set-row">
                   <span>Scale</span>
-                  <input type="range" id="testingScale" min="0.4" max="3" value="0.825" step="0.025" title="0.825 = exact Soul Jam size (180px frame × 1.1 on 1280×720, shown at 960×540)" />
-                  <span id="testingScaleLabel" style="font-family:var(--mono);min-width:24px;text-align:right">3x</span>
+                  <input type="range" id="testingScale" min="0.4" max="2.5" value="1" step="0.025" title="100% = exact Soul Jam size (180px frame × 1.1 on 1280×720, shown at 960×540)" />
+                  <span id="testingScaleLabel" style="font-family:var(--mono);min-width:24px;text-align:right">121%</span>
                 </div>
                 <!-- Anim speed -->
                 <div class="tv2-set-row">
                   <span>Speed</span>
-                  <input type="range" id="testingSpeed" min="0.25" max="3" value="1" step="0.25" />
+                  <input type="range" id="testingSpeed" min="0.25" max="1.5" value="0.8" step="0.05" />
                   <span id="testingSpeedLabel" style="font-family:var(--mono);min-width:24px;text-align:right">1x</span>
                 </div>
                 <!-- FPS — per-animation, saved to localStorage -->
@@ -2969,6 +2981,17 @@ function gmOnScreenAction(type) {
   // (stationary payload); stepback keeps its Soul Jam burst. The hand the move
   // starts with is pinned here; onAnimChange flips the live ball hand for
   // hand-switching moves when the animation actually begins.
+  // Shots + the step-back jumper go through the same path as the controller
+  // (ball flight, frame-synced step-back burst, follow-through)
+  const hasSB = GM.charAnims.some(a => a.name === 'stepback-jumpshot');
+  const hasJS = GM.charAnims.some(a => a.name === 'jumpshot');
+  const hasStep = GM.charAnims.some(a => a.name === 'stepback');
+  if (hasSB && ((type === 'jumpshot' && !hasJS) || (type === 'stepback' && !hasStep))) {
+    gmStartShot('stepback-jumpshot', { moveX: 0, moveY: 0 });
+    const b = document.querySelector(`.tv2-action[data-act="${type}"]`);
+    if (b) { b.classList.add('flash'); setTimeout(() => b.classList.remove('flash'), 150); }
+    return;
+  }
   if (type === 'crossover') GM.physics.facingRight = !GM.physics.facingRight;
   const md = type === 'crossover'
     ? { type: 'stationary' }
@@ -2976,7 +2999,7 @@ function gmOnScreenAction(type) {
       ? gmActionMoveData(type, null)
       : null; // triggerAction self-resolves from the chosen animation
   GM._actionHand = GM.ballHand;
-  GM.player.triggerAction(type, md);
+  GM.player.triggerAction(type, md, { immediate: true });
 
   // Flash button
   const btn = document.querySelector(`.tv2-action[data-act="${type}"]`);
@@ -6632,18 +6655,8 @@ async function loadTestingConfig() {
     }
     // Scale + speed are global settings — the cloud copy wins over this
     // device's localStorage so every device sees the same values
-    if (Number.isFinite(d.scaleV2) && d.scaleV2 > 0) {
-      TESTING.scale = d.scaleV2;
-      localStorage.setItem('testing_scale_v2', d.scaleV2);
-      const el = document.getElementById('testingScale');
-      if (el) { el.value = d.scale; document.getElementById('testingScaleLabel').textContent = d.scale + 'x'; }
-    }
-    if (Number.isFinite(d.speed) && d.speed > 0) {
-      TESTING.speed = d.speed;
-      localStorage.setItem('testing_speed', d.speed);
-      const el = document.getElementById('testingSpeed');
-      if (el) { el.value = d.speed; document.getElementById('testingSpeedLabel').textContent = d.speed + 'x'; }
-    }
+    if (Number.isFinite(d.scaleV2) && d.scaleV2 > 0) tcApplyScale(d.scaleV2);
+    if (Number.isFinite(d.speed) && d.speed > 0) tcApplySpeed(d.speed);
   } catch {}
 }
 
@@ -6652,8 +6665,36 @@ function _tcStatus(msg, color) {
   if (el) { el.textContent = msg; el.style.color = color || '#404060'; }
 }
 
+// ── Playground size + speed (one source of truth for both slider sets) ──────
+const TC_GAME_SCALE = 0.825;      // exact Soul Jam size on this 960×540 court
+const TC_DEFAULT_SCALE = 1.0;     // playground default: ~121% of game size
+const TC_DEFAULT_SPEED = 0.8;     // playground default: 0.8× the filmed speed
+function tcApplyScale(v) {
+  if (!Number.isFinite(v) || v <= 0) return;
+  TESTING.scale = +v.toFixed(3);
+  try { localStorage.setItem('testing_scale_v2', TESTING.scale); } catch {}
+  const pct = Math.round((TESTING.scale / TC_GAME_SCALE) * 100) + '%';
+  for (const [id, lbl, txt] of [['pbSize', 'pbSizeLbl', pct], ['testingScale', 'testingScaleLabel', pct]]) {
+    const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = TESTING.scale;
+    const l = document.getElementById(lbl); if (l) l.textContent = txt;
+  }
+}
+function tcApplySpeed(v) {
+  if (!Number.isFinite(v) || v <= 0) return;
+  TESTING.speed = +v.toFixed(2);
+  try { localStorage.setItem('testing_speed', TESTING.speed); } catch {}
+  if (GM.player) GM.player.speed = TESTING.speed;
+  const txt = TESTING.speed.toFixed(2) + '×';
+  for (const [id, lbl] of [['pbSpeed', 'pbSpeedLbl'], ['testingSpeed', 'testingSpeedLabel']]) {
+    const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = TESTING.speed;
+    const l = document.getElementById(lbl); if (l) l.textContent = txt;
+  }
+}
+
 async function saveTestingConfig() {
   _tcStatus('saving…', '#888');
+  const pb = document.getElementById('pbSaved');
+  if (pb) { pb.textContent = 'saving…'; pb.style.color = '#888'; }
   try {
     const r = await fetch(`${API}/api/testing-config`, {
       method: 'POST',
@@ -6663,12 +6704,16 @@ async function saveTestingConfig() {
     const d = await r.json();
     if (d.savedToCloud) {
       _tcStatus('✓ saved to cloud', '#00cc66');
+      if (pb) { pb.textContent = '✓ saved'; pb.style.color = '#00cc66'; }
     } else {
       _tcStatus('⚠ saved locally only', '#ffaa00');
+      if (pb) { pb.textContent = '⚠ this server only'; pb.style.color = '#ffaa00'; }
     }
   } catch (e) {
     _tcStatus('✗ save failed', '#ff4444');
+    if (pb) { pb.textContent = '✗ not saved'; pb.style.color = '#ff4444'; }
   }
+  if (pb) setTimeout(() => { if (pb.textContent === '✓ saved') pb.textContent = ''; }, 2500);
 }
 
 async function checkTcPersistence() {
@@ -6924,14 +6969,10 @@ function initTestingPage() {
 
   // Restore persisted scale/speed
   // v2 key: the old 'testing_scale' (default 3×) drew players 3.6× too big
-  const _savedScale = parseFloat(localStorage.getItem('testing_scale_v2') || '0.825');
-  const _savedSpeed = parseFloat(localStorage.getItem('testing_speed') || '1');
-  TESTING.scale = _savedScale;
-  TESTING.speed = _savedSpeed;
-  const _scaleEl = document.getElementById('testingScale');
-  const _speedEl = document.getElementById('testingSpeed');
-  if (_scaleEl) { _scaleEl.value = _savedScale; document.getElementById('testingScaleLabel').textContent = _savedScale + 'x'; }
-  if (_speedEl) { _speedEl.value = _savedSpeed; document.getElementById('testingSpeedLabel').textContent = _savedSpeed + 'x'; }
+  // Until the cloud settings arrive: this device's last values, else the
+  // playground defaults (a bit bigger than game size, a bit slower than real time)
+  tcApplyScale(parseFloat(localStorage.getItem('testing_scale_v2') || '') || TC_DEFAULT_SCALE);
+  tcApplySpeed(parseFloat(localStorage.getItem('testing_speed') || '') || TC_DEFAULT_SPEED);
 
   // Debounced cloud save — dragging a slider fires once, ~800ms after release
   let _tcSettingsTimer = null;
@@ -6939,18 +6980,14 @@ function initTestingPage() {
     clearTimeout(_tcSettingsTimer);
     _tcSettingsTimer = setTimeout(() => saveTestingConfig(), 800);
   };
-  document.getElementById('testingScale').oninput = (e) => {
-    TESTING.scale = parseFloat(e.target.value);
-    document.getElementById('testingScaleLabel').textContent = TESTING.scale + 'x';
-    localStorage.setItem('testing_scale_v2', TESTING.scale);
-    _tcSaveSettings(); // persist globally — other devices pick it up on load
-  };
-  document.getElementById('testingSpeed').oninput = (e) => {
-    TESTING.speed = parseFloat(e.target.value);
-    document.getElementById('testingSpeedLabel').textContent = TESTING.speed + 'x';
-    localStorage.setItem('testing_speed', TESTING.speed);
-    _tcSaveSettings(); // persist globally — other devices pick it up on load
-  };
+  // Both the playground bar and the Settings panel drive the same values;
+  // every change is saved for all devices (debounced)
+  const _onScale = (e) => { tcApplyScale(parseFloat(e.target.value)); _tcSaveSettings(); };
+  const _onSpeed = (e) => { tcApplySpeed(parseFloat(e.target.value)); _tcSaveSettings(); };
+  document.getElementById('testingScale').oninput = _onScale;
+  document.getElementById('pbSize').oninput = _onScale;
+  document.getElementById('testingSpeed').oninput = _onSpeed;
+  document.getElementById('pbSpeed').oninput = _onSpeed;
   // FPS is a PER-ANIMATION speed, saved game-wide: changing it while an
   // animation plays patches every saved variant of that slot on the server
   // (all zones/hands share one speed) and updates live playback immediately.
@@ -8171,15 +8208,23 @@ function testingRenderLoop(timestamp) {
     const angleEntry = TESTING.angleStrips[currentZone.angleIdx];
     const hasAngleStrip = angleEntry && angleEntry.loaded && !angleEntry.fallback;
     ctx.fillStyle = 'rgba(0,0,0,0.72)';
-    ctx.fillRect(8, H - 48, 260, 40);
+    ctx.fillRect(8, H - 48, 340, 40);
     ctx.font = '10px "Space Mono", monospace';
     ctx.fillStyle = currentZone.color + '1)';
     ctx.fillText(`Zone ${currentZone.id}: ${currentZone.label.toUpperCase()}  (angle-${currentZone.angleIdx})`, 14, H - 31);
-    ctx.fillStyle = hasAngleStrip ? '#00ff88' : '#888';
-    ctx.fillText(
-      hasAngleStrip ? `✓ angle strip loaded` : `↳ using default strip (no angle-${currentZone.angleIdx} found)`,
-      14, H - 16
-    );
+    if (GM.active) {
+      // What is actually playing: the saved strip for this zone (or a nearer one)
+      const key = GM._loadedAnimKey || '—';
+      const exact = new RegExp(`_z${currentZone.id}(_|$)`).test(key);
+      ctx.fillStyle = exact ? '#00ff88' : '#ffaa00';
+      ctx.fillText(`▶ ${key}${_mirror ? '  (mirrored)' : ''}${exact ? '' : '  · nearest zone'}`, 14, H - 16);
+    } else {
+      ctx.fillStyle = hasAngleStrip ? '#00ff88' : '#888';
+      ctx.fillText(
+        hasAngleStrip ? `✓ angle strip loaded` : `↳ using default strip (no angle-${currentZone.angleIdx} found)`,
+        14, H - 16
+      );
+    }
 
     // Zone validity badge for selected anim (uses new 9-zone spatial system)
     if (GM.active && TESTING.selectedAnim && typeof getPositionZone === 'function') {
@@ -8659,7 +8704,12 @@ function gmStartShot(slotId, input) {
   // the hoop is applied on the frame the performer actually hops back
   const fps = entry?.fps ?? 8, frames = entry?.frameCount ?? 1;
   GM._actionHand = GM.ballHand;
-  GM.player.triggerAction(slotId, { type: 'stationary', velocityX: 0, velocityY: 0, duration: (frames / fps) * 1000 / (GM.player.speed || 1), lockMovement: true, untilLastFrame: true }, { immediate: true });
+  GM.player.triggerAction(slotId, {
+    type: 'stationary', velocityX: 0, velocityY: 0, duration: (frames / fps) * 1000 / (GM.player.speed || 1),
+    lockMovement: true, untilLastFrame: true,
+    // follow-through: hold the last frame until the shot has landed
+    holdWhile: () => !!GM._shotBall,
+  }, { immediate: true });
   GM._shot = { slotId, started: false, burstDone: false, released: false, burst: gmActionMoveData('stepback', input) };
   gmShotMeta(entry);
 }
@@ -8766,7 +8816,9 @@ function gmTick(timestamp) {
     // Pin the hand the move will START with; the actual hand flip happens in
     // onAnimChange when the (possibly queued) action animation really begins
     GM._actionHand = GM.ballHand;
-    GM.player.triggerAction(actionKey, movementData);
+    // Game feel: a move starts on the button press (not at the end of the
+    // current dribble loop)
+    GM.player.triggerAction(actionKey, movementData, { immediate: true });
     _triggeredAction = label;
   };
 
@@ -8801,9 +8853,14 @@ function gmTick(timestamp) {
       gmTriggerMove('tween', 'tween', null, 'between legs');
     }
 
-    // CIRCLE — Stepback (keeps the ball in the same hand)
+    // CIRCLE — Stepback (keeps the ball in the same hand); a character whose
+    // step-back is the step-back jumper plays that
     else if (input.justCircle) {
-      gmTriggerMove('stepback', 'stepback', gmActionMoveData('stepback', input), 'step back');
+      if (!GM.charAnims.some(a => a.name === 'stepback') && GM.charAnims.some(a => a.name === 'stepback-jumpshot')) {
+        gmStartShot('stepback-jumpshot', input); _triggeredAction = 'step-back jumper';
+      } else {
+        gmTriggerMove('stepback', 'stepback', gmActionMoveData('stepback', input), 'step back');
+      }
     }
 
     // Legacy R2-held + face buttons (keyboard R-modifier path)
