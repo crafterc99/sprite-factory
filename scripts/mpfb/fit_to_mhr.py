@@ -79,7 +79,32 @@ for n in meta['bones']:                       # parents come first in Blender's 
         R[n] = swing(Rp @ (t0 - h0), T - H) @ Rp
     else:
         R[n] = swing(t0 - h0, T - H)
+# The torso chain moves onto MHR's joints by translation only: both rigs stand
+# upright, and the large spine / clavicle swings (30°+) only reflect how the two
+# rigs place those bones — blending them shears the chest and shoulders.
+for n in ('pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'head', 'clavicle_l', 'clavicle_r'):
+    R[n] = np.eye(3)
 T_of = {n: (R[n], (hjoint(MAP[n][0]) if MAP.get(n) else heads[B[n]]), heads[B[n]]) for n in meta['bones']}
+# The two rigs split the spine differently (MPFB's upper spine joint sits ~25 cm
+# below MHR's): pinning each spine joint onto its MHR namesake stretches the
+# chest. Spine joints take the displacement interpolated by height between the
+# pelvis and neck anchors — the character keeps its own torso proportions.
+d_pel, d_neck = hjoint('root') - heads[B['pelvis']], hjoint('c_neck') - heads[B['neck_01']]
+z_pel, z_neck = heads[B['pelvis'], 1], heads[B['neck_01'], 1]
+for n in ('spine_01', 'spine_02', 'spine_03'):
+    h = heads[B[n]]; t = np.clip((h[1] - z_pel) / (z_neck - z_pel), 0, 1)
+    T_of[n] = (R[n], h + (1 - t) * d_pel + t * d_neck, h)
+
+
+def refit(pos0, bi, bw):
+    """Rest pose onto MHR's: blend of per-bone rigid transforms (MPFB weights)."""
+    pos = np.zeros_like(pos0)
+    for k in range(4):
+        for bn, (Rb, Hb, hb) in T_of.items():
+            sel = (bi[:, k] == B[bn]) & (bw[:, k] > 0)
+            if sel.any():
+                pos[sel] += bw[sel, k, None] * ((pos0[sel] - hb) @ Rb.T + Hb)
+    return pos
 
 base_verts = np.frombuffer(base64.b64decode(base['verts']), np.float32).reshape(-1, 3)
 base_idx = np.frombuffer(base64.b64decode(M['skinIdx']), np.uint8).reshape(-1, 4)
@@ -97,28 +122,29 @@ def nearest(points, ref, k=1):
     return out_i, out_d
 
 
-HEAD_PARTS = ('high-poly', 'eyebrow', 'eyelash')
+body_disp = refit(body_pos0, body_bi, body_bw / np.maximum(1e-8, body_bw.sum(1, keepdims=True))) - body_pos0
+HEAD_PARTS = ('high-poly', 'eyebrow', 'eyelash')   # + hair: rigid on the head
+HEAD_J = [JI[n] for n in ('c_head', 'c_jaw', 'c_jaw_null', 'r_eye', 'r_eye_null', 'l_eye', 'l_eye_null', 'c_head_null')]
 parts_out = []
 all_pos = []
 for p in meta['parts']:
     nm = p['name']
     pos0 = b2m(E[nm + '_pos']) * s
     bi, bw = E[nm + '_bi'].copy(), E[nm + '_bw'].copy()
-    # parts without their own weights take the nearest body vertex's
-    miss = bw.sum(1) < 1e-4
-    if miss.any():
-        ii, _ = nearest(pos0[miss], body_pos0)
-        bi[miss], bw[miss] = body_bi[ii[:, 0]], body_bw[ii[:, 0]]
     bw = bw / np.maximum(1e-8, bw.sum(1, keepdims=True))
-    # 2. onto MHR's rest pose (blend of per-bone rigid transforms)
-    pos = np.zeros_like(pos0)
-    for k in range(4):
-        for bn, (Rb, Hb, hb) in T_of.items():
-            sel = (bi[:, k] == B[bn]) & (bw[:, k] > 0)
-            if sel.any():
-                pos[sel] += bw[sel, k, None] * ((pos0[sel] - hb) @ Rb.T + Hb)
+    # 2. onto MHR's rest pose. Parts with their own rig weights (body, eyes…):
+    # the bone blend. Parts without (MPFB clothes carry none): they follow the
+    # fitted body — the inverse-distance mean displacement of the 8 nearest
+    # body vertices, a smooth field (per-vertex borrowed bone weights tear cloth
+    # that stands off the body, e.g. a hood)
+    miss = bw.sum(1) < 1e-4
+    pos = refit(pos0, bi, bw)
+    if miss.any():
+        ii, dd = nearest(pos0[miss], body_pos0, 8)
+        wv = 1 / (dd + 0.005) ** 2; wv /= wv.sum(1, keepdims=True)
+        pos[miss] = pos0[miss] + (wv[:, :, None] * body_disp[ii]).sum(1)
     # 3. MHR weights from the nearest MHR body vertices (inverse distance, k=4)
-    if nm.startswith(HEAD_PARTS):
+    if nm.startswith(HEAD_PARTS) or 'hair' in nm:   # rigid on the head
         si = np.zeros((len(pos), 4), np.uint8); si[:, 0] = JI['c_head']; sw = np.zeros((len(pos), 4), np.float32); sw[:, 0] = 1
     else:
         ii, dd = nearest(pos, base_verts, 4)
@@ -127,6 +153,27 @@ for p in meta['parts']:
         for k in range(4):
             for c in range(4):
                 np.add.at(acc, (np.arange(len(pos)), base_idx[ii[:, k], c]), wv[:, k] * base_w[ii[:, k], c])
+        # smooth the weights over the garment's surface (vertices sharing a
+        # position — UV seams — count as one): nearest-body weights are noisy on
+        # cloth that stands off the body (hoods, collars), and neighbouring
+        # vertices with different weights pull the fabric into spikes
+        if nm != 'body':
+            key = np.round(pos / 0.002).astype(np.int64)
+            _, grp = np.unique(key, axis=0, return_inverse=True); grp = grp.ravel()
+            tri = E[nm + '_tri'].astype(np.int64)
+            e = np.concatenate([tri[:, [0, 1]], tri[:, [1, 2]], tri[:, [2, 0]]])
+            e = np.unique(np.sort(grp[e], 1), axis=0)
+            G = grp.max() + 1
+            g_acc = np.zeros((G, acc.shape[1]), np.float32); np.add.at(g_acc, grp, acc)
+            g_acc /= np.maximum(1e-8, g_acc.sum(1, keepdims=True))
+            deg = np.zeros(G); np.add.at(deg, e[:, 0], 1); np.add.at(deg, e[:, 1], 1)
+            for _ in range(8):
+                nb = np.zeros_like(g_acc); np.add.at(nb, e[:, 0], g_acc[e[:, 1]]); np.add.at(nb, e[:, 1], g_acc[e[:, 0]])
+                g_acc = np.where(deg[:, None] > 0, 0.5 * g_acc + 0.5 * nb / np.maximum(1, deg)[:, None], g_acc)
+            acc = g_acc[grp]
+        # garments never follow the head (a hood or collar taking head weights
+        # tears away from the torso when the head turns): head joints → neck
+        acc[:, JI['c_neck']] += acc[:, HEAD_J].sum(1); acc[:, HEAD_J] = 0
         top = np.argsort(-acc, 1)[:, :4]
         sw = np.take_along_axis(acc, top, 1); sw /= np.maximum(1e-8, sw.sum(1, keepdims=True))
         si = top.astype(np.uint8)

@@ -328,9 +328,11 @@ function buildCharacter(rig) {
       geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Uint16Array.from(A.b64(p.skinIdx, Uint8Array)), 4));
       geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(A.b64(p.skinW, Float32Array), 4));
       const mat = new THREE.MeshStandardMaterial({ map: tex(p.map, true), normalMap: tex(p.normalMap, false), roughness: /high-poly/.test(p.name) ? 0.25 : 0.78, metalness: 0,
-        ...(p.alpha ? { alphaTest: 0.45, side: THREE.DoubleSide } : {}) });
+        // garments are single sheets (open hoods, hems, cuffs): both sides drawn, like Blender
+        side: p.name === 'body' || /high-poly/.test(p.name) ? THREE.FrontSide : THREE.DoubleSide, ...(p.alpha ? { alphaTest: 0.45 } : {}) });
       const m = addMesh(geo, mat);
-      if (p.alpha) m.castShadow = false;
+      // shadows from the big parts only (each shadow caster is another skinned pass)
+      if (p.alpha || !/body|hood|pants|sandal|shoe|shorts|top/.test(p.name)) m.castShadow = false;
     }
     return;
   }

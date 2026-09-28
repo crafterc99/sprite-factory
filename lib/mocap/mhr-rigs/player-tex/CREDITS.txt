@@ -1,0 +1,13 @@
+Player character (court3d "player") — asset credits
+
+Base human, skin, eyes, eyebrows, eyelashes: MakeHuman / MPFB system assets — CC0
+Hair: cortu_short_messy_hair by Cortu — CC0
+Hoodie: elvs_hooded_sweat_jacket1 by Elvaerwyn — CC-BY (MakeHuman community asset pack "shirts02")
+Sandals: elvs_male_flip_flop_sandals1 by Elvaerwyn — CC-BY (MakeHuman community asset pack "shoes02")
+Track pants: toigo_wool_pants by MargaretToigo — CC0 (pack "pants01")
+Socks: joepal_crude_low_socks by Joel Palmius — CC0 (pack "underwear04")
+T-shirt: elvs_crude_t-shirt_male (MakeHuman, edited by Elvaerwyn) — CC0
+
+Source: https://static.makehumancommunity.org/assets/assetpacks.html
+Textures re-coloured (and side stripes added) by scripts/mpfb/textures.js.
+Skeleton + skin weights: Meta Momentum Human Rig (MHR), Apache-2.0 — see ../MHR-LICENSE.txt
