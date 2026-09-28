@@ -362,6 +362,26 @@ function register(router, ctx) {
     json(res, { result: r });
   });
 
+  // Re-align + re-composite from stored raw generations (no model calls)
+  router.post('/api/mocap/recompose', async (req, res) => {
+    const body = await parseBody(req);
+    if (!body.resultId) return json(res, { error: 'resultId required' }, 400);
+    try {
+      const t0 = Date.now();
+      const out = await pipeline.recomposeResult({ ...body, ASSETS_DIR, TMP_DIR });
+      json(res, { success: true, seconds: +((Date.now() - t0) / 1000).toFixed(1), variantsRecomposed: out.variantsRecomposed, result: out.result });
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+  });
+
+  // Raw per-frame measurements (debugging / offline re-processing)
+  router.get('/api/mocap/motion/:id/raw', async (req, res, params) => {
+    const raw = await store.loadMotionFile(params.id, 'raw');
+    if (!raw) return json(res, { error: 'motion not found' }, 404);
+    json(res, raw);
+  });
+
   router.post('/api/mocap/regen-frame', async (req, res) => {
     const body = await parseBody(req);
     if (!body.resultId || !body.animName || body.frameIndex == null) return json(res, { error: 'resultId, animName, frameIndex required' }, 400);

@@ -251,7 +251,9 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <p class="hint">Each frame is aligned to the mocap mannequin (feet, height, centre) and scored. Tap a frame to see its QC and regenerate it. Save a variant to put it in the game slot.</p>
       <div class="row" style="margin-bottom:10px">
         <label class="f col">Run<select id="resultSel"></select></label>
+        <button type="button" id="btnRecompose" title="Re-align and re-place the ball from the saved generations using the current motion — free, no model calls">↻ Recompose (free)</button>
       </div>
+      <div class="status" id="rcStatus"></div>
       <div id="variants"></div>
     </section>
   </div>
@@ -647,6 +649,14 @@ async function loadResults(selectId) {
   } else { $('#variants').innerHTML = ''; }
 }
 $('#resultSel').onchange = () => showResult($('#resultSel').value);
+$('#btnRecompose').onclick = async () => {
+  const st = $('#rcStatus'); st.classList.remove('err'); st.textContent = 'Recomposing…';
+  try {
+    const r = await api('/api/mocap/recompose', { method: 'POST', body: JSON.stringify({ resultId: $('#resultSel').value }) });
+    st.textContent = `✓ ${r.variantsRecomposed} variant(s) recomposed in ${r.seconds}s`;
+    await showResult($('#resultSel').value);
+  } catch (e) { st.textContent = e.message; st.classList.add('err'); }
+};
 
 const gamePlayers = [];
 async function showResult(id) {

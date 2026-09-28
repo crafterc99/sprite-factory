@@ -188,6 +188,12 @@ test('full pipeline: upload → analyze → render → generate → regen', asyn
 
   r = await req('GET', `/api/mocap/results?motionId=${motionId}`);
   assert.strictEqual(r.json.results.length, 1);
+
+  // Re-clean the motion, then recompose from stored raws — no model calls
+  r = await req('POST', '/api/mocap/recompose', { body: { resultId: result.id } });
+  assert.strictEqual(r.status, 200, JSON.stringify(r.json));
+  assert.strictEqual(r.json.variantsRecomposed, 4);
+  assert.ok(r.json.result.variants.every((v) => v.recomposedAt));
 });
 
 test('studio image client routes to GPT Image when no Gemini key (green-flattened output)', async () => {
