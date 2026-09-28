@@ -241,6 +241,13 @@ The **Clip type** buttons on the Capture step set these for you. Then set the tr
    - Set rejected takes to **— none —**. Loops (idle, locomotion) use one take per role; moves and shots keep up to 4 takes and the nearest-pose matcher picks between them. An explicit role beats a guess, then the newest wins.
 4. **Open in 3D court** (`/court3d?focus=<motionId>`) to play it.
 
+### Stand-ins that were not filmed (generated / Kimodo)
+
+Until a role is recorded, a generated clip can fill it. Filmed takes you add later join as extra variants for the pose matcher. Delete a stand-in, or set it to **— none —**, once the real take is better.
+
+- **Procedural:** `POST /api/mocap3d/generate {"kind":"run-dribble"}` (role `loco-sprint`), `{"kind":"crossover"}` or `{"kind":"crossover-moving"}` (role `move-crossover`). Add `"hand":"left"` for the other hand.
+- **NVIDIA Kimodo:** generate the body in the Kimodo demo (for example "a person jogs forward" or "a person jogs and cuts hard to the left"), export **NPZ**, then post the file: `curl -X POST --data-binary @motion.npz -H 'Authorization: Bearer …' '<site>/api/mocap3d/import-kimodo?name=Jog%20dribble&role=loco-fwd&arms=dribble'`. Kimodo does not handle the ball, so `arms=dribble` adds a dribble synced to its steps and `arms=crossover` crosses the ball at its sharpest cut (`arms=none` keeps its arms).
+
 ---
 
 ## 13 · Troubleshooting: quality flags

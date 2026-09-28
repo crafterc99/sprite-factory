@@ -1,6 +1,6 @@
 # 3D animation set — pipeline, formats, runtime
 
-Phone video → SAM 3D Body → **game clips** (planted feet, root motion, loops) → **character rigs** (any height/proportions) → the **runtime** (`engine3d/anim3d.mjs`) that blends them on the court (`/court3d`). How to film is in [RECORDING.md](RECORDING.md).
+Phone video (or a generator: procedural, NVIDIA Kimodo) → SAM 3D Body → **game clips** (planted feet, root motion, loops) → **character rigs** (any height/proportions) → the **runtime** (`engine3d/anim3d.mjs`) that blends them on the court (`/court3d`). How to film is in [RECORDING.md](RECORDING.md).
 
 ```
 video ─/mocap─▶ raw.json (SAM 3D Body per frame) ─motion-builder─▶ world motion
@@ -47,7 +47,7 @@ Served by `lib/mocap/game-clips.js`: built on demand, cached in memory, on disk 
 
 ## 2. Roles — `lib/mocap/game-roles.js`
 
-`idle` (hub loop, required) · `loco-fwd / loco-back / loco-left / loco-right / loco-sprint` (loops, used as a direction blend space) · `shot-stepback / shot-jumper` · `move-crossover (○) / move-spin (△) / move-hesi (✕) / move-btl (R1)`. Not played yet: `move-btb, start-fwd, stop, layup`. Unassigned motions get a guess from the naming convention (`<family>-<action>-…`).
+`idle` (hub loop, required) · `loco-fwd / loco-back / loco-left / loco-right / loco-sprint` (loops, used as a direction blend space) · `shot-stepback / shot-jumper` · `move-crossover (○) / move-spin (△) / move-hesi (✕) / move-btl (R1)`. Not played yet: `move-btb, start-fwd, stop, layup`. Loops use one take per role; moves and shots keep up to 4 takes per role (assigned first, then newest) and the pose matcher picks between them. Unassigned motions get a guess from the naming convention (`<family>-<action>-…`).
 
 ## 3. Character rigs — `lib/mocap/character-rig.js`
 
@@ -83,11 +83,29 @@ Per frame:
 
 The **foot planner** (used for movement until loco loops are recorded): predictive landing spots from the velocity (re-aimed every frame), reach-limited leads, running stance narrows with speed, quicker shuffle cadence sideways, slides/backpedals slower than forward, early steps before a foot leaves the leg's reach, corrective steps after turns and moves. Planted-foot world slide measured 0.00 cm in all directions at 12 and 60 fps.
 
-Tuning (`DEFAULT_OPTS`): `jogSpeed 3.1`, `sprintSpeed 5.0` m/s (at 0.86 m legs; scale with the rig), `accelHalflife 0.11`, `turnHalflife 0.07`, `blendHalflife 0.09`, `moveBlendHalflife 0.06`, `unlockRadius 0.3`.
+**Controls** (standard game-feel techniques, no GPU):
+
+| | How | Measured (60 fps sim) |
+|---|---|---|
+| instant response | "moving" starts from the stick, not the velocity; asymmetric velocity springs: push `accelHalflife 0.05`, reverse `reverseHalflife 0.08`, release `stopHalflife 0.09` | first step 0 ms, half speed 50 ms, direction reversal 83 ms |
+| blended turns | facing blends hoop ↔ travel while running (`runFacingSpeed`), heavier spring while running (`runTurnHalflife 0.12`), ≤ `maxTurnRate 11` rad/s; upper body leads, banking lean; a foot turns ≤ 75° per step | faces the run (0.02 rad), back to the hoop 0.55 s after letting go |
+| slide-in stop | stop state: braking crouch; from a run (> `skidSpeed 3.3`) the braking foot skids (`skidFactor 0.45`, `skidTime 0.16` s) | 0.38 m from a jog, 0.61 m + skid from a sprint; planted slide 0 cm |
+| moves | momentum carried in (only what the clip's own root motion lacks) and out (exit at the move's speed); the stick cancels a move after `moveCancel 0.72` of it; a new move in that window chains | |
+
+**Nearest-pose matcher**: each candidate frame is a 19-number feature vector in root space (both feet position + height, pelvis height, both wrists, body velocity, foot contacts, ball hand), weighted. On a trigger every candidate — all variants of the role, their mirrors, every frame of each entry window, only those starting in the ball hand — is scored against the current pose; the lowest cost wins (`events: {type:'action', clip, mirror, entry, cost, variants}`). The same match picks the entry phase when recorded loops take over. Debug overlay (F) shows the last pick.
+
+Tuning (`DEFAULT_OPTS`): `jogSpeed 3.1`, `sprintSpeed 5.0` m/s (at 0.86 m legs; scale with the rig), the control half-lives above, `turnHalflife 0.07`, `blendHalflife 0.09`, `moveBlendHalflife 0.06`, `unlockRadius 0.3`.
 
 **Porting** (Godot/Unity/Unreal): the clip + rig JSON are engine-neutral; port `anim3d.mjs` (≈1.2k lines, no dependencies) or call it from a JS runtime, and feed the 47 bone matrices to the engine's skinned mesh (bind matrix identity, bone inverses = `rig.restInv`).
 
-## 5. API
+## 5. Generated and Kimodo clips
+
+Motions that were not filmed are stored like analysed ones (`raw.json` holds `worldFrames` + `balls` directly) and get roles, variants and QC the same way.
+
+- **Procedural** (`lib/mocap/motion-gen.js`): `runDribble` — a 4.25 m/s run with a flight phase, one dribble per stride, whole-cycle loop (role `loco-sprint`); `crossover` standing / on the move — the ball crosses in front of the body on the plant, entry window before the cross (role `move-crossover`). IK arms, synthesized ball.
+- **NVIDIA Kimodo** (text → motion, e.g. the hosted Space `nvidia/Kimodo`; export **NPZ**): SOMA 77 (or 30) joints, 30 fps, metres, y-up, +Z forward. `lib/mocap/kimodo.js` maps SOMA → MHR70 with a fitted keypoint map (`kimodo-mhr70.json`: every keypoint = weighted joints + offsets in their bone frames, fitted to Kimodo's skinned mesh; < 2 mm with the exported `global_rot_mats`, ~0.5 cm from positions only). Kimodo animates the body well but not ball handling (its crossovers never cross the ball, its jog is ~2 m/s), so `arms=dribble` scripts one dribble per stride synced to its foot plants and `arms=crossover` crosses the ball at the sharpest cut.
+
+## 6. API
 
 | Route | |
 |---|---|
@@ -96,5 +114,8 @@ Tuning (`DEFAULT_OPTS`): `jogSpeed 3.1`, `sprintSpeed 5.0` m/s (at 0.86 m legs; 
 | `PUT /api/mocap3d/clip/:id` | save game settings → rebuilt summary |
 | `POST /api/mocap3d/clip/:id/build` | force a rebuild |
 | `GET /api/mocap3d/rig/:char` | rig (gz JSON, ETag), `?motion&frame` for another scan |
-| `GET /js/anim3d.mjs` | the runtime module |
+| `POST /api/mocap3d/generate` | `{ kind: run-dribble \| crossover \| crossover-moving, hand, speed }` → new motion |
+| `POST /api/mocap3d/import` | `{ name, role, type, fps, skeleton: mhr70 \| soma \| <named>, jointNames?, frames, upAxis, units, balls?, hand?, entryMax? }` → new motion |
+| `POST /api/mocap3d/import-kimodo` | raw `.npz` body, `?name&role&arms=dribble\|crossover\|none&hand&prompt&type` (≤ 30 MB) → new motion |
+| `GET /js/anim3d.mjs` | the runtime module (revalidated on every load, like the page) |
 | `/court3d` · `/recording` | sandbox · recording guide (`/court3d?focus=<motionId>&char=big`) |
