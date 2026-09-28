@@ -801,7 +801,9 @@ async function gcLoad(id, meta) {
     gcState();
     gcStatus('');
     if (entry.built) await gcShowBuilt(entry.built, tok);
-    else if (tok === GC.tok) $('#gcResult').innerHTML = '<p class="hint" style="margin:10px 0 0">Not built yet — press Rebuild.</p>';
+    else if (tok === GC.tok) $('#gcResult').innerHTML = entry.buildError
+      ? `<p class="hint" style="margin:10px 0 0;color:var(--bad)">Build failed: ${esc(entry.buildError)} — fix the settings and Save.</p>`
+      : '<p class="hint" style="margin:10px 0 0">Not built yet — press Rebuild.</p>';
   } catch (e) {
     if (tok === GC.tok) gcStatus(e.message, true);
   } finally { if (tok === GC.tok) { gcSetBusy(false); if (!GC.orig) gcSetBusy(true); } }

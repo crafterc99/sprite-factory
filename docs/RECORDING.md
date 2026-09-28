@@ -161,7 +161,7 @@ Lane loops (jog, sprint, backpedal): record L→R **and** R→L. Joints on the f
 
 ### Extras (record them now so they are ready)
 
-The name guesses a role from its family prefix, so some extras play on the court as soon as they are analysed: `move-crossover-jog-rl` → crossover, `shot-pullup-jog-r` → jumper, `loco-run-fwd-r` → forward loop. Set them to **— none —** in /mocap to keep them off. `calib-`, `turn-` and `cut-` takes get no role.
+The name guesses a role from its family prefix, so some extras play on the court as soon as they are analysed: `move-crossover-jog-rl` → crossover, `shot-pullup-jog-r` → jumper, `loco-run-fwd-r` and `loco-walk-fwd-r` → forward loop, `dribble-idle-low-r` → idle hub. Set them to **— none —** in /mocap to keep them off. `calib-`, `turn-` and `cut-` takes get no role.
 
 | Name | Camera | Notes |
 |---|---|---|

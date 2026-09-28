@@ -425,13 +425,13 @@ const SHOTS = [
     perform: 'Jog across, plant (left foot, then a take planting right), reverse through the camera side, keep jogging.', tips: ['Record both plant feet.'] },
   { id: 'crossover-jog', role: null, group: 'extras', names: ['move-crossover-jog-rl'], type: 'action', cls: 'lane', preset: 'move', label: 'Crossover on the move',
     take: '5–8 s', holds: 'Enter at jog pace', window: '≈ 3 s', takes: '3',
-    perform: 'Jog → crossover with a 30–45° change of direction → continue.', tips: ['Can also fill the move-crossover role.'] },
+    perform: 'Jog → crossover with a 30–45° change of direction → continue.', tips: ['Its name is guessed as the crossover role, so it plays on the court (a matcher variant) unless set to — none — in /mocap.'] },
   { id: 'pullup', role: null, group: 'extras', names: ['shot-pullup-jog-r'], type: 'action', cls: 'lane', preset: 'shot', label: 'Pull-up jumper',
     take: '5–8 s', holds: 'Enter at jog pace · ≥ 1 s landing hold', window: '≈ 3–4 s', takes: '3–5',
-    perform: 'Jog across → 1–2 step or hop gather → jumper → land, hold 1 s.', tips: ['Headroom ≥ 0.8 m.'] },
+    perform: 'Jog across → 1–2 step or hop gather → jumper → land, hold 1 s.', tips: ['Headroom ≥ 0.8 m.', 'Its name is guessed as the jumper role, so it plays on the court unless set to — none — in /mocap.'] },
   { id: 'run', role: null, group: 'extras', names: ['loco-run-fwd-r'], type: 'loop', cls: 'lane', preset: 'loco', label: 'Run dribble',
     take: '20–30 s', holds: 'None: at speed before the frame', window: '2 strides', takes: '2 passes each way',
-    perform: 'Run dribble ~4.3 m/s (est.). The next loop to add after the minimum set.', tips: [] },
+    perform: 'Run dribble ~4.3 m/s (est.). The next loop to add after the minimum set.', tips: ['Its name is guessed as the forward loop; set it to the sprint loop (loco-sprint) in /mocap to replace the generated run-dribble.'] },
 ];
 const FLAGS = [
   ['low-fps', 'warn', 'A moving clip was analysed below 20 fps.', 'Re-analyse at 30 fps.', 'Capture at 60 fps.'],
