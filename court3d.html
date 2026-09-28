@@ -286,7 +286,9 @@ function clipBallAt(clip, f, loop, speed) {
 
 // ═══ Input: gamepad + keyboard + touch ═══
 const keys = new Set();
-window.addEventListener('keydown', (e) => { keys.add(e.code); if (e.code === 'KeyC') cycleCam(); if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); });
+// presses since the last frame (a quick tap between two frames still counts)
+const pressedSinceTick = new Set();
+window.addEventListener('keydown', (e) => { keys.add(e.code); pressedSinceTick.add(e.code); if (e.code === 'KeyC') cycleCam(); if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
 const touch = { x: 0, y: 0, shoot: false, id: null, ox: 0, oy: 0 };
 const zone = $('stickZone'), sb = $('stickBase'), knob = $('stickKnob');
@@ -300,7 +302,7 @@ zone.addEventListener('pointermove', (e) => {
 const endTouch = (e) => { if (e.pointerId !== touch.id) return; touch.id = null; touch.x = touch.y = 0; sb.style.display = 'none'; knob.style.left = knob.style.top = '35px'; };
 zone.addEventListener('pointerup', endTouch); zone.addEventListener('pointercancel', endTouch);
 const sBtn = $('shootBtn');
-sBtn.addEventListener('pointerdown', () => { touch.shoot = true; sBtn.classList.add('held'); });
+sBtn.addEventListener('pointerdown', () => { touch.shoot = true; touch.tap = true; sBtn.classList.add('held'); });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) sBtn.addEventListener(ev, () => { touch.shoot = false; sBtn.classList.remove('held'); });
 
 const dz = (v) => (Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85);
@@ -316,9 +318,12 @@ function readInput() {
   }
   if (keys.has('KeyA')) mx -= 1; if (keys.has('KeyD')) mx += 1; if (keys.has('KeyW')) my -= 1; if (keys.has('KeyS')) my += 1;
   if (keys.has('ArrowLeft')) cx -= 1; if (keys.has('ArrowRight')) cx += 1; if (keys.has('ArrowUp')) cy -= 1; if (keys.has('ArrowDown')) cy += 1;
-  if (keys.has('KeyI') || keys.has('Space')) shoot = true;
+  if (keys.has('KeyI') || keys.has('Space') || pressedSinceTick.has('KeyI') || pressedSinceTick.has('Space')) shoot = true;
+  const tapped = pressedSinceTick.has('KeyI') || pressedSinceTick.has('Space');
+  pressedSinceTick.clear();
   if (touch.id != null) { mx = touch.x; my = touch.y; }
-  if (touch.shoot) shoot = true;
+  if (touch.shoot || touch.tap) shoot = true;
+  touch.tap = false;
   const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
   $('pad').textContent = gp ? '🎮 ' + (gp.id.split('(')[0].trim().slice(0, 22) || 'controller') : (matchMedia('(pointer:coarse)').matches ? 'touch' : 'keyboard');
   return { mx, my, cx, cy, shoot, zoomIn, zoomOut };
@@ -408,7 +413,7 @@ function updateCamera(dt, inp) {
 let last = performance.now(), fpsAcc = 0, fpsN = 0;
 const ballSpin = new THREE.Vector3();
 function tick(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const dt = Math.min(0.1, (now - last) / 1000); last = now; // cap: a stalled tab must not teleport the game
   fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { $('fps').textContent = Math.round(fpsN / fpsAcc) + ' fps'; fpsAcc = 0; fpsN = 0; }
   const inp = readInput();
   if (!S.idle) { requestAnimationFrame(tick); return; }

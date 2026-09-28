@@ -58,7 +58,7 @@ fs.mkdirSync(OUT, { recursive: true });
   // Idle dribble: sample the ball height for 3 s
   const ballYs = await page.evaluate(async () => {
     const out = []; const t0 = performance.now();
-    await new Promise((res) => { const f = () => { out.push(window.__ballProbe ? window.__ballProbe() : null); if (performance.now() - t0 < 3000) requestAnimationFrame(f); else res(); }; f(); });
+    await new Promise((res) => { const f = () => { out.push(window.__ballProbe ? window.__ballProbe() : null); if (performance.now() - t0 < 6000) requestAnimationFrame(f); else res(); }; f(); });
     return out.filter((v) => v != null);
   });
   const minY = Math.min(...ballYs), maxY = Math.max(...ballYs);
@@ -66,7 +66,7 @@ fs.mkdirSync(OUT, { recursive: true });
 
   // Move: W for 1 s → position changes, still facing the basket
   const p0 = await page.evaluate(() => [__court3d.pos.x, __court3d.pos.z]);
-  await page.keyboard.down('KeyW'); await page.waitForTimeout(1000);
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(2500);
   const mid = await page.evaluate(() => ({ state: document.getElementById('state').textContent }));
   await page.keyboard.up('KeyW');
   const p1 = await page.evaluate(() => ({ pos: [__court3d.pos.x, __court3d.pos.z], yaw: __court3d.yaw, faceErr: Math.abs(((__court3d.yaw - Math.atan2(-__court3d.pos.x, -__court3d.pos.z)) + Math.PI * 3) % (Math.PI * 2) - Math.PI) }));
@@ -77,7 +77,7 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.keyboard.down('KeyI'); await page.waitForTimeout(300); await page.keyboard.up('KeyI');
   const seq = []; let swish = false, shots = 0;
   const t0 = Date.now();
-  while (Date.now() - t0 < 9000) {
+  while (Date.now() - t0 < 40000) {
     const s = await page.evaluate(() => ({ st: __court3d.state, label: document.getElementById('state').textContent, f: +__court3d.clipT.toFixed(1), free: !!__court3d.freeBall, by: __court3d.freeBall ? +__court3d.freeBall.p.y.toFixed(2) : null }));
     seq.push(s);
     if (s.label === 'SWISH') swish = true;
