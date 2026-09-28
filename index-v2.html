@@ -7203,6 +7203,7 @@ const ANIMATION_SLOTS = [
   { id: 'stepback',          label: 'Step Back',       icon: 'O',  group: 'r2',   state: 'action', loop: false, desc: 'Step back dribble (R2+Circle)' },
   // Jump Shot — Square button (always)
   { id: 'jumpshot',          label: 'Jump Shot',       icon: 'S',  group: 'shot', state: 'action', loop: false, desc: 'Jump shot (Square / I)' },
+  { id: 'stepback-jumpshot', label: 'Step Back Jumper',icon: 'S',  group: 'shot', state: 'action', loop: false, desc: 'Move the left stick, then HOLD Square (hold I)' },
 ];
 
 // 5 court perspective zones — each animation slot has one variant per zone.
@@ -7231,6 +7232,7 @@ const MOVE_DEFS = [
   { id: 'stepback',          label: 'Step Back',      key: 'R+L',     group: 'r2',   slot: true },
   // Jump shot
   { id: 'jumpshot',          label: 'Jump Shot',      key: 'I / □',   group: 'shot', slot: true },
+  { id: 'stepback-jumpshot', label: 'Step Back Jumper', key: 'move + hold □', group: 'shot', slot: true },
 ];
 
 function _moveZoneInfo(animName) {
@@ -8093,6 +8095,12 @@ function testingRenderLoop(timestamp) {
     const useHD = hdImg?.complete && hdImg?.naturalWidth > 0;
 
     let drawX, drawY, drawW, drawH;
+    // Face the hoop: the zone art is the LEFT-side view; mirror it (about the
+    // feet) when the hoop is to the player's right. Game Mode keeps the facing
+    // in physics (stick facing while moving, hoop facing when idle/shooting).
+    const _curAnim = GM.active ? (GM.player?.currentAnim ?? '') : (TESTING.selectedAnim ?? '');
+    const _mirror = !_NO_FLIP_ANIMS.has(_curAnim) && (GM.active ? (GM.physics ? !GM.physics.facingRight : false) : !!activeZone.flip);
+    if (_mirror) { ctx.save(); ctx.translate(TESTING.charX, 0); ctx.scale(-1, 1); ctx.translate(-TESTING.charX, 0); }
     if (useHD && hdImg.naturalWidth === hdImg.naturalHeight) {
       // Pre-aligned square frame (mocap 540×540): same geometry as a 180 strip
       // cell — feet at 170/180, stature already baked in at pixelHeight
@@ -8120,6 +8128,7 @@ function testingRenderLoop(timestamp) {
       drawY = TESTING.charY - baselineFrac * drawH;
       ctx.drawImage(activeImg, TESTING.currentFrame * frameW, 0, frameW, frameH, drawX, drawY, drawW, drawH);
     }
+    if (_mirror) ctx.restore();
 
     // Shadow at feet position
     ctx.save();
@@ -8129,6 +8138,9 @@ function testingRenderLoop(timestamp) {
     ctx.ellipse(TESTING.charX, TESTING.charY, drawW * 0.25, drawW * 0.08, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+
+    // Shot in flight (the sprite has no ball after the release frame)
+    if (GM.active) gmDrawShotBall(ctx, timestamp || performance.now());
 
     // Hitbox overlay
     if (TESTING.showHitbox) {
@@ -8276,7 +8288,7 @@ const GM = {
 // with); everything else is locomotion and follows the live ball hand.
 const GM_ACTION_SLOTS = new Set([
   'cross', 'crossover', 'tween', 'tween-cross', 'behind', 'stepback',
-  'jumpshot', 'ac-jumpshot', 'tween-tween', 'steal', 'hand-switch', 'ac-cgs',
+  'jumpshot', 'ac-jumpshot', 'tween-tween', 'steal', 'hand-switch', 'ac-cgs', 'stepback-jumpshot',
 ]);
 // Dribble moves that move the ball to the other hand when performed
 const GM_HAND_SWITCH_SLOTS = new Set(['cross', 'crossover', 'tween', 'tween-cross', 'behind', 'hand-switch']);
@@ -8599,6 +8611,131 @@ function gmActionMoveData(slotId, input) {
   return out;
 }
 
+// ── Step-back jumper: Square gesture, frame-synced burst, shot ball ─────────
+// Move the left stick, then HOLD Square (~0.17 s) → step-back jumper. A tap
+// (or a hold while standing still) is a plain jump shot. Keyboard: I = Square.
+const SQ_HOLD_MS = 170;       // hold time that turns a press into the step-back
+const SQ_MOVE_WINDOW = 450;   // stick must have moved this recently (ms) at the press
+function gmSquareGesture(input, ts, inDefense) {
+  if (Math.hypot(input.moveX, input.moveY) > 0.35) GM._lastMoveAt = ts;
+  if (inDefense) { GM._sq = null; return null; }
+  if (input.justSquare) {
+    GM._sq = { at: ts, moved: ts - (GM._lastMoveAt ?? -1e9) < SQ_MOVE_WINDOW, fired: false };
+  }
+  const q = GM._sq;
+  if (!q || q.fired) return null;
+  if (input.btnSquare && ts - q.at >= SQ_HOLD_MS) { q.fired = true; return q.moved ? 'hold' : 'tap'; }
+  if (!input.btnSquare) { GM._sq = null; return 'tap'; }
+  return null;
+}
+
+// Rim on the court art, kept relative to the hoop-base anchor so it follows
+// when the anchor is dragged (defaults: base 82,343 → rim 236,150 @960×540)
+function gmRimPoint() {
+  return { x: NET_ANCHOR.x + 154, y: NET_ANCHOR.y - 193, halfW: 26 };
+}
+
+// genmeta.json next to each mocap strip: release frame/point (+ step frame)
+function gmShotMeta(entry) {
+  if (!entry?.stripUrl) return Promise.resolve(null);
+  if (!entry._shotMetaP) {
+    const url = entry.stripUrl.split('?')[0].replace(/\.png$/, '-genmeta.json');
+    entry._shotMetaP = fetch(url).then(r => r.ok ? r.json() : null).then(j => (entry._shotMeta = j?.shot ?? null)).catch(() => null);
+  }
+  return entry._shotMetaP;
+}
+
+function gmStartShot(slotId, input) {
+  const entry = gmFindEntry(slotId, gmEffectiveZoneId(slotId), GM.ballHand);
+  // The shot plays in place (movement locked); the step-back burst away from
+  // the hoop is applied on the frame the performer actually hops back
+  const fps = entry?.fps ?? 8, frames = entry?.frameCount ?? 1;
+  GM._actionHand = GM.ballHand;
+  GM.player.triggerAction(slotId, { type: 'stationary', velocityX: 0, velocityY: 0, duration: (frames / fps) * 1000 / (GM.player.speed || 1), lockMovement: true }, { immediate: true });
+  GM._shot = { slotId, started: false, burstDone: false, released: false, burst: gmActionMoveData('stepback', input) };
+  gmShotMeta(entry);
+}
+
+function gmShotTick(ts) {
+  const st = GM._shot;
+  if (st && GM.player.currentAnim === st.slotId && GM.player.state === 'ACTION') {
+    st.started = true;
+    const entry = GM.charAnims.find(a => a.animKey === GM._loadedAnimKey) ?? gmFindEntry(st.slotId, gmEffectiveZoneId(st.slotId), gmHandFor(st.slotId));
+    const meta = entry?._shotMeta;
+    const f = TESTING.currentFrame;
+    const stepAt = meta?.stepStripFrame ?? (meta ? Math.max(0, meta.releaseStripFrame - Math.round(0.47 * (entry.fps || 8))) : 1);
+    if (!st.burstDone && f >= stepAt && st.burst) {
+      st.burstDone = true;
+      GM.physics.applyBurst(st.burst, GM.physics.facingRight);
+    }
+    if (!st.released && meta && f >= meta.releaseStripFrame) {
+      st.released = true;
+      gmLaunchBall(meta);
+    }
+  } else if (st && st.started) {
+    GM._shot = null; // action over
+  }
+  // advance the flying ball
+  const b = GM._shotBall;
+  if (b) {
+    b.t = Math.min(1, (ts - b.t0) / b.dur);
+    if (ts - b.t0 > b.dur + b.dropMs + 250) GM._shotBall = null;
+  }
+}
+
+function gmLaunchBall(meta) {
+  const sc = TESTING.scale;
+  const flip = !GM.physics.facingRight;
+  const x0 = TESTING.charX + (meta.releasePx.x - 90) * sc * (flip ? -1 : 1);
+  const y0 = TESTING.charY + (meta.releasePx.y - 170) * sc;
+  const rim = gmRimPoint();
+  const dist = Math.hypot(rim.x - x0, rim.y - y0);
+  GM._shotBall = {
+    x0, y0, x1: rim.x, y1: rim.y - 4, t0: performance.now(), t: 0,
+    dur: 650 + Math.min(700, dist * 1.1), dropMs: 320,
+    apex: Math.max(14, Math.min(y0, rim.y) - (45 + dist * 0.2)), // arc peak, kept on screen
+    r: Math.max(3, (meta.ballRadiusPx || 7.5) * sc),
+  };
+}
+
+// Ball in flight: quadratic arc release → rim, then drops through the net
+function gmDrawShotBall(ctx, ts) {
+  const b = GM._shotBall;
+  if (!b) return;
+  let x, y, alpha = 1, r = b.r;
+  const el = ts - b.t0;
+  if (el <= b.dur) {
+    const t = el / b.dur;
+    // Bezier with control point above both ends
+    const cx = (b.x0 + b.x1) / 2, cy = 2 * b.apex - (b.y0 + b.y1) / 2;
+    x = (1 - t) * (1 - t) * b.x0 + 2 * (1 - t) * t * cx + t * t * b.x1;
+    y = (1 - t) * (1 - t) * b.y0 + 2 * (1 - t) * t * cy + t * t * b.y1;
+    r = b.r * (1 - 0.25 * t); // a little smaller as it travels toward the hoop
+  } else {
+    const t = Math.min(1, (el - b.dur) / b.dropMs);
+    x = b.x1; y = b.y1 + t * 44; r = b.r * 0.75;
+    alpha = el > b.dur + b.dropMs ? Math.max(0, 1 - (el - b.dur - b.dropMs) / 250) : 1;
+  }
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+  g.addColorStop(0, '#f7a25c'); g.addColorStop(0.55, '#e06a1f'); g.addColorStop(1, '#9c3f0c');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2b1204'; ctx.lineWidth = Math.max(1, r * 0.12);
+  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x + r, y); ctx.moveTo(x, y - r); ctx.lineTo(x, y + r); ctx.stroke();
+  ctx.restore();
+  if (el > b.dur && el < b.dur + b.dropMs + 250) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = 'bold 13px "Space Mono", monospace';
+    ctx.fillStyle = '#ffcc00'; ctx.textAlign = 'center';
+    ctx.fillText('SWISH', b.x1, b.y1 - 26);
+    ctx.restore();
+  }
+}
+
 // ── Game Mode tick — called inside testingRenderLoop before draw ────────────
 function gmTick(timestamp) {
   if (!GM.active || !GM.physics || !GM.input || !GM.player) return;
@@ -8627,10 +8764,18 @@ function gmTick(timestamp) {
 
   if (GM.player.state !== 'ACTION') {
 
-    // SQUARE — Jumpshot (always) OR Steal (defense)
-    if (input.justSquare) {
-      if (inDefense) {
-        gmTriggerMove('steal', 'steal', null, 'steal');
+    // SQUARE — Steal on defense (instant). On offense: move the left stick,
+    // then HOLD Square → step-back jumper; a quick tap → plain jump shot.
+    const sq = gmSquareGesture(input, timestamp, inDefense);
+    if (input.justSquare && inDefense) {
+      gmTriggerMove('steal', 'steal', null, 'steal');
+    }
+    else if (sq) {
+      const hasSB = GM.charAnims.some(a => a.name === 'stepback-jumpshot');
+      const hasJS = GM.charAnims.some(a => a.name === 'jumpshot');
+      if (sq === 'hold' && hasSB || sq === 'tap' && !hasJS && hasSB) {
+        gmStartShot('stepback-jumpshot', input);
+        _triggeredAction = 'step-back jumper';
       } else {
         gmTriggerMove('jumpshot', 'jumpshot', null, 'jump shot');
       }
@@ -8686,6 +8831,7 @@ function gmTick(timestamp) {
   const phys = GM.physics.update(input.moveX, input.moveY, inDefense, input.sprint, dt);
   TESTING.charX = phys.x;
   TESTING.charY = phys.y;
+  gmShotTick(timestamp);
 
   // Locomotion facing comes from the LEFT stick's 8-way direction, not the
   // court position. The stick angle picks one of the 5 camera-angle variants

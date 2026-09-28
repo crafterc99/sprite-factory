@@ -26,7 +26,8 @@ const PLAYER_STATES = {
 
 // Map player action → preferred animation names (priority order)
 const ACTION_ANIMS = {
-  jumpshot:  ['jumpshot', 'ac-jumpshot', 'tween-tween'],
+  jumpshot:  ['jumpshot', 'ac-jumpshot', 'tween-tween', 'stepback-jumpshot'],
+  'stepback-jumpshot': ['stepback-jumpshot', 'jumpshot'],
   crossover: ['crossover', 'tween-cross', 'ac-cgs'],
   cross:     ['cross', 'crossover', 'tween-cross'],
   tween:     ['tween', 'hand-switch', 'static-dribble'],
@@ -85,7 +86,7 @@ class AnimationPlayer {
   }
 
   /** Trigger an action animation by key: 'jumpshot' | 'crossover' | 'stepback' | 'dribble' | 'steal' */
-  triggerAction(actionKey, movementData) {
+  triggerAction(actionKey, movementData, opts = {}) {
     if (this.state === PLAYER_STATES.ACTION) return; // busy — ignore
     const candidates = ACTION_ANIMS[actionKey] ?? [];
     const anim = this._findFirstMatch(candidates);
@@ -101,7 +102,8 @@ class AnimationPlayer {
 
     // Smooth transitions: the move starts once the current animation finishes
     // its pass — queue it for the frame-advance loop to fire on wrap.
-    if (!this._atLastFrame()) {
+    // (opts.immediate: shots start on the button, not at the end of the loop)
+    if (!opts.immediate && !this._atLastFrame()) {
       this._pendingTrigger = { anim, movementData };
       this._pendingAnim = null;
       return;
