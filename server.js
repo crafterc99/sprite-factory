@@ -790,6 +790,13 @@ async function handler(req, res) {
     // three.js r160, self-hosted: no CDN, no import map (older iOS lacks them)
     return serveStatic(res, path.join(__dirname, 'vendor', 'three.module.min.js'), 'text/javascript');
   }
+  if (pathname.startsWith('/chars/')) {
+    // textures of the textured court characters (lib/mocap/mhr-rigs/<char>-tex/)
+    const m = pathname.match(/^\/chars\/([a-z0-9-]+)\/([a-z0-9_.-]+\.webp)$/);
+    const fp = m && path.join(__dirname, 'lib/mocap/mhr-rigs', `${m[1]}-tex`, m[2]);
+    if (fp && fs.existsSync(fp)) return serveStatic(res, fp, 'image/webp');
+    res.writeHead(404); return res.end('Not found');
+  }
   if (pathname === '/js/mhr-skin.mjs') {
     // MHR skeleton solver + skinning matrices (engine3d/mhr-skin.mjs)
     return serveStatic(res, path.join(__dirname, 'engine3d', 'mhr-skin.mjs'), 'text/javascript', { revalidate: true });

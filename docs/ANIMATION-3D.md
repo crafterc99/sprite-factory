@@ -63,6 +63,12 @@ Why the older scan rigs looked mangled: one frame per bone built from noisy keyp
 
 **Replay vs video**: `/court3d?replay=<motionId>` plays a recorded clip exactly as the game has it, from the filming camera's angle, next to the source frame (play / pause, frame step, ¼ speed, capture on/off).
 
+**Source video box**: in normal play a resizable box in the top-right corner shows the recorded frame of the move that is playing (enlarge ⤢, hide ×, `V` toggles; size and state are remembered).
+
+**Slow-motion recordings**: set the clip's `timeMap` game setting, e.g. `{ "segments": [{ "from": 0, "to": 163, "slow": 8 }], "fps": 30 }` (source frame range filmed at 8× slow motion). The cleanup resamples poses, ball, camera rays and captured rotations onto real time at `fps`, so the move plays at real speed. The slowdown is found from the ball: the gravity-arc fit residuals are smallest at the true speed (IMG_7870: 8× → rms 1.4–2.3 cm; 4× → 2–4.4 cm).
+
+**Textured character (`player`)** — `lib/mocap/mhr-rigs/player.json.gz` + `player-tex/`: an MPFB (MakeHuman for Blender; CC0 output) character — skin, eyes, brows, lashes, hair, tank top, shorts, shoes — refitted onto Ankh's MHR skeleton: its rest pose re-posed onto MHR's joints, skin weights taken from the nearest MHR body vertices. Rig JSON adds `parts` (one skinned, textured mesh each, same skeleton). Rebuild: `scripts/mpfb/export_mpfb.py` (in Blender with MPFB) → `fit_to_mhr.py` → `textures.js`; textures are served from `/chars/<char>/<file>.webp`.
+
 ### Scan rigs (v3, legacy) — `lib/mocap/character-rig.js`
 
 One scan frame (the one with the limbs clearest of the body) is bound with the mesh guide's surface skinning: every vertex follows two of 47 bone segments. That is exactly linear-blend skinning:

@@ -291,10 +291,49 @@ scene.add(ball);
 // MHR rigs (v4): the body model's own mesh, 127-joint skeleton and skin
 // weights, posed by engine3d/mhr-skin.mjs from the runtime's keypoints.
 // Older scan rigs (?legacy=1): 47 segment bones from keypoints.
-let charMesh = null, boneMats = null, mhrRig = null;
+let charMeshes = [], boneMats = null, mhrRig = null;
 function buildCharacter(rig) {
   mhrRig = rig.json.kind === 'mhr' ? MS.prepareMhr(rig.json, A.MHR70) : null;
-  if (charMesh) { scene.remove(charMesh); charMesh.geometry.dispose(); charMesh.material.dispose(); }
+  for (const m of charMeshes) { scene.remove(m); m.geometry.dispose(); m.material.map?.dispose(); m.material.normalMap?.dispose(); m.material.dispose(); }
+  charMeshes = [];
+  const nb = mhrRig ? mhrRig.n : A.NSEG;
+  const bones = Array.from({ length: nb }, () => new THREE.Bone());
+  const skeleton = new THREE.Skeleton(bones, bones.map(() => new THREE.Matrix4()));
+  boneMats = new Float32Array(nb * 16);
+  // bone matrices come straight from the runtime (world-space segment frames × rest inverse)
+  skeleton.update = function () { this.boneMatrices.set(boneMats); if (this.boneTexture) this.boneTexture.needsUpdate = true; };
+  const addMesh = (geo, mat) => {
+    geo.computeVertexNormals();
+    const mesh = new THREE.SkinnedMesh(geo, mat);
+    mesh.bindMode = 'detached';
+    mesh.bind(skeleton, new THREE.Matrix4());
+    mesh.frustumCulled = false;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    scene.add(mesh);
+    charMeshes.push(mesh);
+    return mesh;
+  };
+  // textured characters (MPFB, scripts/mpfb/): one skinned mesh per part — body,
+  // clothes, hair, eyes — all on the same MHR skeleton
+  if (mhrRig && rig.json.parts) {
+    const tl = new THREE.TextureLoader();
+    const tex = (url, srgb) => { if (!url) return null; const t = tl.load(url); t.flipY = false; t.anisotropy = 4; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+    for (const p of rig.json.parts) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(A.b64(p.verts, Float32Array), 3));
+      const uv = A.b64(p.uv, Float32Array);
+      for (let i = 1; i < uv.length; i += 2) uv[i] = 1 - uv[i]; // Blender UV (v up) → image rows
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.setIndex(new THREE.BufferAttribute(A.b64(p.faces, p.faces32 ? Uint32Array : Uint16Array), 1));
+      geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Uint16Array.from(A.b64(p.skinIdx, Uint8Array)), 4));
+      geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(A.b64(p.skinW, Float32Array), 4));
+      const mat = new THREE.MeshStandardMaterial({ map: tex(p.map, true), normalMap: tex(p.normalMap, false), roughness: /high-poly/.test(p.name) ? 0.25 : 0.78, metalness: 0,
+        ...(p.alpha ? { alphaTest: 0.45, side: THREE.DoubleSide } : {}) });
+      const m = addMesh(geo, mat);
+      if (p.alpha) m.castShadow = false;
+    }
+    return;
+  }
   const n = rig.vertexCount;
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(rig.verts, 3));
@@ -316,20 +355,7 @@ function buildCharacter(rig) {
   }
   geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
   geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
-  geo.computeVertexNormals();
-  const mesh = new THREE.SkinnedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0 }));
-  const nb = mhrRig ? mhrRig.n : A.NSEG;
-  const bones = Array.from({ length: nb }, () => new THREE.Bone());
-  const skeleton = new THREE.Skeleton(bones, bones.map(() => new THREE.Matrix4()));
-  mesh.bindMode = 'detached';
-  mesh.bind(skeleton, new THREE.Matrix4());
-  boneMats = new Float32Array(nb * 16);
-  // bone matrices come straight from the runtime (world-space segment frames × rest inverse)
-  skeleton.update = function () { this.boneMatrices.set(boneMats); if (this.boneTexture) this.boneTexture.needsUpdate = true; };
-  mesh.frustumCulled = false;
-  mesh.castShadow = true; mesh.receiveShadow = true;
-  scene.add(mesh);
-  charMesh = mesh;
+  addMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0 }));
 }
 const boneTmp = new Float32Array(A.NSEG * 16);
 // Recorded clips carry the capture's own joint rotations: arms, hands, fingers
