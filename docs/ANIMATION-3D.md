@@ -49,7 +49,15 @@ Served by `lib/mocap/game-clips.js`: built on demand, cached in memory, on disk 
 
 `idle` (hub loop, required) · `loco-fwd / loco-back / loco-left / loco-right / loco-sprint` (loops, used as a direction blend space) · `shot-stepback / shot-jumper` · `move-crossover (○) / move-spin (△) / move-hesi (✕) / move-btl (R1)`. Not played yet: `move-btb, start-fwd, stop, layup`. Loops use one take per role; moves and shots keep up to 4 takes per role (assigned first, then newest) and the pose matcher picks between them. Unassigned motions get a guess from the naming convention (`<family>-<action>-…`).
 
-## 3. Character rigs — `lib/mocap/character-rig.js`
+## 3. Character rigs
+
+**MHR rigs (v4, default)** — `lib/mocap/mhr-rigs/*.json.gz`, baked by `scripts/mhr/bake_rig.py` (see its README). The body model SAM 3D Body fits (Meta's MHR, Apache-2.0): its own mesh, a 127-joint skeleton (clavicles, 4 spine joints, 4–5 twist joints along every limb, full hands) and artist skin weights (≤ 4 per vertex), shaped to the performer (median MHR shape + bone scales of the take). Every analysed frame now also stores SAM 3D Body's MHR output (`rec.mhr`: per-joint rotations, joint positions, shape) — same call, same price.
+
+`engine3d/mhr-skin.mjs` poses it from the runtime's keypoints each frame: pelvis / chest / head frames from hips, shoulders, ears + nose; limbs from their bend plane (the hand's or foot's frame when straight); limb twist spread over the twist joints with MHR's own ratios (upper arm / thigh 0 → 100 %, forearm / shin 20–80 %); fingers aimed along their keypoints. Skinning matrices are rigid (`[Q | p − Q·b]`, no scale or shear), so volume is kept and skin does not fold. Checked against SAM 3D Body's own posed body on a spin take: mean vertex error 1.8 cm (test: `tests/anim3d.test.js`, fixture `tests/fixtures/mhr-frames.json`).
+
+Why the older scan rigs looked mangled: one frame per bone built from noisy keypoints (thigh twist taken from the foot direction), only 2 influences per vertex, no clavicle or twist joints, and a bind pose taken from a video frame. They remain available with `/court3d?legacy=1` for comparison.
+
+### Scan rigs (v3, legacy) — `lib/mocap/character-rig.js`
 
 One scan frame (the one with the limbs clearest of the body) is bound with the mesh guide's surface skinning: every vertex follows two of 47 bone segments. That is exactly linear-blend skinning:
 
@@ -113,7 +121,8 @@ Motions that were not filmed are stored like analysed ones (`raw.json` holds `wo
 | `GET /api/mocap3d/clip/:id` | built game clip (gz JSON, ETag) |
 | `PUT /api/mocap3d/clip/:id` | save game settings → rebuilt summary |
 | `POST /api/mocap3d/clip/:id/build` | force a rebuild |
-| `GET /api/mocap3d/rig/:char` | rig (gz JSON, ETag), `?motion&frame` for another scan |
+| `GET /api/mocap3d/rig/:char` | rig (gz JSON, ETag): the MHR rig; `?legacy=1` (or `?motion&frame`) for a scan rig |
+| `GET /js/mhr-skin.mjs` | MHR skeleton solver + skinning matrices |
 | `POST /api/mocap3d/generate` | `{ kind: run-dribble \| crossover \| crossover-moving, hand, speed }` → new motion |
 | `POST /api/mocap3d/import` | `{ name, role, type, fps, skeleton: mhr70 \| soma \| <named>, jointNames?, frames, upAxis, units, balls?, hand?, entryMax? }` → new motion |
 | `POST /api/mocap3d/import-kimodo` | raw `.npz` body, `?name&role&arms=dribble\|crossover\|none&hand&prompt&type` (≤ 30 MB) → new motion |

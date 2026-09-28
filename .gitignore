@@ -31,3 +31,6 @@ data/.testing-config.json
 data/court-presets.json
 .thumb-cache/
 data/mocap/
+
+# MHR model assets (download: scripts/mhr/README.md)
+scripts/mhr/assets/

@@ -790,6 +790,10 @@ async function handler(req, res) {
     // three.js r160, self-hosted: no CDN, no import map (older iOS lacks them)
     return serveStatic(res, path.join(__dirname, 'vendor', 'three.module.min.js'), 'text/javascript');
   }
+  if (pathname === '/js/mhr-skin.mjs') {
+    // MHR skeleton solver + skinning matrices (engine3d/mhr-skin.mjs)
+    return serveStatic(res, path.join(__dirname, 'engine3d', 'mhr-skin.mjs'), 'text/javascript', { revalidate: true });
+  }
   if (pathname === '/js/anim3d.mjs') {
     // the engine-agnostic animation runtime (also imported by the Node tests)
     // the page always revalidates, so its runtime must too (new HTML never runs on an old module)

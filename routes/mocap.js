@@ -362,7 +362,7 @@ function register(baseRouter, ctx) {
 
   // Character rig (skinned mesh + skeleton), ?motion=&frame= to build from another scan
   router.get('/api/mocap3d/rig/:char', async (req, res, params, query) => {
-    try { sendGz(req, res, await RIG.buildRig(params.char, { motionId: query.motion || undefined, frame: query.frame || undefined })); }
+    try { sendGz(req, res, await RIG.buildRig(params.char, { motionId: query.motion || undefined, frame: query.frame || undefined, legacy: query.legacy === '1' })); }
     catch (err) { json(res, { error: err.message }, 400); }
   });
 

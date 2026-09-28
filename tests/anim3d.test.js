@@ -370,3 +370,41 @@ test('kimodo import: SOMA-77 joints → MHR70, npz reader, scripted dribble arm'
   assert.deepStrictEqual(z.posed_joints.shape, [1, 2, 3]);
   assert.deepStrictEqual(Array.from(z.posed_joints.data), [1, 2, 3, 4, 5, 6]);
 });
+
+test('MHR rig: solver poses the body model like SAM 3D Body did (rigid bones, cm-level mesh error)', async () => {
+  const zlib = require('zlib'), fs = require('fs'), path = require('path');
+  const M = await import('../engine3d/mhr-skin.mjs');
+  const rig = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(__dirname, '../lib/mocap/mhr-rigs/ankh.json.gz'))));
+  assert.strictEqual(rig.kind, 'mhr');
+  const R = M.prepareMhr(rig, (await A).MHR70);
+  assert.strictEqual(R.n, 127);
+  const fx = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/mhr-frames.json'), 'utf8'));
+  const u = (s, T) => { const b = Buffer.from(s, 'base64'); return new T(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
+  const verts = u(rig.verts, Float32Array), sIdx = u(rig.mhr.skinIdx, Uint8Array), sW = u(rig.mhr.skinW, Float32Array);
+  const gt = new Float32Array(R.n * 16);
+  let sum = 0, cnt = 0;
+  // the capture at the rig's size (the runtime retargets poses to the rig the same way)
+  const J = (await A).J, legOf = (kp) => ['left', 'right'].reduce((t, sd) => t + Math.hypot(...[0, 1, 2].map((c) => kp[J[sd + '-hip']][c] - kp[J[sd + '-knee']][c])) + Math.hypot(...[0, 1, 2].map((c) => kp[J[sd + '-knee']][c] - kp[J[sd + '-ankle']][c])), 0) / 2;
+  const k = rig.legLen / (fx.frames.reduce((t, f) => t + legOf(f.kp3d), 0) / fx.frames.length);
+  for (const f0 of fx.frames) {
+    const f = { ...f0, kp3d: f0.kp3d.map((p) => p.map((x) => x * k)), joints: f0.joints.map((x) => x * k) };
+    // camera → world (y up, +Z toward the viewer); the rotations are already in that space
+    const P = f.kp3d.flatMap((p) => [p[0], -p[1], -p[2]]);
+    const mats = M.mhrBoneMatrices(P, R);
+    for (let i = 0; i < R.n; i++) {
+      const o = i * 16, c = (k) => [mats[o + k * 4], mats[o + k * 4 + 1], mats[o + k * 4 + 2]];
+      const [x, y, z] = [c(0), c(1), c(2)];
+      const d = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      assert.ok(Math.abs(d(x, x) - 1) < 1e-4 && Math.abs(d(y, y) - 1) < 1e-4 && Math.abs(d(x, y)) < 1e-4, 'bones stay rigid (no scale / shear)');
+      const G = f.rots.slice(i * 9, i * 9 + 9), B = M._internal.quatToMat(rig.mhr.bindRot[i]);
+      const Q = [0, 1, 2].map((r) => [0, 1, 2].map((cc) => G[r * 3] * B[cc][0] + G[r * 3 + 1] * B[cc][1] + G[r * 3 + 2] * B[cc][2]));
+      const p = [f.joints[i * 3], -f.joints[i * 3 + 1], -f.joints[i * 3 + 2]], b = R.b[i];
+      const t = [0, 1, 2].map((r) => p[r] - (Q[r][0] * b[0] + Q[r][1] * b[1] + Q[r][2] * b[2]));
+      gt.set([Q[0][0], Q[1][0], Q[2][0], 0, Q[0][1], Q[1][1], Q[2][1], 0, Q[0][2], Q[1][2], Q[2][2], 0, t[0], t[1], t[2], 1], o);
+    }
+    const a = M.skinVerts(verts, sIdx, sW, mats), g = M.skinVerts(verts, sIdx, sW, gt);
+    for (let v = 0; v < a.length; v += 3) { sum += Math.hypot(a[v] - g[v], a[v + 1] - g[v + 1], a[v + 2] - g[v + 2]); cnt++; }
+  }
+  const meanCm = (sum / cnt) * 100;
+  assert.ok(meanCm < 2.5, `mean vertex error vs SAM 3D Body ${meanCm.toFixed(2)} cm`);
+});
