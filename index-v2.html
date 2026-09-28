@@ -2296,6 +2296,14 @@ const STATE = {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
+  // Deep link: /?page=testing&char=<name> opens the Testing court with that
+  // character selected (used by /mocap "Play on court")
+  const _dl = new URLSearchParams(location.search);
+  if (_dl.get('page')) {
+    if (_dl.get('char')) TESTING.deepChar = _dl.get('char');
+    const btn = document.querySelector(`.nav-btn[onclick="showPage('${_dl.get('page').replace(/[^a-z]/g, '')}')"]`);
+    if (btn) setTimeout(() => btn.click(), 0);
+  }
   // Check persistence backend health — warn loudly if data won't persist
   fetch('/api/debug/db').then(r => r.json()).then(db => {
     if (!db.ok) {
@@ -7131,7 +7139,11 @@ async function loadTestingRoster() {
 
     renderTestingCharGrid();
 
-    if (!TESTING.selectedChar && TESTING.roster.length > 0) {
+    if (TESTING.deepChar && TESTING.roster.some(c => c.name === TESTING.deepChar)) {
+      const dc = TESTING.deepChar;
+      TESTING.deepChar = null;
+      testingSelectChar(dc);
+    } else if (!TESTING.selectedChar && TESTING.roster.length > 0) {
       // First load: auto-select first character that has animations
       const charWithAnims = TESTING.roster.find(c => c.completedAnims > 0) || TESTING.roster[0];
       testingSelectChar(charWithAnims.name);

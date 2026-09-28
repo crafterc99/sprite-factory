@@ -716,7 +716,7 @@ $('#sdSave').onclick = async () => {
       spriteUrl: v.spriteUrl.split('?')[0], fps: ST.result.fps, frameCount: v.frameCount,
       angle: zone.label, angleIndex: zone.angleIdx, slotId, zoneId: v.view, startingHand: v.hand,
     }) });
-    st.textContent = `✓ Saved as ${slotId}_z${v.view}_${v.hand} — test it in the Studio's Testing tab`;
+    st.innerHTML = `✓ Saved as <b>${slotId}_z${v.view}_${v.hand}</b> · <a href="/?page=testing&char=${encodeURIComponent(ST.result.charName)}">Play on the test court →</a>`;
   } catch (e) { st.textContent = e.message; st.classList.add('err'); }
 };
 

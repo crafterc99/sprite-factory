@@ -55,6 +55,9 @@ function register(router, ctx) {
       fal: providers.status(),
       images: models.providerStatus(),
       ready: providers.status().fal || providers.status().mock,
+      // Names only (never values) of key-like variables the server can see —
+      // tells a misnamed/undeployed Railway variable apart from a missing one
+      envSeen: Object.keys(process.env).filter((k) => /FAL|OPENAI|GEMINI|GOOGLE|APP_PASSWORD/i.test(k)).sort(),
       notes: {
         FAL_KEY: 'SAM 3 segmentation ($0.005/frame/prompt) + SAM 3D Body ($0.02/frame) via fal.ai',
         OPENAI_API_KEY: 'GPT Image 2.5 Sunburst / Flare',
