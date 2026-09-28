@@ -380,3 +380,28 @@ test('firebase credentials from separate variables (Railway raw-editor JSON past
   assert.strictEqual(fb.splitVars({}), null);
   assert.strictEqual(fb.splitVars({ FIREBASE_PROJECT_ID: 'p2', FIREBASE_CLIENT_EMAIL: 'e', FIREBASE_PRIVATE_KEY: pem }).project_id, 'p2');
 });
+
+test('jump shot: ball leaving the hand upward is a release (no ball drawn after it)', async () => {
+  const mock = require('../lib/mocap/mock');
+  const { buildMotion } = require('../lib/mocap/motion-builder');
+  const W = 540, H = 960;
+  const frames = [];
+  for (let i = 0; i < 18; i++) {
+    const f = `frame-${String(i + 1).padStart(4, '0')}.png`;
+    const seg = await mock.segmentFrame(f, W, H);
+    const body = await mock.bodyFrame(f, W, H);
+    frames.push({ file: f, index: i, ball: seg.ball, kp2d: body.kp2d, kp3d: body.kp3d, camT: body.camT, focal: body.focal, imgW: W, imgH: H });
+  }
+  const dribble = buildMotion({ fps: 12, frames });
+  assert.ok(!dribble.report.shotRelease, 'plain dribble is not a shot');
+  const held = dribble.frames.map((fr) => !!fr.ball?.held);
+  const last = held.lastIndexOf(true, 11);
+  assert.ok(last > 2, 'a held frame to shoot from');
+  // From the last catch on, the ball flies up out of the hand (and leaves the frame)
+  const shot = frames.map((fr, i) => (i <= last ? fr : { ...fr, ball: i < last + 4 ? { ...frames[last].ball, v: frames[last].ball.v - 70 * (i - last) } : null }));
+  const m = buildMotion({ fps: 12, frames: shot });
+  assert.ok(m.report.shotRelease, JSON.stringify(m.report));
+  assert.strictEqual(m.report.shotRelease.releaseFrame, m.report.shotRelease.lastHeldFrame + 1);
+  assert.ok(m.frames.slice(m.report.shotRelease.releaseFrame).every((fr) => fr.ball === null), 'no ball after release');
+  assert.ok(m.frames[m.report.shotRelease.lastHeldFrame].ball, 'ball still in hand on the last held frame');
+});
