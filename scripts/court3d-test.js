@@ -48,7 +48,9 @@ fs.mkdirSync(OUT, { recursive: true });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
+  // failed loads are judged by URL below (a clip's source video frames may be absent on a local server)
+  page.on('console', (m) => { if (m.type() === 'error' && !/^Failed to load resource/.test(m.text())) errors.push('console: ' + m.text().slice(0, 200)); });
+  page.on('response', (r) => { if (r.status() >= 400 && !/\/api\/mocap\/motion\/[^/]+\/frame\//.test(r.url())) errors.push(`${r.status()} ${r.url().slice(0, 160)}`); });
   const q = args.char ? `?char=${encodeURIComponent(args.char)}` : '';
   await page.goto(`${BASE}/court3d${q}`, { waitUntil: 'load', timeout: 90000 });
   await page.waitForFunction(() => window.__court3d?.player || document.getElementById('err')?.textContent, null, { timeout: 180000 });

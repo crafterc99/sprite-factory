@@ -418,7 +418,10 @@ function register(baseRouter, ctx) {
     const fr = raw?.frames?.[+i];
     if (!fr) return { raw, fr: null, p: null };
     const p = path.join(store.motionDir(id), 'frames', fr.file);
-    return { raw, fr, p: fs.existsSync(p) ? p : null };
+    if (fs.existsSync(p)) return { raw, fr, p };
+    // frames on disk go with a redeploy: the analysis keeps each source frame as a cloud asset
+    const asset = await store.loadMotionAsset(id, `src-${String(fr.index ?? +i).padStart(3, '0')}.jpg`).catch(() => null);
+    return { raw, fr, p: asset && fs.existsSync(asset) ? asset : null };
   }
 
   router.get('/api/mocap/motion/:id/frame/:i', async (req, res, params, query) => {

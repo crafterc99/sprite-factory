@@ -22,6 +22,12 @@
   #state { color:var(--ok); }
   #help { position:fixed; left:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--dim); max-width:420px; }
   #help b { color:var(--txt); }
+  #vid { position:fixed; right:12px; top:110px; z-index:5; width:240px; min-width:140px; max-width:92vw; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:6px; resize:both; overflow:hidden; display:none; }
+  #vid.big { width:min(46vw,640px); }
+  #vid .vh { display:flex; gap:6px; align-items:center; color:var(--dim); font-size:11px; margin-bottom:4px; }
+  #vid .vh span { flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  #vid img { width:100%; height:calc(100% - 22px); object-fit:contain; display:block; border-radius:8px; background:#000; }
+  #vid button { padding:1px 7px; font-size:11px; }
   #dbg { position:fixed; right:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 10px; color:var(--dim); display:none; min-width:220px; }
   #dbg b { color:#fff; } #dbg .ok { color:var(--ok); } #dbg .warn { color:var(--warn); } #dbgBody { white-space:pre-line; }
   #toast { position:fixed; left:50%; top:64px; transform:translateX(-50%); z-index:9; background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:8px 14px; display:none; max-width:90vw; text-align:center; }
@@ -107,6 +113,7 @@
 </div>
 <div id="dbg"><b>feet</b> · slide max <span id="dbgSlide"></span> <button id="dbgReset" type="button">reset</button><br><span id="dbgBody"></span></div>
 <div id="toast"></div>
+<div id="vid"><div class="vh"><span id="vidLbl">original video</span><button id="vidBig" type="button" title="enlarge">⤢</button><button id="vidHide" type="button" title="hide (V)">×</button></div><img id="vidImg" alt="the recorded frame of the move playing"></div>
 <div id="replay" style="display:none;position:fixed;right:12px;top:110px;z-index:6;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;width:min(42vw,420px)">
   <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="color:#fff">Replay vs video</b><span id="rpInfo" style="color:var(--dim);font-size:12px"></span></div>
   <img id="rpImg" alt="source frame" style="width:100%;border-radius:8px;display:block;background:#000">
@@ -351,7 +358,7 @@ for (const s of ['left', 'right']) {
 // ═══ Input: gamepad + keyboard + touch ═══
 const keys = new Set();
 const pressedSinceTick = new Set(); // a quick tap between two frames still counts
-const GAME_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'ShiftLeft', 'ShiftRight']);
+const GAME_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'KeyV', 'ShiftLeft', 'ShiftRight']);
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return; // browser shortcuts (Cmd+F, Ctrl+C) are not game input
   if (GAME_KEYS.has(e.code)) {
@@ -562,6 +569,7 @@ function step(now) {
     if (e.type === 'skid') S.skidAt = now;
   }
   poseCharacter(S.rig, r.pose, r, rdt);
+  updateVideoBox(r);
 
   // ── Ball
   if (S.freeBall) {
@@ -616,6 +624,37 @@ function step(now) {
 
   updateCamera(rdt, inp);
   renderer.render(scene, camera);
+}
+
+// ═══ The original video of the move that is playing (corner box, resizable) ═══
+const VID = { on: true, last: '', big: false };
+try { const v = JSON.parse(localStorage.getItem('court3d_vid') || '{}'); if (v.on === false) VID.on = false; if (v.big) VID.big = true; if (v.w) $('vid').style.width = v.w + 'px'; if (v.h) $('vid').style.height = v.h + 'px'; } catch {}
+const saveVid = () => { try { localStorage.setItem('court3d_vid', JSON.stringify({ on: VID.on, big: VID.big, w: $('vid').offsetWidth, h: $('vid').style.height ? $('vid').offsetHeight : 0 })); } catch {} };
+$('vid').classList.toggle('big', VID.big);
+$('vidBig').onclick = () => { VID.big = !VID.big; $('vid').style.width = ''; $('vid').style.height = ''; $('vid').classList.toggle('big', VID.big); saveVid(); };
+$('vidHide').onclick = () => { VID.on = false; $('vid').style.display = 'none'; saveVid(); toast('Video box hidden — press V to show it.'); };
+new ResizeObserver(() => saveVid()).observe($('vid'));
+window.addEventListener('keydown', (e) => { if (e.code === 'KeyV' && !e.repeat && !e.metaKey && !e.ctrlKey) { VID.on = !VID.on; saveVid(); if (!VID.on) $('vid').style.display = 'none'; } });
+function updateVideoBox(r) {
+  const box = $('vid');
+  const top = r?.rotSrc?.length ? r.rotSrc.reduce((m, q) => (q.w > m.w ? q : m), r.rotSrc[0]) : null;
+  const c = top?.clip, id = c?.json?.id, sf = c?.json?.srcFrames;
+  if (!VID.on || S.replay || !id || !sf) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const F = c.F, t = c.loop ? ((top.t % F) + F) % F : Math.max(0, Math.min(F - 1, top.t));
+  const src = sf[Math.min(sf.length - 1, Math.round(t))];
+  const key = id + ':' + src;
+  // one frame in flight at a time (the last shown stays up meanwhile); a clip
+  // whose source frames can't be served says so once instead of retrying every frame
+  if (VID.miss?.[id]) { setText($('vidLbl'), `${c.json.name || id} · source video not available`); return; }
+  if (key !== VID.last && !VID.busy) {
+    VID.last = key; VID.busy = true;
+    const im = new Image();
+    im.onload = () => { VID.busy = false; $('vidImg').src = im.src; $('vidImg').style.visibility = 'visible'; };
+    im.onerror = () => { VID.busy = false; (VID.miss ||= {})[id] = true; $('vidImg').style.visibility = 'hidden'; };
+    im.src = `/api/mocap/motion/${encodeURIComponent(id)}/frame/${src}?w=${VID.big ? 640 : 360}`;
+    setText($('vidLbl'), `${c.json.name || id}${c.mirror ? ' (mirrored)' : ''} · frame ${src + 1}`);
+  }
 }
 
 // A held ball rides the character's own (captured) hand: the offset from the
