@@ -15,7 +15,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js --ignore data/ --ignore coordination/ --ignore .video-tmp/"
+    "dev": "nodemon server.js --ignore data/ --ignore coordination/ --ignore .video-tmp/",
+    "test": "node --test --test-timeout=240000 tests/*.test.js"
   },
   "main": "server.js",
   "bin": {

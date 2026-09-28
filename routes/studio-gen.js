@@ -125,10 +125,26 @@ async function buildStrip(framePaths, outputPath, opts = {}) {
   const targetPixelHeight = opts.pixelHeight || 112;
   const frameSize = DEFAULT_FRAME_SIZE; // 180
 
+  // One scale for the whole animation. Scaling every frame's bounding box to
+  // the same height (the old behaviour) stretched crouches, shrank arms-up
+  // frames and glued jumps to the floor. Now the median frame maps to the
+  // character's pixelHeight and every other frame keeps its relative size;
+  // only a frame that would overflow the cell is shrunk to fit.
+  // STRIP_SCALE_MODE=per-frame restores the old behaviour.
+  let heights = null;
+  if (process.env.STRIP_SCALE_MODE !== 'per-frame') {
+    heights = await Promise.all(framePaths.map(async (p) => {
+      try { const b = await getContentBounds(p); return b && b.h > 0 ? b.h : null; } catch { return null; }
+    }));
+    const valid = heights.filter(Boolean).sort((a, b) => a - b);
+    const med = valid.length ? valid[valid.length >> 1] : null;
+    heights = med ? heights.map((h) => (h ? Math.min(BASELINE_Y - 2, Math.round(targetPixelHeight * h / med)) : targetPixelHeight)) : null;
+  }
+
   const scaledBufs = await Promise.all(framePaths.map(async (p, i) => {
     const tmpPath = p + '-strip-scaled.png';
     try {
-      await scaleToHeight(p, tmpPath, targetPixelHeight, BASELINE_Y, frameSize);
+      await scaleToHeight(p, tmpPath, heights ? heights[i] : targetPixelHeight, BASELINE_Y, frameSize);
       const buf = fs.readFileSync(tmpPath);
       try { fs.unlinkSync(tmpPath); } catch {}
       return buf;

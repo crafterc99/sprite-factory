@@ -90,7 +90,29 @@ function recordCost(model, type, resolution = '2K', numRefImages = 2, meta = {})
   return { totalCost, imageCost, inputCost, runningTotal: data.totalSpend };
 }
 
+/**
+ * Record a spend whose exact USD amount is already known (fal per-call prices,
+ * OpenAI usage-token billing) instead of looking it up per image.
+ */
+function recordCostExact(model, type, usd, meta = {}) {
+  const data = loadCostData();
+  const totalCost = +usd || 0;
+  data.totalSpend += totalCost;
+  data.totalGenerations++;
+  if (!data.byModel[model]) data.byModel[model] = { spend: 0, count: 0 };
+  data.byModel[model].spend += totalCost;
+  data.byModel[model].count++;
+  if (!data.byType[type]) data.byType[type] = { spend: 0, count: 0 };
+  data.byType[type].spend += totalCost;
+  data.byType[type].count++;
+  data.history.push({ model, type, totalCost, ...meta, timestamp: new Date().toISOString() });
+  if (data.history.length > 200) data.history = data.history.slice(-200);
+  saveCostData(data);
+  return { totalCost, runningTotal: data.totalSpend };
+}
+
 module.exports = {
+  recordCostExact,
   COST_PER_IMAGE,
   INPUT_IMAGE_TOKENS,
   getImageCost,

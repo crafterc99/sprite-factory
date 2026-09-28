@@ -558,6 +558,22 @@ function register(router, { ASSETS_DIR, RAW_DIR, TMP_DIR, json, parseBody, serve
     if (!fs.existsSync(framePath)) return json(res, { error: 'Frame not found' }, 404);
     fs.mkdirSync(subjectsDir, { recursive: true });
 
+    // Real segmentation (SAM 3) when fal is configured: the actual pixels of
+    // the player + ball, one scale for the whole session. The AI-redraw path
+    // below stays as the fallback (no FAL_KEY) or when mode:'ai' / a custom
+    // prompt asks for it.
+    const falReady = require('../lib/mocap/providers').status();
+    if ((falReady.fal || falReady.mock) && body.mode !== 'ai' && !customPrompt) {
+      try {
+        const { samCutout } = require('../lib/mocap/cutout');
+        const out = await samCutout(framePath, subjectsDir, frameIndex);
+        if (out.cost) require('../middleware/cost-tracker').recordCostExact('fal-sam3', 'subject-extract', out.cost, { sessionId, frameIndex });
+        return json(res, { frameIndex, url: `/api/video/subject/${sessionId}/${out.outFile}`, method: 'sam3' });
+      } catch (err) {
+        console.warn(`[extract-subject] SAM 3 cutout failed on frame ${frameIndex}, falling back to AI extraction:`, err.message);
+      }
+    }
+
     // Green background so removeBackground (chroma-key) works reliably
     let prompt = 'Extract the basketball player from this image. Place them centered on a PURE GREEN (#00FF00) background — no court, no arena, no floor, no shadows. Scale the player up so they fill approximately 60% of the image height — if they are far from the camera, zoom in so the player is large and centered. Keep their exact pose, body proportions, and the basketball if visible. Solid pure green everywhere the player is not.';
     if (customPrompt) prompt += '\n\nSPECIFIC INSTRUCTION: ' + customPrompt + '\nKeep everything else identical.';

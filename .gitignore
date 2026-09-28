@@ -30,3 +30,4 @@ data/regen-anim-results.json
 data/.testing-config.json
 data/court-presets.json
 .thumb-cache/
+data/mocap/

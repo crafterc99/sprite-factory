@@ -2798,3 +2798,20 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: Playwright — editor opens with speed input + 2 variant selects; speed 15 + legacy z1→left re-key updated local state, GM entries and the server (post-cache-bust read shows idle-dribble_z1_left fps 15 hand left immediately); zero JS errors
 - Assumptions: "either" leaves legacy keys hand-agnostic; one speed per slot across variants (established)
 - Next dependency: none
+
+## TASK-ADHOC-20260928 — Stage 1 mocap pipeline (SAM 3 + SAM 3D Body on fal) + password gate
+- Task ID: ADHOC (user request via remote session)
+- Status: DONE (live API calls not yet exercised — no FAL/OpenAI keys in the dev container; verified end-to-end in MOCAP_MOCK mode)
+- Files changed:
+  - lib/mocap/skeleton.js, fal-client.js, providers.js, mock.js, motion-builder.js, mannequin.js, image-models.js, compose.js, cutout.js, store.js, pipeline.js — new Stage 1 pipeline
+  - routes/mocap.js — /api/mocap/* (analyze, motions, overlays, mannequin renders/sheets, generate, results, regen-frame)
+  - mocap.html — new iPad-friendly Motion Capture UI at /mocap (record/upload → 3D check → generate → QC/regen/save to slot)
+  - middleware/auth.js + server.js — APP_PASSWORD gate (login page, 30-day cookie, private link ?key=, Bearer/Basic), /api/health, /mocap route, startup status lines
+  - middleware/cost-tracker.js — recordCostExact for fal / OpenAI token billing
+  - routes/studio-gen.js — AUDIT FIX: strips use one scale per animation (median frame → pixelHeight) instead of stretching every frame's bbox to 112px (STRIP_SCALE_MODE=per-frame restores old behaviour)
+  - routes/video.js — AUDIT FIX: extract-subject uses SAM 3 real-pixel cutouts with one scale per session when FAL_KEY is set (Gemini redraw kept as fallback / mode:'ai' / custom prompt)
+  - index-v2.html — "Mocap 3D" nav button
+  - tests/mocap.test.js, package.json (npm test), .gitignore (data/mocap/), docs/MOCAP.md
+- Validation: npm test 3/3 (motion recovery from a 30°-yawed/6°-pitched camera, auth gate, full HTTP pipeline incl. strips 180×N with feet at y≈170, L/R mirror variants, regen); Playwright iPad Pro 11 run of the whole UI (login → upload → analyze → 5-zone mannequin previews → generate GPT 2.5 mock → results → frame QC dialog → regen → save cross_z1_right) with zero JS errors
+- Assumptions: SAM 3D Body keypoint convention auto-detected by re-projection error (4 candidates); ball radius 0.12 m for depth; fal accepts data-URI images; GPT Image 2.5 via /v1/images/edits with background=transparent; motions are in-place by default (root travel stored in motion.json)
+- Next dependency: set FAL_KEY, OPENAI_API_KEY (optional), APP_PASSWORD in Railway; first real-clip run to tune QC thresholds

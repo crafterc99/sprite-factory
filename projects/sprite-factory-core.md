@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | IN_PROGRESS |
-| **Last Updated** | 2026-06-12 |
+| **Last Updated** | 2026-09-28 |
 | **Owner** | Claude Code |
 
 ## Goal
@@ -23,6 +23,8 @@ A full pipeline for generating NBA player sprite sheets using Gemini image gener
 - [x] Smart frame selector (lib/sprite-generator/smart-selector.js)
 - [x] Reference strip builder (lib/sprite-generator/strip-builder.js)
 - [x] Default model updated to gemini-3-pro-image-preview (Nano Banana Pro)
+- [x] Mocap Stage 1: video → SAM 3 + SAM 3D Body (fal) → motion.json → mannequin → any character/angle/hand (/mocap)
+- [x] Password-protected studio (APP_PASSWORD)
 - [ ] Stable end-to-end generation on Railway (public URL)
 - [ ] Full character roster complete (all planned characters with all animations)
 - [ ] Production export pipeline validated
@@ -50,6 +52,7 @@ None currently — pending Railway stability.
 
 | Date | What happened |
 |---|---|
+| 2026-09-28 | Stage 1 mocap pipeline + /mocap iPad UI (SAM 3 masks, SAM 3D Body skeletons, cleaned reusable motion.json, colour-coded mannequin per game zone, GPT Image 2.5 / Nano Banana generation aligned to the mannequin, canonical composited ball, QC + auto-retry, save to slot); APP_PASSWORD gate; audit fixes: shared strip scale, SAM 3 cutouts |
 | 2026-06-12 | Moves panel click-to-edit: inline per-animation settings (game-wide speed, per-variant starting hand re-key); roster cache busts on writes; net-line idle hand verified vs production net |
 | 2026-06-12 | Per-animation speed persists game-wide (FPS slider PATCHes all slot variants server-side); net-line hand swap verified in all 5 zones with velocity fallback |
 | 2026-06-12 | Parallel L/R saves (hand always in slot key + studio hand picker) and net-relative ball-hand rule (lateral movement vs character→net line switches hands) |

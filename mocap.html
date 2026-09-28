@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Motion Capture — Sprite Factory</title>
+<style>
+:root{
+  --bg:#0e0f14;--panel:#161821;--panel2:#1d202b;--line:#2a2e3d;--text:#e9eaf0;--mute:#9699ab;
+  --accent:#ff6a2b;--accent2:#ffb000;--ok:#35c27a;--bad:#ff5a6a;--blue:#2f6bff;--red:#eb3458;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-text-size-adjust:100%}
+a{color:var(--accent2)}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top));background:rgba(14,15,20,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0 8px 0 0;white-space:nowrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--mute);white-space:nowrap}
+.chip.on{color:#bff5d6;border-color:#2c6b4c;background:#12291e}
+.chip.off{color:#ffc2c8;border-color:#6b2c35;background:#2a1216}
+header .sp{flex:1}
+main{max-width:1180px;margin:0 auto;padding:16px;padding-bottom:80px}
+.steps{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.step{flex:1;min-width:120px;padding:10px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--mute);font-weight:600;font-size:14px;text-align:left;cursor:pointer}
+.step b{display:block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);opacity:.8}
+.step.active{border-color:var(--accent);color:var(--text);background:#23180f}
+.step.done b{color:var(--ok)}
+section.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+section.card>h2{font-size:16px;margin:0 0 4px}
+.hint{color:var(--mute);font-size:13px;margin:0 0 12px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.col{flex:1;min-width:240px}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.04em;min-width:120px}
+input[type=text],input[type=number],select,textarea{font:inherit;font-size:16px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 11px;min-height:44px;width:100%}
+textarea{min-height:64px;resize:vertical}
+input[type=range]{width:100%;accent-color:var(--accent);min-height:32px}
+button{font:inherit;font-weight:600;font-size:15px;min-height:44px;padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);cursor:pointer;touch-action:manipulation}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.ghost{background:transparent}
+button.small{min-height:34px;padding:6px 11px;font-size:13px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--text);min-height:44px;padding:0 4px;cursor:pointer;user-select:none}
+.toggle input{width:20px;height:20px;accent-color:var(--accent)}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:0 12px;min-height:40px;border:1px solid var(--line);border-radius:999px;background:var(--bg);cursor:pointer;font-size:14px;user-select:none}
+.pill input{display:none}
+.pill:has(input:checked){border-color:var(--accent);background:#2a1a10;color:#ffd9c7}
+video{width:100%;max-height:52vh;background:#000;border-radius:10px}
+.progress{height:8px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
+.status{font-size:13px;color:var(--mute);margin-top:6px;min-height:1.2em}
+.status.err{color:var(--bad)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.thumb{position:relative;border-radius:8px;overflow:hidden;background:#000;border:1px solid var(--line);aspect-ratio:9/16}
+.thumb img{width:100%;height:100%;object-fit:contain;display:block}
+.thumb .n{position:absolute;left:4px;top:4px;font-size:11px;background:rgba(0,0,0,.65);padding:1px 6px;border-radius:6px}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:10px 0}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:17px}
+.stat span{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em}
+.player{background:#fff;border-radius:10px;display:block;width:100%;max-width:320px;aspect-ratio:2/3;margin:0 auto}
+.players{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.players figure{margin:0;text-align:center}
+.players figcaption{font-size:12px;color:var(--mute);margin-top:4px}
+.chars{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.char{border:2px solid var(--line);border-radius:10px;background:var(--bg);padding:6px;cursor:pointer;text-align:center;font-size:12px}
+.char img{width:100%;aspect-ratio:3/4;object-fit:contain;display:block;margin-bottom:4px}
+.char.sel{border-color:var(--accent);background:#2a1a10}
+.char.dis{opacity:.4}
+.variant{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;background:var(--panel2)}
+.variant h3{margin:0 0 8px;font-size:15px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{font-size:11px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mute)}
+.badge.ok{color:#bff5d6;border-color:#2c6b4c;background:#12291e}
+.badge.bad{color:#ffc2c8;border-color:#6b2c35;background:#2a1216}
+.vwrap{display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:12px}
+@media (max-width:620px){.vwrap{grid-template-columns:1fr}}
+.gameview{background:repeating-conic-gradient(#232634 0% 25%,#1a1c26 0% 50%) 50%/20px 20px;border-radius:10px;width:100%;aspect-ratio:1/1;image-rendering:auto}
+.frames{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
+.fr{position:relative;border-radius:8px;border:2px solid var(--line);background:repeating-conic-gradient(#232634 0% 25%,#1a1c26 0% 50%) 50%/14px 14px;cursor:pointer;overflow:hidden}
+.fr img{width:100%;aspect-ratio:1/1;display:block}
+.fr.bad{border-color:var(--bad)}
+.fr.ok{border-color:#2c6b4c}
+.fr .s{position:absolute;right:3px;bottom:3px;font-size:10px;background:rgba(0,0,0,.7);padding:1px 5px;border-radius:5px}
+.fr.busy::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.55) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 50 50'%3E%3Ccircle cx='25' cy='25' r='20' fill='none' stroke='%23ffb000' stroke-width='5' stroke-dasharray='90 40'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 25 25' to='360 25 25' dur='0.9s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E") center no-repeat}
+.list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto}
+.li{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer}
+.li.sel{border-color:var(--accent)}
+.li small{color:var(--mute)}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;max-width:560px;width:calc(100% - 32px);padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.issues{margin:6px 0 0;padding-left:18px;color:#ffc2c8;font-size:13px}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--mute);flex-wrap:wrap;margin-top:6px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+.hidden{display:none!important}
+.rec-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:6px;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.2}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎥 Motion Capture</h1>
+  <div class="chips" id="chips"><span class="chip">checking providers…</span></div>
+  <div class="sp"></div>
+  <a href="/" class="chip">← Studio</a>
+  <a href="/logout" class="chip">Sign out</a>
+</header>
+
+<main>
+  <nav class="steps" id="steps">
+    <button class="step active" data-step="capture"><b>1 · Capture</b>Record or upload</button>
+    <button class="step" data-step="motion"><b>2 · Motion</b>3D body check</button>
+    <button class="step" data-step="generate"><b>3 · Generate</b>Character + angles</button>
+    <button class="step" data-step="results"><b>4 · Results</b>QC · regen · save</button>
+  </nav>
+
+  <!-- ─── 1 · CAPTURE ─────────────────────────────────────────────────── -->
+  <div data-panel="capture">
+    <section class="card">
+      <h2>Record or upload the move</h2>
+      <p class="hint">Tripod or steady hands, full body in frame head-to-feet, good light. Stand still for half a second before the move (it sets your height and the floor). Any camera angle works — the motion is rotated to every game angle afterwards.</p>
+      <div class="row" style="margin-bottom:12px">
+        <label class="f col">Move name<input type="text" id="moveName" placeholder="e.g. crossover" value=""></label>
+        <label class="f" style="max-width:150px">Sample FPS
+          <select id="sampleFps"><option>8</option><option>10</option><option selected>12</option><option>15</option><option>24</option></select></label>
+        <label class="f" style="max-width:150px">Max frames
+          <select id="maxFrames"><option>16</option><option>24</option><option selected>36</option><option>48</option><option>72</option></select></label>
+      </div>
+      <div class="btns" style="margin-bottom:12px">
+        <label class="pill" style="padding:0"><button class="ghost" id="btnPick" type="button" style="border:0">📁 Choose video</button></label>
+        <input type="file" id="fileInput" accept="video/*" class="hidden">
+        <button id="btnCam" type="button">📷 Open camera</button>
+        <button id="btnFlip" type="button" class="hidden">🔄 Flip camera</button>
+        <button id="btnRec" type="button" class="hidden">⏺ Record</button>
+      </div>
+      <video id="preview" playsinline controls muted class="hidden"></video>
+      <div id="trimBox" class="hidden" style="margin-top:12px">
+        <div class="row">
+          <label class="f col">Start <span id="startLbl">0.00s</span><input type="range" id="trimStart" min="0" max="1" step="0.01" value="0"></label>
+          <label class="f col">End <span id="endLbl">0.00s</span><input type="range" id="trimEnd" min="0" max="1" step="0.01" value="1"></label>
+        </div>
+        <div class="btns" style="margin-top:8px">
+          <button class="small" id="setStart" type="button">⇤ Start = playhead</button>
+          <button class="small" id="setEnd" type="button">End = playhead ⇥</button>
+          <span class="hint" id="clipInfo" style="margin:0;align-self:center"></span>
+        </div>
+      </div>
+      <div style="margin-top:14px" class="btns">
+        <button class="primary" id="btnAnalyze" type="button" disabled>Analyze motion →</button>
+      </div>
+      <div class="progress" style="margin-top:12px"><i id="capBar"></i></div>
+      <div class="status" id="capStatus"></div>
+    </section>
+
+    <section class="card">
+      <h2>Saved motions</h2>
+      <p class="hint">Every analyzed move is kept and reusable for every character.</p>
+      <div class="list" id="motionList"><div class="hint">Loading…</div></div>
+    </section>
+  </div>
+
+  <!-- ─── 2 · MOTION ──────────────────────────────────────────────────── -->
+  <div data-panel="motion" class="hidden">
+    <section class="card">
+      <h2 id="motionTitle">Motion</h2>
+      <p class="hint">What SAM 3 (mask, ball) and SAM 3D Body (skeleton) measured on each frame, then the cleaned 3D motion rendered from the game angles. Blue = left limbs, red = right limbs.</p>
+      <div class="stats" id="motionStats"></div>
+      <div class="players" id="mqPlayers"></div>
+      <div class="legend"><span><i style="background:var(--blue)"></i>left</span><span><i style="background:var(--red)"></i>right</span><span><i style="background:#e06a1f;border-radius:50%"></i>ball (composited, never generated)</span></div>
+      <div class="row" style="margin-top:10px">
+        <label class="toggle"><input type="checkbox" id="mqMirror"> Mirror (other hand)</label>
+        <label class="f" style="max-width:130px">Preview FPS<select id="mqFps"><option>6</option><option>8</option><option selected>12</option><option>15</option></select></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Clean-up</h2>
+      <p class="hint">Re-runs from the saved raw measurements — free, no API calls.</p>
+      <div class="row">
+        <label class="f col">Smoothing <span id="smLbl">1.2</span><input type="range" id="smoothing" min="0" max="3" step="0.1" value="1.2"></label>
+        <label class="f" style="max-width:130px">Trim start<input type="number" id="trimS" min="0" value="0"></label>
+        <label class="f" style="max-width:130px">Trim end<input type="number" id="trimE" min="0" value="0"></label>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="toggle"><input type="checkbox" id="footLock" checked> Foot lock</label>
+        <label class="toggle"><input type="checkbox" id="inPlace" checked> In place (game moves the player)</label>
+        <button id="btnReprocess" type="button">Re-clean motion</button>
+      </div>
+      <div class="status" id="rpStatus"></div>
+    </section>
+
+    <section class="card">
+      <h2>Measured frames</h2>
+      <p class="hint">Green tint = player mask · dots = keypoints · dashed ring = ball. A red bar means that frame failed and was interpolated.</p>
+      <div class="grid" id="overlayGrid"></div>
+    </section>
+    <div class="btns"><button class="primary" type="button" onclick="go('generate')">Next: Generate →</button></div>
+  </div>
+
+  <!-- ─── 3 · GENERATE ────────────────────────────────────────────────── -->
+  <div data-panel="generate" class="hidden">
+    <section class="card">
+      <h2>Character</h2>
+      <p class="hint">The mannequin is scaled to the character's registry height before generation, so size is fixed before the model draws anything.</p>
+      <div class="chars" id="charGrid"><div class="hint">Loading…</div></div>
+    </section>
+    <section class="card">
+      <h2>Angles &amp; hands</h2>
+      <div class="pills" id="viewPills"></div>
+      <div class="pills" style="margin-top:8px" id="handPills">
+        <label class="pill"><input type="checkbox" value="right" checked> Right hand</label>
+        <label class="pill"><input type="checkbox" value="left"> Left hand (mirrored motion)</label>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Model</h2>
+      <div class="row">
+        <label class="f col">Image model<select id="modelSel"></select></label>
+        <label class="f" style="max-width:150px">Quality (GPT)<select id="qualitySel"><option value="medium">medium</option><option value="high" selected>high</option><option value="xhigh">xhigh</option></select></label>
+        <label class="f" style="max-width:150px">Use every<select id="frameStep"><option value="1">frame</option><option value="2" selected>2nd frame</option><option value="3">3rd frame</option></select></label>
+        <label class="f" style="max-width:150px">Auto-retry fails<select id="retries"><option>0</option><option selected>1</option><option>2</option></select></label>
+      </div>
+      <p class="hint" id="estimate" style="margin-top:10px"></p>
+      <div class="btns"><button class="primary" id="btnGenerate" type="button" disabled>Generate sprites</button></div>
+      <div class="progress" style="margin-top:12px"><i id="genBar"></i></div>
+      <div class="status" id="genStatus"></div>
+    </section>
+  </div>
+
+  <!-- ─── 4 · RESULTS ─────────────────────────────────────────────────── -->
+  <div data-panel="results" class="hidden">
+    <section class="card">
+      <h2>Results</h2>
+      <p class="hint">Each frame is aligned to the mocap mannequin (feet, height, centre) and scored. Tap a frame to see its QC and regenerate it. Save a variant to put it in the game slot.</p>
+      <div class="row" style="margin-bottom:10px">
+        <label class="f col">Run<select id="resultSel"></select></label>
+      </div>
+      <div id="variants"></div>
+    </section>
+  </div>
+</main>
+
+<dialog id="frameDlg">
+  <h3 style="margin:0 0 8px" id="fdTitle">Frame</h3>
+  <div class="row" style="align-items:flex-start">
+    <img id="fdImg" style="width:180px;height:180px;background:repeating-conic-gradient(#232634 0% 25%,#1a1c26 0% 50%) 50%/14px 14px;border-radius:8px">
+    <img id="fdPose" style="width:120px;border-radius:8px;background:#fff">
+    <div class="col" id="fdQc" style="font-size:13px"></div>
+  </div>
+  <label class="f" style="margin-top:12px">Instruction (optional)<textarea id="fdPrompt" placeholder="e.g. left arm lower, keep the jersey number visible"></textarea></label>
+  <div class="btns" style="margin-top:10px;justify-content:flex-end">
+    <button type="button" onclick="frameDlg.close()">Close</button>
+    <button type="button" class="primary" id="fdRegen">Regenerate frame</button>
+  </div>
+  <div class="status" id="fdStatus"></div>
+</dialog>
+
+<dialog id="saveDlg">
+  <h3 style="margin:0 0 8px">Save to game slot</h3>
+  <p class="hint" id="sdInfo"></p>
+  <label class="f">Slot<select id="sdSlot"></select></label>
+  <div class="btns" style="margin-top:12px;justify-content:flex-end">
+    <button type="button" onclick="saveDlg.close()">Cancel</button>
+    <button type="button" class="primary" id="sdSave">Save</button>
+  </div>
+  <div class="status" id="sdStatus"></div>
+</dialog>
+
+<script>
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const api = async (url, opts = {}) => {
+  const res = await fetch(url, { credentials: 'same-origin', ...opts, headers: { ...(opts.body && !(opts.body instanceof Blob) ? { 'Content-Type': 'application/json' } : {}), ...(opts.headers || {}) } });
+  if (res.status === 401) { location.href = '/login?next=/mocap'; throw new Error('signed out'); }
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j.error) throw new Error(j.error || `HTTP ${res.status}`);
+  return j;
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Game slots (index-v2 ANIMATION_SLOTS) + zones (COURT_ZONES)
+const SLOTS = [
+  ['idle-dribble', 'Idle Dribble'], ['jog-dribble', 'Jog Dribble'], ['sprint-dribble', 'Sprint Dribble'],
+  ['backpedal-dribble', 'Backpedal'], ['side-dribble-l', 'Side Left'], ['side-dribble-r', 'Side Right'],
+  ['cross', 'Crossover'], ['tween', 'Between Legs'], ['behind', 'Behind Back'], ['stepback', 'Step Back'],
+  ['jumpshot', 'Jump Shot'],
+];
+const ZONES = { 1: { label: 'Front', angleIdx: 0 }, 2: { label: 'Front Left', angleIdx: 7 }, 3: { label: 'Left', angleIdx: 6 }, 4: { label: 'Back Left', angleIdx: 5 }, 5: { label: 'Back', angleIdx: 4 } };
+
+const ST = {
+  sessionId: null, file: null, duration: 0, motionId: null, motion: null, meta: null,
+  character: null, characters: [], models: [], result: null, results: [], players: [],
+};
+
+// ── Steps ────────────────────────────────────────────────────────────────
+function go(step) {
+  $$('.step').forEach((b) => b.classList.toggle('active', b.dataset.step === step));
+  $$('[data-panel]').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== step));
+  if (step === 'generate') refreshEstimate();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+$$('.step').forEach((b) => b.addEventListener('click', () => {
+  if ((b.dataset.step === 'motion' || b.dataset.step === 'generate') && !ST.motionId) return toast('Analyze or pick a motion first');
+  if (b.dataset.step === 'results' && !ST.results.length) return toast('No results yet for this motion');
+  go(b.dataset.step);
+}));
+function markDone(step) { $(`.step[data-step="${step}"]`).classList.add('done'); }
+function toast(msg) { const s = $('#capStatus'); s.textContent = msg; }
+
+// ── Status chips ────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const s = await api('/api/mocap/status');
+    const chip = (on, label, title) => `<span class="chip ${on ? 'on' : 'off'}" title="${esc(title)}">${on ? '✓' : '✕'} ${label}</span>`;
+    $('#chips').innerHTML = (s.fal.mock ? '<span class="chip" style="color:#ffd27a;border-color:#6b5a2c">MOCK MODE</span>' : '') +
+      chip(s.fal.fal || s.fal.mock, 'fal · SAM 3D', s.notes.FAL_KEY) +
+      chip(s.images.openai || s.images.mock, 'GPT Image 2.5', s.notes.OPENAI_API_KEY) +
+      chip(s.images.gemini || s.images.mock, 'Nano Banana', s.notes.GEMINI_API_KEY);
+    if (!s.ready) $('#capStatus').textContent = 'FAL_KEY is not set on the server — analysis is disabled until it is added in Railway → Variables.';
+  } catch (e) { $('#chips').innerHTML = `<span class="chip off">${esc(e.message)}</span>`; }
+}
+
+// ── Capture: file / camera ──────────────────────────────────────────────
+const video = $('#preview');
+let camStream = null, recorder = null, recChunks = [], facing = 'environment';
+$('#btnPick').onclick = () => $('#fileInput').click();
+$('#fileInput').onchange = (e) => { const f = e.target.files[0]; if (f) useFile(f); };
+
+function useFile(file) {
+  stopCam();
+  ST.file = file; ST.sessionId = null;
+  video.srcObject = null;
+  video.src = URL.createObjectURL(file);
+  video.muted = true; video.controls = true;
+  video.classList.remove('hidden');
+  if (!$('#moveName').value) $('#moveName').value = (file.name || 'move').replace(/\.[^.]+$/, '').slice(0, 40);
+  // The server decodes the video (ffmpeg), so analysis never depends on the
+  // browser being able to preview it (e.g. HEVC outside Safari)
+  ST.duration = 0;
+  $('#btnAnalyze').disabled = false;
+  $('#trimBox').classList.add('hidden');
+  video.onerror = () => {
+    $('#capStatus').textContent = 'This browser can\'t preview the file — the whole clip will be analyzed.';
+  };
+  video.onloadedmetadata = () => {
+    ST.duration = video.duration || 0;
+    for (const id of ['trimStart', 'trimEnd']) { $('#' + id).max = ST.duration.toFixed(2); }
+    $('#trimStart').value = 0; $('#trimEnd').value = ST.duration.toFixed(2);
+    $('#trimBox').classList.remove('hidden');
+    updateTrim();
+    $('#btnAnalyze').disabled = false;
+  };
+}
+
+async function openCam() {
+  try {
+    stopCam();
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } }, audio: false });
+    video.src = ''; video.srcObject = camStream; video.controls = false; video.muted = true;
+    video.classList.remove('hidden');
+    await video.play().catch(() => {});
+    $('#btnRec').classList.remove('hidden'); $('#btnFlip').classList.remove('hidden');
+    $('#trimBox').classList.add('hidden');
+  } catch (e) { $('#capStatus').textContent = 'Camera unavailable: ' + e.message; }
+}
+function stopCam() {
+  if (camStream) camStream.getTracks().forEach((t) => t.stop());
+  camStream = null;
+  $('#btnRec').classList.add('hidden'); $('#btnFlip').classList.add('hidden');
+}
+$('#btnCam').onclick = openCam;
+$('#btnFlip').onclick = () => { facing = facing === 'environment' ? 'user' : 'environment'; openCam(); };
+$('#btnRec').onclick = () => {
+  if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+  const types = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+  const mimeType = types.find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+  recChunks = [];
+  recorder = new MediaRecorder(camStream, mimeType ? { mimeType, videoBitsPerSecond: 12e6 } : undefined);
+  recorder.ondataavailable = (e) => e.data.size && recChunks.push(e.data);
+  recorder.onstop = () => {
+    const type = recorder.mimeType || 'video/mp4';
+    const blob = new Blob(recChunks, { type });
+    const file = new File([blob], `recording.${type.includes('mp4') ? 'mp4' : 'webm'}`, { type });
+    $('#btnRec').innerHTML = '⏺ Record';
+    useFile(file);
+  };
+  recorder.start(200);
+  $('#btnRec').innerHTML = '<span class="rec-dot"></span>Stop';
+};
+
+function updateTrim() {
+  let s = +$('#trimStart').value, e = +$('#trimEnd').value;
+  if (e <= s) { e = Math.min(ST.duration, s + 0.2); $('#trimEnd').value = e; }
+  $('#startLbl').textContent = s.toFixed(2) + 's';
+  $('#endLbl').textContent = e.toFixed(2) + 's';
+  const fps = +$('#sampleFps').value, n = Math.min(+$('#maxFrames').value, Math.max(2, Math.round((e - s) * fps)));
+  $('#clipInfo').textContent = `${(e - s).toFixed(2)}s → ${n} frames · measure ≈ $${(n * 0.03).toFixed(2)}`;
+}
+['trimStart', 'trimEnd', 'sampleFps', 'maxFrames'].forEach((id) => $('#' + id).addEventListener('input', updateTrim));
+$('#trimStart').addEventListener('input', () => { video.currentTime = +$('#trimStart').value; });
+$('#trimEnd').addEventListener('input', () => { video.currentTime = +$('#trimEnd').value; });
+$('#setStart').onclick = () => { $('#trimStart').value = video.currentTime.toFixed(2); updateTrim(); };
+$('#setEnd').onclick = () => { $('#trimEnd').value = video.currentTime.toFixed(2); updateTrim(); };
+
+function uploadFile(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/video/upload');
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => { try { const j = JSON.parse(xhr.responseText); j.error ? reject(new Error(j.error)) : resolve(j); } catch { reject(new Error('Upload failed: HTTP ' + xhr.status)); } };
+    xhr.onerror = () => reject(new Error('Upload failed (network)'));
+    xhr.send(file);
+  });
+}
+
+async function pollJob(jobId, onProgress) {
+  for (;;) {
+    await sleep(1200);
+    const j = await api(`/api/mocap/job/${jobId}`);
+    if (j.progress) onProgress(j.progress);
+    if (j.status === 'done') return j.result;
+    if (j.status === 'error') throw new Error(j.error);
+  }
+}
+
+$('#btnAnalyze').onclick = async () => {
+  const bar = $('#capBar'), st = $('#capStatus');
+  st.classList.remove('err');
+  $('#btnAnalyze').disabled = true;
+  try {
+    if (!ST.sessionId) {
+      st.textContent = 'Uploading video…';
+      const up = await uploadFile(ST.file, (p) => { bar.style.width = (p * 30).toFixed(1) + '%'; st.textContent = `Uploading… ${(p * 100).toFixed(0)}%`; });
+      ST.sessionId = up.sessionId;
+    }
+    st.textContent = 'Analyzing…';
+    const { jobId } = await api('/api/mocap/analyze', { method: 'POST', body: JSON.stringify({
+      sessionId: ST.sessionId, name: $('#moveName').value || 'move', fps: +$('#sampleFps').value, maxFrames: +$('#maxFrames').value,
+      start: ST.duration ? +$('#trimStart').value : 0, end: ST.duration ? +$('#trimEnd').value : 0,
+    }) });
+    const out = await pollJob(jobId, (p) => {
+      const frac = p.total ? p.done / p.total : 0;
+      bar.style.width = (30 + frac * 70).toFixed(1) + '%';
+      st.textContent = p.msg || 'Working…';
+    });
+    bar.style.width = '100%';
+    st.textContent = `✓ Motion ready — ${out.meta.frameCount} frames (${out.meta.failedFrames} failed) · $${out.meta.measureCost}`;
+    markDone('capture');
+    await loadMotions();
+    await openMotion(out.motionId);
+  } catch (e) {
+    st.textContent = e.message; st.classList.add('err');
+  } finally { $('#btnAnalyze').disabled = false; }
+};
+
+// ── Motions ─────────────────────────────────────────────────────────────
+async function loadMotions() {
+  const { motions } = await api('/api/mocap/motions');
+  $('#motionList').innerHTML = motions.length ? motions.map((m) => `
+    <div class="li ${m.id === ST.motionId ? 'sel' : ''}" data-id="${esc(m.id)}">
+      <div><b>${esc(m.name || m.id)}</b><br><small>${m.frameCount} frames · ${m.fps} fps · ${m.startingHand ? m.startingHand + ' hand' : 'no ball'} · ${new Date(m.createdAt).toLocaleString()}</small></div>
+      <button class="small" data-open="${esc(m.id)}">Open</button>
+    </div>`).join('') : '<div class="hint">No motions yet — record or upload one above.</div>';
+  $$('#motionList [data-open]').forEach((b) => b.onclick = (e) => { e.stopPropagation(); openMotion(b.dataset.open); });
+}
+
+async function openMotion(id) {
+  const { meta, motion } = await api(`/api/mocap/motion/${id}`);
+  ST.motionId = id; ST.meta = meta; ST.motion = motion;
+  $('#motionTitle').textContent = `Motion · ${meta.name}`;
+  const r = meta.report || {};
+  const stat = (v, l) => `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
+  $('#motionStats').innerHTML = [
+    stat(meta.frameCount, 'frames'), stat(`${meta.fps} fps`, 'sample rate'),
+    stat(meta.startingHand || '—', 'starting hand'), stat(`${(meta.statureM || 0).toFixed(2)} m`, 'your height (est.)'),
+    stat(`${r.sourceYawDeg ?? 0}°`, 'filmed from'), stat(r.reprojErrPx != null ? `${r.reprojErrPx}px` : '—', 'fit error'),
+    stat(r.ballFrames ?? 0, 'ball frames'), stat(`${r.lrSwaps ?? 0} / ${r.outliersFixed ?? 0}`, 'L/R fixes / outliers'),
+  ].join('');
+  const s = meta.settings || {};
+  $('#smoothing').value = s.smoothing ?? 1.2; $('#smLbl').textContent = $('#smoothing').value;
+  $('#footLock').checked = s.footLock !== false; $('#inPlace').checked = s.inPlace !== false;
+  $('#trimS').value = s.trimStart || 0; $('#trimE').value = s.trimEnd || 0;
+  if (meta.startingHand) $$('#handPills input').forEach((i) => { i.checked = i.value === meta.startingHand; });
+  buildPlayers();
+  const raw = meta.sourceFrames || meta.frameCount;
+  $('#overlayGrid').innerHTML = Array.from({ length: raw }, (_, i) =>
+    `<div class="thumb"><img loading="lazy" src="/api/mocap/motion/${id}/overlay/${i}?w=320" alt=""><span class="n">${i + 1}</span></div>`).join('');
+  markDone('motion');
+  await loadMotions();
+  await loadResults();
+  go('motion');
+}
+
+// Mannequin players: one sheet image per zone, animated on a canvas
+function buildPlayers() {
+  ST.players.forEach((p) => p.stop());
+  ST.players = [];
+  const mirror = $('#mqMirror').checked ? 1 : 0;
+  const char = ST.character ? `&char=${encodeURIComponent(ST.character.name)}` : '';
+  $('#mqPlayers').innerHTML = [1, 2, 3, 4, 5].map((v) => `<figure><canvas class="player" width="192" height="288" data-v="${v}"></canvas><figcaption>Z${v} · ${ZONES[v].label}</figcaption></figure>`).join('');
+  $$('#mqPlayers canvas').forEach((cv) => {
+    ST.players.push(sheetPlayer(cv, `/api/mocap/motion/${ST.motionId}/sheet?view=${cv.dataset.v}&mirror=${mirror}&w=192${char}`, ST.motion.frameCount, () => +$('#mqFps').value));
+  });
+}
+$('#mqMirror').onchange = buildPlayers;
+
+function sheetPlayer(cv, url, count, fpsFn) {
+  const ctx = cv.getContext('2d');
+  const img = new Image();
+  let i = 0, alive = true, t;
+  img.onload = () => {
+    const fw = img.width / count;
+    cv.width = fw; cv.height = img.height;
+    const tick = () => {
+      if (!alive) return;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(img, i * fw, 0, fw, img.height, 0, 0, fw, img.height);
+      i = (i + 1) % count;
+      t = setTimeout(tick, 1000 / (fpsFn() || 8));
+    };
+    tick();
+  };
+  img.src = url;
+  return { stop() { alive = false; clearTimeout(t); } };
+}
+
+$('#smoothing').oninput = () => { $('#smLbl').textContent = $('#smoothing').value; };
+$('#btnReprocess').onclick = async () => {
+  const st = $('#rpStatus');
+  st.textContent = 'Re-cleaning…'; st.classList.remove('err');
+  try {
+    await api(`/api/mocap/motion/${ST.motionId}/reprocess`, { method: 'POST', body: JSON.stringify({ settings: {
+      smoothing: +$('#smoothing').value, footLock: $('#footLock').checked, inPlace: $('#inPlace').checked,
+      trimStart: +$('#trimS').value || 0, trimEnd: +$('#trimE').value || 0,
+    } }) });
+    st.textContent = '✓ Updated';
+    await openMotion(ST.motionId);
+  } catch (e) { st.textContent = e.message; st.classList.add('err'); }
+};
+
+// ── Generate ────────────────────────────────────────────────────────────
+async function loadCharacters() {
+  const { characters } = await api('/api/mocap/characters');
+  ST.characters = characters;
+  $('#charGrid').innerHTML = characters.length ? characters.map((c) => `
+    <div class="char ${c.usable ? '' : 'dis'}" data-name="${esc(c.name)}">
+      ${c.portrait ? `<img loading="lazy" src="${esc(c.portrait)}" alt="">` : '<div style="aspect-ratio:3/4"></div>'}
+      <b>${esc(c.name)}</b><br><small>${Math.floor(c.heightInches / 12)}'${c.heightInches % 12}" · ${c.angles.length}/8 angles</small>
+    </div>`).join('') : '<div class="hint">No characters yet — create one in the Studio.</div>';
+  $$('#charGrid .char').forEach((el) => el.onclick = () => {
+    const c = ST.characters.find((x) => x.name === el.dataset.name);
+    if (!c?.usable) return;
+    ST.character = c;
+    $$('#charGrid .char').forEach((x) => x.classList.toggle('sel', x === el));
+    $('#btnGenerate').disabled = !ST.motionId;
+    renderViewPills();
+    refreshEstimate();
+    if (ST.motion) buildPlayers();
+  });
+}
+
+function renderViewPills() {
+  const has = new Set(ST.character?.angles || []);
+  $('#viewPills').innerHTML = Object.entries(ZONES).map(([v, z]) => `
+    <label class="pill" title="${has.has(z.angleIdx) ? 'uses this angle\'s body reference' : 'no body reference for this angle — falls back to Front'}">
+      <input type="checkbox" value="${v}" ${v === '1' ? 'checked' : ''}> Z${v} ${z.label}${ST.character && !has.has(z.angleIdx) ? ' ⚠' : ''}
+    </label>`).join('');
+  $$('#viewPills input').forEach((i) => i.onchange = refreshEstimate);
+}
+
+async function loadModels() {
+  const { models } = await api('/api/mocap/models');
+  ST.models = models;
+  $('#modelSel').innerHTML = models.map((m) => `<option value="${esc(m.id)}" ${m.available ? '' : 'disabled'}>${esc(m.label)}${m.available ? '' : ' — key not set'}</option>`).join('');
+  const first = models.find((m) => m.available);
+  if (first) $('#modelSel').value = first.id;
+}
+
+function selected(sel) { return $$(sel + ' input:checked').map((i) => i.value); }
+function refreshEstimate() {
+  if (!ST.motion) { $('#estimate').textContent = ''; return; }
+  const views = selected('#viewPills').length, hands = selected('#handPills').length;
+  const step = +$('#frameStep').value;
+  const frames = Math.ceil(ST.motion.frameCount / step);
+  const n = views * hands * frames;
+  const m = $('#modelSel').value || '';
+  const per = m.startsWith('gemini-3-pro') ? 0.14 : m.startsWith('gemini-3.1') ? 0.07 : null;
+  $('#estimate').textContent = `${views} angle(s) × ${hands} hand(s) × ${frames} frames = ${n} images` +
+    (per ? ` · ≈ $${(n * per).toFixed(2)} + retries` : ' · GPT Image is billed per token (shown after the run)');
+  $('#btnGenerate').disabled = !(ST.character && ST.motionId && n);
+}
+['modelSel', 'frameStep'].forEach((id) => $('#' + id).addEventListener('change', refreshEstimate));
+$$('#handPills input').forEach((i) => i.addEventListener('change', refreshEstimate));
+
+$('#btnGenerate').onclick = async () => {
+  const bar = $('#genBar'), st = $('#genStatus');
+  st.classList.remove('err');
+  $('#btnGenerate').disabled = true;
+  try {
+    const { jobId } = await api('/api/mocap/generate', { method: 'POST', body: JSON.stringify({
+      motionId: ST.motionId, charName: ST.character.name, views: selected('#viewPills').map(Number), hands: selected('#handPills'),
+      model: $('#modelSel').value, quality: $('#qualitySel').value, frameStep: +$('#frameStep').value, retries: +$('#retries').value,
+    }) });
+    const out = await pollJob(jobId, (p) => {
+      bar.style.width = (p.total ? (p.done / p.total) * 100 : 5).toFixed(1) + '%';
+      st.textContent = p.msg || 'Generating…';
+    });
+    bar.style.width = '100%';
+    st.textContent = `✓ Done · ${out.variants.length} variant(s) · $${(out.cost || 0).toFixed(2)}`;
+    markDone('generate');
+    await loadResults(out.id);
+    go('results');
+  } catch (e) { st.textContent = e.message; st.classList.add('err'); }
+  finally { $('#btnGenerate').disabled = false; }
+};
+
+// ── Results ─────────────────────────────────────────────────────────────
+async function loadResults(selectId) {
+  if (!ST.motionId) return;
+  const { results } = await api(`/api/mocap/results?motionId=${ST.motionId}`);
+  ST.results = results;
+  $('#resultSel').innerHTML = results.map((r) => `<option value="${esc(r.id)}">${esc(r.charName)} · ${esc(r.model)} · ${new Date(r.createdAt).toLocaleString()}</option>`).join('');
+  if (results.length) {
+    $('#resultSel').value = selectId || results[0].id;
+    markDone('generate');
+    await showResult($('#resultSel').value);
+  } else { $('#variants').innerHTML = ''; }
+}
+$('#resultSel').onchange = () => showResult($('#resultSel').value);
+
+const gamePlayers = [];
+async function showResult(id) {
+  const { result } = await api(`/api/mocap/result/${id}`);
+  ST.result = result;
+  gamePlayers.forEach((p) => p.stop()); gamePlayers.length = 0;
+  $('#variants').innerHTML = result.variants.map((v, vi) => {
+    const pass = v.frames.filter((f) => f.pass).length;
+    return `<div class="variant" data-vi="${vi}">
+      <h3>Z${v.view} ${esc(v.viewLabel)} · ${esc(v.hand)} hand
+        <span class="badge ${pass === v.frames.length ? 'ok' : 'bad'}">QC ${pass}/${v.frames.length}</span>
+        ${v.clipped ? '<span class="badge bad" title="part of the move leaves the 180px cell">clipped</span>' : ''}
+        <span class="badge">${v.frameCount} frames · ${result.fps} fps</span>
+      </h3>
+      <div class="vwrap">
+        <div><canvas class="gameview" width="180" height="180"></canvas>
+          <div class="btns" style="margin-top:8px"><button class="primary small" data-save="${vi}" ${v.view > 5 ? 'disabled' : ''}>Save to slot</button>
+          <a class="chip" href="${esc(v.spriteUrl)}" target="_blank" style="align-self:center">strip ↗</a></div></div>
+        <div class="frames">${v.frames.map((f, fi) => `
+          <div class="fr ${f.pass ? 'ok' : 'bad'}" data-vi="${vi}" data-fi="${fi}"><img loading="lazy" src="${esc(v.frameUrls[fi])}?v=${Date.now().toString(36)}"><span class="s">${f.score}</span></div>`).join('')}</div>
+      </div></div>`;
+  }).join('');
+  $$('#variants .variant').forEach((el) => {
+    const v = result.variants[+el.dataset.vi];
+    gamePlayers.push(sheetPlayer($('canvas', el), v.spriteUrl, v.frameCount, () => result.fps));
+  });
+  $$('#variants .fr').forEach((el) => el.onclick = () => openFrame(+el.dataset.vi, +el.dataset.fi));
+  $$('#variants [data-save]').forEach((b) => b.onclick = () => openSave(+b.dataset.save));
+}
+
+let dlgCtx = null;
+function openFrame(vi, fi) {
+  const v = ST.result.variants[vi], f = v.frames[fi];
+  dlgCtx = { vi, fi };
+  $('#fdTitle').textContent = `Z${v.view} ${v.viewLabel} · ${v.hand} · frame ${fi + 1}`;
+  $('#fdImg').src = v.frameUrls[fi] + '?v=' + Date.now().toString(36);
+  $('#fdPose').src = `/api/mocap/motion/${ST.result.motionId}/render?view=${v.view}&frame=${f.sourceFrame}&mirror=${v.mirror ? 1 : 0}&char=${encodeURIComponent(ST.result.charName)}&w=240`;
+  const m = f.metrics || {};
+  $('#fdQc').innerHTML = `<b style="font-size:20px">${f.score}</b> / 100 ${f.pass ? '<span class="badge ok">pass</span>' : '<span class="badge bad">fail</span>'}
+    <div class="hint" style="margin:6px 0 0">coverage ${pct(m.coverage)} · spill ${pct(m.spill)} · colour ${pct(m.palette)} · size Δ ${pct(m.scaleDev)} · attempts ${f.attempts || 1}</div>
+    ${f.issues?.length ? `<ul class="issues">${f.issues.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}`;
+  $('#fdPrompt').value = '';
+  $('#fdStatus').textContent = '';
+  frameDlg.showModal();
+}
+const pct = (x) => (x == null ? '—' : `${Math.round(x * 100)}%`);
+
+$('#fdRegen').onclick = async () => {
+  const { vi, fi } = dlgCtx;
+  const v = ST.result.variants[vi];
+  const st = $('#fdStatus');
+  const tile = $(`#variants .fr[data-vi="${vi}"][data-fi="${fi}"]`);
+  st.textContent = 'Regenerating…'; st.classList.remove('err');
+  $('#fdRegen').disabled = true; tile?.classList.add('busy');
+  try {
+    await api('/api/mocap/regen-frame', { method: 'POST', body: JSON.stringify({ resultId: ST.result.id, animName: v.animName, frameIndex: fi, customPrompt: $('#fdPrompt').value.trim() || undefined }) });
+    st.textContent = '✓ Done';
+    frameDlg.close();
+    await showResult(ST.result.id);
+  } catch (e) { st.textContent = e.message; st.classList.add('err'); }
+  finally { $('#fdRegen').disabled = false; tile?.classList.remove('busy'); }
+};
+
+let saveCtx = null;
+function openSave(vi) {
+  const v = ST.result.variants[vi];
+  saveCtx = vi;
+  $('#sdInfo').textContent = `${ST.result.charName} · Z${v.view} ${v.viewLabel} · ${v.hand} hand · ${v.frameCount} frames @ ${ST.result.fps} fps`;
+  const guess = SLOTS.find(([id, l]) => (ST.result.motionName || '').toLowerCase().includes(l.toLowerCase().split(' ')[0]) || (ST.result.motionName || '').toLowerCase().includes(id));
+  $('#sdSlot').innerHTML = SLOTS.map(([id, l]) => `<option value="${id}" ${guess && guess[0] === id ? 'selected' : ''}>${l}</option>`).join('');
+  $('#sdStatus').textContent = '';
+  saveDlg.showModal();
+}
+$('#sdSave').onclick = async () => {
+  const v = ST.result.variants[saveCtx];
+  const slotId = $('#sdSlot').value, slot = SLOTS.find((s) => s[0] === slotId);
+  const zone = ZONES[v.view];
+  const st = $('#sdStatus');
+  try {
+    await api(`/api/character/${encodeURIComponent(ST.result.charName)}/save-animation`, { method: 'POST', body: JSON.stringify({
+      animId: `${slotId}_z${v.view}_${v.hand}`, animName: `${slot[1]} — ${zone.label} (${v.hand})`,
+      spriteUrl: v.spriteUrl.split('?')[0], fps: ST.result.fps, frameCount: v.frameCount,
+      angle: zone.label, angleIndex: zone.angleIdx, slotId, zoneId: v.view, startingHand: v.hand,
+    }) });
+    st.textContent = `✓ Saved as ${slotId}_z${v.view}_${v.hand} — test it in the Studio's Testing tab`;
+  } catch (e) { st.textContent = e.message; st.classList.add('err'); }
+};
+
+// ── Boot ────────────────────────────────────────────────────────────────
+(async () => {
+  await loadStatus();
+  await Promise.all([loadMotions(), loadCharacters(), loadModels()]).catch((e) => toast(e.message));
+  renderViewPills();
+  const m = new URLSearchParams(location.search).get('motion');
+  if (m) openMotion(m).catch(() => {});
+})();
+</script>
+</body>
+</html>

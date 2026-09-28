@@ -218,6 +218,9 @@ require('./routes/quality-check').register(router);
 require('./routes/quiz').register(router, ctx);
 require('./routes/movement-profiles').register(router);
 require('./routes/pose-import').register(router, ctx);
+require('./routes/mocap').register(router, ctx);
+
+router.get('/api/health', (req, res) => json(res, { ok: true, auth: require('./middleware/auth').enabled() }));
 
 // ─── Storage Status Endpoint ─────────────────────────────────────────────
 router.get('/api/storage-status', async (req, res) => {
@@ -647,6 +650,9 @@ async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
+  // Password gate (APP_PASSWORD) — everything below requires sign-in
+  if (await require('./middleware/auth').gate(req, res, url)) return;
+
   // API routes
   if (pathname.startsWith('/api/')) {
     try {
@@ -712,6 +718,9 @@ async function handler(req, res) {
   if (pathname === '/v2' || pathname === '/v2/') {
     return serveStatic(res, path.join(__dirname, 'index-v2.html'), 'text/html');
   }
+  if (pathname === '/mocap' || pathname === '/mocap/' || pathname === '/mocap.html') {
+    return serveStatic(res, path.join(__dirname, 'mocap.html'), 'text/html');
+  }
   if (pathname === '/skeleton-viewer' || pathname === '/skeleton-viewer.html') {
     return serveStatic(res, path.join(__dirname, 'skeleton-viewer.html'), 'text/html');
   }
@@ -738,7 +747,9 @@ if (require.main === module) {
       const storageLine = r2On
         ? `R2 (bucket=${process.env.R2_BUCKET || 'sprite-factory'})`
         : 'NOT SET — data will not persist';
-      console.log(`  Storage: ${storageLine}\n`);
+      console.log(`  Storage: ${storageLine}`);
+      console.log(`  Auth: ${require('./middleware/auth').enabled() ? 'password gate ON (APP_PASSWORD)' : 'OFF — set APP_PASSWORD to make the studio private'}`);
+      console.log(`  Mocap: fal=${process.env.FAL_KEY ? 'set' : 'NOT SET'} openai=${process.env.OPENAI_API_KEY ? 'set' : 'NOT SET'}${process.env.MOCAP_MOCK === '1' ? ' (MOCK MODE)' : ''}\n`);
     });
 
     // ── Background restore — runs after PORT is bound ──────────────────────
