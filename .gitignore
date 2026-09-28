@@ -4,6 +4,7 @@ node_modules/
 .env
 .npm-cache/
 data/.video-tmp/
+data/.chargen/
 .vercel
 .railway/
 

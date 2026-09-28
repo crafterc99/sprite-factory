@@ -25,6 +25,8 @@
  *   PUT  /api/mocap3d/clip/:id                   { role, type, trimStart, trimEnd, warp, entryMax, mirror, notes } → rebuilt
  *   POST /api/mocap3d/clip/:id/build             force a rebuild
  *   GET  /api/mocap3d/rig/:char                  character rig (gz JSON, ETag) ?motion&frame
+ *   POST /api/mocap3d/character/generate          character from video: A-pose views → Rodin 3D { motionId, frames, outfit }
+ *   GET  /api/mocap3d/character/job/:id[/file/:n]  job status / its files (views, model.glb, textures)
  *   POST /api/mocap3d/generate                   { kind: run-dribble | crossover | crossover-moving, hand, speed } → new motion
  *   POST /api/mocap3d/import                     { name, role, fps, skeleton: mhr70|soma|smplx, frames, upAxis, units } → new motion
  *   POST /api/mocap3d/import-kimodo              raw Kimodo .npz body ?name&role&arms=dribble|crossover|none&hand&prompt → new motion
@@ -292,6 +294,26 @@ function register(baseRouter, ctx) {
     } catch (err) { json(res, { error: err.message }, 400); }
   });
   // Generated motions (not filmed): { kind: 'run-dribble' | 'crossover' | 'crossover-moving', hand, speed }
+  // Character from video: A-pose views of the performer → Rodin 3D model (lib/mocap/character-gen.js)
+  router.post('/api/mocap3d/character/generate', async (req, res) => {
+    const body = (await parseBody(req)) || {};
+    try { json(res, { job: require('../lib/mocap/character-gen').start(body) }); }
+    catch (err) { json(res, { error: err.message }, 400); }
+  });
+  router.get('/api/mocap3d/character/job/:id', async (req, res, params) => {
+    const job = require('../lib/mocap/character-gen').getJob(params.id);
+    if (!job) return json(res, { error: 'job not found' }, 404);
+    json(res, { job });
+  });
+  router.get('/api/mocap3d/character/job/:id/file/:name', async (req, res, params) => {
+    const p = require('../lib/mocap/character-gen').filePath(params.id, params.name);
+    if (!p) { res.writeHead(404); return res.end(); }
+    const type = /\.glb$/i.test(p) ? 'model/gltf-binary' : /\.jpe?g$/i.test(p) ? 'image/jpeg' : /\.webp$/i.test(p) ? 'image/webp' : 'image/png';
+    const buf = fs.readFileSync(p);
+    res.writeHead(200, { 'Content-Type': type, 'Content-Length': buf.length, 'Cache-Control': 'no-store' });
+    res.end(buf);
+  });
+
   router.post('/api/mocap3d/generate', async (req, res) => {
     const body = (await parseBody(req)) || {};
     try {
