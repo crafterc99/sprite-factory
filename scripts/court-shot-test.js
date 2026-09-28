@@ -34,16 +34,49 @@ fs.mkdirSync(OUT, { recursive: true });
     const u = new URL(proxyUrl);
     proxy = { server: `${u.protocol}//${u.host}`, username: decodeURIComponent(u.username || ''), password: decodeURIComponent(u.password || '') };
   }
+  // --relay: the browser's own network path is flaky in some sandboxes; serve
+  // every studio request through Node's fetch (with retries) instead
+  const relay = !!args.relay;
+  if (relay) proxy = undefined;
   const browser = await chromium.launch({ proxy, executablePath: process.env.CHROMIUM_PATH || (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined) });
   // Password as a header on every request (no ?key= redirect / rate limit)
   const ctx = await browser.newContext({ ignoreHTTPSErrors: !!proxy, viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, recordVideo: { dir: OUT, size: { width: 1280, height: 800 } }, ...(PW ? { extraHTTPHeaders: { Authorization: `Bearer ${PW}` } } : {}) });
+  if (relay) {
+    let active = 0; const queue = [];
+    const slot = () => new Promise((r) => (active < 6 ? (active++, r()) : queue.push(r)));
+    const done = () => { active--; const n = queue.shift(); if (n) { active++; n(); } };
+    await ctx.route('**/*', async (route) => {
+      const req = route.request();
+      if (!req.url().startsWith(BASE)) return route.abort();
+      await slot();
+      try {
+        for (let a = 0; ; a++) {
+          try {
+            const res = await fetch(req.url(), { method: req.method(), headers: { ...req.headers(), ...(PW ? { authorization: `Bearer ${PW}` } : {}) }, body: req.postDataBuffer() || undefined, redirect: 'manual' });
+            const body = Buffer.from(await res.arrayBuffer());
+            const headers = {}; res.headers.forEach((v, k) => { if (!/^(content-encoding|content-length|transfer-encoding|connection)$/i.test(k)) headers[k] = v; });
+            return await route.fulfill({ status: res.status, headers, body });
+          } catch (e) { if (a >= 3) return route.abort(); await new Promise((r) => setTimeout(r, 500 * (a + 1))); }
+        }
+      } finally { done(); }
+    });
+  }
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const q = `page=testing&char=${encodeURIComponent(CHAR)}`;
+  const failed = [];
+  page.on('requestfailed', (r) => failed.push(`${r.url().replace(BASE, '')} ${r.failure()?.errorText}`));
   for (let a = 0; ; a++) {
-    try { await page.goto(`${BASE}/?${q}`, { waitUntil: 'load', timeout: 60000 }); break; }
-    catch (e) { if (a >= 4) throw e; await page.waitForTimeout(3000 * (a + 1)); }
+    try {
+      await page.goto(`${BASE}/?${q}`, { waitUntil: 'load', timeout: 60000 });
+      // every engine script must have loaded (a flaky network can drop one)
+      const ok = await page.evaluate(() => ['ControllerInput', 'AnimationPlayer', 'perspectiveZone'].every((n) => typeof window[n] !== 'undefined' || (() => { try { return typeof eval(n) !== 'undefined'; } catch { return false; } })()));
+      if (ok) break;
+      if (a >= 4) throw new Error('engine scripts failed to load: ' + failed.slice(-5).join(' | '));
+      console.log('reloading — missing engine script', failed.slice(-3));
+      errors.length = 0;
+    } catch (e) { if (a >= 4) throw e; await page.waitForTimeout(3000 * (a + 1)); }
   }
   await page.waitForFunction((c) => typeof TESTING !== 'undefined' && TESTING.selectedChar === c && typeof GM !== 'undefined' && GM.active && GM.player, CHAR, { timeout: 30000 })
     .catch(async () => { await page.evaluate((c) => { testingSelectChar(c); if (!GM.active) startGameMode(true); }, CHAR); });
@@ -104,6 +137,12 @@ fs.mkdirSync(OUT, { recursive: true });
       if (Math.abs(dy) > Math.abs(dx) * 0.4) k.push(dy < 0 ? 'KeyW' : 'KeyS');
       return k;
     }, sp.flip);
+    // in-page recorder: every displayed frame of the shot (polling misses short ones)
+    await page.evaluate(() => {
+      window.__shotFrames = new Set();
+      const tick = () => { if (GM.player?.currentAnim === 'stepback-jumpshot') window.__shotFrames.add(TESTING.currentFrame); window.__rec = requestAnimationFrame(tick); };
+      cancelAnimationFrame(window.__rec); tick();
+    });
     for (const k of keys) await page.keyboard.down(k);
     await page.waitForTimeout(120);
     await page.keyboard.down('KeyI');
@@ -130,21 +169,23 @@ fs.mkdirSync(OUT, { recursive: true });
       await page.waitForTimeout(60);
     }
     const shot = samples.filter((q) => q.anim === 'stepback-jumpshot');
+    const shown = await page.evaluate(() => [...window.__shotFrames].sort((a, b) => a - b));
     const hoop = await page.evaluate(() => ({ x: NET_ANCHOR.x, y: NET_ANCHOR.y, rim: gmRimPoint() }));
     const dStart = Math.hypot(start.x - hoop.x, start.y - hoop.y);
     const dEnd = shot.length ? Math.hypot(shot[shot.length - 1].x - hoop.x, shot[shot.length - 1].y - hoop.y) : null;
     const firstBall = samples.find((q) => q.ball);
     const r = {
-      ...sp, idle, shotKey: shot[0]?.key ?? null, shotFrames: shot.length ? Math.max(...shot.map((q) => q.frame)) + 1 : 0,
+      ...sp, idle, shotKey: shot[0]?.key ?? null, shotFrames: shown.length ? Math.max(...shown) + 1 : 0, framesShown: shown.length,
       shotMirrored: shot[0]?.mirrored ?? null, movedAwayPx: dEnd != null ? Math.round(dEnd - dStart) : null,
       ballLaunched: !!firstBall, releaseFrame: firstBall?.frame ?? null, release: firstBall ? [Math.round(firstBall.ball.x0), Math.round(firstBall.ball.y0)] : null,
       meta: shot.find((q) => q.meta)?.meta ?? null, backToIdle: samples[samples.length - 1].anim,
     };
+    r.expectFrames = await page.evaluate((k) => GM.charAnims.find((a) => a.animKey === k)?.frameCount ?? null, r.shotKey);
     r.shotZone = start.zone?.id; r.shotZoneFlip = !!start.zone?.flip;
     r.walkFacesHoop = walk.filter((w) => w.anim === 'idle-dribble').every((w) => w.mirrored === w.flip);
     r.pass = r.idle.key === `idle-dribble_z${sp.zone}_right` && r.idle.mirrored === sp.flip
       && r.shotKey === `stepback-jumpshot_z${r.shotZone}_right` && r.shotMirrored === r.shotZoneFlip
-      && r.movedAwayPx > 5 && r.ballLaunched && r.backToIdle === 'idle-dribble' && r.walkFacesHoop;
+      && r.movedAwayPx > 5 && r.ballLaunched && r.framesShown === r.shotFrames && r.shotFrames === (r.meta ? r.expectFrames : r.shotFrames) && r.backToIdle === 'idle-dribble' && r.walkFacesHoop;
     report.spots.push(r);
     console.log(JSON.stringify(r));
   }

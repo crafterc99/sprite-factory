@@ -8659,7 +8659,7 @@ function gmStartShot(slotId, input) {
   // the hoop is applied on the frame the performer actually hops back
   const fps = entry?.fps ?? 8, frames = entry?.frameCount ?? 1;
   GM._actionHand = GM.ballHand;
-  GM.player.triggerAction(slotId, { type: 'stationary', velocityX: 0, velocityY: 0, duration: (frames / fps) * 1000 / (GM.player.speed || 1), lockMovement: true }, { immediate: true });
+  GM.player.triggerAction(slotId, { type: 'stationary', velocityX: 0, velocityY: 0, duration: (frames / fps) * 1000 / (GM.player.speed || 1), lockMovement: true, untilLastFrame: true }, { immediate: true });
   GM._shot = { slotId, started: false, burstDone: false, released: false, burst: gmActionMoveData('stepback', input) };
   gmShotMeta(entry);
 }

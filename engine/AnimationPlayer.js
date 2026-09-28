@@ -118,6 +118,11 @@ class AnimationPlayer {
     this.state = PLAYER_STATES.ACTION;
     const fps = (anim.fps ?? 8) * (this.speed || 1);
     this.actionTimer = movementData?.duration ?? (anim.frameCount / fps) * 1000;
+    // untilLastFrame: end when the last frame has actually been shown (frame
+    // advance is per display refresh — a slow/throttled display must not cut
+    // the landing frames off); the timer is only a generous safety net
+    this._untilLastFrame = !!movementData?.untilLastFrame;
+    if (this._untilLastFrame) this.actionTimer = Math.max(this.actionTimer, (anim.frameCount / fps) * 1000) * 3;
 
     // Apply physics burst
     if (this.physics && movementData) {
@@ -221,7 +226,13 @@ class AnimationPlayer {
       if (!this.lastFrameTime) this.lastFrameTime = timestamp;
       if (timestamp - this.lastFrameTime >= frameDuration) {
         const next = this.currentFrame + 1;
-        if (next >= anim.frameCount) {
+        if (next >= anim.frameCount && this.state === PLAYER_STATES.ACTION && this._untilLastFrame) {
+          // last frame shown for a full frame time → the action is over
+          this._untilLastFrame = false;
+          this.physics?.unlock();
+          this.state = PLAYER_STATES.IDLE;
+          this.actionTimer = 0;
+        } else if (next >= anim.frameCount) {
           // Full pass complete — fire any queued transition here so switches
           // always land on the animation boundary (smooth move-to-move flow)
           if (this._pendingTrigger && this.state !== PLAYER_STATES.ACTION) {
