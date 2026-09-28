@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Recording Guide — Sprite Factory</title>
+<style>
+:root{
+  --bg:#0e0f14;--panel:#161821;--panel2:#1d202b;--line:#2a2e3d;--text:#e9eaf0;--mute:#9699ab;
+  --accent:#ff6a2b;--accent2:#ffb000;--ok:#35c27a;--bad:#ff5a6a;--blue:#2f6bff;--red:#eb3458;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-text-size-adjust:100%}
+a{color:var(--accent2)}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top));background:rgba(14,15,20,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0 8px 0 0;white-space:nowrap}
+header .sp{flex:1}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--mute);white-space:nowrap;text-decoration:none}
+a.chip:hover{color:var(--text);border-color:var(--accent)}
+main{max-width:1180px;margin:0 auto;padding:16px;padding-bottom:80px}
+section.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;scroll-margin-top:72px}
+section.card>h2{font-size:16px;margin:0 0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+section.card>h2 .sp{flex:1}
+.hint{color:var(--mute);font-size:13px;margin:0 0 12px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.col{flex:1;min-width:220px}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.04em;min-width:120px}
+select{font:inherit;font-size:16px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 11px;min-height:44px;width:100%}
+button{font:inherit;font-weight:600;font-size:15px;min-height:44px;padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);cursor:pointer;touch-action:manipulation}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.ghost{background:transparent}
+button.small{min-height:34px;padding:6px 11px;font-size:13px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:0 12px;min-height:40px;border:1px solid var(--line);border-radius:999px;background:var(--bg);font-size:14px;color:var(--text);text-decoration:none;white-space:nowrap}
+a.pill:hover{border-color:var(--accent);background:#2a1a10;color:#ffd9c7}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mute);white-space:nowrap;vertical-align:1px}
+.badge.ok{color:#bff5d6;border-color:#2c6b4c;background:#12291e}
+.badge.bad{color:#ffc2c8;border-color:#6b2c35;background:#2a1216}
+.badge.warn{color:#ffe2a8;border-color:#6b5a2c;background:#2a2210}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:10px 0}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:0}
+.stat b{display:block;font-size:15px;overflow-wrap:anywhere}
+.stat span{font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em}
+.progress{height:8px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
+.status{font-size:13px;color:var(--mute);margin-top:6px;min-height:1.2em}
+.status.err{color:var(--bad)}
+code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#ffd9c7;overflow-wrap:anywhere}
+pre{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere;color:#ffd9c7}
+ul,ol{margin:6px 0;padding-left:20px}
+li{margin:3px 0}
+.hidden{display:none!important}
+
+/* jump links */
+.toc{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+
+/* why */
+.why{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-top:8px}
+.why>div{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
+.why b{display:block;margin-bottom:2px}
+
+/* checklist */
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px;margin-bottom:10px}
+.cgrp{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:12px 0 6px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;min-height:44px;font-size:14px;user-select:none}
+.check input{width:22px;height:22px;accent-color:var(--ok);flex:none;margin:0}
+.check:has(input:checked){border-color:#2c6b4c;background:#12291e}
+.check:has(input:checked) span{color:#bff5d6}
+
+/* tables → cards on narrow screens */
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{text-align:left;font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.05em;font-weight:600;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl td>div{min-width:0;overflow-wrap:anywhere}
+.tbl tr.grp td{padding:14px 8px 6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent2);border-bottom:1px solid var(--line)}
+.tbl small{color:var(--mute)}
+.tbl tr.sel td{background:#23180f}
+@media (max-width:760px){
+  .tbl thead{display:none}
+  .tbl,.tbl tbody,.tbl tr,.tbl td{display:block;width:100%}
+  .tbl tr{border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:6px 10px;margin-bottom:8px}
+  .tbl td{border:0;padding:4px 0;display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px}
+  .tbl td::before{content:attr(data-l);font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;font-weight:600;padding-top:2px}
+  .tbl td.nol{display:block}
+  .tbl td.nol::before{display:none}
+  .tbl tr.grp{border:0;background:none;padding:8px 0 0;margin:0}
+  .tbl tr.grp td{display:block;border:0;padding:6px 0 2px}
+  .tbl tr.grp td::before{display:none}
+  .tbl tr.sel{border-color:var(--accent)}
+  .tbl tr.sel td{background:none}
+}
+
+/* rules */
+details.rule{border:1px solid var(--line);border-radius:10px;background:var(--bg);margin-bottom:6px}
+details.rule>summary{cursor:pointer;padding:11px 12px;min-height:44px;font-size:14px;list-style:none;display:flex;gap:8px;align-items:baseline}
+details.rule>summary::-webkit-details-marker{display:none}
+details.rule>summary::before{content:"▸";color:var(--accent2);flex:none}
+details.rule[open]>summary::before{content:"▾"}
+details.rule>summary b{flex:none}
+details.rule>summary span{color:var(--mute)}
+details.rule>div{padding:0 12px 12px 30px;font-size:14px}
+.note{border-left:3px solid var(--accent2);background:#221d10;padding:8px 12px;border-radius:0 8px 8px 0;font-size:13px;margin:8px 0}
+
+/* camera card */
+.camhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 4px}
+.camhead code{font-size:17px;font-weight:700}
+.perform{font-size:15px;margin:6px 0 4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 Recording guide</h1>
+  <div class="sp"></div>
+  <a href="/" class="chip">← Studio</a>
+  <a href="/mocap" class="chip">Mocap</a>
+  <a href="/court3d" class="chip">3D Court</a>
+</header>
+
+<main>
+  <nav class="toc">
+    <a class="pill" href="#setup">✓ Setup</a>
+    <a class="pill" href="#shots">📋 Shot list</a>
+    <a class="pill" href="#camera">🎥 Camera card</a>
+    <a class="pill" href="#rules">📏 Rules</a>
+    <a class="pill" href="#analyse">⚙ Analyse</a>
+    <a class="pill" href="#import">⤵ Import</a>
+    <a class="pill" href="#flags">⚠ Flags</a>
+  </nav>
+
+  <section class="card" id="why">
+    <h2>Why these rules</h2>
+    <p class="hint">A phone clip becomes a 3D game clip through SAM 3 (mask), then SAM 3D Body (pose), then clip-builder. SAM 3D Body reads one image at a time: it measures pose well and depth badly.</p>
+    <div class="why">
+      <div><b>Travel ACROSS the frame</b>Across the frame: ~1–2 cm error at 5 m. Toward or away from the camera: ~5–15 cm per frame. On our step-back take, 1.6 m of depth travel had to be thrown away.</div>
+      <div><b>Camera never moves</b>Tripod, 1x lens, settings locked. SAM guesses the focal length on every frame, so a fixed lens keeps that guess stable.</div>
+      <div><b>Same size in frame</b>Walking 3 m toward a camera 5 m away changes body size by ~60 %, and all of it reads as depth noise.</div>
+      <div><b>Hold still at the edges</b>≥ 1 s in the idle stance at the start and end of every action. The floor snap and foot pinning lock onto those frames.</div>
+    </div>
+    <p class="hint" style="margin:10px 0 0">Values marked <i>(est.)</i> are research estimates. Tune them on real takes. The same guide is in <code>docs/RECORDING.md</code>.</p>
+  </section>
+
+  <section class="card" id="setup">
+    <h2>Setup checklist <span class="sp"></span><span class="badge" id="chkCount">0 / 0</span><button class="small ghost" id="chkReset" type="button">Reset</button></h2>
+    <p class="hint">Tick items off as you set up. Your ticks are saved on this device.</p>
+    <div class="progress"><i id="chkBar"></i></div>
+    <div id="checklist"></div>
+  </section>
+
+  <section class="card" id="shots">
+    <h2>Shot list <span class="sp"></span><span class="badge" id="shotSummary">loading…</span><button class="small ghost" id="shotRefresh" type="button">↻ Refresh</button></h2>
+    <p class="hint">✅ means the 3D court plays that role now. Locomotion is clip-driven once recorded; until then the court uses procedural stepping. The status shows the take the court uses: an explicitly assigned role beats a guessed one, and the newest take wins among equals. Set rejected takes to "— none —" in /mocap.</p>
+    <table class="tbl">
+      <thead><tr><th>Role</th><th>Record as</th><th>Camera</th><th>Court</th><th>Status</th><th></th></tr></thead>
+      <tbody id="shotBody"></tbody>
+    </table>
+    <div class="status" id="shotStatus"></div>
+  </section>
+
+  <section class="card" id="camera">
+    <h2>Camera card</h2>
+    <p class="hint">One card per clip. Keep it open while you record.</p>
+    <div class="row">
+      <label class="f col">Clip<select id="camSel"></select></label>
+      <div class="btns"><button type="button" id="camPrev" aria-label="Previous clip">◀</button><button type="button" id="camNext" aria-label="Next clip">▶</button></div>
+    </div>
+    <div id="camBody"></div>
+  </section>
+
+  <section class="card" id="rules">
+    <h2>Rules</h2>
+    <p class="hint">Tap a rule to open it.</p>
+
+    <details class="rule"><summary><b>Camera</b><span>tripod · 0.9–1.2 m · level · 1x · landscape · 60 fps · locked</span></summary><div>
+      <ul>
+        <li>Tripod, fully still. No pan, zoom or cuts. Keep one tripod position per session; if it moves, record a new calibration clip.</li>
+        <li>Lens height <b>0.9–1.2 m</b> (hip to chest). Keep it level: pitch 0°, at most 5–10° down.</li>
+        <li><b>1x main lens</b>, landscape 16:9. No ultra-wide.</li>
+        <li><b>Stabilisation / Action Mode OFF</b> and <b>HDR OFF</b>. Lock exposure, focus and white balance (for example with the Blackmagic Camera app).</li>
+        <li><b>60 fps</b>, 1080p or better. Use 4K60 for the sprint lane and for shots.</li>
+        <li>Shutter <b>1/500–1/1000</b> in daylight, or <b>1/120</b> under LEDs (1/100 on 50 Hz mains) to avoid flicker. Ball blur at 5 m/s <i>(est.)</i>: 8 cm at 1/60, 4 cm at 1/120, 1 cm at 1/500.</li>
+        <li>Light behind the camera. Plain background with no mirrors or glass. Nobody else in view.</li>
+      </ul>
+    </div></details>
+
+    <details class="rule"><summary><b>Distance</b><span>3.5 m in place · 4.5 m shots · 5 m lanes · 6.5 m sprint</span></summary><div>
+      <table class="tbl" id="distTbl"></table>
+      <p class="hint" style="margin-top:8px">A 1x phone lens covers about 1.32·d wide × 0.745·d tall <i>(est.)</i>. Tape start, centre and end marks parallel to the camera. At the ends of travel keep ≥ 1 m to the frame edge.</p>
+    </div></details>
+
+    <details class="rule"><summary><b>Framing</b><span>whole body + ball · 10 % under the feet · 0.8–1 m headroom</span></summary><div>
+      <ul>
+        <li>Whole body <b>plus the ball</b> in frame for the entire take.</li>
+        <li>≥ 10 % margin under the feet: heels, toes and the ball's bounce must be visible.</li>
+        <li><b>Headroom ≥ 0.8–1.0 m</b> above the standing head for shots and layups. Keep the ball in frame ≥ 0.3 s after release.</li>
+        <li>The performer fills ≥ half the frame height where possible.</li>
+      </ul>
+      <div class="note"><b>Real failure:</b> in one step-back frame the head left the top of the frame. SAM guessed the rest of the body and faked a <b>35 cm hop</b>. The pipeline now drops such frames and interpolates them, but record with headroom.</div>
+    </div></details>
+
+    <details class="rule"><summary><b>Performer</b><span>fitted clothes · contrasting shoes · size 7 ball · alone</span></summary><div>
+      <ul>
+        <li>Fitted shorts above the knee and a fitted top. Patterns or light colours read better than all-black.</li>
+        <li>Shoes that contrast with the floor. Use a matte floor; glossy courts reflect the legs.</li>
+        <li><b>Size 7 ball</b> only: the pipeline assumes a 0.12 m radius.</li>
+        <li><b>One person in view.</b> Nobody walks behind.</li>
+        <li>Measure height in shoes (cm) once per session.</li>
+      </ul>
+    </div></details>
+
+    <details class="rule"><summary><b>Hub pose IDS</b><span>every action starts and ends in it · hold ≥ 1 s</span></summary><div>
+      <p><b>IDS-R (Idle Dribble Stance, right hand):</b></p>
+      <ul>
+        <li>Feet ~1.2× shoulder width, left foot ~15 cm ahead.</li>
+        <li>Knees bent 30–40°, hips back, chest over the knees.</li>
+        <li>Ball dribbled at knee-to-hip height beside and slightly ahead of the right foot.</li>
+        <li>Left forearm up as a guard.</li>
+        <li>Phase 0 = ball in the right palm at the top of the bounce.</li>
+      </ul>
+      <ul>
+        <li>IDS-L is the software mirror. Never record it.</li>
+        <li>Other connection states: JOG-R (right foot down, ball at the top) and LAND (both feet planted, no ball).</li>
+        <li><b>Hold ≥ 1 s perfectly still</b> in IDS at the start and end of every action clip (≈ 2 bounces <i>(est.)</i>).</li>
+      </ul>
+    </div></details>
+
+    <details class="rule"><summary><b>Loops</b><span>20–30 s to a metronome · whole cycles</span></summary><div>
+      <ul>
+        <li>Record 20–30 s takes to a metronome. Idle ≈ 120 bpm (1 bounce per beat). Jog cadence 160–170 steps/min with a bounce every 2nd step <i>(est.)</i>.</li>
+        <li>For lane loops, be at speed before entering the frame: start 3 m before the edge (sprint: accelerate over 8 m). Keep a constant pace. 2 passes each way.</li>
+        <li>Analyse a window with at least one whole cycle: idle 4 bounces ≈ 2 s, jog 2 strides ≈ 1.4 s. The builder finds the loop itself.</li>
+        <li>Speed tiers <i>(est.)</i>: walk 1.4 · jog 3.0 · run 4.3 · sprint 5.8 m/s.</li>
+      </ul>
+    </div></details>
+
+    <details class="rule"><summary><b>Hands &amp; mirroring</b><span>record right-handed · direction clips both ways</span></summary><div>
+      <ul>
+        <li>The ball always starts in the <b>right hand</b>. The game mirrors the 3D motion to get the left hand.</li>
+        <li>Mirroring flips hand <b>and</b> direction, so record these <b>both ways</b>, right-handed: strafe left + right, turn 90° L + R, cut 90° L + R, 180° plant on the left + on the right.</li>
+        <li>Record hand changes <b>once, R→L</b> (the mirror gives L→R): crossover, between the legs, behind the back, spin.</li>
+        <li>For lane loops, do both passes (L→R and R→L). Far-side joints are 40–108 % less accurate.</li>
+      </ul>
+    </div></details>
+
+    <details class="rule"><summary><b>Turns &amp; cuts</b><span>turn through the camera side · V-path for cuts</span></summary><div>
+      <ul>
+        <li>Plant the pivot foot on the centre mark. Pivot radius ≤ 1 m.</li>
+        <li>Turn <b>through the side facing the camera</b>. Back to the camera for ≤ 0.5 s (a spin ≤ 0.3 s).</li>
+        <li>90° cuts use a <b>V-path</b>: approach at 45° going away from the camera, plant on the centre mark, exit at 45° coming back.</li>
+      </ul>
+    </div></details>
+
+    <details class="rule"><summary><b>Naming</b><span>&lt;family&gt;-&lt;action&gt;[-&lt;variant&gt;]-&lt;hands&gt;-t&lt;NN&gt;</span></summary><div>
+      <pre>&lt;family&gt;-&lt;action&gt;[-&lt;variant&gt;]-&lt;hands&gt;-t&lt;NN&gt;</pre>
+      <ul>
+        <li>Families: <code>calib dribble loco start stop turn cut move shot layup</code></li>
+        <li>Hands: <code>r</code>, or <code>rl</code> / <code>lr</code> for a hand change.</li>
+        <li>Lowercase, <code>a-z 0-9 _ -</code>, ≤ 60 characters.</li>
+        <li>Examples: <code>dribble-idle-r-t02</code> · <code>loco-jog-fwd-r-t03</code> · <code>move-crossover-idle-rl-t03</code> · <code>shot-stepback-r-t04</code> · <code>calib-gym1-t01</code></li>
+      </ul>
+      <div class="note">The name only <b>guesses</b> the role. Any name containing <code>idle</code> is guessed as the idle hub. Always pick the role in /mocap → 3D game clip and Save.</div>
+    </div></details>
+
+    <details class="rule"><summary><b>Calibration</b><span>~12 s, once per camera position</span></summary><div>
+      <ol>
+        <li>Clap or slam the ball (an audio sync mark).</li>
+        <li>A-pose facing the camera on the centre mark, 2 s.</li>
+        <li>Quarter turn to profile, 2 s.</li>
+        <li>IDS-R, 2 s.</li>
+        <li>Slow walk along the whole lane, stepping flat on the tape marks.</li>
+        <li>2 small hops, then stand still 1 s.</li>
+      </ol>
+      <p>Write down height in shoes (cm), tape distance (m), camera height and distance (m). Put them in the clip notes. The pipeline does not read calibration clips automatically yet.</p>
+    </div></details>
+
+    <details class="rule"><summary><b>Takes &amp; order</b><span>≥ 3 good takes per action · shots before fatigue</span></summary><div>
+      <ul>
+        <li>≥ 3 good takes per action (3–5 for moves and shots). 2 passes per direction for lane loops.</li>
+        <li>Session order: calibration → idle hub → locomotion → transitions → shots → moves.</li>
+        <li>Say the take name on camera, or rename the file straight after recording.</li>
+      </ul>
+    </div></details>
+  </section>
+
+  <section class="card" id="analyse">
+    <h2>Analyse settings in /mocap</h2>
+    <p class="hint">The <b>Clip type</b> buttons on /mocap's Capture step set these. Then trim to the action plus its holds. Max frames goes up to 240 (8 s at 30 fps). Measuring costs about $0.02–0.03 per frame; the 3D body mesh adds ~$0.02 per frame.</p>
+    <table class="tbl" id="anaTbl"></table>
+    <p class="hint" style="margin:8px 0 0">Why 30 fps: a jog step touches the floor ~0.25–0.3 s, which is only ~3 samples at 12 fps.</p>
+  </section>
+
+  <section class="card" id="import">
+    <h2>Import, step by step</h2>
+    <ol>
+      <li><a href="/mocap">/mocap</a> → <b>Capture</b>: choose the video and name it with the convention. Press the clip-type button, trim to the action plus its holds, and press <b>Analyze motion</b>.</li>
+      <li><b>Motion</b> step: press <b>Add 3D body mesh + hand close-ups</b>.</li>
+      <li><b>3D game clip</b> panel (Motion step):
+        <ul>
+          <li>Choose the <b>role</b>.</li>
+          <li>Check the type, the trims (raw frames cut from each end; leave 0 for loops) and the entry max (actions; blank = auto).</li>
+          <li>Press <b>Save &amp; rebuild</b> and read the quality flags.</li>
+          <li>Set rejected takes to <b>— none —</b>.</li>
+        </ul>
+      </li>
+      <li><b>Open in 3D court</b>, or go to <a href="/court3d">/court3d</a>, to play it.</li>
+    </ol>
+  </section>
+
+  <section class="card" id="flags">
+    <h2>Troubleshooting: quality flags</h2>
+    <p class="hint">Shown after Save &amp; rebuild in /mocap. Red = bad (the clip will not work well), amber = warning.</p>
+    <table class="tbl" id="flagTbl"></table>
+    <h2 style="font-size:15px;margin:16px 0 4px">Reading the numbers</h2>
+    <table class="tbl" id="numTbl"></table>
+  </section>
+</main>
+
+<script>
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// localStorage can throw (private mode, blocked storage) — every access is guarded
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const KEY_CHECK = 'sf-recording-checklist-v1', KEY_CARD = 'sf-recording-card-v1';
+
+// ── Data ────────────────────────────────────────────────────────────────
+const CLASS = {
+  inplace: { dist: '3.5 m', angle: '3/4', angleLong: 'Body 30–45° off the camera axis, ball hand (right) on the camera side', frame: '2.6 × 4.6 m', size: '~70 %', label: 'In-place dribble moves' },
+  shot: { dist: '4.5 m', angle: '3/4', angleLong: 'Imaginary hoop off to the side; any step-back travels ACROSS the frame', frame: '3.35 × 5.9 m', size: '~55 %', label: 'Jump shots, step-back' },
+  lane: { dist: '5 m', angle: 'side-on lane', angleLong: 'Camera side-on to the taped lane; travel ACROSS the frame', frame: '3.7 × 6.6 m', size: '~50 %', label: 'Jog lanes, starts/stops, cuts, layups' },
+  sprint: { dist: '6.5 m', angle: 'side-on lane', angleLong: 'Side-on to the lane. Record 4K60 so the performer stays ≥ 300 px tall', frame: '4.8 × 8.6 m', size: '~38 %', label: 'Sprint lane' },
+};
+const PRESETS = {
+  idle: { label: 'Idle loop', fps: 15, max: 48, window: '3.2 s (≥ 4 bounces)' },
+  loco: { label: 'Locomotion', fps: 30, max: 96, window: '3.2 s (one pass in frame)' },
+  move: { label: 'Move / transition', fps: 30, max: 120, window: '4 s (hold + move + hold)' },
+  shot: { label: 'Shot / layup', fps: 30, max: 120, window: '4 s (hold + shot + landing hold)' },
+  calib: { label: 'Calibration (optional)', fps: 15, max: 180, window: '12 s' },
+};
+const GROUPS = [['loops', 'Loops'], ['locomotion', 'Locomotion'], ['shots', 'Shots'], ['moves', 'Dribble moves'], ['transitions', 'Transitions'], ['extras', 'Extras (no game role yet)']];
+const HOLD_ACTION = '≥ 1 s still in IDS-R before · ≥ 1 s hold at the end';
+const SHOTS = [
+  { id: 'idle', role: 'idle', group: 'loops', names: ['dribble-idle-r'], type: 'loop', cls: 'inplace', preset: 'idle', court: 'hub', label: 'Idle dribble (hub stance)',
+    take: '20 s', holds: 'Feet planted the whole take', window: '≥ 4 bounces (≈ 2 s)', takes: '2',
+    perform: 'IDS-R dribble to the metronome (~120 bpm, 1 bounce per beat, est.). Feet stay planted.',
+    tips: ['This is the hub: every other clip starts and ends in this pose.', 'Ball hand (right) on the camera side so the torso never hides it.'] },
+  { id: 'loco-fwd', role: 'loco-fwd', group: 'locomotion', names: ['loco-jog-fwd-r'], type: 'loop', cls: 'lane', preset: 'loco', court: 'stick', label: 'Dribble jog forward',
+    take: '20–30 s', holds: 'None: enter the frame already at speed', window: '2 strides ≈ 1.4 s (trim to one pass)', takes: '2 passes each way',
+    perform: 'Jog dribble at ~3.0 m/s (est.), cadence 160–170 steps/min, a bounce every 2nd step.',
+    tips: ['Start running 3 m before the frame edge.', 'Record L→R and R→L.'] },
+  { id: 'loco-back', role: 'loco-back', group: 'locomotion', names: ['loco-backpedal-r'], type: 'loop', cls: 'lane', preset: 'loco', court: 'stick', label: 'Backpedal dribble',
+    take: '20–30 s', holds: 'None: at speed before the frame', window: '≥ 2 strides', takes: '2 passes each way',
+    perform: 'Retreat dribble moving backward across the frame, ~1.5–2 m/s (est.).',
+    tips: ['Travel stays parallel to the camera.', 'Record both directions.'] },
+  { id: 'loco-left', role: 'loco-left', group: 'locomotion', names: ['loco-strafe-left-r'], type: 'loop', cls: 'lane', preset: 'loco', court: 'stick', label: 'Slide / strafe left',
+    take: '20–30 s', holds: 'None: at speed before the frame', window: '≥ 2 slide cycles', takes: '2 passes',
+    perform: 'Lateral slide dribble to the performer\'s left, ~1–1.5 m/s (est.), facing the camera at 3/4. Feet never cross.',
+    tips: ['Right hand. The mirror cannot replace the other direction: record strafe right too.'] },
+  { id: 'loco-right', role: 'loco-right', group: 'locomotion', names: ['loco-strafe-right-r'], type: 'loop', cls: 'lane', preset: 'loco', court: 'stick', label: 'Slide / strafe right',
+    take: '20–30 s', holds: 'None: at speed before the frame', window: '≥ 2 slide cycles', takes: '2 passes',
+    perform: 'Lateral slide dribble to the performer\'s right, ~1–1.5 m/s (est.), facing the camera at 3/4. Feet never cross.',
+    tips: ['Still right-handed.'] },
+  { id: 'loco-sprint', role: 'loco-sprint', group: 'locomotion', names: ['loco-sprint-fwd-r'], type: 'loop', cls: 'sprint', preset: 'loco', court: 'R2', label: 'Speed dribble (sprint, R2)',
+    take: '20–30 s', holds: 'None: accelerate over 8 m before the frame', window: '1–2 strides (~1.1 s usable)', takes: '2 passes each way',
+    perform: 'Speed dribble ~5.5–6.5 m/s (est.). Ball pushed out ahead, a bounce every 2 steps.',
+    tips: ['Record 4K60.', 'Trim to the part fully inside the frame.'] },
+  { id: 'shot-stepback', role: 'shot-stepback', group: 'shots', names: ['shot-stepback-r'], type: 'action', cls: 'shot', preset: 'shot', court: 'stick + hold □', label: 'Step-back jumper',
+    take: '5–8 s', holds: '≥ 1 s IDS-R before · ≥ 1 s landing hold', window: '≈ 3–4 s', takes: '3–5',
+    perform: 'IDS-R 1 s → jab or one hard dribble → step back 0.8–1.2 m ACROSS the frame → gather → jumper → land → hold 1 s.',
+    tips: ['Headroom ≥ 0.8–1.0 m above the head.', 'Ball in frame ≥ 0.3 s after release.', 'Our first take faked a 35 cm hop when the head left the frame.'] },
+  { id: 'shot-jumper', role: 'shot-jumper', group: 'shots', names: ['shot-jumper-idle-r'], type: 'action', cls: 'shot', preset: 'shot', court: 'hold □', label: 'Jump shot',
+    take: '5–8 s', holds: '≥ 1 s IDS-R before · ≥ 1 s landing hold', window: '≈ 3 s', takes: '3–5',
+    perform: 'IDS-R 1 s → spot-up jumper → land → hold 1 s.',
+    tips: ['Headroom ≥ 0.8–1.0 m.', 'Record shots before the performer tires.'] },
+  { id: 'layup', role: 'layup', group: 'shots', names: ['layup-jog-r'], type: 'action', cls: 'lane', preset: 'shot', court: '', label: 'Layup',
+    take: '5–8 s', holds: 'Enter at jog pace · ≥ 1 s landing hold', window: '≈ 3–4 s', takes: '3–5',
+    perform: 'Jog across → gather on the right foot → step on the left → take off from the left foot → right-hand finish at full reach → land, hold 1 s.',
+    tips: ['Headroom for ~3 m reach.'] },
+  { id: 'move-crossover', role: 'move-crossover', group: 'moves', names: ['move-crossover-idle-rl'], type: 'action', cls: 'inplace', preset: 'move', court: '○', label: 'Crossover',
+    take: '5–8 s', holds: '≥ 1 s IDS-R before · ≥ 1 s IDS-L after', window: '≈ 3 s', takes: '3–5',
+    perform: 'IDS-R 1 s → low crossover in front of the body with a small jab step → IDS-L hold 1 s.',
+    tips: ['Record once R→L: the mirror gives L→R.', 'Shutter ≥ 1/500 outdoors (1/120 under LEDs): the ball crosses in ~0.2 s.'] },
+  { id: 'move-spin', role: 'move-spin', group: 'moves', names: ['move-spin-jog-rl'], type: 'action', cls: 'lane', preset: 'move', court: '△', label: 'Spin move',
+    take: '5–8 s', holds: 'Enter at jog pace · hold IDS-L 1 s if you stop', window: '≈ 3 s', takes: '3–5',
+    perform: 'Jog → plant the left foot → reverse pivot 360° through the camera side → switch to the left hand → continue.',
+    tips: ['Back to the camera ≤ 0.3 s.', 'Pivot on the centre mark, radius ≤ 1 m.'] },
+  { id: 'move-hesi', role: 'move-hesi', group: 'moves', names: ['move-hesi-jog-r'], type: 'action', cls: 'lane', preset: 'move', court: '✕', label: 'Hesitation',
+    take: '5–8 s', holds: 'Enter at jog pace', window: '≈ 3 s', takes: '3–5',
+    perform: 'Jog → decelerate → rise up with the ball hanging in the right hand → burst 2–3 steps.',
+    tips: ['Optional stationary variant: IDS → rise → IDS.'] },
+  { id: 'move-btl', role: 'move-btl', group: 'moves', names: ['move-btl-idle-rl'], type: 'action', cls: 'inplace', preset: 'move', court: 'R1', label: 'Between the legs',
+    take: '5–8 s', holds: '≥ 1 s still at both ends', window: '≈ 3 s', takes: '3–5',
+    perform: 'IDS-R with the LEFT foot forward, 1 s → between the legs → ends right foot forward, hold 1 s.',
+    tips: ['The stance flips, so hold both ends still.'] },
+  { id: 'move-btb', role: 'move-btb', group: 'moves', names: ['move-btb-idle-rl'], type: 'action', cls: 'inplace', preset: 'move', court: '', label: 'Behind the back',
+    take: '5–8 s', holds: HOLD_ACTION, window: '≈ 3 s', takes: '3–5',
+    perform: 'IDS-R 1 s → behind the back → IDS-L hold 1 s.', tips: ['Record once R→L.'] },
+  { id: 'start-fwd', role: 'start-fwd', group: 'transitions', names: ['start-jog-fwd-r'], type: 'action', cls: 'lane', preset: 'move', court: '', label: 'Start (idle → jog)',
+    take: '5–8 s', holds: '≥ 1 s IDS-R before the first step', window: '≈ 3–4 s', takes: '3',
+    perform: 'IDS-R side-on, facing the travel direction, hold 1 s → 3–4 accelerating steps → ≥ 2 steps at jog pace still in frame.',
+    tips: ['Start in the far third of the lane so the acceleration happens in frame.', 'Exit pace within ~10 % of the jog loop.'] },
+  { id: 'stop', role: 'stop', group: 'transitions', names: ['stop-jog-r'], type: 'action', cls: 'lane', preset: 'move', court: '', label: 'Stop (jog → idle)',
+    take: '5–8 s', holds: 'IDS-R hold 1.5 s at the end', window: '≈ 3–4 s', takes: '3',
+    perform: 'Enter at jog pace → 2-count stride stop or jump stop → IDS-R hold 1.5 s.', tips: ['Stop on the centre mark.'] },
+  // extras: no game role yet
+  { id: 'calib', role: null, group: 'extras', names: ['calib-'], display: 'calib-<setup>', type: 'calib', cls: 'lane', preset: 'calib', label: 'Calibration',
+    take: '≈ 12 s', holds: 'A-pose 2 s · profile 2 s · IDS 2 s · still 1 s', window: 'whole clip', takes: '1 per tripod position',
+    perform: 'Clap or ball slam → A-pose facing the camera 2 s → quarter turn to profile 2 s → IDS-R 2 s → slow walk along the lane on the tape marks → 2 small hops → stand still 1 s.',
+    tips: ['Record from the camera position used for the session.', 'Write height in shoes, tape distance, camera height and distance in the clip notes.', 'Not read automatically yet.'] },
+  { id: 'turn-90', role: null, group: 'extras', names: ['turn-90l-idle-r', 'turn-90r-idle-r'], type: 'action', cls: 'inplace', preset: 'move', label: 'Turn 90° in place',
+    take: '5–8 s', holds: HOLD_ACTION, window: '≈ 3 s', takes: '3 per direction',
+    perform: 'IDS-R → 1–2 step pivot while dribbling → IDS-R hold.', tips: ['Record left AND right.', 'Turn through the camera side.'] },
+  { id: 'cut-90', role: null, group: 'extras', names: ['cut-90l-jog-r', 'cut-90r-jog-r'], type: 'action', cls: 'lane', preset: 'move', label: 'Cut 90° jogging',
+    take: '5–8 s', holds: 'Enter at jog pace', window: '≈ 3 s', takes: '3 per direction',
+    perform: 'V-path: approach at 45° going away from the camera, plant the outside foot on the centre mark, exit at 45° coming back.', tips: ['Record left AND right.'] },
+  { id: 'turn-180', role: null, group: 'extras', names: ['turn-180l-jog-r', 'turn-180r-jog-r'], type: 'action', cls: 'lane', preset: 'move', label: '180° plant',
+    take: '5–8 s', holds: 'Enter at jog pace', window: '≈ 3 s', takes: '3 per plant foot',
+    perform: 'Jog across, plant (left foot, then a take planting right), reverse through the camera side, keep jogging.', tips: ['Record both plant feet.'] },
+  { id: 'crossover-jog', role: null, group: 'extras', names: ['move-crossover-jog-rl'], type: 'action', cls: 'lane', preset: 'move', label: 'Crossover on the move',
+    take: '5–8 s', holds: 'Enter at jog pace', window: '≈ 3 s', takes: '3',
+    perform: 'Jog → crossover with a 30–45° change of direction → continue.', tips: ['Can also fill the move-crossover role.'] },
+  { id: 'pullup', role: null, group: 'extras', names: ['shot-pullup-jog-r'], type: 'action', cls: 'lane', preset: 'shot', label: 'Pull-up jumper',
+    take: '5–8 s', holds: 'Enter at jog pace · ≥ 1 s landing hold', window: '≈ 3–4 s', takes: '3–5',
+    perform: 'Jog across → 1–2 step or hop gather → jumper → land, hold 1 s.', tips: ['Headroom ≥ 0.8 m.'] },
+  { id: 'run', role: null, group: 'extras', names: ['loco-run-fwd-r'], type: 'loop', cls: 'lane', preset: 'loco', label: 'Run dribble',
+    take: '20–30 s', holds: 'None: at speed before the frame', window: '2 strides', takes: '2 passes each way',
+    perform: 'Run dribble ~4.3 m/s (est.). The next loop to add after the minimum set.', tips: [] },
+];
+const FLAGS = [
+  ['low-fps', 'warn', 'A moving clip was analysed below 20 fps.', 'Re-analyse at 30 fps.', 'Capture at 60 fps.'],
+  ['depth-travel', 'warn', 'More than 0.3 m of travel toward/away from the camera was not trusted and was removed.', 'Nothing: that travel is lost.', 'Camera side-on to the path: travel ACROSS the frame; step-back across with the hoop off to the side.'],
+  ['noisy-feet', 'warn', 'Planted feet jitter more than 0.5 m/s in the capture.', 'Analyse at 30 fps.', 'Film closer (≥ half the frame height), 1080p+, tripod, shutter ≥ 1/500 (1/120 under LEDs), more light, contrasting shoes.'],
+  ['no-contacts', 'bad', 'No foot plants found (bad on moving clips, a warning otherwise).', 'Widen the trim window.', 'Feet in frame the whole take with 10 % under them; heels and toes visible; nothing in front of the feet.'],
+  ['slide', 'warn', 'Planted feet still move more than 4 cm after cleanup.', 'Analyse at 30 fps.', 'See noisy-feet and depth-travel.'],
+  ['ik-clamped', 'warn', 'More than 15 % of frames needed a straight leg to reach the floor (the height estimate is off).', 'Check "your height (est.)" on the Motion step.', 'Head AND feet in frame at all times; record the calibration clip.'],
+  ['loop-seam', 'warn', 'The best loop\'s seam is more than 6 cm.', 'Analyse a longer window (≥ 2 cycles).', '20–30 s takes to a metronome at a constant pace.'],
+  ['no-loop', 'bad', 'No loopable cycle in the analysed window.', 'Type = loop, trims 0; analyse ≥ 1 whole cycle (idle ≥ 2 s).', 'Steady rhythm; stay in frame for full cycles.'],
+  ['no-start-hold', 'warn', 'The action does not start with both feet planted.', 'Lower trim start so the clip begins inside the hold.', 'Hold IDS still ≥ 1 s before the move.'],
+];
+const NUMBERS = [
+  ['Foot slide measured → pinned', 'pinned ≤ 4 cm', 'Worst planted-foot slide in the capture, and after pinning.'],
+  ['Loop seam', '≤ 6 cm', 'Pose difference where the loop wraps.'],
+  ['Contacts L / R', '≥ 1 each (moving clips)', 'Foot plants found per foot.'],
+  ['Depth drift removed', '≤ 0.3 m', 'Travel along the camera axis that was discarded.'],
+  ['Foot noise', '≤ 0.5 m/s', 'Jitter of grounded feet.'],
+  ['Pelvis drop', 'small', 'How far the pelvis was lowered so the pinned feet reach the floor.'],
+  ['Warp correction', 'small', 'Difference between the intended travel (e.g. the step-back hop) and the measured travel. Large values usually mean the travel went into depth.'],
+];
+const CHECKLIST = [
+  ['Camera', [
+    ['tripod', 'Tripod, fully still: no pan, zoom or cuts'],
+    ['height', 'Lens at 0.9–1.2 m (hip to chest), phone level'],
+    ['lens', '1x main lens, no zoom, no ultra-wide'],
+    ['landscape', 'Landscape 16:9'],
+    ['stab', 'Stabilisation / Action Mode OFF'],
+    ['hdr', 'HDR / Dolby Vision OFF (SDR)'],
+    ['lock', 'Exposure, focus and white balance locked'],
+    ['fps', '60 fps, 1080p+ (4K for the sprint lane and shots)'],
+    ['shutter', 'Shutter 1/500–1/1000 in daylight · 1/120 under LEDs (1/100 on 50 Hz)'],
+    ['remote', 'Remote, or leave it recording across takes; never touch the phone'],
+  ]],
+  ['Scene', [
+    ['tape', 'Lane taped (start, centre and end marks), parallel to the camera'],
+    ['distance', 'Camera at the distance for this clip class (see the camera card)'],
+    ['light', 'Light behind the camera; no window or sun behind the performer'],
+    ['bg', 'Plain background: no mirrors, glass or clutter'],
+    ['alone', 'Nobody else in view, including the background'],
+    ['floor', 'Matte floor; shoes contrast with it'],
+  ]],
+  ['Performer', [
+    ['clothes', 'Fitted shorts above the knee and a fitted, patterned or light top'],
+    ['ball', 'Size 7 ball'],
+    ['measured', 'Height in shoes measured (cm)'],
+    ['metronome', 'Metronome ready (idle ≈ 120 bpm)'],
+  ]],
+  ['Every take', [
+    ['body', 'Whole body + ball in frame for the whole take'],
+    ['feet', '≥ 10 % margin under the feet'],
+    ['head', 'Headroom ≥ 0.8–1.0 m above the head for shots and layups'],
+    ['holds', '≥ 1 s still in IDS at the start and end of every action'],
+    ['calib', 'Calibration clip recorded for this camera position'],
+  ]],
+];
+
+// ── Helpers ─────────────────────────────────────────────────────────────
+const td = (label, html, cls = '') => `<td data-l="${esc(label)}"${cls ? ` class="${cls}"` : ''}><div>${html}</div></td>`;
+const LEVEL = { bad: 'bad', warn: 'warn' };
+const nameOf = (s) => s.display || s.names.join(' / ');
+function table(el, cols, rows) {
+  el.innerHTML = `<thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((h, i) => td(cols[i], h)).join('')}</tr>`).join('')}</tbody>`;
+}
+
+// ── Checklist ───────────────────────────────────────────────────────────
+function renderChecklist() {
+  const state = LS.get(KEY_CHECK, {}) || {};
+  $('#checklist').innerHTML = CHECKLIST.map(([g, items]) => `<div class="cgrp">${esc(g)}</div><div class="checks">${items.map(([id, text]) => `
+    <label class="check"><input type="checkbox" data-chk="${esc(id)}" ${state[id] ? 'checked' : ''}><span>${esc(text)}</span></label>`).join('')}</div>`).join('');
+  $$('#checklist [data-chk]').forEach((i) => i.addEventListener('change', () => {
+    const s = LS.get(KEY_CHECK, {}) || {};
+    s[i.dataset.chk] = i.checked;
+    LS.set(KEY_CHECK, s);
+    chkProgress();
+  }));
+  chkProgress();
+}
+function chkProgress() {
+  const all = $$('#checklist [data-chk]'), on = all.filter((i) => i.checked).length;
+  $('#chkCount').textContent = `${on} / ${all.length}`;
+  $('#chkCount').className = 'badge' + (on === all.length && all.length ? ' ok' : '');
+  $('#chkBar').style.width = (all.length ? (on / all.length) * 100 : 0).toFixed(1) + '%';
+}
+$('#chkReset').onclick = () => { LS.set(KEY_CHECK, {}); renderChecklist(); };
+
+// ── Shot list (live status from /api/mocap3d/library) ───────────────────
+let LIB = null, LIB_ERR = null;
+async function getJSON(url) {
+  const res = await fetch(url, { credentials: 'same-origin' });
+  if (res.status === 401) { location.href = '/login?next=/recording'; throw new Error('signed out'); }
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || j.error) throw new Error(j.error || `HTTP ${res.status}`);
+  return j;
+}
+async function loadLibrary() {
+  const st = $('#shotStatus');
+  st.classList.remove('err'); st.textContent = 'Checking your motions…';
+  try {
+    LIB = await getJSON('/api/mocap3d/library');
+    LIB_ERR = null; st.textContent = '';
+  } catch (e) {
+    LIB_ERR = e.message; st.textContent = `Status unavailable: ${e.message}`; st.classList.add('err');
+  }
+  try { renderShots(); renderCard(); } catch (e) { st.textContent = e.message; st.classList.add('err'); }
+}
+const roleInfo = (s) => (s.role && LIB?.roles?.[s.role]) || null;
+const groupOf = (s) => roleInfo(s)?.group || s.group;
+const playsNow = (s) => { const r = roleInfo(s); return r ? !!r.runtime : !!s.court; };
+function courtCell(s) {
+  if (!s.role) return '<small>n/a</small>';
+  return playsNow(s) ? `✅ <small>${esc(s.court || 'yes')}</small>` : '<span class="badge">not yet</span>';
+}
+function flagBadge(clip) {
+  if (!clip.built) return '<span class="badge" title="Open it in /mocap and press Rebuild">not built</span>';
+  const f = clip.built.quality?.flags || [];
+  if (!f.length) return '<span class="badge ok">0 flags</span>';
+  const bad = f.some((x) => x.level === 'bad');
+  return `<span class="badge ${bad ? 'bad' : 'warn'}" title="${esc(f.map((x) => x.code).join(', '))}">${f.length} flag${f.length > 1 ? 's' : ''}</span><br><small>${f.map((x) => esc(x.code)).join(' · ')}</small>`;
+}
+function statusCell(s) {
+  if (!LIB) return LIB_ERR ? '<small>unavailable</small>' : '<small>loading…</small>';
+  const clips = LIB.clips || [];
+  if (s.role) {
+    const takes = clips.filter((c) => c.game?.role === s.role);
+    const used = (LIB.court || []).find((c) => c.role === s.role);
+    const clip = (used && clips.find((c) => c.id === used.id)) || takes[0];
+    if (!clip) return '<span class="badge">not recorded</span>';
+    const others = takes.filter((c) => c.id !== clip.id).length;
+    return `<a href="/mocap?motion=${encodeURIComponent(clip.id)}">${esc(clip.name)}</a> ${flagBadge(clip)}` +
+      (clip.game?.assigned ? '' : ' <span class="badge" title="The role was guessed from the name. Set it in /mocap → 3D game clip.">guessed</span>') +
+      (others ? `<br><small>+${others} other take${others > 1 ? 's' : ''}</small>` : '');
+  }
+  const pre = s.names.map((n) => n.toLowerCase());
+  const takes = clips.filter((c) => pre.some((p) => String(c.name || '').toLowerCase().startsWith(p)));
+  return takes.length ? `<span class="badge ok">${takes.length} take${takes.length > 1 ? 's' : ''}</span> <small>${takes.slice(0, 3).map((c) => esc(c.name)).join(', ')}</small>` : '<span class="badge">not recorded</span>';
+}
+function renderShots() {
+  const sel = currentCard();
+  const rows = [];
+  for (const [g, gl] of GROUPS) {
+    const items = SHOTS.filter((s) => groupOf(s) === g);
+    if (!items.length) continue;
+    rows.push(`<tr class="grp"><td colspan="6" class="nol"><div>${esc(gl)}</div></td></tr>`);
+    for (const s of items) {
+      const label = roleInfo(s)?.label || s.label;
+      rows.push(`<tr data-id="${esc(s.id)}" class="${s.id === sel ? 'sel' : ''}">` +
+        td('Role', `<b>${esc(label)}</b>${s.role ? `<br><small>${esc(s.role)}</small>` : ''}`) +
+        td('Record as', `<code>${esc(nameOf(s))}</code><br><small>${esc(s.type)}</small>`) +
+        td('Camera', `${esc(CLASS[s.cls].dist)} · ${esc(CLASS[s.cls].angle)}<br><small>${PRESETS[s.preset].fps} fps · ${PRESETS[s.preset].max} frames</small>`) +
+        td('Court', courtCell(s)) +
+        td('Status', statusCell(s)) +
+        td('', `<button class="small" style="white-space:nowrap" type="button" data-card="${esc(s.id)}">Camera card</button>`, 'nol') + '</tr>');
+    }
+  }
+  $('#shotBody').innerHTML = rows.join('');
+  $$('#shotBody [data-card]').forEach((b) => b.onclick = () => { selectCard(b.dataset.card); $('#camera').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  const roles = SHOTS.filter((s) => s.role);
+  if (LIB) {
+    const filled = roles.filter((s) => (LIB.court || []).some((c) => c.role === s.role)).length;
+    const live = roles.filter((s) => playsNow(s) && (LIB.court || []).some((c) => c.role === s.role)).length;
+    $('#shotSummary').textContent = `${filled} / ${roles.length} roles recorded · ${live} on court`;
+    $('#shotSummary').className = 'badge' + (filled === roles.length ? ' ok' : '');
+  } else {
+    $('#shotSummary').textContent = `${roles.length} roles`;
+  }
+}
+$('#shotRefresh').onclick = loadLibrary;
+
+// ── Camera card ─────────────────────────────────────────────────────────
+function currentCard() { const id = LS.get(KEY_CARD, 'idle'); return SHOTS.some((s) => s.id === id) ? id : 'idle'; }
+function selectCard(id) {
+  LS.set(KEY_CARD, id);
+  $('#camSel').value = id;
+  renderCard();
+  $$('#shotBody tr[data-id]').forEach((tr) => tr.classList.toggle('sel', tr.dataset.id === id));
+}
+function renderCamSelect() {
+  $('#camSel').innerHTML = GROUPS.map(([g, gl]) => {
+    const items = SHOTS.filter((s) => s.group === g);
+    return items.length ? `<optgroup label="${esc(gl)}">${items.map((s) => `<option value="${esc(s.id)}">${esc(s.label)} · ${esc(nameOf(s))}</option>`).join('')}</optgroup>` : '';
+  }).join('');
+  $('#camSel').value = currentCard();
+}
+function renderCard() {
+  const s = SHOTS.find((x) => x.id === currentCard()) || SHOTS[0];
+  const c = CLASS[s.cls], p = PRESETS[s.preset];
+  const stat = (v, l) => `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
+  const first = s.display ? s.display : s.names[0];
+  $('#camBody').innerHTML = `
+    <div class="camhead"><code>${esc(first)}-t01</code><span class="badge">${esc(s.type)}</span>${s.role ? `<span class="badge">${esc(s.role)}</span>` : ''}${s.role ? (playsNow(s) ? `<span class="badge ok">court: ${esc(s.court || 'yes')}</span>` : '<span class="badge">court: not yet</span>') : ''}</div>
+    ${s.names.length > 1 ? `<p class="hint" style="margin:0">Also record: ${s.names.slice(1).map((n) => `<code>${esc(n)}</code>`).join(', ')}</p>` : ''}
+    <p class="perform">${esc(s.perform)}</p>
+    <div class="stats">
+      ${stat(c.dist, 'distance')}
+      ${stat(c.angle, 'angle')}
+      ${stat('0.9–1.2 m, level', 'lens height')}
+      ${stat('60 fps · 1x · landscape', 'capture')}
+      ${stat(s.cls === 'sprint' ? '4K60' : '1080p60+', 'resolution')}
+      ${stat(`${p.fps} fps · ${p.max} frames`, 'analyse in /mocap')}
+      ${stat(s.take, 'take length')}
+      ${stat(s.window, 'import window')}
+      ${stat(s.holds, 'holds')}
+      ${stat(s.takes, 'takes')}
+      ${stat(`$${(p.max * 0.02).toFixed(2)}–${(p.max * 0.03).toFixed(2)}`, 'measure cost (max)')}
+      ${stat(c.frame, 'frame covers (h × w)')}
+    </div>
+    <p class="hint" style="margin:0 0 6px"><b>Angle:</b> ${esc(c.angleLong)}. <b>Shutter:</b> 1/500–1/1000 in daylight, 1/120 under LEDs. <b>Performer:</b> ${esc(c.size)} of the frame height.</p>
+    ${s.tips.length ? `<ul>${s.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}`;
+}
+$('#camSel').onchange = () => selectCard($('#camSel').value);
+const stepCard = (d) => { const i = SHOTS.findIndex((s) => s.id === currentCard()); selectCard(SHOTS[(i + d + SHOTS.length) % SHOTS.length].id); };
+$('#camPrev').onclick = () => stepCard(-1);
+$('#camNext').onclick = () => stepCard(1);
+
+// ── Static tables ───────────────────────────────────────────────────────
+function renderStatic() {
+  table($('#distTbl'), ['Class', 'Distance', 'Angle', 'Frame (h × w)', 'Performer'],
+    Object.values(CLASS).map((c) => [esc(c.label), `<b>${esc(c.dist)}</b>`, esc(c.angleLong), esc(c.frame), esc(c.size)]));
+  table($('#anaTbl'), ['Clip type', 'Sample FPS', 'Max frames', 'Window', 'Cost at max frames'],
+    Object.values(PRESETS).map((p) => [`<b>${esc(p.label)}</b>`, `<b>${p.fps}</b>`, String(p.max), esc(p.window), `$${(p.max * 0.02).toFixed(2)}–${(p.max * 0.03).toFixed(2)}`]));
+  table($('#flagTbl'), ['Flag', 'Meaning', 'Fix now', 'Fix when re-recording'],
+    FLAGS.map(([code, lvl, meaning, now, rec]) => [`<span class="badge ${LEVEL[lvl]}">${esc(code)}</span>`, esc(meaning), esc(now), esc(rec)]));
+  table($('#numTbl'), ['Number', 'Good', 'Meaning'], NUMBERS.map(([n, g, m]) => [`<b>${esc(n)}</b>`, esc(g), esc(m)]));
+}
+
+// ── Boot ────────────────────────────────────────────────────────────────
+try { renderStatic(); } catch (e) { console.warn(e); }
+try { renderChecklist(); } catch (e) { console.warn(e); }
+try { renderCamSelect(); renderShots(); renderCard(); } catch (e) { console.warn(e); }
+loadLibrary();
+</script>
+</body>
+</html>

@@ -4,61 +4,82 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>3D Court — Sprite Factory</title>
+<link rel="icon" href="data:,">
 <style>
-  :root { --bg:#07070d; --panel:rgba(8,8,18,.82); --line:#262648; --txt:#d8d8f0; --dim:#7a7aa8; --accent:#ff6a1a; --ok:#19d27a; }
+  :root { --bg:#07070d; --panel:rgba(8,8,18,.82); --line:#262648; --txt:#d8d8f0; --dim:#7a7aa8; --accent:#ff6a1a; --ok:#19d27a; --warn:#ffb020; }
   * { box-sizing:border-box; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--txt); font:13px/1.35 ui-monospace, "SF Mono", Menlo, monospace; overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none; }
-  #view { position:fixed; inset:0; display:block; }
-  .bar { position:fixed; left:12px; right:12px; top:10px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; pointer-events:none; z-index:5; }
-  .bar > * { pointer-events:auto; }
-  .pill { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:6px 12px; display:flex; gap:8px; align-items:center; white-space:nowrap; }
+  #view { position:fixed; top:0; left:0; right:0; bottom:0; width:100%; height:100%; display:block; }
+  .bar { position:fixed; left:12px; right:12px; top:10px; display:flex; flex-wrap:wrap; align-items:center; pointer-events:none; z-index:5; }
+  .bar > * { pointer-events:auto; margin:0 8px 8px 0; }
+  .pill { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:6px 12px; display:flex; align-items:center; white-space:nowrap; }
+  .pill > * + * { margin-left:8px; }
   .pill b { color:#fff; }
   a.pill { color:var(--txt); text-decoration:none; }
   select, button { font:inherit; color:var(--txt); background:#12122a; border:1px solid var(--line); border-radius:12px; padding:4px 8px; }
   button.on { border-color:var(--accent); color:#fff; }
-  input[type=range] { accent-color:var(--accent); width:110px; }
+  input[type=range] { accent-color:var(--accent); width:100px; }
   #state { color:var(--ok); }
-  #help { position:fixed; left:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--dim); max-width:360px; }
+  #help { position:fixed; left:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--dim); max-width:420px; }
   #help b { color:var(--txt); }
-  #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; background:var(--bg); z-index:20; color:var(--dim); }
+  #dbg { position:fixed; right:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 10px; color:var(--dim); display:none; min-width:220px; }
+  #dbg b { color:#fff; } #dbg .ok { color:var(--ok); } #dbg .warn { color:var(--warn); }
+  #toast { position:fixed; left:50%; top:64px; transform:translateX(-50%); z-index:9; background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:8px 14px; display:none; max-width:90vw; text-align:center; }
+  #toast a { color:var(--accent); }
+  #loading { position:fixed; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; background:var(--bg); z-index:20; color:var(--dim); }
+  #loading > * { margin:5px 0; }
   #loading .t { color:#fff; font-size:16px; }
   #err { color:#ff6a6a; max-width:520px; text-align:center; }
   /* touch controls (iPad without a controller) */
   #stickZone { position:fixed; left:0; bottom:0; width:45vw; height:55vh; z-index:4; }
   #stickBase { position:fixed; width:120px; height:120px; border-radius:50%; border:2px solid rgba(255,255,255,.18); background:rgba(255,255,255,.05); display:none; z-index:6; pointer-events:none; }
   #stickKnob { position:absolute; left:35px; top:35px; width:50px; height:50px; border-radius:50%; background:rgba(255,106,26,.55); }
-  #shootBtn { position:fixed; right:28px; bottom:34px; width:96px; height:96px; border-radius:50%; border:2px solid rgba(255,255,255,.25); background:rgba(255,106,26,.28); color:#fff; font-weight:700; z-index:6; display:none; }
-  #shootBtn.held { background:rgba(255,106,26,.7); }
-  @media (pointer:coarse) { #shootBtn { display:block; } #help { display:none; } }
+  .tbtn { position:fixed; border-radius:50%; border:2px solid rgba(255,255,255,.25); color:#fff; font-weight:700; z-index:6; display:none; }
+  #shootBtn { right:28px; bottom:34px; width:96px; height:96px; background:rgba(255,106,26,.28); }
+  #moveBtn { right:140px; bottom:44px; width:72px; height:72px; background:rgba(47,107,255,.25); font-size:11px; }
+  .tbtn.held { background:rgba(255,106,26,.7); }
+  @media (pointer:coarse) { .tbtn { display:block; } #help { display:none; } }
 </style>
 <script>
 // ── Boot watchdog (a plain script: runs even when the 3D module can't) ──
-// Any load/startup error, or the engine not starting at all, is shown on the
-// loading screen with a Retry — the page must never sit on "Loading" silently.
+// Load/startup errors, or the engine not starting at all, are shown on the
+// loading screen with a Retry — the page never sits on "Loading" silently.
 (function () {
-  function fail(msg) {
+  function fail(msg, soft) {
     if (window.__c3dReady) return;
     var e = document.getElementById('err');
     if (!e) { window.__c3dPendingErr = msg; return; }
+    if (window.__c3dFailed && !soft) return; // keep the first (most specific) error
+    if (!soft) window.__c3dFailed = true;
+    e.setAttribute('data-src', soft ? 'watchdog' : 'error');
     e.innerHTML = String(msg).replace(/</g, '&lt;') + '<br><br><button onclick="location.reload()">Retry</button> &nbsp; <a href="/?page=testing" style="color:#ff6a1a">Open the 2D court</a>';
   }
   window.__c3dFail = fail;
   window.addEventListener('error', function (e) {
     var t = e.target;
-    if (t && t !== window && (t.src || t.href)) fail('Could not load ' + (t.src || t.href) + ' — check the connection and retry.');
+    if (t && t !== window && t.tagName === 'SCRIPT') fail('Could not load the 3D engine (' + (t.src || 'script') + ') — check the connection and retry.');
+    else if (t && t !== window && (t.src || t.href)) fail('Could not load ' + (t.src || t.href) + ' — check the connection and retry.');
     else if (e.message) fail('3D engine error: ' + e.message);
   }, true);
   window.addEventListener('unhandledrejection', function (e) { fail('3D engine error: ' + ((e.reason && e.reason.message) || e.reason)); });
   var hasGL = false;
   try { var c = document.createElement('canvas'); hasGL = !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (x) {}
   window.__c3dHasGL = hasGL;
-  setTimeout(function () {
-    if (window.__c3dBoot) return;
-    var why = !('noModule' in HTMLScriptElement.prototype) ? 'this browser does not support JavaScript modules (update iOS / Safari)'
-      : !hasGL ? 'WebGL is turned off or unsupported on this device'
-      : 'the 3D engine file did not load';
-    fail('The 3D engine did not start: ' + why + '. (' + navigator.userAgent + ')');
-  }, 12000);
+  var s = 0;
+  var tick = setInterval(function () {
+    if (window.__c3dBoot) { clearInterval(tick); return; }
+    s++;
+    var m = document.getElementById('loadMsg');
+    if (m) m.textContent = 'downloading the 3D engine… ' + s + ' s';
+    if (s === 12) fail('Still downloading the 3D engine — slow connection?', true);
+    if (s >= 35) {
+      clearInterval(tick);
+      var why = !('noModule' in HTMLScriptElement.prototype) ? 'this browser does not support JavaScript modules (update iOS / Safari)'
+        : !hasGL ? 'WebGL is turned off or unsupported on this device'
+        : 'the 3D engine file did not load';
+      fail('The 3D engine did not start: ' + why + '. (' + navigator.userAgent + ')');
+    }
+  }, 1000);
 })();
 </script>
 </head>
@@ -66,48 +87,56 @@
 <canvas id="view"></canvas>
 
 <div class="bar">
-  <a class="pill" href="/?page=testing" title="Back to the 2D test court">← 2D court</a>
+  <a class="pill" href="/?page=testing" title="Back to the 2D test court">← 2D</a>
   <span class="pill">3D COURT <span id="state">loading</span></span>
-  <span class="pill">Idle <select id="selIdle"></select></span>
-  <span class="pill">Move <select id="selMove"></select></span>
-  <span class="pill" title="Animation playback speed (1.00× = the speed you filmed it). Saved on this device.">Speed <input type="range" id="speed" min="0.25" max="1.5" step="0.05"><b id="speedLbl">1.00×</b></span>
-  <span class="pill">Camera <button id="camChase" class="on">2K</button><button id="camSide">Side</button><button id="camFree">Orbit</button></span>
+  <span class="pill">Player <select id="selChar"></select></span>
+  <span class="pill" title="Dribble hand — the loops are mirrored for the other hand (L1 / H)">Hand <button id="handBtn">—</button></span>
+  <span class="pill" title="Game speed (1.00× = real time). Saved on this device.">Speed <input type="range" id="speed" min="0.25" max="1.5" step="0.05"><b id="speedLbl">1.00×</b></span>
+  <span class="pill">Cam <button id="camChase" class="on">2K</button><button id="camSide">Side</button><button id="camFree">Orbit</button></span>
+  <span class="pill" title="Clips the game has, by role — record the rest (see the recording guide)"><span id="libInfo">clips…</span> <a href="/recording" style="color:var(--accent)">guide</a></span>
+  <span class="pill"><button id="dbgBtn" title="Foot plants + slide meter (F)">Feet</button></span>
   <span class="pill" id="pad">no controller</span>
   <span class="pill" id="fps">—</span>
 </div>
 
 <div id="help">
-  <b>Controller</b> left stick move · hold <b>□</b> step-back jumper · right stick camera · L1/R1 zoom<br>
-  <b>Keyboard</b> WASD move · hold <b>I</b> (or Space) shoot · arrows camera · C camera mode<br>
-  Standing still = idle dribble. The player always faces the basket.
+  <b>Controller</b> left stick move · R2 sprint · hold <b>□</b> shoot (moving = step-back) · <b>○</b> crossover · <b>△</b> spin · <b>✕</b> hesi · R1 between-legs · L1 switch hand · right stick camera<br>
+  <b>Keyboard</b> WASD move · Shift sprint · hold <b>I</b>/Space shoot · O cross · K spin · J hesi · U btl · H hand · C camera · F feet<br>
+  Standing still = idle dribble. The player always faces the basket; feet stay planted.
 </div>
+<div id="dbg"></div>
+<div id="toast"></div>
 
 <div id="stickZone"></div>
 <div id="stickBase"><div id="stickKnob"></div></div>
-<button id="shootBtn">SHOOT</button>
+<button id="shootBtn" class="tbtn">SHOOT</button>
+<button id="moveBtn" class="tbtn">CROSS</button>
 
-<div id="loading"><div class="t">Loading 3D court…</div><div id="loadMsg">motions</div><div id="err"></div></div>
+<div id="loading"><div class="t">Loading 3D court…</div><div id="loadMsg">downloading the 3D engine…</div><div id="err"></div></div>
 
 <script type="module">
 import * as THREE from '/vendor/three.module.min.js';
+import * as A from '/js/anim3d.mjs';
 window.__c3dBoot = true;
+{ const e = document.getElementById('err'); if (e && e.getAttribute('data-src') === 'watchdog') e.innerHTML = ''; }
 if (window.__c3dPendingErr) window.__c3dFail(window.__c3dPendingErr);
 
 // ═══ Constants (metres; y up; rim centre above the origin; court toward +z) ═══
 const RIM_Y = 3.05, RIM_R = 0.2286, BASELINE_Z = -1.575, HALF_LEN = 14.33, HALF_W = 7.62;
-const G = 9.81;
-const MOVE_SPEED = 3.0;            // m/s dribble jog
-const HOLD_MS = 170;               // hold Square this long → step-back jumper
-const STEPBACK_DIST = 1.1;         // m straight back from the hoop during the hop
+const G = 9.81, BALL_R = 0.12;
+const HOLD_MS = 170;               // hold Square this long → shot (a tap shoots too)
 const $ = (id) => document.getElementById(id);
 const loadMsg = (m) => { $('loadMsg').textContent = m; };
+const textCache = new Map();
+const setText = (el, s) => { if (textCache.get(el) !== s) { textCache.set(el, s); el.textContent = s; } };
+const COARSE = matchMedia('(pointer:coarse)').matches;
 
 // ═══ Renderer / scene ═══
 const canvas = $('view');
 // Lite mode on phones/tablets (iPadOS reports a Mac UA but has touch points):
 // lower pixel ratio, cheaper shadows. ?hq=1 forces full quality, ?lite=1 lite.
 const QS = new URLSearchParams(location.search);
-const TOUCH = navigator.maxTouchPoints > 1 || matchMedia('(pointer:coarse)').matches;
+const TOUCH = navigator.maxTouchPoints > 1 || COARSE;
 const LITE = QS.get('lite') === '1' || (TOUCH && QS.get('hq') !== '1');
 let renderer;
 try {
@@ -116,7 +145,8 @@ try {
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false }); }
   catch (e2) { window.__c3dFail('WebGL could not start on this device (' + (e2.message || e2) + '). Try closing other tabs, turning off Low Power Mode, or updating iOS.'); throw e2; }
 }
-renderer.setPixelRatio(Math.min(LITE ? 1.5 : 2, window.devicePixelRatio || 1));
+let pixelRatio = Math.min(LITE ? 1.5 : 2, window.devicePixelRatio || 1);
+renderer.setPixelRatio(pixelRatio);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = LITE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -135,11 +165,11 @@ sun.shadow.mapSize.set(LITE ? 1024 : 2048, LITE ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
 sun.shadow.bias = -0.0004;
 scene.add(sun);
-const fill = new THREE.PointLight(0xffa860, 0.9, 30); fill.position.set(6, 6, 10); scene.add(fill);
+if (!LITE) { const fill = new THREE.PointLight(0xffa860, 0.9, 30); fill.position.set(6, 6, 10); scene.add(fill); }
 
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
-  renderer.setSize(w, h, false);
+  renderer.setSize(w, h); // also sets the CSS size (never a zoomed/cropped canvas)
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
@@ -152,7 +182,6 @@ function courtTexture() {
   const W = Math.round((HALF_W * 2 + 2) * PX), H = Math.round((HALF_LEN + 2) * PX);
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d');
-  // hardwood planks
   const plankW = 0.18 * PX;
   for (let x = 0; x < W; x += plankW) {
     for (let y = -Math.random() * 300; y < H; y += 220 + Math.random() * 180) {
@@ -163,9 +192,7 @@ function courtTexture() {
   }
   g.fillStyle = 'rgba(0,0,0,.08)';
   for (let x = 0; x < W; x += plankW) g.fillRect(x + plankW - 1, 0, 1, H);
-  // court coords → canvas: x∈[-HALF_W-1, HALF_W+1], z∈[BASELINE_Z-1, BASELINE_Z+HALF_LEN+1]
   const X = (x) => (x + HALF_W + 1) * PX, Y = (z) => (z - BASELINE_Z + 1) * PX;
-  // paint + three-point band in Soul Jam red
   g.fillStyle = 'rgba(190,34,40,.82)';
   g.fillRect(X(-2.44), Y(BASELINE_Z), 4.88 * PX, 5.8 * PX);
   g.strokeStyle = '#f4f1e8'; g.lineWidth = 0.05 * PX; g.lineCap = 'round';
@@ -173,18 +200,17 @@ function courtTexture() {
   const arc = (cx, cz, r, a0, a1) => { g.beginPath(); g.arc(X(cx), Y(cz), r * PX, a0, a1); g.stroke(); };
   line([[-HALF_W, BASELINE_Z], [HALF_W, BASELINE_Z], [HALF_W, BASELINE_Z + HALF_LEN], [-HALF_W, BASELINE_Z + HALF_LEN], [-HALF_W, BASELINE_Z]]);
   line([[-2.44, BASELINE_Z], [-2.44, BASELINE_Z + 5.8], [2.44, BASELINE_Z + 5.8], [2.44, BASELINE_Z]]);
-  arc(0, BASELINE_Z + 5.8, 1.83, 0, Math.PI);                                // free-throw circle
-  arc(0, 0, 1.22, 0, Math.PI);                                                // restricted area
-  // three-point line: corners 6.71 m from the rim, arc 7.24 m
+  arc(0, BASELINE_Z + 5.8, 1.83, 0, Math.PI);
+  arc(0, 0, 1.22, 0, Math.PI);
   const zc = Math.sqrt(7.24 ** 2 - 6.71 ** 2);
   line([[-6.71, BASELINE_Z], [-6.71, zc]]); line([[6.71, BASELINE_Z], [6.71, zc]]);
   arc(0, 0, 7.24, Math.atan2(zc, 6.71), Math.PI - Math.atan2(zc, 6.71));
-  arc(0, BASELINE_Z + HALF_LEN, 1.83, Math.PI, 2 * Math.PI);                 // centre circle
+  arc(0, BASELINE_Z + HALF_LEN, 1.83, Math.PI, 2 * Math.PI);
   g.fillStyle = 'rgba(255,255,255,.12)'; g.font = `bold ${1.6 * PX}px sans-serif`; g.textAlign = 'center';
   g.fillText('SOUL JAM', X(0), Y(BASELINE_Z + 10.4));
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.anisotropy = Math.min(LITE ? 4 : 16, renderer.capabilities.getMaxAnisotropy());
   return tex;
 }
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W * 2 + 2, HALF_LEN + 2), new THREE.MeshStandardMaterial({ map: courtTexture(), roughness: 0.42, metalness: 0.05 }));
@@ -195,7 +221,6 @@ scene.add(floor);
 const apron = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x1a1016, roughness: 0.9 }));
 apron.rotation.x = -Math.PI / 2; apron.position.y = -0.005; apron.receiveShadow = true; scene.add(apron);
 
-// Hoop: stanchion, arm, backboard, rim, net
 const hoop = new THREE.Group(); scene.add(hoop);
 const padMat = new THREE.MeshStandardMaterial({ color: 0xb8232a, roughness: 0.6 });
 const steel = new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.4, metalness: 0.7 });
@@ -210,12 +235,9 @@ const square = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeo
 square.position.set(0, RIM_Y + 0.225 + 0.04, BASELINE_Z + 1.245); hoop.add(square);
 const rim = new THREE.Mesh(new THREE.TorusGeometry(RIM_R, 0.012, 10, 40), new THREE.MeshStandardMaterial({ color: 0xff4a10, roughness: 0.35, metalness: 0.6 }));
 rim.rotation.x = Math.PI / 2; rim.position.set(0, RIM_Y, 0); rim.castShadow = true; hoop.add(rim);
-const netGeo = new THREE.CylinderGeometry(RIM_R, RIM_R * 0.62, 0.42, 16, 5, true);
-const net = new THREE.Mesh(netGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.75 }));
+const net = new THREE.Mesh(new THREE.CylinderGeometry(RIM_R, RIM_R * 0.62, 0.42, 16, 5, true), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.75 }));
 net.position.set(0, RIM_Y - 0.21, 0); hoop.add(net);
-const HOOP = new THREE.Vector3(0, 0, 0); // floor point under the rim (the player faces it)
-
-// A few arena touches: dark stands + light banks
+const HOOP = [0, 0]; // floor point under the rim (the player faces it)
 for (const [x, z, w, d] of [[0, BASELINE_Z - 5, 30, 4], [-HALF_W - 4, 6, 4, 22], [HALF_W + 4, 6, 4, 22]]) {
   const st = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), new THREE.MeshStandardMaterial({ color: 0x14142a, roughness: 0.95 }));
   st.position.set(x, 1.5, z); scene.add(st);
@@ -234,115 +256,64 @@ function ballTexture() {
   for (const x0 of [0, 256]) { g.beginPath(); for (let y = 0; y <= 256; y += 4) { const x = x0 + 128 + Math.sin((y / 256) * Math.PI) * 70 * (x0 ? 1 : -1); y ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
-let BALL_R = 0.12;
 const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), new THREE.MeshStandardMaterial({ map: ballTexture(), roughness: 0.62 }));
-ball.castShadow = true;
+ball.castShadow = true; ball.scale.setScalar(BALL_R);
 scene.add(ball);
 
-// ═══ Character (baked SAM 3D Body scan animation) ═══
-const b64 = (s, T) => { const bin = atob(s); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new T(u8.buffer); };
-
-const yieldUI = () => new Promise((r) => setTimeout(r, 0)); // let Safari paint + stay responsive
-async function makeClip(data, label) {
-  const n = data.meta.vertexCount, q = data.meta.quant;
-  const faces = b64(data.faces, Uint32Array);
-  const tmp = new THREE.BufferGeometry(); tmp.setIndex(new THREE.BufferAttribute(faces, 1));
-  const frames = [], normals = [];
-  for (let i = 0; i < data.frames.length; i++) {
-    const i16 = b64(data.frames[i], Int16Array);
-    const pos = new Float32Array(n * 3);
-    for (let k = 0; k < pos.length; k++) pos[k] = i16[k] * q;
-    data.frames[i] = null; // free the base64 as we go
-    // per-keyframe normals (positions and normals are both blended)
-    tmp.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    tmp.computeVertexNormals();
-    frames.push(pos); normals.push(tmp.getAttribute('normal').array.slice());
-    if (i % 3 === 2) { loadMsg(`preparing ${label}: frame ${i + 1}/${data.frames.length}`); await yieldUI(); }
+// ═══ Character: skinned rig (47 segment bones, linear blend skinning) ═══
+let charMesh = null, boneMats = null;
+function buildCharacter(rig) {
+  if (charMesh) { scene.remove(charMesh); charMesh.geometry.dispose(); charMesh.material.dispose(); }
+  const n = rig.vertexCount;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(rig.verts, 3));
+  geo.setIndex(new THREE.BufferAttribute(rig.faces, 1));
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < col.length; i++) col[i] = Math.pow(rig.colors[i] / 255, 2.2); // sRGB → linear
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const w = rig.weight[i] / 255;
+    si[i * 4] = rig.skin[i * 2]; si[i * 4 + 1] = rig.skin[i * 2 + 1];
+    sw[i * 4] = w; sw[i * 4 + 1] = 1 - w;
   }
-  tmp.dispose();
-  return { ...data, faces, frames, normals, colors: b64(data.colors, Uint8Array), n };
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+  geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  geo.computeVertexNormals();
+  const mesh = new THREE.SkinnedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0 }));
+  const bones = Array.from({ length: A.NSEG }, () => new THREE.Bone());
+  const skeleton = new THREE.Skeleton(bones, bones.map(() => new THREE.Matrix4()));
+  mesh.bindMode = 'detached';
+  mesh.bind(skeleton, new THREE.Matrix4());
+  boneMats = new Float32Array(A.NSEG * 16);
+  // bone matrices come straight from the runtime (world-space segment frames × rest inverse)
+  skeleton.update = function () { this.boneMatrices.set(boneMats); if (this.boneTexture) this.boneTexture.needsUpdate = true; };
+  mesh.frustumCulled = false;
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  scene.add(mesh);
+  charMesh = mesh;
 }
+const boneTmp = new Float32Array(A.NSEG * 16);
+function poseCharacter(rig, pose) { A.boneMatrices(pose, rig.restInv, boneMats, boneTmp); }
 
-let charMesh = null, charGeo = null;
-const player = new THREE.Group(); scene.add(player);
-function buildCharacter(clip) {
-  if (charMesh) { player.remove(charMesh); charGeo.dispose(); }
-  charGeo = new THREE.BufferGeometry();
-  charGeo.setIndex(new THREE.BufferAttribute(clip.faces, 1));
-  charGeo.setAttribute('position', new THREE.BufferAttribute(clip.frames[0].slice(), 3));
-  charGeo.setAttribute('normal', new THREE.BufferAttribute(clip.normals[0].slice(), 3));
-  const col = new Float32Array(clip.n * 3);
-  for (let i = 0; i < col.length; i++) col[i] = Math.pow(clip.colors[i] / 255, 2.2); // sRGB → linear
-  charGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  charMesh = new THREE.Mesh(charGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0 }));
-  charMesh.castShadow = true; charMesh.receiveShadow = true;
-  charMesh.frustumCulled = false;
-  player.add(charMesh);
-}
-
-// Write a blended pose (clip frame f, fractional) into the character geometry
-const blendFrom = { pos: null, nor: null, t: 0, dur: 0 };
-function writePose(clip, f, loop) {
-  const N = clip.meta.frameCount;
-  let a = Math.floor(f), w = f - a, b = a + 1;
-  if (loop) { a = ((a % N) + N) % N; b = (a + 1) % N; } else { a = Math.min(a, N - 1); b = Math.min(b, N - 1); if (a === N - 1) w = 0; }
-  const pa = clip.frames[a], pb = clip.frames[b], na = clip.normals[a], nb = clip.normals[b];
-  const P = charGeo.getAttribute('position'), Nn = charGeo.getAttribute('normal');
-  const pos = P.array, nor = Nn.array;
-  const bw = blendFrom.pos && blendFrom.t < blendFrom.dur ? 1 - blendFrom.t / blendFrom.dur : 0;
-  for (let i = 0; i < pos.length; i++) {
-    let p = pa[i] + (pb[i] - pa[i]) * w, nn = na[i] + (nb[i] - na[i]) * w;
-    if (bw > 0) { p = p + (blendFrom.pos[i] - p) * bw; nn = nn + (blendFrom.nor[i] - nn) * bw; }
-    pos[i] = p; nor[i] = nn;
-  }
-  P.needsUpdate = true; Nn.needsUpdate = true;
-}
-function startBlend(dur = 0.18) {
-  blendFrom.pos = charGeo.getAttribute('position').array.slice();
-  blendFrom.nor = charGeo.getAttribute('normal').array.slice();
-  blendFrom.t = 0; blendFrom.dur = dur;
-}
-
-// ═══ Ball logic ═══
-// Clip-local ball: in hand = the measured position next to the palm; between
-// release and catch = gravity: down to a floor bounce and back up to the catch
-function clipBallSegments(clip) {
-  const N = clip.meta.frameCount, held = clip.balls.map((b) => !!(b && b.held));
-  return { N, held };
-}
-function lerp3(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
-function clipBallAt(clip, f, loop, speed) {
-  const N = clip.meta.frameCount, B = clip.balls;
-  const fps = clip.meta.fps * speed;
-  const idx = (k) => (loop ? ((k % N) + N) % N : Math.max(0, Math.min(N - 1, k)));
-  const a0 = Math.floor(f), w = f - a0;
-  const A = B[idx(a0)], Bn = B[idx(a0 + 1)];
-  if (!A && !Bn) return null;
-  if (A?.held && (Bn?.held || !loop && a0 >= N - 1)) return lerp3(A.p, (Bn || A).p, w);
-  // in the air: find the release (last held before) and the catch (first held after)
-  let r = a0; while (r > a0 - N && !(B[idx(r)]?.held)) r--;
-  let c = a0 + 1; while (c < a0 + 1 + N && !(B[idx(c)]?.held)) c++;
-  const R = B[idx(r)], C = B[idx(c)];
-  if (!R?.held || !C?.held || (!loop && (r < 0 || c > N - 1))) return (A || Bn).p; // no catch: follow the data
-  const T = (c - r) / fps, t = (f - r) / fps;
-  const yr = R.p[1], yc = C.p[1], rr = BALL_R;
-  const T1 = T * Math.max(0.2, Math.min(0.8, (yr - rr) / ((yr - rr) + (yc - rr) || 1)));
-  const T2 = T - T1;
-  let y;
-  if (t <= T1) { const v0 = (rr - yr + 0.5 * G * T1 * T1) / T1; y = yr + v0 * t - 0.5 * G * t * t; }
-  else { const u = t - T1; const v1 = (yc - rr + 0.5 * G * T2 * T2) / T2; y = rr + v1 * u - 0.5 * G * u * u; }
-  const k = Math.max(0, Math.min(1, t / T));
-  const p = lerp3(R.p, C.p, k);
-  return [p[0], Math.max(rr, y), p[2]];
+// foot-plant debug markers
+const plantMarks = { left: null, right: null };
+for (const s of ['left', 'right']) {
+  const m = new THREE.Mesh(new THREE.RingGeometry(0.07, 0.1, 24), new THREE.MeshBasicMaterial({ color: s === 'left' ? 0x2f6bff : 0xeb3458, transparent: true, opacity: 0.85, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.006; m.visible = false; scene.add(m); plantMarks[s] = m;
 }
 
 // ═══ Input: gamepad + keyboard + touch ═══
 const keys = new Set();
-// presses since the last frame (a quick tap between two frames still counts)
-const pressedSinceTick = new Set();
-window.addEventListener('keydown', (e) => { keys.add(e.code); pressedSinceTick.add(e.code); if (e.code === 'KeyC') cycleCam(); if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); });
+const pressedSinceTick = new Set(); // a quick tap between two frames still counts
+window.addEventListener('keydown', (e) => {
+  keys.add(e.code); pressedSinceTick.add(e.code);
+  if (e.code === 'KeyC') cycleCam();
+  if (e.code === 'KeyF') toggleDbg();
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+});
 window.addEventListener('keyup', (e) => keys.delete(e.code));
-const touch = { x: 0, y: 0, shoot: false, id: null, ox: 0, oy: 0 };
+const touch = { x: 0, y: 0, shoot: false, tap: false, move: false, id: null, ox: 0, oy: 0 };
 const zone = $('stickZone'), sb = $('stickBase'), knob = $('stickKnob');
 zone.addEventListener('pointerdown', (e) => { touch.id = e.pointerId; touch.ox = e.clientX; touch.oy = e.clientY; sb.style.display = 'block'; sb.style.left = (e.clientX - 60) + 'px'; sb.style.top = (e.clientY - 60) + 'px'; zone.setPointerCapture(e.pointerId); });
 zone.addEventListener('pointermove', (e) => {
@@ -356,70 +327,79 @@ zone.addEventListener('pointerup', endTouch); zone.addEventListener('pointercanc
 const sBtn = $('shootBtn');
 sBtn.addEventListener('pointerdown', () => { touch.shoot = true; touch.tap = true; sBtn.classList.add('held'); });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) sBtn.addEventListener(ev, () => { touch.shoot = false; sBtn.classList.remove('held'); });
+$('moveBtn').addEventListener('pointerdown', () => { touch.move = true; });
 
 const dz = (v) => (Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85);
+const padPrev = {};
+function padEdge(gp, i) { const now = !!gp?.buttons[i]?.pressed; const was = padPrev[i]; padPrev[i] = now; return now && !was; }
 function readInput() {
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   const gp = pads[0];
-  let mx = 0, my = 0, cx = 0, cy = 0, shoot = false, zoomIn = false, zoomOut = false;
+  let mx = 0, my = 0, cx = 0, cy = 0, shoot = false, sprint = false;
+  const edge = { cross: false, spin: false, hesi: false, btl: false, hand: false };
   if (gp) {
     mx = dz(gp.axes[0] || 0); my = dz(gp.axes[1] || 0);
     cx = dz(gp.axes[2] || 0); cy = dz(gp.axes[3] || 0);
     shoot = !!gp.buttons[2]?.pressed;                   // Square (PS) / X (Xbox)
-    zoomIn = !!gp.buttons[5]?.pressed; zoomOut = !!gp.buttons[4]?.pressed;
+    sprint = (gp.buttons[7]?.value || 0) > 0.3;         // R2
+    edge.cross = padEdge(gp, 1); edge.spin = padEdge(gp, 3); edge.hesi = padEdge(gp, 0);
+    edge.btl = padEdge(gp, 5); edge.hand = padEdge(gp, 4);
   }
   if (keys.has('KeyA')) mx -= 1; if (keys.has('KeyD')) mx += 1; if (keys.has('KeyW')) my -= 1; if (keys.has('KeyS')) my += 1;
   if (keys.has('ArrowLeft')) cx -= 1; if (keys.has('ArrowRight')) cx += 1; if (keys.has('ArrowUp')) cy -= 1; if (keys.has('ArrowDown')) cy += 1;
+  if (keys.has('ShiftLeft') || keys.has('ShiftRight')) sprint = true;
   if (keys.has('KeyI') || keys.has('Space') || pressedSinceTick.has('KeyI') || pressedSinceTick.has('Space')) shoot = true;
-  const tapped = pressedSinceTick.has('KeyI') || pressedSinceTick.has('Space');
+  if (pressedSinceTick.has('KeyO')) edge.cross = true;
+  if (pressedSinceTick.has('KeyK')) edge.spin = true;
+  if (pressedSinceTick.has('KeyJ')) edge.hesi = true;
+  if (pressedSinceTick.has('KeyU')) edge.btl = true;
+  if (pressedSinceTick.has('KeyH')) edge.hand = true;
   pressedSinceTick.clear();
   if (touch.id != null) { mx = touch.x; my = touch.y; }
   if (touch.shoot || touch.tap) shoot = true;
-  touch.tap = false;
+  if (touch.move) edge.cross = true;
+  touch.tap = false; touch.move = false;
   const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
-  $('pad').textContent = gp ? '🎮 ' + (gp.id.split('(')[0].trim().slice(0, 22) || 'controller') : (matchMedia('(pointer:coarse)').matches ? 'touch' : 'keyboard');
-  return { mx, my, cx, cy, shoot, zoomIn, zoomOut };
+  setText($('pad'), gp ? '🎮 ' + (gp.id.split('(')[0].trim().slice(0, 22) || 'controller') : (COARSE ? 'touch' : 'keyboard'));
+  return { mx, my, cx, cy, shoot, sprint, edge };
 }
 
 // ═══ Game state ═══
 const S = {
-  idle: null, move: null, speed: 1,
-  pos: new THREE.Vector3(1.8, 0, 5.2), yaw: 0,
-  state: 'idle',          // idle | shot | follow
-  clipT: 0,               // clip time in frames (float)
+  rig: null, lib: null, player: null, clips: [], roles: {}, speed: 1,
   sqAt: null, sqFired: false, lastMoveAt: -1e9,
-  shot: null,             // { t0, from, stepDone }
-  freeBall: null,         // { p, v, made, t }
+  freeBall: null,         // released shot in flight { p, v, t, through, bounces }
+  lastBall: new THREE.Vector3(),
   cam: 'chase', camYaw: 0, camDist: 5.2, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(),
+  dbg: false, toastUntil: 0,
 };
 try { S.speed = parseFloat(localStorage.getItem('court3d_speed')) || 1; } catch {}
 $('speed').value = S.speed; $('speedLbl').textContent = S.speed.toFixed(2) + '×';
 $('speed').oninput = (e) => { S.speed = parseFloat(e.target.value); $('speedLbl').textContent = S.speed.toFixed(2) + '×'; try { localStorage.setItem('court3d_speed', S.speed); } catch {} };
+$('dbgBtn').onclick = () => toggleDbg();
+function toggleDbg() { S.dbg = !S.dbg; $('dbgBtn').classList.toggle('on', S.dbg); $('dbg').style.display = S.dbg ? 'block' : 'none'; if (S.player) S.player.metrics.slideMaxCm = 0; }
+function toast(html, ms = 2600) { const t = $('toast'); t.innerHTML = html; t.style.display = 'block'; S.toastUntil = performance.now() + ms; }
 
-function faceHoopYaw(p) { return Math.atan2(HOOP.x - p.x, HOOP.z - p.z); }
-
-function startShot() {
-  if (!S.move || S.state !== 'idle') return;
-  startBlend(0.15);
-  S.state = 'shot'; S.clipT = 0;
-  const away = new THREE.Vector3(S.pos.x - HOOP.x, 0, S.pos.z - HOOP.z).normalize();
-  S.shot = { from: S.pos.clone(), away, stepDone: 0, released: false };
-  buildOrKeep(S.move);
+const ROLE_NAMES = { 'move-crossover': 'crossover', 'move-spin': 'spin move', 'move-hesi': 'hesitation', 'move-btl': 'between-the-legs', 'shot-jumper': 'jump shot', 'shot-stepback': 'step-back jumper' };
+function trigger(role) {
+  const p = S.player;
+  if (!p || p.mode !== 'loco' || !p.hasBall) return null;
+  if (!p.lib[role]) { toast(`No ${ROLE_NAMES[role] || role} recorded yet — <a href="/recording">record one</a> and give it the role on /mocap.`); return null; }
+  return role;
 }
-function buildOrKeep(clip) { if (charGeo.getAttribute('position').count !== clip.n) buildCharacter(clip); }
+function shotRole(moving) {
+  const L = S.player.lib;
+  if (moving && L['shot-stepback']) return 'shot-stepback';
+  if (L['shot-jumper']) return 'shot-jumper';
+  return L['shot-stepback'] ? 'shot-stepback' : 'shot-jumper';
+}
 
-function launchBall(fromWorld) {
+function launchBall(from) {
   const target = new THREE.Vector3(0, RIM_Y + 0.03, 0);
-  const d = target.clone().sub(fromWorld); const horiz = Math.hypot(d.x, d.z);
+  const d = target.clone().sub(from); const horiz = Math.hypot(d.x, d.z);
   const T = 0.75 + horiz * 0.07;                       // flight time (arc height follows)
   const v = new THREE.Vector3(d.x / T, (d.y + 0.5 * G * T * T) / T, d.z / T);
-  S.freeBall = { p: fromWorld.clone(), v, t: 0, T, through: false, bounces: 0 };
-}
-
-function toWorld(local) {
-  const v = new THREE.Vector3(local[0], local[1], local[2]);
-  v.applyAxisAngle(new THREE.Vector3(0, 1, 0), S.yaw);
-  return v.add(player.position);
+  S.freeBall = { p: from.clone(), v, t: 0, T, through: false, bounces: 0 };
 }
 
 // ═══ Camera ═══
@@ -437,18 +417,16 @@ canvas.addEventListener('wheel', (e) => { S.camDist = Math.max(2.2, Math.min(14,
 
 function updateCamera(dt, inp) {
   S.camYaw += inp.cx * dt * 1.8;
-  if (inp.zoomIn) S.camDist = Math.max(2.2, S.camDist - dt * 3);
-  if (inp.zoomOut) S.camDist = Math.min(14, S.camDist + dt * 3);
-  const p = player.position;
+  S.camDist = Math.max(2.2, Math.min(14, S.camDist + inp.cy * dt * 3));
+  const pp = S.player.pos, p = new THREE.Vector3(pp[0], 0, pp[1]);
   let want, look;
   if (S.cam === 'chase') {
     // 2K-style: behind the ball handler, looking past them at the basket
-    const toHoop = new THREE.Vector3(HOOP.x - p.x, 0, HOOP.z - p.z).normalize();
+    const toHoop = new THREE.Vector3(HOOP[0] - p.x, 0, HOOP[1] - p.z).normalize();
     const back = toHoop.clone().multiplyScalar(-1).applyAxisAngle(new THREE.Vector3(0, 1, 0), S.camYaw);
-    want = p.clone().add(back.multiplyScalar(S.camDist)).add(new THREE.Vector3(0, 2.1 + inp.cy * 0.8, 0));
+    want = p.clone().add(back.multiplyScalar(S.camDist)).add(new THREE.Vector3(0, 2.1, 0));
     look = p.clone().add(toHoop.multiplyScalar(2.2)).add(new THREE.Vector3(0, 1.35, 0));
   } else if (S.cam === 'side') {
-    // Broadcast side view (like the 2D court)
     want = new THREE.Vector3(p.x * 0.35 + 10.5, 6.2, p.z * 0.6 + 8.5);
     look = new THREE.Vector3(p.x * 0.6, 1.2, p.z * 0.7 + 1.2);
   } else {
@@ -462,71 +440,61 @@ function updateCamera(dt, inp) {
 }
 
 // ═══ Main loop ═══
-let last = performance.now(), fpsAcc = 0, fpsN = 0;
+let last = performance.now(), fpsAcc = 0, fpsN = 0, slowFor = 0;
 const ballSpin = new THREE.Vector3();
 function tick(now) {
   try { step(now); } catch (e) {
     console.error(e);
-    $('loading').style.display = 'flex'; window.__c3dReady = false;
+    $('loading').style.display = 'flex'; window.__c3dReady = false; window.__c3dFailed = false;
     window.__c3dFail('3D engine stopped: ' + (e.message || e));
     return;
   }
   requestAnimationFrame(tick);
 }
 function step(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now; // cap: a stalled tab must not teleport the game
-  fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { $('fps').textContent = Math.round(fpsN / fpsAcc) + ' fps'; fpsAcc = 0; fpsN = 0; }
+  const rdt = Math.min(0.1, (now - last) / 1000); last = now; // cap: a stalled tab must not teleport the game
+  fpsAcc += rdt; fpsN++;
+  if (fpsAcc > 0.5) {
+    const f = fpsN / fpsAcc;
+    setText($('fps'), Math.round(f) + ' fps');
+    // adaptive quality: a slow tablet drops to 1× pixels
+    if (LITE && f < 45 && pixelRatio > 1) { slowFor += fpsAcc; if (slowFor > 2) { pixelRatio = 1; renderer.setPixelRatio(1); resize(); } } else slowFor = 0;
+    fpsAcc = 0; fpsN = 0;
+  }
   const inp = readInput();
-  if (!S.idle) return;
+  const P = S.player;
+  if (!P) return;
+  const dt = rdt * S.speed;
 
-  // ── Square gesture: move then hold (a tap also shoots — the only shot is the step-back jumper)
+  // camera-relative stick → world direction
+  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+  const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0));
+  const mv = right.multiplyScalar(inp.mx).add(fwd.multiplyScalar(-inp.my));
   const moving = Math.hypot(inp.mx, inp.my) > 0.2;
   if (moving) S.lastMoveAt = now;
+
+  // Square: tap or hold → shot; moving (or just moved) → step-back
+  let trig = null;
   if (inp.shoot && S.sqAt == null) { S.sqAt = now; S.sqFired = false; }
-  if (inp.shoot && !S.sqFired && now - S.sqAt >= HOLD_MS) { S.sqFired = true; startShot(); }
-  if (!inp.shoot && S.sqAt != null) { if (!S.sqFired) startShot(); S.sqAt = null; }
+  const wantShot = (inp.shoot && !S.sqFired && now - S.sqAt >= HOLD_MS) || (!inp.shoot && S.sqAt != null && !S.sqFired);
+  if (wantShot) { S.sqFired = true; trig = trigger(shotRole(moving || now - S.lastMoveAt < 350)); }
+  if (!inp.shoot) S.sqAt = null;
+  if (!trig && inp.edge.cross) trig = trigger('move-crossover');
+  if (!trig && inp.edge.spin) trig = trigger('move-spin');
+  if (!trig && inp.edge.hesi) trig = trigger('move-hesi');
+  if (!trig && inp.edge.btl) trig = trigger('move-btl');
+  if (inp.edge.hand && P.mode === 'loco') switchHand();
 
-  // ── Movement (camera-relative), always facing the basket
-  if (S.state === 'idle' && moving) {
-    const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
-    const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0));
-    const v = right.multiplyScalar(inp.mx).add(fwd.multiplyScalar(-inp.my)).multiplyScalar(MOVE_SPEED * dt);
-    S.pos.add(v);
+  const r = P.update(dt, { move: [mv.x, mv.z], sprint: inp.sprint, face: HOOP, trigger: trig });
+  // court bounds + keep off the stanchion (the capsule only; planted feet stay put)
+  P.pos[0] = Math.max(-HALF_W + 0.4, Math.min(HALF_W - 0.4, P.pos[0]));
+  P.pos[1] = Math.max(BASELINE_Z + 0.4, Math.min(BASELINE_Z + HALF_LEN - 0.4, P.pos[1]));
+  const hd = Math.hypot(P.pos[0], P.pos[1]); if (hd < 0.9) { P.pos[0] *= 0.9 / hd; P.pos[1] *= 0.9 / hd; }
+  for (const e of r.events) {
+    if (e.type === 'release') launchBall(S.lastBall.clone());
+    if (e.type === 'action') S.lastAction = e.role;
   }
-  S.pos.x = Math.max(-HALF_W + 0.4, Math.min(HALF_W - 0.4, S.pos.x));
-  S.pos.z = Math.max(BASELINE_Z + 0.4, Math.min(BASELINE_Z + HALF_LEN - 0.4, S.pos.z));
-  if (Math.hypot(S.pos.x, S.pos.z) < 0.9) { const k = 0.9 / Math.hypot(S.pos.x, S.pos.z); S.pos.x *= k; S.pos.z *= k; }
-
-  // ── Animation
-  const clip = S.state === 'idle' ? S.idle : S.move;
-  const fps = clip.meta.fps * S.speed;
-  if (blendFrom.pos) blendFrom.t += dt;
-  if (S.state === 'idle') {
-    S.clipT = (S.clipT + dt * fps) % clip.meta.frameCount;
-    writePose(clip, S.clipT, true);
-  } else {
-    S.clipT = Math.min(clip.meta.frameCount - 1, S.clipT + dt * fps);
-    writePose(clip, S.clipT, false);
-    // step-back: straight back from the basket over the hop frames
-    const sh = clip.shot, stepF = sh?.stepFrame ?? Math.max(0, (sh?.releaseFrame ?? 10) - 7);
-    const u = Math.max(0, Math.min(1, (S.clipT - stepF) / 6));
-    const ease = 1 - (1 - u) * (1 - u);
-    S.pos.copy(S.shot.from).add(S.shot.away.clone().multiplyScalar(STEPBACK_DIST * ease));
-    // release → the ball leaves the hand toward the rim
-    if (sh && !S.shot.released && S.clipT >= sh.releaseFrame) {
-      S.shot.released = true;
-      const lb = clip.balls[sh.lastHeldFrame];
-      launchBall(toWorld(lb ? lb.p : sh.point));
-    }
-    if (S.clipT >= clip.meta.frameCount - 1) {
-      S.state = 'follow';
-    }
-  }
-  if (S.state === 'follow' && !S.freeBall) {  // follow-through held until the ball has landed
-    startBlend(0.22); S.state = 'idle'; S.clipT = 0; S.shot = null;
-  }
-  S.yaw = faceHoopYaw(S.pos);
-  player.position.copy(S.pos); player.rotation.y = S.yaw;
+  poseCharacter(S.rig, r.pose);
 
   // ── Ball
   if (S.freeBall) {
@@ -534,108 +502,179 @@ function step(now) {
     fb.t += dt;
     fb.v.y -= G * dt;
     fb.p.addScaledVector(fb.v, dt);
-    // through the rim: slow it and drop through the net
-    const hd = Math.hypot(fb.p.x, fb.p.z);
-    if (!fb.through && fb.v.y < 0 && fb.p.y <= RIM_Y + 0.02 && hd < RIM_R) { fb.through = true; fb.v.x *= 0.2; fb.v.z *= 0.2; fb.v.y *= 0.5; net.scale.set(0.9, 1.15, 0.9); $('state').textContent = 'SWISH'; }
+    const hdist = Math.hypot(fb.p.x, fb.p.z);
+    if (!fb.through && fb.v.y < 0 && fb.p.y <= RIM_Y + 0.02 && hdist < RIM_R) { fb.through = true; fb.v.x *= 0.2; fb.v.z *= 0.2; fb.v.y *= 0.5; net.scale.set(0.9, 1.15, 0.9); S.swishAt = now; }
     if (fb.p.y < BALL_R) { fb.p.y = BALL_R; fb.v.y = -fb.v.y * 0.62; fb.v.x *= 0.8; fb.v.z *= 0.8; fb.bounces++; }
     ball.position.copy(fb.p);
     ballSpin.set(fb.v.z, 0, -fb.v.x);
-    if (fb.bounces >= 3 || fb.t > 4.5) S.freeBall = null;
-  } else if (!(S.state !== 'idle' && S.shot?.released)) {
-    const bp = clipBallAt(clip, S.clipT, S.state === 'idle', S.speed);
-    if (bp) { const w = toWorld(bp); ballSpin.subVectors(w, ball.position).multiplyScalar(1 / Math.max(dt, 1e-3)); ball.position.copy(w); }
-  } else {
-    ball.position.set(0, -5, 0); // released and already caught by the net logic
+    if (fb.bounces >= 3 || fb.t > 4.5) { S.freeBall = null; P.giveBall(); }
+  } else if (r.ball) {
+    const w = new THREE.Vector3(r.ball[0], r.ball[1], r.ball[2]);
+    ballSpin.subVectors(w, ball.position).multiplyScalar(1 / Math.max(dt, 1e-3));
+    ball.position.copy(w);
+    S.lastBall.copy(w);
   }
   if (ballSpin.lengthSq() > 1e-6) ball.rotateOnWorldAxis(new THREE.Vector3(ballSpin.z, 0, -ballSpin.x).normalize(), ballSpin.length() * dt / BALL_R * 0.5);
   net.scale.lerp(new THREE.Vector3(1, 1, 1), 1 - Math.exp(-dt * 5));
-  if (S.state === 'idle' && !S.freeBall) $('state').textContent = (moving ? 'DRIBBLE' : 'IDLE') + (S.moveLoading ? ' · move loading…' : S.moveError ? ' · move failed (reload)' : '');
-  if (S.state === 'shot') $('state').textContent = S.shot?.released ? 'SHOT' : 'STEP BACK';
 
-  updateCamera(dt, inp);
+  // ── HUD
+  const label = S.swishAt && now - S.swishAt < 1200 ? 'SWISH'
+    : P.mode === 'action' ? (ROLE_NAMES[P.action?.role] || P.action?.role || 'MOVE').toUpperCase()
+    : Math.hypot(P.vel[0], P.vel[1]) > 0.3 ? (P.source === 'clip-loco' ? 'DRIBBLE · clip' : 'DRIBBLE') : 'IDLE';
+  setText($('state'), label);
+  if (S.toastUntil && now > S.toastUntil) { $('toast').style.display = 'none'; S.toastUntil = 0; }
+  if (S.dbg) {
+    for (const s of ['left', 'right']) {
+      const f = P.feetState?.[s];
+      plantMarks[s].visible = !!f?.planted;
+      if (f?.planted) { const a = A.MHR70.indexOf(s + '-ankle'); plantMarks[s].position.set(r.pose[a * 3], 0.006, r.pose[a * 3 + 2]); }
+    }
+    const m = P.metrics;
+    const sl = m.slideMaxCm;
+    $('dbg').innerHTML = `<b>feet</b> · slide max <span class="${sl < 1 ? 'ok' : 'warn'}">${sl.toFixed(1)} cm</span> <button id="dbgReset">reset</button><br>`
+      + `source <b>${P.source}</b> · hand <b>${P.hand}</b><br>`
+      + `L ${P.feetState?.left?.planted ? 'planted' : 'free'} · R ${P.feetState?.right?.planted ? 'planted' : 'free'} · pelvis drop ${(P.pelvisDrop * 100).toFixed(1)} cm<br>`
+      + `speed ${Math.hypot(P.vel[0], P.vel[1]).toFixed(2)} m/s · steps ${(P.planner.Tstep ? 1 / P.planner.Tstep : 0).toFixed(1)}/s`;
+    const rb = $('dbgReset'); if (rb) rb.onclick = () => { P.metrics.slideMaxCm = 0; };
+  } else { plantMarks.left.visible = plantMarks.right.visible = false; }
+
+  updateCamera(rdt, inp);
   renderer.render(scene, camera);
 }
 
-// ═══ Load motions ═══
-// fetch JSON with retries, a timeout, byte progress and clear errors
+function switchHand() {
+  const p = S.player;
+  if (!p.lib['idle:mirror']) { toast('This idle has no mirrored copy.'); return; }
+  p.hand = p.hand === 'left' ? 'right' : 'left';
+  p.stance = p.idle().feet;
+  $('handBtn').textContent = p.hand === 'left' ? 'L' : 'R';
+}
+$('handBtn').onclick = () => { if (S.player) switchHand(); };
+
+// ═══ Loading ═══
+// fetch with retries, a first-byte deadline, an idle (stall) timer that
+// resets on every chunk, byte progress and honest errors
 class SignedOut extends Error {}
-async function getJSON(url, { label, timeoutMs = 90000 } = {}) {
+async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4 } = {}) {
   for (let a = 0; ; a++) {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), timeoutMs);
+    let timer = null;
+    const arm = (ms) => { clearTimeout(timer); timer = setTimeout(() => ctl.abort(), ms); };
+    const t0 = performance.now();
+    const shown = setInterval(() => loadMsg(`${label ? 'loading ' + label : 'loading'}… ${Math.round((performance.now() - t0) / 1000)} s`), 1000);
     try {
-      const r = await fetch(url, { credentials: 'same-origin', signal: ctl.signal, cache: 'no-cache' });
+      arm(headerMs);
+      const r = await fetch(url, { credentials: 'same-origin', signal: ctl.signal });
       const ct = r.headers.get('content-type') || '';
-      if (r.status === 401 || r.redirected && /\/login/.test(r.url) || ct.includes('text/html')) throw new SignedOut('Not signed in on this browser.');
+      if (r.status === 401 || (r.redirected && /\/login/.test(r.url))) throw new SignedOut('Not signed in on this browser.');
+      if (r.status >= 500 || ct.includes('text/html')) { const e = new Error(`server busy (HTTP ${r.status})`); e.retry = true; throw e; }
+      arm(idleMs);
       let text;
       const total = +(r.headers.get('x-raw-length') || 0);
-      if (label && r.body && r.body.getReader) {
+      if (r.body && r.body.getReader) {
         const reader = r.body.getReader(), chunks = [];
-        let got = 0, lastShown = 0;
+        let got = 0;
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
+          arm(idleMs);
           chunks.push(value); got += value.length;
-          if (got - lastShown > 150000) { lastShown = got; loadMsg(`downloading ${label}: ${(got / 1e6).toFixed(1)}${total ? ' / ' + (total / 1e6).toFixed(1) : ''} MB`); }
+          if (label && got > 200000) loadMsg(`downloading ${label}: ${(got / 1e6).toFixed(1)}${total ? ' / ' + (total / 1e6).toFixed(1) : ''} MB`);
         }
         const all = new Uint8Array(got); let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; }
         text = new TextDecoder().decode(all);
       } else text = await r.text();
       const j = JSON.parse(text);
-      if (!r.ok || j.error) throw new Error(j.error || 'HTTP ' + r.status);
+      if (!r.ok || j.error) { const e = new Error(j.error || 'HTTP ' + r.status); e.retry = r.status >= 500; throw e; }
       return j;
     } catch (e) {
       if (e instanceof SignedOut) throw e;
-      if (a >= 2) throw new Error((e.name === 'AbortError' ? 'timed out loading ' : 'could not load ') + (label || url) + ' (' + (e.message || e) + ')');
-      loadMsg(`retrying ${label || url}…`);
-      await new Promise((res) => setTimeout(res, 1000 * (a + 1)));
-    } finally { clearTimeout(timer); }
+      const retryable = e.name === 'AbortError' || e.retry || e instanceof TypeError;
+      if (!retryable || a >= tries - 1) throw new Error((e.name === 'AbortError' ? 'timed out loading ' : 'could not load ') + (label || url) + ' (' + (e.message || e) + ')');
+      loadMsg(`${e.message || 'network error'} — retrying ${label || url}…`);
+      await new Promise((res) => setTimeout(res, 1500 * (a + 1)));
+    } finally { clearTimeout(timer); clearInterval(shown); }
   }
-}
-async function loadClip(id, label) {
-  loadMsg(`loading ${label}…`);
-  return makeClip(await getJSON(`/api/mocap3d/bake/${encodeURIComponent(id)}`, { label, timeoutMs: 120000 }), label);
 }
 
 (async () => {
   try {
-    loadMsg('finding motions…');
-    const { motions } = await getJSON('/api/mocap3d/motions');
-    if (!motions.length) throw new Error('No motions with SAM 3D Body meshes yet — analyse a clip on /mocap first.');
-    const qs = new URLSearchParams(location.search);
-    const idleId = qs.get('idle') || (motions.find((m) => /idle/i.test(m.name) && !m.shot && m.frameCount <= 20) || motions.find((m) => !m.shot) || motions[0]).id;
-    const moveId = qs.get('move') || (motions.find((m) => m.shot) || motions[0]).id;
-    for (const [sel, cur] of [[$('selIdle'), idleId], [$('selMove'), moveId]]) {
-      sel.innerHTML = motions.map((m) => `<option value="${m.id}" ${m.id === cur ? 'selected' : ''}>${m.name} · ${m.frameCount}f${m.shot ? ' · shot' : ''}</option>`).join('');
-      sel.onchange = () => { const q = new URLSearchParams(location.search); q.set(sel.id === 'selIdle' ? 'idle' : 'move', sel.value); location.search = q.toString(); };
+    loadMsg('finding clips…');
+    const libInfo = await getJSON('/api/mocap3d/library', { label: 'clip library' });
+    S.roles = libInfo.roles || {};
+    const focus = QS.get('focus');
+    let court = libInfo.court || [];
+    // ?focus=<motionId>: play that clip in its role (unassigned: loop → idle, action → the shot button)
+    if (focus) {
+      const m = libInfo.clips.find((c) => c.id === focus);
+      if (m) {
+        const role = m.game.role || (m.game.type === 'loop' ? 'idle' : 'shot-stepback');
+        court = court.filter((c) => c.role !== role).concat([{ id: m.id, role, name: m.name }]);
+      }
     }
-    // Playable as soon as the idle dribble is ready; the move loads behind it
-    const idle = await loadClip(idleId, 'idle dribble');
-    S.idle = idle; S.move = null;
-    BALL_R = idle.meta.ballRadius || 0.12;
-    ball.scale.setScalar(BALL_R);
-    buildCharacter(idle);
-    S.yaw = faceHoopYaw(S.pos);
-    player.position.copy(S.pos);
-    S.camPos.set(S.pos.x + 2, 3, S.pos.z + 6); S.camLook.set(0, 1.2, 0);
-    loadMsg('starting…');
-    renderer.render(scene, camera); // first frame compiles the shaders — surface failures here
+    if (!court.find((c) => c.role === 'idle')) throw new Error('No idle loop yet — analyse an idle dribble on /mocap and give it the role "idle".');
+    const chars = libInfo.characters || [{ id: 'ankh', name: 'Ankh' }];
+    let charId = QS.get('char');
+    try { charId = charId || localStorage.getItem('court3d_char'); } catch {}
+    if (!chars.find((c) => c.id === charId)) charId = chars[0].id;
+    $('selChar').innerHTML = chars.map((c) => `<option value="${c.id}" ${c.id === charId ? 'selected' : ''}>${c.name}</option>`).join('');
+    $('selChar').onchange = () => { try { localStorage.setItem('court3d_char', $('selChar').value); } catch {} const q = new URLSearchParams(location.search); q.set('char', $('selChar').value); location.search = q.toString(); };
+
+    // rig + clips in parallel (the rig is the big one, ~350 KB)
+    const idleRef = court.find((c) => c.role === 'idle');
+    const [rigJson, idleJson] = await Promise.all([
+      getJSON(`/api/mocap3d/rig/${encodeURIComponent(charId)}`, { label: 'character' }),
+      getJSON(`/api/mocap3d/clip/${encodeURIComponent(idleRef.id)}`, { label: 'idle dribble' }),
+    ]);
+    loadMsg('rigging the character…');
+    await new Promise((r) => setTimeout(r, 0));
+    const rig = A.prepareRig(rigJson);
+    S.rig = rig;
+    buildCharacter(rig);
+    idleJson.role = 'idle';
+    S.clips = [idleJson];
+    S.lib = A.buildLibrary(S.clips, rig);
+    const start = { x: 1.8, z: 5.2 };
+    S.player = new A.Player(rig, S.lib, { x: start.x, z: start.z, yaw: Math.atan2(HOOP[0] - start.x, HOOP[1] - start.z) });
+    $('handBtn').textContent = S.player.hand === 'left' ? 'L' : 'R';
+    // first pose before the first render
+    const r0 = S.player.update(1 / 60, { face: HOOP });
+    poseCharacter(rig, r0.pose);
+    S.camPos.set(start.x + 2, 3, start.z + 6); S.camLook.set(0, 1.2, 0);
+    loadMsg('compiling shaders…');
+    await new Promise((r) => requestAnimationFrame(r));
+    try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); } catch {}
+    renderer.render(scene, camera);
     $('loading').style.display = 'none';
     window.__c3dReady = true;
-    $('state').textContent = 'IDLE';
     window.__court3d = S; // for automated checks
     window.__ballProbe = () => ball.position.y;
-    if (moveId !== idleId) {
-      S.moveLoading = true;
-      loadClip(moveId, 'move').then((m) => { S.move = m; })
-        .catch((e) => { S.moveError = e.message; console.warn('move failed to load', e); })
-        .finally(() => { S.moveLoading = false; });
-    } else S.move = idle;
+    const showLib = () => {
+      const have = Object.keys(S.player.lib).filter((k) => !k.endsWith(':mirror'));
+      const want = Object.entries(S.roles).filter(([, v]) => v.runtime).map(([k]) => k);
+      setText($('libInfo'), `clips ${have.length}/${want.length}`);
+      $('libInfo').parentElement.title = 'In the game: ' + have.join(', ') + '\nNot recorded yet: ' + want.filter((k) => !have.includes(k)).join(', ');
+    };
+    showLib();
+    // the other roles load behind the idle (playable meanwhile)
+    const rest = court.filter((c) => c.role !== 'idle');
+    S.loadingRest = rest.length;
+    for (const c of rest) {
+      getJSON(`/api/mocap3d/clip/${encodeURIComponent(c.id)}`, { label: c.name }).then((j) => {
+        j.role = c.role;
+        const add = A.buildLibrary([j], rig);
+        Object.assign(S.player.lib, add);
+        S.clips.push(j);
+        showLib();
+      }).catch((e) => { console.warn('clip failed', c, e); toast(`Could not load ${c.name}: ${e.message}`); })
+        .finally(() => { S.loadingRest--; });
+    }
+    if (focus) toast(`Testing <b>${(court.find((c) => c.id === focus) || {}).name || focus}</b>`);
   } catch (e) {
     const signedOut = e instanceof SignedOut;
     window.__c3dFail(signedOut ? 'You are not signed in on this browser.' : e.message);
     if (signedOut) $('err').insertAdjacentHTML('beforeend', `<br><a href="/login?next=${encodeURIComponent(location.pathname + location.search)}" style="color:#ff6a1a">Sign in</a>`);
-    $('state').textContent = 'error';
+    setText($('state'), 'error');
     return;
   }
   requestAnimationFrame(tick);

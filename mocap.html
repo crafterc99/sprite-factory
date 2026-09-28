@@ -75,6 +75,16 @@ video{width:100%;max-height:52vh;background:#000;border-radius:10px}
 .badge{font-size:11px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mute)}
 .badge.ok{color:#bff5d6;border-color:#2c6b4c;background:#12291e}
 .badge.bad{color:#ffc2c8;border-color:#6b2c35;background:#2a1216}
+.badge.warn{color:#ffe2a8;border-color:#6b5a2c;background:#2a2210}
+/* 3D game clip panel + clip-type helper */
+.ctype button.on{border-color:var(--accent);background:#2a1a10;color:#ffd9c7}
+.gcflags{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.gcflag{font-size:13px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg)}
+.gcflag.bad{border-color:#6b2c35;background:#1f0f12}
+.gcflag.warn{border-color:#6b5a2c;background:#1f1a0d}
+.gcflag .badge{margin-right:6px}
+.gcsub{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin:14px 0 2px}
+.gcwarps{margin:4px 0 0;padding-left:18px;font-size:13px;color:var(--mute)}
 .vwrap{display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:12px}
 @media (max-width:620px){.vwrap{grid-template-columns:1fr}}
 .gameview{background:repeating-conic-gradient(#232634 0% 25%,#1a1c26 0% 50%) 50%/20px 20px;border-radius:10px;width:100%;aspect-ratio:1/1;image-rendering:auto}
@@ -121,13 +131,23 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <div data-panel="capture">
     <section class="card">
       <h2>Record or upload the move</h2>
-      <p class="hint">Tripod or steady hands, full body in frame head-to-feet, good light. Stand still for half a second before the move (it sets your height and the floor). Any camera angle works — the motion is rotated to every game angle afterwards.</p>
+      <p class="hint">Tripod or steady hands, full body in frame head-to-feet, good light. Stand still for half a second before the move (it sets your height and the floor). Any camera angle works — the motion is rotated to every game angle afterwards. For 3D game clips follow the <a href="/recording">recording guide</a>.</p>
       <div class="row" style="margin-bottom:12px">
         <label class="f col">Move name<input type="text" id="moveName" placeholder="e.g. crossover" value=""></label>
         <label class="f" style="max-width:150px">Sample FPS
-          <select id="sampleFps"><option>8</option><option>10</option><option selected>12</option><option>15</option><option>24</option></select></label>
+          <select id="sampleFps"><option>8</option><option>10</option><option selected>12</option><option>15</option><option>20</option><option>24</option><option>30</option></select></label>
         <label class="f" style="max-width:150px">Max frames
-          <select id="maxFrames"><option>16</option><option>24</option><option selected>36</option><option>48</option><option>72</option></select></label>
+          <select id="maxFrames"><option>16</option><option>24</option><option selected>36</option><option>48</option><option>72</option><option>96</option><option>120</option><option>180</option><option>240</option></select></label>
+      </div>
+      <div class="row" style="margin-bottom:12px;align-items:center">
+        <span class="hint" style="margin:0">Clip type</span>
+        <div class="btns ctype" id="clipType">
+          <button type="button" class="small" data-ct="idle">Idle loop</button>
+          <button type="button" class="small" data-ct="loco">Locomotion</button>
+          <button type="button" class="small" data-ct="move">Move</button>
+          <button type="button" class="small" data-ct="shot">Shot</button>
+        </div>
+        <span class="hint" id="ctHint" style="margin:0">Sets sample FPS and max frames for a 3D game clip.</span>
       </div>
       <div class="btns" style="margin-bottom:12px">
         <label class="pill" style="padding:0"><button class="ghost" id="btnPick" type="button" style="border:0">📁 Choose video</button></label>
@@ -180,6 +200,31 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
         <label class="toggle"><input type="checkbox" id="mqMirror"> Mirror (other hand)</label>
         <label class="f" style="max-width:130px">Preview FPS<select id="mqFps"><option>6</option><option>8</option><option selected>12</option><option>15</option></select></label>
       </div>
+    </section>
+
+    <section class="card" id="gcCard">
+      <h2>3D game clip</h2>
+      <p class="hint">Give this motion a role in the 3D animation set. The 3D court plays one clip per role: an explicitly saved role beats a guessed one, and the newest take wins among equals. Rebuilding is free (no API calls).</p>
+      <div class="hint" id="gcState" style="margin:0 0 10px"></div>
+      <div class="row">
+        <label class="f col">Role<select id="gcRole"><option value="none">— none —</option></select></label>
+        <label class="f" style="max-width:150px">Type<select id="gcType"><option value="loop">loop</option><option value="action">action</option></select></label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="f" style="max-width:130px">Trim start<input type="number" id="gcTrimS" min="0" step="1" inputmode="numeric"></label>
+        <label class="f" style="max-width:130px">Trim end<input type="number" id="gcTrimE" min="0" step="1" inputmode="numeric"></label>
+        <label class="f" style="max-width:130px" id="gcEntryBox">Entry max<input type="number" id="gcEntry" min="0" step="1" inputmode="numeric" placeholder="auto"></label>
+        <label class="f col">Notes<input type="text" id="gcNotes" maxlength="500" placeholder="e.g. 183 cm in shoes · cam 1.0 m high, 4.5 m away · 1/500"></label>
+      </div>
+      <p class="hint" id="gcTrimHint" style="margin:8px 0 0"></p>
+      <div class="btns" style="margin-top:12px">
+        <button class="primary" id="gcSave" type="button">Save &amp; rebuild</button>
+        <button id="gcBuild" type="button">Rebuild</button>
+        <a class="chip" id="gcCourt" href="/court3d" style="align-self:center">Open in 3D court →</a>
+        <a class="chip" href="/recording" style="align-self:center">Recording guide</a>
+      </div>
+      <div class="status" id="gcStatus"></div>
+      <div id="gcResult"></div>
     </section>
 
     <section class="card">
@@ -432,6 +477,31 @@ $('#trimEnd').addEventListener('input', () => { video.currentTime = +$('#trimEnd
 $('#setStart').onclick = () => { $('#trimStart').value = video.currentTime.toFixed(2); updateTrim(); };
 $('#setEnd').onclick = () => { $('#trimEnd').value = video.currentTime.toFixed(2); updateTrim(); };
 
+// Clip-type helper (3D game clips, see /recording): sets sample FPS + max frames
+const CLIP_TYPES = {
+  idle: { fps: 15, max: 48, name: 'dribble-idle-r-t01' },
+  loco: { fps: 30, max: 96, name: 'loco-jog-fwd-r-t01' },
+  move: { fps: 30, max: 120, name: 'move-crossover-idle-rl-t01' },
+  shot: { fps: 30, max: 120, name: 'shot-stepback-r-t01' },
+};
+let clipType = null;
+function markClipType() {
+  const p = CLIP_TYPES[clipType];
+  if (p && (+$('#sampleFps').value !== p.fps || +$('#maxFrames').value !== p.max)) clipType = null;
+  $$('#clipType [data-ct]').forEach((b) => b.classList.toggle('on', b.dataset.ct === clipType));
+}
+$$('#clipType [data-ct]').forEach((b) => b.onclick = () => {
+  const p = CLIP_TYPES[b.dataset.ct];
+  clipType = b.dataset.ct;
+  $('#sampleFps').value = String(p.fps);
+  $('#maxFrames').value = String(p.max);
+  $('#moveName').placeholder = `e.g. ${p.name}`;
+  $('#ctHint').textContent = `${p.fps} fps · up to ${p.max} frames (${(p.max / p.fps).toFixed(1)} s) · ≈ $${(p.max * 0.02).toFixed(2)}–${(p.max * 0.03).toFixed(2)} at the cap`;
+  markClipType();
+  updateTrim();
+});
+['sampleFps', 'maxFrames'].forEach((id) => $('#' + id).addEventListener('change', markClipType));
+
 function uploadFile(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -507,6 +577,7 @@ async function openMotion(id) {
     stat(`${r.sourceYawDeg ?? 0}°`, 'filmed from'), stat(r.reprojErrPx != null ? `${r.reprojErrPx}px` : '—', 'fit error'),
     stat(r.ballFrames ?? 0, 'ball frames'), stat(`${r.lrSwaps ?? 0} / ${r.outliersFixed ?? 0}`, 'L/R fixes / outliers'),
   ].join('');
+  gcLoad(id, meta);
   const mf = meta.mesh?.frames || 0, mt = meta.mesh?.total || meta.sourceFrames || meta.frameCount;
   $('#meshInfo').textContent = mf
     ? `3D body mesh: ${mf}/${mt} frames · hand close-ups: ${meta.hands || 0}`
@@ -587,6 +658,202 @@ $('#btnReprocess').onclick = async () => {
     await openMotion(ST.motionId);
   } catch (e) { st.textContent = e.message; st.classList.add('err'); }
 };
+
+// ── 3D game clip (role, trims, quality — /api/mocap3d, docs/RECORDING.md) ──
+const GC = { tok: 0, id: null, meta: null, lib: null, orig: null, typeTouched: false, busy: false };
+const GC_GROUPS = { loops: 'Loops', locomotion: 'Locomotion', shots: 'Shots', moves: 'Dribble moves', transitions: 'Transitions' };
+const gcRoles = () => GC.lib?.roles || {};
+const gcRoleLabel = (r) => (r && gcRoles()[r]?.label) || r || '— none —';
+
+function gcSetBusy(on) {
+  GC.busy = on;
+  ['gcSave', 'gcBuild'].forEach((id) => { $('#' + id).disabled = on; });
+}
+function gcStatus(msg, err) { const s = $('#gcStatus'); s.textContent = msg || ''; s.classList.toggle('err', !!err); }
+function gcRenderRoles(current) {
+  const groups = {};
+  for (const [id, r] of Object.entries(gcRoles())) (groups[r.group || 'other'] ||= []).push([id, r]);
+  if (current && current !== 'none' && !gcRoles()[current]) (groups.other ||= []).push([current, { label: current }]);
+  $('#gcRole').innerHTML = '<option value="none">— none —</option>' + Object.entries(groups).map(([g, list]) =>
+    `<optgroup label="${esc(GC_GROUPS[g] || g)}">${list.map(([id, r]) =>
+      `<option value="${esc(id)}">${esc(r.label)}${r.runtime === false ? ' (not in 3D court yet)' : ''}</option>`).join('')}</optgroup>`).join('');
+}
+function gcFill(game) {
+  GC.orig = { ...game };
+  GC.typeTouched = false;
+  gcRenderRoles(game.role);
+  $('#gcRole').value = game.role || 'none';
+  $('#gcType').value = game.type || 'loop';
+  $('#gcTrimS').value = game.trimStart ?? 0;
+  $('#gcTrimE').value = game.trimEnd ?? 0;
+  $('#gcEntry').value = game.entryMax ?? '';
+  $('#gcNotes').value = game.notes || '';
+  gcTypeUi();
+}
+function gcTypeUi() {
+  const action = $('#gcType').value === 'action';
+  $('#gcEntryBox').classList.toggle('hidden', !action);
+  const m = GC.meta || {};
+  const raw = m.sourceFrames || m.frameCount || 0;
+  $('#gcTrimHint').textContent = `Trims are raw frames cut from each end of the analysed take (${raw} frames at ${m.fps || '?'} fps). ` +
+    (action ? 'Entry max: the latest frame the court may start this action from (blank = auto).' : 'Loops: leave both at 0 so the loop search can pick the cycle.');
+}
+function gcState() {
+  const g = GC.orig, lib = GC.lib;
+  if (!g || !lib) { $('#gcState').innerHTML = ''; return; }
+  const parts = [];
+  if (!g.role) parts.push(g.assigned ? 'No role: the 3D court ignores this clip.' : 'No role yet: pick one and save.');
+  else {
+    if (!g.assigned) parts.push(`Role guessed from the name: <b>${esc(gcRoleLabel(g.role))}</b>. Save to confirm it.`);
+    const used = (lib.court || []).find((c) => c.role === g.role);
+    if (gcRoles()[g.role]?.runtime === false) parts.push('The 3D court does not play this role yet.');
+    else if (used && used.id === GC.id) parts.push(`<span style="color:var(--ok)">✓ The 3D court plays this clip as <b>${esc(gcRoleLabel(g.role))}</b>.</span>`);
+    else if (used) parts.push(`The 3D court uses <b>${esc(used.name)}</b> for this role (explicitly assigned or newer).`);
+  }
+  $('#gcState').innerHTML = parts.join(' ');
+}
+const gcDir = (deg, speed) => {
+  if (!(speed > 0.1)) return 'in place';
+  const names = ['forward', 'forward-left', 'left', 'back-left', 'back', 'back-right', 'right', 'forward-right'];
+  return names[((Math.round(deg / 45) % 8) + 8) % 8];
+};
+function gcRenderResult(b, clip) {
+  const q = b.quality || {}, s = b.stats || {}, flags = q.flags || [];
+  const stat = (v, l, t) => `<div class="stat"${t ? ` title="${esc(t)}"` : ''}><b>${esc(v)}</b><span>${esc(l)}</span></div>`;
+  const num = (v, unit, d) => (v == null || !Number.isFinite(+v) ? '—' : `${d != null ? (+v).toFixed(d) : v}${unit}`);
+  const entry = b.entry || clip?.entry || null;
+  const shot = clip?.shot || null;
+  const stale = gcStale(b);
+  const windows = [];
+  if (b.loop) windows.push(stat(`${b.loop.from} → ${b.loop.to}`, 'loop window (frames)', `seam pose error ${b.loop.poseErrCm} cm`));
+  else if (GC.orig?.type === 'loop') windows.push(stat('none found', 'loop window'));
+  if (entry) windows.push(stat(`${entry.min} – ${entry.max}`, 'entry window (frames)'));
+  if (shot) {
+    windows.push(stat(`frame ${shot.releaseFrame}`, 'shot release', `last held frame ${shot.lastHeldFrame}${shot.hand ? ` · ${shot.hand} hand` : ''}`));
+    if (shot.stepFrame != null) windows.push(stat(`frame ${shot.stepFrame}`, 'step frame'));
+  } else if (b.shot) windows.push(stat('yes', 'shot release'));
+  $('#gcResult').innerHTML = `
+    <div class="gcsub">Built · ${b.frameCount} frames @ ${b.fps} fps${b.builtAt ? ` · ${esc(new Date(b.builtAt).toLocaleString())}` : ''}</div>
+    ${stale ? '<div class="status err">Built before the latest change to this motion. Press Rebuild.</div>' : ''}
+    <div class="gcflags">${flags.length ? flags.map((f) => `<div class="gcflag ${f.level === 'bad' ? 'bad' : 'warn'}"><span class="badge ${f.level === 'bad' ? 'bad' : 'warn'}">${esc(f.code)}</span>${esc(f.msg)}</div>`).join('') : '<div><span class="badge ok">✓ no quality flags</span></div>'}</div>
+    <div class="gcsub">Quality</div>
+    <div class="stats">
+      ${stat(`${num(q.slideMeasuredCm, '')} → ${num(q.slidePinnedCm, ' cm')}`, 'foot slide measured → pinned', `with root motion only: ${num(q.slideRootMotionCm, ' cm')}`)}
+      ${stat(num(q.loopSeamCm, ' cm'), 'loop seam')}
+      ${stat(`${q.contacts?.left ?? 0} / ${q.contacts?.right ?? 0}`, 'contacts L / R')}
+      ${stat(num(q.depthDriftRemovedM, ' m', 2), 'depth drift removed')}
+      ${stat(num(q.pelvisDropCm, ' cm'), 'pelvis drop')}
+      ${stat(num(q.translationNoiseMps, ' m/s', 2), 'foot noise')}
+      ${stat(`${q.ikClampedFrames ?? 0}`, 'IK-clamped frames')}
+      ${stat(q.rootFromFeet != null ? `${Math.round(q.rootFromFeet * 100)} %` : '—', 'root from feet')}
+    </div>
+    ${q.warps?.length ? `<div class="gcsub">Warps (intended travel)</div><ul class="gcwarps">${q.warps.map((w) =>
+      `<li>frames ${w.from}–${w.to}: measured ${w.measured.map((x) => (+x).toFixed(2)).join(', ')} m → target ${w.target.map((x) => (+x).toFixed(2)).join(', ')} m (dx, dz) · correction <b>${w.correctionCm} cm</b></li>`).join('')}</ul>` : ''}
+    <div class="gcsub">Motion</div>
+    <div class="stats">
+      ${stat(num(s.speed, ' m/s', 2), 'speed', s.speedHipsPerS != null ? `${s.speedHipsPerS} hip-heights/s (scales to any character)` : '')}
+      ${stat(`${gcDir(s.dirDeg, s.speed)}${s.speed > 0.1 ? ` (${s.dirDeg}°)` : ''}`, 'direction')}
+      ${stat(num(s.durationS, ' s', 2), 'duration')}
+      ${stat(num(s.turnDegPerS, '°/s'), 'turn rate')}
+      ${windows.join('')}
+    </div>`;
+}
+// Built summaries omit the shot release (library: also the entry window) —
+// read them from the built clip; it is in the server's cache at this point
+const gcStale = (b) => !!(b.builtAt && GC.meta?.updatedAt && String(b.builtAt) < String(GC.meta.updatedAt));
+async function gcShowBuilt(b, tok) {
+  let clip = null;
+  // a stale summary would not match a fresh clip (and the GET would rebuild) — skip it
+  if (!gcStale(b) && (b.shot || ((GC.orig?.type === 'action') && !b.entry))) {
+    try { clip = await api(`/api/mocap3d/clip/${encodeURIComponent(GC.id)}`); } catch { clip = null; }
+  }
+  if (tok !== GC.tok) return;
+  gcRenderResult(b, clip);
+}
+async function gcRefreshLib(tok) {
+  try {
+    const lib = await api('/api/mocap3d/library');
+    if (tok !== GC.tok) return null;
+    GC.lib = lib;
+    return lib;
+  } catch (e) { if (tok === GC.tok) gcStatus(e.message, true); return null; }
+}
+async function gcLoad(id, meta) {
+  const tok = ++GC.tok;
+  GC.id = id; GC.meta = meta || null; GC.orig = null;
+  $('#gcCourt').href = `/court3d?focus=${encodeURIComponent(id)}`;
+  $('#gcResult').innerHTML = ''; $('#gcState').innerHTML = '';
+  gcStatus('Loading…');
+  gcSetBusy(true);
+  try {
+    const lib = await gcRefreshLib(tok);
+    if (!lib) return;
+    const entry = (lib.clips || []).find((c) => c.id === id);
+    if (!entry) { gcStatus('This motion is not in the 3D library (it needs raw measurements).', true); return; }
+    gcFill(entry.game || {});
+    gcState();
+    gcStatus('');
+    if (entry.built) await gcShowBuilt(entry.built, tok);
+    else if (tok === GC.tok) $('#gcResult').innerHTML = '<p class="hint" style="margin:10px 0 0">Not built yet — press Rebuild.</p>';
+  } catch (e) {
+    if (tok === GC.tok) gcStatus(e.message, true);
+  } finally { if (tok === GC.tok) gcSetBusy(false); }
+}
+// Only the fields that differ from what was loaded (null resets a field to its default)
+function gcPatch() {
+  const o = GC.orig || {}, p = {};
+  const role = $('#gcRole').value;
+  if (role !== (o.role || 'none') || (!o.assigned && role !== 'none')) p.role = role; // saving confirms a guessed role
+  if ($('#gcType').value !== o.type) p.type = $('#gcType').value;
+  const int = (el, label) => {
+    const v = el.value.trim();
+    if (v === '') return null;
+    if (!/^\d+$/.test(v)) throw new Error(`${label} must be a whole number ≥ 0`);
+    return +v;
+  };
+  const ts = int($('#gcTrimS'), 'Trim start'), te = int($('#gcTrimE'), 'Trim end'), em = int($('#gcEntry'), 'Entry max');
+  if (ts !== (o.trimStart ?? null)) p.trimStart = ts;
+  if (te !== (o.trimEnd ?? null)) p.trimEnd = te;
+  if (em !== (o.entryMax ?? null)) p.entryMax = em;
+  const notes = $('#gcNotes').value.trim();
+  if (notes !== (o.notes || '')) p.notes = notes || null;
+  return p;
+}
+async function gcRun(kind) {
+  if (!GC.id || GC.busy) return;
+  const tok = GC.tok, id = GC.id;
+  let patch = null;
+  try { patch = kind === 'save' ? gcPatch() : null; } catch (e) { gcStatus(e.message, true); return; }
+  const save = patch && Object.keys(patch).length > 0;
+  gcSetBusy(true);
+  gcStatus(save ? `Saving ${Object.keys(patch).join(', ')} and rebuilding…` : 'Rebuilding…');
+  try {
+    const out = save
+      ? await api(`/api/mocap3d/clip/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(patch) })
+      : await api(`/api/mocap3d/clip/${encodeURIComponent(id)}/build`, { method: 'POST', body: '{}' });
+    if (tok !== GC.tok) return;
+    if (out.game) gcFill(out.game);
+    await gcRefreshLib(tok);
+    if (tok !== GC.tok) return;
+    const entry = (GC.lib?.clips || []).find((c) => c.id === id);
+    if (entry?.game) gcFill(entry.game);
+    gcState();
+    const built = { ...out.built, builtAt: entry?.built?.builtAt || new Date().toISOString() };
+    await gcShowBuilt(built, tok);
+    if (tok !== GC.tok) return;
+    const nf = out.built?.quality?.flags?.length || 0;
+    gcStatus(`✓ ${save ? 'Saved and rebuilt' : kind === 'save' ? 'Nothing changed — rebuilt' : 'Rebuilt'} · ${out.built?.frameCount ?? '?'} frames · ${nf ? `${nf} quality flag${nf > 1 ? 's' : ''}` : 'no quality flags'}`);
+  } catch (e) {
+    if (tok === GC.tok) gcStatus(e.message, true);
+  } finally { if (tok === GC.tok) gcSetBusy(false); }
+}
+$('#gcSave').onclick = () => gcRun('save');
+$('#gcBuild').onclick = () => gcRun('build');
+$('#gcType').addEventListener('change', () => { GC.typeTouched = true; gcTypeUi(); });
+$('#gcRole').addEventListener('change', () => {
+  const r = gcRoles()[$('#gcRole').value];
+  if (r?.type && !GC.typeTouched) { $('#gcType').value = r.type; gcTypeUi(); }
+});
 
 // ── Generate ────────────────────────────────────────────────────────────
 async function loadCharacters() {

@@ -267,13 +267,13 @@ function register(router, ctx) {
     try {
       const game = await GC.saveSettings(params.id, body || {});
       const { json: j } = await GC.build(params.id, { force: true });
-      json(res, { success: true, game, built: { frameCount: j.frameCount, fps: j.fps, loop: j.loop, stats: j.stats, quality: j.quality, shot: !!j.shot, entry: j.entry } });
+      json(res, { success: true, game, built: GC.summary(j) });
     } catch (err) { json(res, { error: err.message }, 400); }
   });
   router.post('/api/mocap3d/clip/:id/build', async (req, res, params) => {
     try {
       const { json: j } = await GC.build(params.id, { force: true });
-      json(res, { success: true, game: j.game, built: { frameCount: j.frameCount, fps: j.fps, loop: j.loop, stats: j.stats, quality: j.quality, shot: !!j.shot, entry: j.entry } });
+      json(res, { success: true, game: j.game, built: GC.summary(j) });
     } catch (err) { json(res, { error: err.message }, 400); }
   });
   // Character rig (skinned mesh + skeleton), ?motion=&frame= to build from another scan

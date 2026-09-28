@@ -138,8 +138,8 @@ export function segMatrices(P, out = new Float32Array(NSEG * 16)) {
     const g = SEGS[s];
     const a = combo(P, g.a), b = combo(P, g.b);
     const ab = v3.sub(b, a);
-    const L = v3.len(ab) || 1e-6;
-    const u = v3.sc(ab, 1 / L);
+    let L = v3.len(ab), u;
+    if (L < 1e-6) { L = 1e-6; u = [0, 1, 0]; } else u = v3.sc(ab, 1 / L); // zero-length bone: keep the matrix invertible
     let r = v3.sub(get3(P, g.ref[1]), get3(P, g.ref[0]));
     r = v3.sub(r, v3.sc(u, v3.dot(r, u)));
     if (v3.len(r) < 1e-5) r = v3.sub(fb, v3.sc(u, v3.dot(fb, u)));
@@ -329,20 +329,28 @@ function restFeetOf(clip) {
   return out;
 }
 
-/** Loops: gait phase 0 at a left plant, 0.5 at the next right plant (sync markers). */
+/**
+ * Loops: gait cycles from the sync markers — each cycle runs left plant (phase
+ * 0) → right plant (0.5) → next left plant (1). A loop may hold several cycles.
+ */
 function phaseMapOf(clip) {
   if (!clip.loop) return null;
-  const L = clip.markers.leftPlant, R = clip.markers.rightPlant;
-  if (!L.length || !R.length) return { t0: 0, tHalf: clip.F / 2, F: clip.F };
-  const t0 = L[0];
-  let tHalf = R.find((r) => r > t0);
-  if (tHalf == null) tHalf = R[0] + clip.F;
-  return { t0, tHalf, F: clip.F };
+  const F = clip.F;
+  const L = [...clip.markers.leftPlant].sort((a, b) => a - b), R = [...clip.markers.rightPlant].sort((a, b) => a - b);
+  if (!L.length) return { F, cycles: [{ a: 0, h: F / 2, b: F }] };
+  const cycles = L.map((a, i) => {
+    const b = i + 1 < L.length ? L[i + 1] : L[0] + F;
+    let h = R.find((r) => r > a && r < b);
+    if (h == null) { const r2 = R.map((r) => r + F).find((r) => r > a && r < b); h = r2 != null ? r2 : (a + b) / 2; }
+    return { a, h, b };
+  });
+  return { F, cycles };
 }
-function phaseToTime(pm, phase) {
-  phase -= Math.floor(phase);
-  const t = phase < 0.5 ? pm.t0 + (pm.tHalf - pm.t0) * (phase / 0.5) : pm.tHalf + (pm.t0 + pm.F - pm.tHalf) * ((phase - 0.5) / 0.5);
-  return t % pm.F;
+/** Clip time for gait position u (cycles; fraction = phase, integer part = which cycle). */
+function phaseToTime(pm, u) {
+  const k = pm.cycles.length, ci = ((Math.floor(u) % k) + k) % k, f = u - Math.floor(u), c = pm.cycles[ci];
+  const t = f < 0.5 ? c.a + (c.h - c.a) * (f / 0.5) : c.h + (c.b - c.h) * ((f - 0.5) / 0.5);
+  return ((t % pm.F) + pm.F) % pm.F;
 }
 
 /** Catmull-Rom sample of a clip at time t (frames). Loops wrap; actions clamp. */
@@ -418,12 +426,29 @@ export class Inertializer {
 }
 
 // ── two-bone leg IK ─────────────────────────────────────────────────────────
-/** Solve hip→knee→ankle for an ankle target with a knee hint (bend plane). */
-export function solveLeg(hip, kneeHint, target, L1, L2) {
+/**
+ * Solve hip→knee→ankle for an ankle target with a knee hint (bend plane).
+ * soft > 0: "soft IK" — near full extension the reach is eased in
+ * exponentially, so the knee never snaps straight (feet in the air only; a
+ * planted foot must be met exactly).
+ */
+export function solveLeg(hip, kneeHint, target, L1, L2, soft = 0, stretch = 0) {
   let d = v3.sub(target, hip), L = v3.len(d);
   const reach = L1 + L2 - 1e-4;
-  let t = target;
-  if (L > reach) { t = v3.add(hip, v3.sc(d, reach / L)); d = v3.sub(t, hip); L = reach; }
+  let t = target, kneeL = null;
+  if (soft > 0 && L > reach - soft) {
+    const ds = reach - soft, Ls = ds + soft * (1 - Math.exp(-(L - ds) / soft));
+    if (stretch > 0 && L - Ls <= stretch) kneeL = Ls; // planted: the foot stays exactly, the leg stretches ≤ `stretch`
+    else { t = v3.add(hip, v3.sc(d, Ls / L)); d = v3.sub(t, hip); L = Ls; }
+  } else if (L > reach) { t = v3.add(hip, v3.sc(d, reach / L)); d = v3.sub(t, hip); L = reach; }
+  if (kneeL != null) {
+    // knee from the softened distance, scaled so thigh/shin keep their ratio
+    const u0 = v3.norm(d), a0 = (L1 * L1 - L2 * L2 + kneeL * kneeL) / (2 * kneeL), h0 = Math.sqrt(Math.max(0, L1 * L1 - a0 * a0));
+    let pole0 = v3.sub(kneeHint, hip); pole0 = v3.sub(pole0, v3.sc(u0, v3.dot(pole0, u0)));
+    if (v3.len(pole0) < 1e-6) pole0 = [0, 0, 1];
+    const k = L / kneeL;
+    return { knee: v3.add(hip, v3.add(v3.sc(u0, a0 * k), v3.sc(v3.norm(pole0), h0 * k))), ankle: t, short: false };
+  }
   const u = v3.norm(d);
   const a = (L1 * L1 - L2 * L2 + L * L) / (2 * L);
   const h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
@@ -434,6 +459,34 @@ export function solveLeg(hip, kneeHint, target, L1, L2) {
 }
 
 // ── feet ────────────────────────────────────────────────────────────────────
+/**
+ * Rotate foot points [ankle, heel, big toe, small toe] about the toe line,
+ * heel up: the smallest angle (≤ maxA) that brings the ankle within `reach`
+ * of `hip`; when no angle does (a sideways lean — a toe pivot adds no
+ * sideways reach) the angle that gets closest.
+ */
+function heelLift(pts, hip, reach, maxA = 1.13) {
+  const dist = (P) => v3.len(v3.sub(P[0], hip));
+  const ok = (P) => dist(P) <= reach;
+  const T = v3.lerp(pts[2], pts[3], 0.5);
+  let ax = v3.sub(pts[2], pts[3]); ax[1] = 0; ax = v3.norm(ax);
+  const rot = (p, th) => {
+    const d = v3.sub(p, T), c = Math.cos(th), sn = Math.sin(th);
+    return v3.add(T, v3.add(v3.add(v3.sc(d, c), v3.sc(v3.cross(ax, d), sn)), v3.sc(ax, v3.dot(ax, d) * (1 - c))));
+  };
+  // the heel sits behind the toes: pick the sign that raises it
+  const sg = rot(pts[1], 0.3)[1] > pts[1][1] ? 1 : -1;
+  const at = (a) => pts.map((p, q) => (q >= 2 ? p.slice() : rot(p, sg * a)));
+  if (!ok(at(maxA))) {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i <= 10; i++) { const a = (maxA * i) / 10, d = dist(at(a)); if (d < bd - 1e-4) { bd = d; best = a; } }
+    return { pts: at(best), angle: best };
+  }
+  let lo = 0, hi = maxA;
+  for (let it = 0; it < 16; it++) { const m = (lo + hi) / 2; if (ok(at(m))) hi = m; else lo = m; }
+  return { pts: at(hi), angle: hi };
+}
+
 /** Four foot points (ankle, heel, big toe, small toe) for an ankle spot + yaw (+ pitch). */
 function footPoints(geo, ax, az, yaw, lift = 0, pitch = 0) {
   const c = Math.cos(pitch), s = Math.sin(pitch);
@@ -513,7 +566,9 @@ class FootPlanner {
     this.clock += dt;
     const sp = Math.hypot(p.vel[0], p.vel[1]) / ls;         // leg-lengths-normalised speed (m/s at 0.86 m legs)
     const moving = sp > 0.18;
-    const cadence = clamp(2.0 + 0.5 * sp, 2.0, 3.9) * Math.sqrt(1 / ls); // steps/s (quick dribble steps)
+    // quick dribble steps; sideways shuffles quicker still
+    const lvp = rotY(-p.yaw, p.vel[0], p.vel[1]), lat = sp > 0.05 ? Math.abs(lvp[0]) / (Math.hypot(lvp[0], lvp[1]) || 1) : 0;
+    const cadence = clamp(2.0 + 0.5 * sp, 2.0, 3.9) * (1 + 0.3 * lat) * Math.sqrt(1 / ls); // steps/s
     const Tstep = 1 / cadence;
     const Tsw = moving ? clamp(0.82 * Tstep + 0.02 * sp, 0.2, 0.46) : 0.26;
     const Tstance = Math.max(0.05, 2 * Tstep - Tsw);
@@ -532,7 +587,7 @@ class FootPlanner {
     const sw = this.swinging();
     const canOverlap = sp > 3.6; // sprint: flight phase allowed
     // a planted foot already past its reach may hop off even while the other swings
-    const beyond = sw.length === 1 && SIDES.some((sd) => this.feet[sd].mode === 'plant' && this.reachFrac(sd) > 0.97);
+    const beyond = sw.length === 1 && SIDES.some((sd) => this.feet[sd].mode === 'plant' && this.reachFrac(sd) > 0.92);
     if (sw.length === 0 || beyond || (canOverlap && sw.length === 1 && this.feet[sw[0]].t > this.feet[sw[0]].T * 0.7)) {
       let side = null;
       const err = (s) => {
@@ -542,7 +597,7 @@ class FootPlanner {
         return { d: Math.hypot(f.x - t.x, f.z - t.z) / ls, a: Math.abs(wrapPi(f.yaw - t.yaw)) };
       };
       // a planted foot about to fall out of the leg's reach must go now
-      const urgent = SIDES.find((sd) => this.feet[sd].mode === 'plant' && this.reachFrac(sd) > 0.9);
+      const urgent = SIDES.find((sd) => this.feet[sd].mode === 'plant' && this.reachFrac(sd) > 0.8);
       if (urgent) side = urgent;
       else if (moving) {
         if (this.clock - this.lastStep >= Tstep * 0.98 || this.lastStep < 0) {
@@ -564,7 +619,8 @@ class FootPlanner {
         this.clampTarget(side, tg);
         const dist = Math.hypot(tg.x - f.x, tg.z - f.z);
         if (moving || dist > 0.02 * ls || Math.abs(wrapPi(tg.yaw - f.yaw)) > 0.05) {
-          this.feet[side] = { mode: 'swing', from: { x: f.x, z: f.z, yaw: f.yaw }, to: tg, t: 0, T, h: clamp(0.055 + 0.03 * sp, 0.05, 0.17) * ls };
+          const shown = p.feetState?.[side]?.pts;
+          this.feet[side] = { mode: 'swing', from: { x: f.x, z: f.z, yaw: f.yaw, pts: shown ? shown.map((q) => q.slice()) : f.pts || null }, to: tg, t: 0, T, h: clamp(0.055 + 0.03 * sp, 0.05, 0.17) * ls };
           this.lastStep = this.clock; this.lastSide = side;
           p.events.push({ type: 'lift', side });
         }
@@ -607,14 +663,23 @@ class FootPlanner {
   /** Current world foot points for a side. */
   points(side) {
     const f = this.feet[side], g = this.geo(side);
-    if (f.mode === 'plant') return footPoints(g, f.x, f.z, f.yaw);
+    if (f.mode === 'plant') return f.pts ? f.pts.map((q) => q.slice()) : footPoints(g, f.x, f.z, f.yaw);
     const s = clamp(f.t / f.T, 0, 1), e = smooth01(s);
     const x = f.from.x + (f.to.x - f.from.x) * e, z = f.from.z + (f.to.z - f.from.z) * e;
     const yaw = f.from.yaw + wrapPi(f.to.yaw - f.from.yaw) * e;
     // C1 curves: zero vertical speed at lift-off and touch-down
     const lift = f.h * (1 - Math.cos(2 * Math.PI * s)) / 2 * (1 + 0.35 * Math.sin(Math.PI * s)) + (f.y0 || 0) * (1 - smooth01(s));
     const pitch = 0.38 * Math.sin(Math.PI * s) ** 2 * (1 - 1.6 * s); // toes down after push-off, heel first at the end
-    return footPoints(g, x, z, yaw, lift, pitch);
+    const pts = footPoints(g, x, z, yaw, lift, pitch);
+    // leave the floor from exactly how the foot was shown (heel up at push-off)
+    if (f.from.pts) {
+      const b = 1 - smooth01(s / 0.4);
+      if (b > 0) {
+        const d = [x - f.from.x, 0, z - f.from.z];
+        return pts.map((q, i) => v3.lerp(q, v3.add(f.from.pts[i], [d[0], lift, d[2]]), b));
+      }
+    }
+    return pts;
   }
 }
 
@@ -730,24 +795,49 @@ export class Player {
     const dirK = 1 - 0.3 * Math.abs(lm[0] / lmag) - 0.3 * Math.max(0, -lm[1] / lmag);
     const maxV = (inp.sprint ? o.sprintSpeed : o.jogSpeed) * ls * clamp(dirK, 0.62, 1);
     const want = [mv[0] * maxV, mv[1] * maxV];
-    for (let c = 0; c < 2; c++) {
-      const [x, v] = springTo(this.vel[c], 0, want[c], o.accelHalflife, dt);
-      this.accel = this.accel || [0, 0];
-      this.accel[c] = (x - this.vel[c]) / dt;
-      this.vel[c] = x;
-    }
+    this.accel = this.accel || [0, 0];
+    for (let c = 0; c < 2; c++) [this.vel[c], this.accel[c]] = springTo(this.vel[c], this.accel[c], want[c], o.accelHalflife, dt);
     this.pos[0] += this.vel[0] * dt; this.pos[1] += this.vel[1] * dt;
     if (inp.face) this.yaw = dampAngle(this.yaw, Math.atan2(inp.face[0] - this.pos[0], inp.face[1] - this.pos[1]), o.turnHalflife, dt);
     const sp = Math.hypot(this.vel[0], this.vel[1]);
     // recorded locomotion loops, if the library covers this direction and speed
-    const blend = this.locoBlend(sp, inp.sprint);
-    if (blend) { this.source = 'clip-loco'; this.clipLoco(dt, blend, sp); return; }
+    // hysteresis: once on recorded loops, stay until clearly below their range
+    const blend = this.locoBlend(sp, inp.sprint, this.source === 'clip-loco');
+    if (blend) {
+      if (this.source !== 'clip-loco') this.enterClipLoco();
+      this.source = 'clip-loco'; this.clipLoco(dt, blend, sp); return;
+    }
+    if (this.source === 'clip-loco') this.leaveClipLoco();
     this.source = 'proc';
     this.proceduralLoco(dt, sp);
   }
 
+  /** Planner feet → world locks, and a gait phase that matches the feet. */
+  enterClipLoco() {
+    const f = this.planner.feet;
+    for (const s of SIDES) this.locks[s] = f[s].mode === 'plant' ? { pts: this.planner.points(s), out: 0, keep: false } : { pts: this.planner.points(s), out: 1e-6, keep: false };
+    // phase 0 = left plant, 0.5 = right plant (sync markers)
+    if (f.right.mode === 'swing') this.gaitPhase = 0.1 + 0.35 * clamp(f.right.t / f.right.T, 0, 1);
+    else if (f.left.mode === 'swing') this.gaitPhase = 0.6 + 0.35 * clamp(f.left.t / f.left.T, 0, 1);
+    else this.gaitPhase = this.planner.lastSide === 'left' ? 0.02 : 0.52;
+  }
+  /** World locks → planner feet (planted stay exactly where they are). */
+  leaveClipLoco() {
+    this.planner.init(this.world);
+    for (const s of SIDES) {
+      const L = this.locks[s], fs = this.planner.feet[s];
+      const shown = this.feetState?.[s]?.pts;
+      if (L && L.out === 0) { fs.x = L.pts[0][0]; fs.z = L.pts[0][2]; fs.pts = (shown || L.pts).map((q) => q.slice()); }
+      else {
+        const a2 = get3(this.world, LEG[s].ankle);
+        this.planner.feet[s] = { mode: 'swing', from: { x: a2[0], z: a2[2], yaw: fs.yaw, pts: shown ? shown.map((q) => q.slice()) : null }, to: this.planner.target(s, 0.2), t: 0, T: 0.2, h: 0.04 * this.rig.ls, y0: Math.max(0, a2[1] - this.stance[s].ankle[1]) };
+      }
+    }
+    this.locks = { left: null, right: null };
+  }
+
   /** Pick 1–2 recorded loops for the local travel direction (null → procedural). */
-  locoBlend(sp, sprint) {
+  locoBlend(sp, sprint, staying = false) {
     const ls = this.rig.ls;
     const cands = [];
     for (const role of ['loco-fwd', 'loco-left', 'loco-right', 'loco-back', 'loco-sprint']) {
@@ -762,7 +852,7 @@ export class Player {
     scored.sort((a, b) => a.d - b.d);
     const A = scored[0];
     if (!A || Math.abs(wrapPi(A.c.dir - th)) > 0.9) return null;
-    if (sp < A.c.speed * 0.55) return null;
+    if (sp < A.c.speed * (staying ? 0.45 : 0.55)) return null;
     // a second clip on the other side of the travel angle
     const sA = Math.sign(wrapPi(th - A.c.dir));
     const B = scored.find((q) => q !== A && Math.sign(wrapPi(q.c.dir - A.c.dir)) === sA && Math.abs(wrapPi(q.c.dir - A.c.dir)) <= Math.PI / 2 + 0.01);
@@ -775,17 +865,20 @@ export class Player {
 
   clipLoco(dt, blend, sp) {
     const items = blend.items;
-    const cycle = items.reduce((s, q) => s + q.w * q.c.duration, 0);
+    // one gait cycle of each clip (a loop can hold several)
+    const cycle = items.reduce((s, q) => s + q.w * (q.c.duration / q.c.phaseMap.cycles.length), 0);
     const clipSp = items.reduce((s, q) => s + q.w * q.c.speed, 0);
     const rate = clamp(sp / clipSp, 0.6, 1.5);
-    this.gaitPhase = (this.gaitPhase + (dt * rate) / cycle) % 1;
+    this.gaitPhase += (dt * rate) / cycle;
+    if (this.gaitPhase >= 1) { this.gaitPhase -= 1; this.gaitCycle = (this.gaitCycle || 0) + 1; }
     const P = this.base;
     P.fill(0);
     const tmp = new Float32Array(NJ * 3);
     const cw = { left: 0, right: 0 };
-    let blendDir = 0;
+    let dirS = 0, dirC = 0;
+    const u = (this.gaitCycle || 0) + this.gaitPhase;
     for (const q of items) {
-      const t = phaseToTime(q.c.phaseMap, this.gaitPhase);
+      const t = phaseToTime(q.c.phaseMap, u);
       samplePose(q.c, t, tmp);
       const tr = sampleTraj(q.c, t);
       // the loop's in-cycle root wobble, then back to the capsule
@@ -793,13 +886,14 @@ export class Player {
       placePose(tmp, tr[0], tr[1], tr[2], place, NJ);
       for (let i = 0; i < NJ * 3; i++) P[i] += place[i] * q.w;
       for (const s of SIDES) cw[s] += contactAt(q.c, s, t) * q.w;
-      blendDir += q.c.dir * q.w;
+      dirS += Math.sin(q.c.dir) * q.w; dirC += Math.cos(q.c.dir) * q.w;
     }
     // orientation warp: turn the legs onto the true travel angle, chest stays square
+    const blendDir = Math.atan2(dirS, dirC); // circular mean (back + side is −135°, not +45°)
     const warp = clamp(wrapPi(blend.th - blendDir), -0.8, 0.8);
     if (Math.abs(warp) > 1e-3) this.rotateLegs(P, warp);
     this.contactW = cw;
-    this.ballFromClip(P, items[0].c, phaseToTime(items[0].c.phaseMap, this.gaitPhase));
+    this.ballFromClip(P, items[0].c, phaseToTime(items[0].c.phaseMap, u));
     this.baseVelFrom(P, dt);
   }
 
@@ -993,7 +1087,7 @@ export class Player {
     this.planner.init(this.world);
     for (const s of SIDES) {
       const L = this.locks[s], f = this.planner.feet[s];
-      if (L && L.out === 0) { f.x = L.pts[0][0]; f.z = L.pts[0][2]; continue; }
+      if (L && L.out === 0) { f.x = L.pts[0][0]; f.z = L.pts[0][2]; f.pts = (this.feetState?.[s]?.pts || L.pts).map((q) => q.slice()); continue; }
       const g = this.stance[s], a2 = get3(this.world, LEG[s].ankle);
       const tg = this.planner.target(s, 0);
       this.planner.feet[s] = { mode: 'swing', from: { x: a2[0], z: a2[2], yaw: f.yaw }, to: tg, t: 0, T: 0.22, h: 0.03 * this.rig.ls, y0: Math.max(0, a2[1] - g.ankle[1]) };
@@ -1007,7 +1101,8 @@ export class Player {
   solveFeet(dt) {
     const W = this.world, rig = this.rig, ls = rig.ls;
     const targets = {};
-    if (this.mode === 'loco' && this.source === 'proc') {
+    // the planner owns the feet in procedural locomotion (and from the frame an action ends)
+    if (this.mode === 'loco' && this.source !== 'clip-loco') {
       for (const s of SIDES) targets[s] = { pts: this.planner.points(s), w: 1, planted: this.planner.feet[s].mode === 'plant' };
     } else {
       // clip contacts → world locks
@@ -1016,8 +1111,9 @@ export class Player {
         const anim = FOOTPTS[s].map((k) => get3(W, k));
         let L = this.locks[s];
         if (cw >= 0.5 && (!L || L.out > 0)) {
-          // plant where the foot is NOW (mid-release: where it is drawn), lowest point on the floor
-          const cur = L && L.out > 0 ? anim.map((p, q) => v3.lerp(p, L.pts[q], 1 - smooth01(L.out))) : anim;
+          // plant where the foot is DRAWN (last frame, after IK easing), lowest point on the floor
+          const shown = this.feetState?.[s]?.pts;
+          const cur = shown ? shown.map((q) => q.slice()) : L && L.out > 0 ? anim.map((p, q) => v3.lerp(p, L.pts[q], 1 - smooth01(L.out))) : anim;
           const low = Math.min(...cur.slice(1).map((p) => p[1]));
           L = this.locks[s] = { pts: cur.map((p) => [p[0], p[1] - low + rig.soleOffset, p[2]]), out: 0, keep: false };
         }
@@ -1036,23 +1132,45 @@ export class Player {
         } else targets[s] = { pts: anim, w: 0, planted: false };
       }
     }
-    // pelvis drop: the body comes down when a planted foot is out of reach
+    // body height: the drop carried from the last frame first, so the heel
+    // lift below sees where the hips really are
+    const notLeg = (k) => !(FOOTPTS.left.includes(k) || FOOTPTS.right.includes(k) || k === LEG.left.knee || k === LEG.right.knee);
+    const lower = (d) => { if (d > 1e-5) for (let k = 0; k < NP; k++) if (notLeg(k)) W[k * 3 + 1] -= d; };
+    lower(this.pelvisDrop);
+    // push-off: a planted foot the hip is leaving pivots on its toes (heel up)
+    // before the body has to come down — the toes never move
+    const reachOf = (s) => rig.boneLen[LEG[s].knee] + rig.boneLen[LEG[s].ankle] - 0.012 * ls;
+    for (const s of SIDES) {
+      const t = targets[s];
+      if (!t || !t.planted) continue;
+      const hip = get3(W, LEG[s].hip), reach = reachOf(s);
+      if (v3.len(v3.sub(t.pts[0], hip)) <= reach) { t.heel = 0; continue; }
+      // rate-limited (≤ 9 rad/s) so the heel never snaps
+      this.heelPrev = this.heelPrev || { left: 0, right: 0 };
+      const want = heelLift(t.pts, hip, reach).angle;
+      const a = clamp(want, this.heelPrev[s] - 9 * dt, this.heelPrev[s] + 9 * dt);
+      const r = heelLift(t.pts, hip, reach, Math.max(0, a));
+      t.pts = r.pts; t.heel = r.angle;
+    }
+    for (const s of SIDES) { this.heelPrev = this.heelPrev || { left: 0, right: 0 }; this.heelPrev[s] = targets[s]?.planted ? targets[s].heel || 0 : 0; }
+    // still out of reach: the body comes down now (never drag a planted foot);
+    // otherwise it rises back on a spring and the heel lift takes over
     let need = 0;
     for (const s of SIDES) {
       const t = targets[s];
-      if (!t || !t.planted) continue; // a foot in the air may fall short — invisible
-      const hip = get3(W, LEG[s].hip), a = t.pts[0];
-      const L = rig.boneLen[LEG[s].knee] + rig.boneLen[LEG[s].ankle] - 0.012 * ls;
+      if (!t || !t.planted) continue;
+      const hip = get3(W, LEG[s].hip), a = t.pts[0], L = reachOf(s);
       const hz = Math.hypot(a[0] - hip[0], a[2] - hip[2]);
       if (hz < L) need = Math.max(need, (hip[1] - a[1]) - Math.sqrt(L * L - hz * hz));
     }
-    // planted feet move continuously, so `need` does too: follow it down at
-    // once (never let a planted foot be dragged), come back up on a spring
-    need = clamp(need, 0, 0.25 * ls);
-    if (need >= this.pelvisDrop) { this.pelvisDropV = (need - this.pelvisDrop) / dt; this.pelvisDrop = need; }
-    else [this.pelvisDrop, this.pelvisDropV] = springTo(this.pelvisDrop, Math.min(0, this.pelvisDropV), need, 0.08, dt);
-    const drop = Math.max(0, this.pelvisDrop);
-    if (drop > 1e-4) for (let k = 0; k < NP; k++) if (!(FOOTPTS.left.includes(k) || FOOTPTS.right.includes(k) || k === LEG.left.knee || k === LEG.right.knee)) W[k * 3 + 1] -= drop;
+    const cap = 0.18 * ls;
+    if (need > 1e-4 && this.pelvisDrop < cap) {
+      const extra = Math.min(need, cap - this.pelvisDrop);
+      lower(extra); this.pelvisDrop += extra; this.pelvisDropV = 0;
+    } else {
+      [this.pelvisDrop, this.pelvisDropV] = springTo(this.pelvisDrop, this.pelvisDropV, 0, 0.12, dt);
+      if (this.pelvisDrop < 0) { this.pelvisDrop = 0; this.pelvisDropV = 0; }
+    }
     // legs
     for (const s of SIDES) {
       const t = targets[s];
@@ -1062,14 +1180,26 @@ export class Player {
       // knee bends over the toes
       const toe = v3.lerp(t.pts[2], t.pts[3], 0.5), heel = t.pts[1];
       const fwd = v3.norm([toe[0] - heel[0], 0, toe[2] - heel[2]]);
-      const animKnee = get3(W, LEG[s].knee);
-      const hint = this.source === 'proc' || this.mode === 'loco' && this.source === 'proc'
-        ? v3.add(v3.lerp(hip, t.pts[0], 0.5), v3.sc(fwd, 0.4))
-        : v3.add(animKnee, v3.sc(fwd, 0.05));
-      const r = solveLeg(hip, hint, t.pts[0], L1, L2);
+      // bend plane: the animated knee's own bend direction (off its hip→ankle
+      // line, capsule space → world), leaning toward the toes. Taking the
+      // knee point itself as the hint flips when it is near the leg line.
+      const O = this.out, hC = get3(O, LEG[s].hip), kC = get3(O, LEG[s].knee), aC = get3(O, LEG[s].ankle);
+      const u = v3.norm(v3.sub(aC, hC)), kd = v3.sub(kC, hC);
+      const pc = v3.sub(kd, v3.sc(u, v3.dot(kd, u)));
+      const planner = this.mode === 'loco' && this.source !== 'clip-loco';
+      let dir = fwd;
+      const bendW = smooth01(v3.len(pc) / (0.08 * ls)); // a straight leg has no bend direction: fade to the toes
+      if (bendW > 0) {
+        const pw = rotY(this.yaw, pc[0], pc[2]);
+        const kd2 = v3.norm(v3.add(v3.sc(v3.norm([pw[0], pc[1], pw[1]]), planner ? 0.5 : 0.75), v3.sc(fwd, planner ? 0.5 : 0.25)));
+        dir = v3.norm(v3.add(v3.sc(fwd, 1 - bendW), v3.sc(kd2, bendW)));
+      }
+      const hint = v3.add(v3.lerp(hip, t.pts[0], 0.5), v3.sc(dir, 0.3));
+      const r = solveLeg(hip, hint, t.pts[0], L1, L2, t.planted ? 0.04 * ls : 0.06 * ls, t.planted ? 0.03 * ls : 0);
       set3(W, LEG[s].knee, ...r.knee);
       const shift = v3.sub(r.ankle, t.pts[0]);
       FOOTPTS[s].forEach((k, q) => set3(W, k, t.pts[q][0] + shift[0], t.pts[q][1] + shift[1], t.pts[q][2] + shift[2]));
+      t.pts = t.pts.map((q) => v3.add(q, shift));
       t.short = r.short;
     }
     this.feetState = targets;
@@ -1081,18 +1211,19 @@ export class Player {
       const t = this.feetState?.[s];
       const m = this.metrics.slide;
       if (t?.planted) {
-        const a = get3(this.world, LEG[s].ankle);
+        const a = v3.lerp(get3(this.world, LEG[s].big), get3(this.world, LEG[s].small), 0.5);
         if (!m[s]) m[s] = { x: a[0], z: a[2], max: 0 };
         m[s].max = Math.max(m[s].max, Math.hypot(a[0] - m[s].x, a[2] - m[s].z));
         this.metrics.slideMaxCm = Math.max(this.metrics.slideMaxCm, m[s].max * 100);
       } else m[s] = null;
     }
-    // pose pops: joint acceleration spikes (m/s²) excluding the ball
-    if (this.prevWorld && this.prevWorld2 && dt > 0) {
+    // pose pops: joint acceleration spikes (m/s²), ball excluded; uneven
+    // frame times are handled (velocities over each frame's own dt)
+    if (this.prevWorld && this.prevWorld2 && dt > 0 && this.prevDt > 0) {
       let big = 0;
-      for (let k = 0; k < NJ; k++) for (let c = 0; c < 3; c++) {
-        const i = k * 3 + c;
-        const a = (this.world[i] - 2 * this.prevWorld[i] + this.prevWorld2[i]) / (dt * dt);
+      const h = (dt + this.prevDt) / 2;
+      for (let i = 0; i < NJ * 3; i++) {
+        const a = ((this.world[i] - this.prevWorld[i]) / dt - (this.prevWorld[i] - this.prevWorld2[i]) / this.prevDt) / h;
         if (Math.abs(a) > big) big = Math.abs(a);
       }
       this.metrics.accelMax = big;
@@ -1100,6 +1231,7 @@ export class Player {
     }
     this.prevWorld2 = this.prevWorld ? this.prevWorld : null;
     this.prevWorld = this.world.slice();
+    this.prevDt = dt;
   }
 }
 
