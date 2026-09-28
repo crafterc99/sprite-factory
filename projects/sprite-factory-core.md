@@ -73,3 +73,5 @@ None currently — pending Railway stability.
 | 2026-03-31 | Vercel deployment added (assets excluded from bundle due to 250MB size limit) |
 
 - 2026-09-28: Mocap fix round 3 — zone apex at hoop stand base, magenta ball-proxy grip (fingers over the ball), per-frame floor snap + smoothed root for travelling moves. Tests 9/9. Railway deploy pending persistent storage.
+
+- 2026-09-28: Step-back jumper from video → zones 1–5 (SAM 3D Body mesh guide, hand close-ups, ball placed from the performer photo, shot release) → playable on the test court: move + hold Square, faces the hoop in every zone, ball flies to the rim. Firebase persistence live.

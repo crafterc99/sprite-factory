@@ -2861,8 +2861,15 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Assumptions: real .ply frame = keypoint frame up to a flip + translation (auto-detected; otherwise falls back to mannequin with meshError). Not yet run on a real fal mesh.
 
 ## MOCAP-6 — Step-back jumper through the pipeline, zones 1–5, on the test court
-- Status: NEEDS_REVIEW (live run in progress at time of writing; see below)
+- Status: DONE (live: court-shot-test --relay passes all 5 zones + mirrored spot)
 - Files changed: lib/mocap/motion-builder.js, lib/mocap/pipeline.js, lib/mocap/mannequin.js, lib/mocap/mesh-guide.js, index-v2.html, engine/AnimationPlayer.js, scripts/court-shot-test.js, tests/mocap.test.js, docs/MOCAP.md
 - What changed: shot release detection (+ hop frame) and genmeta.shot; jump-safe floor snap; held ball on the measured side of the palm; stepback-jumpshot slot with move + hold-Square trigger, frame-synced step-back burst, ball flight to the rim; court sprite mirroring (was never applied); mesh colour fixes.
 - Validation: npm test 11/11; court-shot-test on a local studio with stand-in strips: 6/6 spots pass (zones 1–5 + mirrored spot), no page errors. Live: clip analysed (39 frames, 39 meshes, $1.17), character rebuilt from the sheet (7 angles), release detected at frame 23 (hop at 16).
 - Assumptions: right-hand shooter only (left-hand ball hand falls back to the right-hand strip); idle dribble taken from the dribble before the step back (0–0.93 s) of the same clip.
+
+## MOCAP-7 — Ball in hand from the performer photo
+- Status: DONE
+- Files changed: lib/mocap/pipeline.js, lib/mocap/compose.js, lib/mocap/mannequin.js, tests/mocap.test.js, index-v2.html, engine/AnimationPlayer.js, scripts/court-shot-test.js
+- What changed: in-hand frames have no ball in the guide; prompt names the holding hand and asks for the ball as the performer holds it (photo + hand close-up) as a magenta disc; compose keeps the model's placement (disc anywhere, or its orange ball) → canonical texture, fingers on top; no double balls. Court: shot ends on its last displayed frame; /api/animations can't block roster load.
+- Validation: npm test 12/12; Front zone re-generated and compared frame-by-frame with the performer cut-outs (ball in hand every held frame); all 5 zones regenerated ($1.35/zone, QC 89–100%); live court test passes every zone.
+- Follow-up: OpenAI credits ran out before the separate idle-dribble generation — idle-dribble_z1..5 are the first 8 frames (the dribble before the hop) of each zone's step-back strip. Top up and run `node run3.js 1,2,3,4,5 idle` equivalent (generate idle motion mo-mule39h45m37) for a dedicated loop. cut-018 performer mask includes the wall mural (weak reference for one frame).
