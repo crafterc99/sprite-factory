@@ -35,11 +35,12 @@ fs.mkdirSync(OUT, { recursive: true });
     proxy = { server: `${u.protocol}//${u.host}`, username: decodeURIComponent(u.username || ''), password: decodeURIComponent(u.password || '') };
   }
   const browser = await chromium.launch({ proxy, executablePath: process.env.CHROMIUM_PATH || (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined) });
-  const ctx = await browser.newContext({ ignoreHTTPSErrors: !!proxy, viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, recordVideo: { dir: OUT, size: { width: 1280, height: 800 } } });
+  // Password as a header on every request (no ?key= redirect / rate limit)
+  const ctx = await browser.newContext({ ignoreHTTPSErrors: !!proxy, viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, recordVideo: { dir: OUT, size: { width: 1280, height: 800 } }, ...(PW ? { extraHTTPHeaders: { Authorization: `Bearer ${PW}` } } : {}) });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  const q = `page=testing&char=${encodeURIComponent(CHAR)}` + (PW ? `&key=${encodeURIComponent(PW)}` : '');
+  const q = `page=testing&char=${encodeURIComponent(CHAR)}`;
   for (let a = 0; ; a++) {
     try { await page.goto(`${BASE}/?${q}`, { waitUntil: 'load', timeout: 60000 }); break; }
     catch (e) { if (a >= 4) throw e; await page.waitForTimeout(3000 * (a + 1)); }

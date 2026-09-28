@@ -7149,10 +7149,18 @@ async function loadTestingRoster() {
     const data = await r.json();
     TESTING.roster = data.roster || [];
 
-    // Also load animation definitions
-    const ar = await fetch(`${API}/api/animations`);
-    const adata = await ar.json();
-    TESTING.animations = adata.animations || {};
+    // Also load animation definitions — optional: a failed request (flaky
+    // network) must not stop the character from loading, so retry, then go on
+    for (let a = 0; a < 3; a++) {
+      try {
+        const ar = await fetch(`${API}/api/animations`);
+        TESTING.animations = (await ar.json()).animations || {};
+        break;
+      } catch (e) {
+        if (a === 2) { console.warn('Testing: animation definitions unavailable', e.message); TESTING.animations = TESTING.animations || {}; }
+        else await new Promise(r => setTimeout(r, 600 * (a + 1)));
+      }
+    }
 
     renderTestingCharGrid();
 
