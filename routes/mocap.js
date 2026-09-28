@@ -85,6 +85,97 @@ function register(router, ctx) {
     json(res, { characters });
   });
 
+  // ── Character from a turnaround sheet ────────────────────────────────────
+  // Body: { name, heightInches, imageBase64, order?, description?, fillAngles?, model? }
+  // → splits the sheet into angle references ({name}-angle-{i}.png + {name}full.png),
+  //   registers the character, optionally generates the missing 45° game angles.
+  router.post('/api/mocap/character-from-sheet', async (req, res) => {
+    const body = await parseBody(req);
+    const name = String(body.name || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    if (!name || !body.imageBase64) return json(res, { error: 'name and imageBase64 required' }, 400);
+    const jobId = startJob('character');
+    setImmediate(async () => {
+      const t0 = Date.now();
+      try {
+        const { splitSheet, toReferenceCanvas } = require('../lib/mocap/character-sheet');
+        const r2 = require('../lib/r2-storage');
+        const { loadCharacters, saveCharacters, computeScale } = require('./characters');
+        const buf = Buffer.from(String(body.imageBase64).replace(/^data:[^,]+,/, ''), 'base64');
+        patchJob(jobId, { progress: { msg: 'Splitting sheet…', done: 0, total: 1 } });
+        const sheet = await splitSheet(buf, { order: body.order || 'front,right,back,left' });
+        const written = [];
+        const save = async (file, png) => {
+          const p = path.join(ASSETS_DIR, file);
+          fs.mkdirSync(ASSETS_DIR, { recursive: true });
+          fs.writeFileSync(p, png);
+          if (r2.isAvailable()) await r2.uploadFile(file, p);
+          written.push(`/assets/${file}`);
+        };
+        const cutouts = {};
+        for (const p of sheet.poses) {
+          if (p.angleIdx == null) continue;
+          cutouts[p.angleIdx] = p.png;
+          const canvas = await toReferenceCanvas(p.png);
+          await save(`${name}-angle-${p.angleIdx}.png`, canvas);
+          if (p.angleIdx === 0) await save(`${name}full.png`, canvas);
+        }
+
+        // Missing 45° game angles (Z2 front-left = 7, Z4 back-left = 5)
+        const fill = body.fillAngles === false ? [] : [7, 5].filter((i) => !cutouts[i]);
+        const filled = [];
+        if (fill.length && cutouts[0]) {
+          const info = models.listModels().find((m) => m.id === body.model) || models.listModels().find((m) => m.available);
+          if (info?.available) {
+            const refs = [cutouts[0], cutouts[6] || cutouts[2], cutouts[4]].filter(Boolean);
+            const desc = { 7: 'a three-quarter FRONT-LEFT view: body turned 45° so the character faces between the viewer and the left edge of the image (we see the face and chest, and their right side)', 5: 'a three-quarter BACK-LEFT view: body turned so the character faces away from the viewer and toward the left edge of the image (we see the back of the head and back, and a little of their right side)' };
+            let k = 0;
+            for (const idx of fill) {
+              patchJob(jobId, { progress: { msg: `Generating ${idx === 7 ? 'front-left' : 'back-left'} angle…`, done: ++k, total: fill.length + 1 } });
+              const prompt = [
+                'These images are a character turnaround of ONE character: Image 1 front view, Image 2 side view, Image 3 back view.',
+                `Draw this exact same character standing in the same relaxed neutral pose from ${desc[idx]}.`,
+                'Keep every detail identical: face, hair, skin tone, tattoos, clothing, shorts pattern, socks, shoes, colours, line art and shading style. Same body proportions and height.',
+                'Full body head to feet, nothing cropped, one character only, no floor, no shadow, no text.',
+                info.transparent ? 'Background: fully transparent.' : 'Background: solid pure green #00FF00.',
+              ].join('\n');
+              const gen = await models.generateImage({ model: info.id, prompt, images: refs, quality: 'high' });
+              let png = gen.buffer;
+              if (!gen.transparent) {
+                const C = require('../lib/mocap/compose');
+                png = (await C.prepareGenerated(png, false)).buf;
+              }
+              const st = await M.alphaStats(png);
+              if (st) png = await sharp(png).extract({ left: st.minX, top: st.minY, width: st.w, height: st.h }).png().toBuffer();
+              await save(`${name}-angle-${idx}.png`, await toReferenceCanvas(png));
+              if (gen.cost) recordCostExact(info.id, 'character_angle', gen.cost, { name, angle: idx });
+              filled.push(idx);
+            }
+          }
+        }
+
+        // Register (through the characters module so its cache + R2 backup stay in sync)
+        const reg = loadCharacters();
+        const heightInches = Math.max(60, Math.min(90, +body.heightInches || 74));
+        const { scaleMultiplier, pixelHeight } = computeScale(heightInches);
+        reg[name] = {
+          ...(reg[name] || {}), name, id: name,
+          description: body.description || reg[name]?.description || 'the character shown in the reference — keep their exact appearance, outfit, hairstyle, skin tone, tattoos and proportions',
+          style: 'clean anime illustration',
+          heightInches, scaleMultiplier, pixelHeight,
+          portraitPath: `${name}full.png`, status: 'confirmed', source: 'character-sheet',
+          savedAnimations: reg[name]?.savedAnimations || {},
+        };
+        if (Array.isArray(reg._deleted)) reg._deleted = reg._deleted.filter((n) => n !== name);
+        await saveCharacters(reg);
+        patchJob(jobId, { status: 'done', result: { name, heightInches, pixelHeight, angles: Object.keys(cutouts).map(Number).concat(filled).sort((a, b) => a - b), files: written, seconds: +((Date.now() - t0) / 1000).toFixed(1) } });
+      } catch (err) {
+        console.error('[mocap] character-from-sheet failed:', err);
+        patchJob(jobId, { status: 'error', error: err.message });
+      }
+    });
+    json(res, { jobId });
+  });
+
   router.get('/api/mocap/job/:jobId', (req, res, params) => {
     const j = jobs.get(params.jobId);
     if (!j) return json(res, { error: 'job not found (server restarted?)' }, 404);

@@ -205,6 +205,21 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <h2>Character</h2>
       <p class="hint">The mannequin is scaled to the character's registry height before generation, so size is fixed before the model draws anything.</p>
       <div class="chars" id="charGrid"><div class="hint">Loading…</div></div>
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;font-weight:600;min-height:32px">＋ New character from a turnaround sheet</summary>
+        <p class="hint" style="margin-top:8px">One image with the character side by side: front, facing right, back, facing left (flat background). Missing 45° angles are generated with the selected model.</p>
+        <div class="row">
+          <label class="f col">Name<input type="text" id="ncName" placeholder="e.g. ankh"></label>
+          <label class="f" style="max-width:120px">Height (in)<input type="number" id="ncHeight" value="74" min="60" max="90"></label>
+          <label class="f col">Order<input type="text" id="ncOrder" value="front,right,back,left"></label>
+        </div>
+        <div class="btns" style="margin-top:8px">
+          <button type="button" id="ncPick">🖼 Choose sheet</button>
+          <input type="file" id="ncFile" accept="image/*" class="hidden">
+          <button type="button" class="primary" id="ncCreate" disabled>Create character</button>
+        </div>
+        <div class="status" id="ncStatus"></div>
+      </details>
     </section>
     <section class="card">
       <h2>Angles &amp; hands</h2>
@@ -718,6 +733,32 @@ $('#sdSave').onclick = async () => {
     }) });
     st.innerHTML = `✓ Saved as <b>${slotId}_z${v.view}_${v.hand}</b> · <a href="/?page=testing&char=${encodeURIComponent(ST.result.charName)}">Play on the test court →</a>`;
   } catch (e) { st.textContent = e.message; st.classList.add('err'); }
+};
+
+// ── New character from sheet ────────────────────────────────────────────
+let ncData = null;
+$('#ncPick').onclick = () => $('#ncFile').click();
+$('#ncFile').onchange = (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => { ncData = rd.result; $('#ncCreate').disabled = false; $('#ncStatus').textContent = `${f.name} ready`; };
+  rd.readAsDataURL(f);
+};
+$('#ncCreate').onclick = async () => {
+  const st = $('#ncStatus'); st.classList.remove('err');
+  const name = $('#ncName').value.trim();
+  if (!name) { st.textContent = 'Name required'; st.classList.add('err'); return; }
+  $('#ncCreate').disabled = true;
+  try {
+    const { jobId } = await api('/api/mocap/character-from-sheet', { method: 'POST', body: JSON.stringify({
+      name, heightInches: +$('#ncHeight').value, order: $('#ncOrder').value, imageBase64: ncData, model: $('#modelSel').value,
+    }) });
+    const out = await pollJob(jobId, (p) => { st.textContent = p.msg || 'Working…'; });
+    st.textContent = `✓ ${out.name} created — angles ${out.angles.join(', ')} in ${out.seconds}s`;
+    await loadCharacters();
+    $(`#charGrid .char[data-name="${out.name}"]`)?.click();
+  } catch (e) { st.textContent = e.message; st.classList.add('err'); }
+  finally { $('#ncCreate').disabled = false; }
 };
 
 // ── Boot ────────────────────────────────────────────────────────────────
