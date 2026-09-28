@@ -273,3 +273,35 @@ test('game deploy resolver: game angle first, mirrored side views keep frame ord
   assert.deepStrictEqual([r.source, r.mirror], ['game-angle', false]);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('OpenAI rate limit: learns input-image limit, waits and retries; no-credits fails fast', async () => {
+  const saved = { o: process.env.OPENAI_API_KEY, m: process.env.MOCAP_MOCK };
+  process.env.OPENAI_API_KEY = 'sk-test'; delete process.env.MOCAP_MOCK;
+  const models = require('../lib/mocap/image-models');
+  const realFetch = global.fetch;
+  const png = await sharp({ create: { width: 8, height: 8, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
+  let n = 0;
+  global.fetch = async () => {
+    n++;
+    if (n === 1) return { ok: false, status: 429, json: async () => ({ error: { message: 'Rate limit reached for gpt-image-2.5-sunburst (for limit gpt-image) in organization org-x on input-images per min: Limit 5, Used 5, Requested 1. Please try again in 50ms.' } }) };
+    return { ok: true, status: 200, json: async () => ({ data: [{ b64_json: png.toString('base64') }], usage: {} }) };
+  };
+  try {
+    const t0 = Date.now();
+    const out = await models.openaiEdit({ model: 'gpt-image-2.5-sunburst', prompt: 'x', images: [png, png], size: '1024x1536' });
+    assert.ok(out.buffer.length > 0);
+    assert.strictEqual(n, 2);
+    assert.strictEqual(models.inputImageLimit(), 5);
+    assert.ok(Date.now() - t0 >= 500, 'waited the suggested retry delay');
+    models._rl.limit = null; models._rl.log = [];
+    n = 0;
+    global.fetch = async () => { n++; return { ok: false, status: 429, json: async () => ({ error: { message: 'You have no credits remaining. Add credits to continue using the API.' } }) }; };
+    await assert.rejects(models.openaiEdit({ model: 'gpt-image-2.5-sunburst', prompt: 'x', images: [png], size: '1024x1536' }), /no credits/);
+    assert.strictEqual(n, 1, 'no retries on exhausted credits');
+  } finally {
+    global.fetch = realFetch;
+    models._rl.limit = null; models._rl.log = [];
+    if (saved.o !== undefined) process.env.OPENAI_API_KEY = saved.o; else delete process.env.OPENAI_API_KEY;
+    if (saved.m !== undefined) process.env.MOCAP_MOCK = saved.m;
+  }
+});
