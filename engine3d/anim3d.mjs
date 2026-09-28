@@ -60,6 +60,8 @@ const NP = NJ + 1;                    // points per pose buffer
 export const MIRROR = MHR70.map((n) => (n.startsWith('left-') ? J['right-' + n.slice(5)] : n.startsWith('right-') ? J['left-' + n.slice(6)] : J[n])).concat([PELVIS]);
 
 const SIDES = ['left', 'right'];
+const STEP_TURN = 1.3; // max foot turn in one step (rad)
+const SWITCHES_HAND = new Set(['move-crossover', 'move-spin', 'move-btl', 'move-btb']); // roles that end in the other hand
 const LEG = Object.fromEntries(SIDES.map((s) => [s, { hip: J[`${s}-hip`], knee: J[`${s}-knee`], ankle: J[`${s}-ankle`], heel: J[`${s}-heel`], big: J[`${s}-big-toe-tip`], small: J[`${s}-small-toe-tip`] }]));
 const FOOTPTS = Object.fromEntries(SIDES.map((s) => [s, [LEG[s].ankle, LEG[s].heel, LEG[s].big, LEG[s].small]]));
 const PALM = Object.fromEntries(SIDES.map((s) => [s, [J[`${s}-wrist`], J[`${s}-middle-first-joint`]]]));
@@ -97,6 +99,17 @@ function springTo(x, v, goal, halflife, dt) {
   return [e * (j0 + j1 * dt) + goal, e * (v - j1 * y * dt)];
 }
 const dampAngle = (a, goal, halflife, dt) => a + wrapPi(goal - a) * (1 - Math.exp(-(0.69314718 * dt) / (halflife + 1e-5)));
+/**
+ * Closed form of springTo: where a spring-driven value will be, and how fast
+ * it moves, `t` seconds ahead — used to aim steps at where the body WILL be
+ * (a first step that already runs, a braking step at the stop point).
+ * Returns [displacement over t, velocity at t].
+ */
+function springAhead(v, a, goal, halflife, t) {
+  const y = HL(halflife) / 2, j0 = v - goal, j1 = a + j0 * y, e = Math.exp(-y * t);
+  const disp = goal * t + (j0 * (1 - e)) / y + (j1 * (1 - e * (1 + y * t))) / (y * y);
+  return [disp, e * (j0 + j1 * t) + goal];
+}
 
 // ── skinning segments (identical to lib/mocap/mesh-guide.js segmentDefs) ────
 const FINGERS = ['index', 'middle', 'ring', 'pinky'];
@@ -288,7 +301,9 @@ export function prepareClip(json, rig, { mirror = false } = {}) {
   const hand = handCount.left > handCount.right ? 'left' : 'right';
   const endCount = { left: 0, right: 0 };
   ball.slice(Math.floor(F * 0.7)).forEach((b) => { if (b?.held) endCount[b.hand]++; });
-  const endHand = endCount.left + endCount.right === 0 ? hand : endCount.left > endCount.right ? 'left' : 'right';
+  // no ball seen at the end: a hand-switching move still ends in the other hand
+  const switches = json.switchesHand ?? SWITCHES_HAND.has(json.role);
+  const endHand = endCount.left + endCount.right === 0 ? (switches ? (hand === 'left' ? 'right' : 'left') : hand) : endCount.left > endCount.right ? 'left' : 'right';
   const shot = json.shot ? { ...json.shot, hand: side(json.shot.hand) } : null;
   const loop = json.type === 'loop';
   const clip = {
@@ -512,23 +527,26 @@ class FootPlanner {
   /** Where a foot wants to stand if it landed now (world ankle x,z + yaw). */
   target(side, lead, landIn = lead) {
     const p = this.p, g = this.geo(side), ls = p.rig.ls;
-    const [vx, vz] = p.vel;
-    // where the body will be at landing, plus the lead into the stance — the
-    // lead is capped so a planted foot stays within the (crouched) leg's reach
+    // where the body WILL be at landing (the velocity spring's closed form, so
+    // accelerating and braking steps land right), plus the lead into the stance
+    // (capped so a planted foot stays within the crouched leg's reach)
+    const [dx, vxL] = p.ahead(0, landIn), [dz, vzL] = p.ahead(1, landIn);
+    const [vx, vz] = [vxL, vzL];
     let lx = vx * (lead - landIn), lz = vz * (lead - landIn);
     const ll = Math.hypot(lx, lz), cap = 0.36 * ls;
     if (ll > cap) { lx *= cap / ll; lz *= cap / ll; }
-    const ax = p.pos[0] + vx * landIn + lx, az = p.pos[1] + vz * landIn + lz;
+    const ax = p.pos[0] + dx + lx, az = p.pos[1] + dz + lz;
+    const yawL = p.yawAhead ? p.yawAhead(landIn) : p.yaw;
     // moving, the feet come in under the body: the idle stance (wide, staggered)
     // blends into a running stance (hip-width, no stagger) with speed
     const sp = Math.hypot(vx, vz);
     const km = clamp(sp / (1.2 * ls), 0, 1);
     const runX = (side === 'left' ? 1 : -1) * 0.12 * ls;
-    let off = rotY(p.yaw, g.ankle[0] + (runX - g.ankle[0]) * km, g.ankle[2] * (1 - km));
-    let yaw = p.yaw + g.yaw * (1 - km * 0.7);
+    let off = rotY(yawL, g.ankle[0] + (runX - g.ankle[0]) * km, g.ankle[2] * (1 - km));
+    let yaw = yawL + g.yaw * (1 - km * 0.7);
     // running forward: feet point a little more along the travel direction
     if (sp > 1.2 * ls) {
-      const travel = Math.atan2(vx, vz), rel = wrapPi(travel - p.yaw);
+      const travel = Math.atan2(vx, vz), rel = wrapPi(travel - yawL);
       if (Math.abs(rel) < 1.2) yaw += clamp(rel, -0.45, 0.45) * clamp((sp / ls - 1.2) / 2, 0, 0.6);
     }
     let x = ax + off[0], z = az + off[1];
@@ -565,7 +583,8 @@ class FootPlanner {
     const p = this.p, ls = p.rig.ls;
     this.clock += dt;
     const sp = Math.hypot(p.vel[0], p.vel[1]) / ls;         // leg-lengths-normalised speed (m/s at 0.86 m legs)
-    const moving = sp > 0.18;
+    // moving the moment the stick asks for it (instant response), not when the body has sped up
+    const moving = sp > 0.18 || Math.hypot(p.want[0], p.want[1]) / ls > 0.3;
     // quick dribble steps; sideways shuffles quicker still
     const lvp = rotY(-p.yaw, p.vel[0], p.vel[1]), lat = sp > 0.05 ? Math.abs(lvp[0]) / (Math.hypot(lvp[0], lvp[1]) || 1) : 0;
     const cadence = clamp(2.0 + 0.5 * sp, 2.0, 3.9) * (1 + 0.3 * lat) * Math.sqrt(1 / ls); // steps/s
@@ -580,8 +599,33 @@ class FootPlanner {
       const remain = Math.max(0, f.T - f.t);
       const tg = this.target(s, remain + (moving ? Tstance / 2 : 0), remain);
       this.clampTarget(s, tg);
-      f.to = tg;
-      if (f.t >= f.T) { this.place(s, tg.x, tg.z, tg.yaw); this.lastLand = this.clock; p.events.push({ type: 'plant', side: s }); }
+      // re-aim, but a swinging foot's goal moves at most ~5 m/s (stick flicks
+      // must not teleport a foot in the air)
+      const mx = 5 * ls * dt, dxT = tg.x - f.to.x, dzT = tg.z - f.to.z, dT = Math.hypot(dxT, dzT);
+      const kk = dT > mx ? mx / dT : 1;
+      const ny = f.to.yaw + clamp(wrapPi(tg.yaw - f.to.yaw), -8 * dt, 8 * dt);
+      f.to = { x: f.to.x + dxT * kk, z: f.to.z + dzT * kk, yaw: f.from.yaw + clamp(wrapPi(ny - f.from.yaw), -STEP_TURN, STEP_TURN) };
+      if (f.t >= f.T) {
+        this.place(s, f.to.x, f.to.z, f.to.yaw); this.lastLand = this.clock; p.events.push({ type: 'plant', side: s });
+        // hard stop from a run: this plant skids a few cm along the travel (the "slide-in")
+        if (p.stopping && p.stopping.skid && !p.stopping.skidDone) {
+          const k = p.o.skidFactor;
+          this.feet[s].skid = { vx: p.vel[0] * k, vz: p.vel[1] * k, t: 0, T: p.o.skidTime };
+          p.stopping.skidDone = true;
+          p.events.push({ type: 'skid', side: s });
+        }
+      }
+    }
+    // a skidding plant slides with a decaying velocity, then holds
+    for (const s of SIDES) {
+      const f = this.feet[s];
+      if (f.mode !== 'plant' || !f.skid) continue;
+      const k = f.skid;
+      const w = Math.max(0, 1 - k.t / k.T);
+      f.x += k.vx * w * dt; f.z += k.vz * w * dt;
+      if (f.pts) for (const q of f.pts) { q[0] += k.vx * w * dt; q[2] += k.vz * w * dt; }
+      k.t += dt;
+      if (k.t >= k.T) delete f.skid;
     }
     // start a step?
     const sw = this.swinging();
@@ -620,7 +664,9 @@ class FootPlanner {
         const dist = Math.hypot(tg.x - f.x, tg.z - f.z);
         if (moving || dist > 0.02 * ls || Math.abs(wrapPi(tg.yaw - f.yaw)) > 0.05) {
           const shown = p.feetState?.[side]?.pts;
-          this.feet[side] = { mode: 'swing', from: { x: f.x, z: f.z, yaw: f.yaw, pts: shown ? shown.map((q) => q.slice()) : f.pts || null }, to: tg, t: 0, T, h: clamp(0.055 + 0.03 * sp, 0.05, 0.17) * ls };
+          // one step turns the foot at most ~75° (a U-turn takes steps, never a foot spun half round in the air)
+          const to = { ...tg, yaw: f.yaw + clamp(wrapPi(tg.yaw - f.yaw), -STEP_TURN, STEP_TURN) };
+          this.feet[side] = { mode: 'swing', from: { x: f.x, z: f.z, yaw: f.yaw, pts: shown ? shown.map((q) => q.slice()) : f.pts || null }, to, t: 0, T, h: clamp(0.055 + 0.03 * sp, 0.05, 0.17) * ls };
           this.lastStep = this.clock; this.lastSide = side;
           p.events.push({ type: 'lift', side });
         }
@@ -675,23 +721,96 @@ class FootPlanner {
     if (f.from.pts) {
       const b = 1 - smooth01(s / 0.4);
       if (b > 0) {
-        const d = [x - f.from.x, 0, z - f.from.z];
-        return pts.map((q, i) => v3.lerp(q, v3.add(f.from.pts[i], [d[0], lift, d[2]]), b));
+        const d = [x - f.from.x, 0, z - f.from.z], lift0 = f.y0 || 0; // the drawn points already carry the start height
+        return pts.map((q, i) => v3.lerp(q, v3.add(f.from.pts[i], [d[0], lift - lift0, d[2]]), b));
       }
     }
     return pts;
   }
 }
 
+// ── nearest-pose matcher ────────────────────────────────────────────────────
+/**
+ * A deliberately small motion matcher: every candidate clip frame is a
+ * feature vector (root space, character scale) — both feet (position +
+ * height), pelvis height, both wrists, the body's velocity, foot contacts and
+ * which hand has the ball. The next move / loop entry is the candidate frame
+ * nearest to the current pose (weighted squared distance). Cheap enough to
+ * search every candidate frame on every trigger, no GPU, no training.
+ */
+const NF = 19;
+const FW = Float32Array.from([1, 1, 1.5, 1, 1, 1.5, 1.2, 0.45, 0.45, 0.45, 0.45, 0.45, 0.45, 0.35, 0.35, 0.2, 0.2, 0.6, 0.3]);
+function featuresOf(P, vel, cL, cR, hand, out, o = 0) {
+  const g = (k, c) => P[k * 3 + c];
+  const A = LEG.left.ankle, B = LEG.right.ankle, WL = J['left-wrist'], WR = J['right-wrist'];
+  const f = [g(A, 0), g(A, 2), g(A, 1), g(B, 0), g(B, 2), g(B, 1), g(PELVIS, 1), g(WL, 0), g(WL, 1), g(WL, 2), g(WR, 0), g(WR, 1), g(WR, 2), vel[0], vel[1], cL, cR, hand === 'left' ? -1 : hand === 'right' ? 1 : 0, 0];
+  for (let i = 0; i < NF; i++) out[o + i] = f[i] * FW[i];
+  return out;
+}
+/** Per-frame features of a clip (cached on the clip). */
+export function clipFeatures(clip) {
+  if (clip.feat) return clip.feat;
+  const F = clip.F, out = new Float32Array(F * NF), T = clip.traj;
+  for (let i = 0; i < F; i++) {
+    const j = Math.min(F, i + 1), k = j === i ? 1 : j - i;
+    const d = rotY(-T[i * 3 + 2], (T[j * 3] - T[i * 3]) * clip.fps / k, (T[j * 3 + 1] - T[i * 3 + 1]) * clip.fps / k);
+    const b = clip.ball[i];
+    featuresOf(clip.frames.subarray(i * NJ * 3, (i + 1) * NJ * 3), d, clip.contacts.left.on[i], clip.contacts.right.on[i], b?.held ? b.hand : null, out, i * NF);
+  }
+  clip.feat = out;
+  return out;
+}
+/**
+ * Best candidate frame. cands: [{ clip, from, to, bias? }]; query: features.
+ * Later frames in an entry window win ties (a move answers the button sooner).
+ */
+export function matchPose(cands, query) {
+  let best = null;
+  for (const c of cands) {
+    const feat = clipFeatures(c.clip);
+    const to = Math.min(c.clip.F - 1, c.to ?? c.clip.F - 1);
+    for (let i = Math.max(0, c.from || 0); i <= to; i++) {
+      let d = c.bias || 0;
+      for (let q = 0; q < NF; q++) { const e = feat[i * NF + q] - query[q]; d += e * e; }
+      d -= 0.02 * (i - (c.from || 0)) / c.clip.fps;
+      if (!best || d < best.cost) best = { clip: c.clip, frame: i, cost: d };
+    }
+  }
+  return best;
+}
+/** Gait position (cycles) of a loop frame — the inverse of phaseToTime. */
+function timeToPhase(pm, t) {
+  for (let ci = 0; ci < pm.cycles.length; ci++) {
+    const c = pm.cycles[ci];
+    for (const tt of [t, t + pm.F]) {
+      if (tt < c.a || tt >= c.b) continue;
+      const f = tt < c.h ? 0.5 * (tt - c.a) / (c.h - c.a || 1) : 0.5 + 0.5 * (tt - c.h) / (c.b - c.h || 1);
+      return ci + clamp(f, 0, 0.999);
+    }
+  }
+  return 0;
+}
+
 // ── player ──────────────────────────────────────────────────────────────────
 const DEFAULT_OPTS = {
   jogSpeed: 3.1,          // m/s at 0.86 m legs
   sprintSpeed: 5.0,
-  accelHalflife: 0.11,    // stick → velocity spring
-  turnHalflife: 0.07,     // facing spring
+  // stick → velocity: asymmetric springs (standard "responsive but weighty"):
+  accelHalflife: 0.05,    // pushing the stick: near-instant
+  reverseHalflife: 0.08,  // changing direction (stick against the motion)
+  stopHalflife: 0.09,     // letting go: a short slide-in, not a dead stop
+  turnHalflife: 0.07,     // facing spring (hoop)
+  runTurnHalflife: 0.12,  // facing spring while running (heavier)
+  maxTurnRate: 11,        // rad/s
+  runFacingSpeed: 1.6,    // m/s (× legs): sprinting above this faces where you run
   blendHalflife: 0.09,    // inertialization
   moveBlendHalflife: 0.06,
   unlockRadius: 0.3,      // × leg scale: a clip foot this far from its lock releases it
+  skidStops: true,        // a hard stop from a run skids the braking foot a few cm
+  skidSpeed: 3.3,         // m/s (× legs) needed for a skid
+  skidFactor: 0.45,       // share of the body's speed the braking foot slides at
+  skidTime: 0.16,         // s
+  moveCancel: 0.72,       // moves can be cancelled by the stick after this share of the clip
 };
 
 /**
@@ -703,6 +822,9 @@ export class Player {
   constructor(rig, library, opts = {}) {
     this.rig = rig; this.lib = library; this.o = { ...DEFAULT_OPTS, ...opts };
     this.pos = [opts.x || 0, opts.z || 0]; this.yaw = opts.yaw || 0; this.vel = [0, 0];
+    this.want = [0, 0]; this.accel = [0, 0]; this.velHalflife = this.o.accelHalflife;
+    this.yawVel = 0; this.twist = 0; this.twistV = 0; this.runFace = 0; this.runFaceV = 0;
+    this.stopping = null; this.carryVel = [0, 0]; this.crouch = 0; this.crouchV = 0;
     this.idleClip = library.idle;
     if (!this.idleClip) throw new Error('an idle loop is required');
     this.hand = this.idleClip.hand;
@@ -739,12 +861,21 @@ export class Player {
   }
   idle() { return this.clipFor('idle') || this.idleClip; }
 
+  /** Predicted [displacement, velocity] of the body on axis c (0 = x, 1 = z) `t` s ahead. */
+  ahead(c, t) {
+    if (this.mode !== 'loco') return [this.vel[c] * t, this.vel[c]];
+    return springAhead(this.vel[c], this.accel[c], this.want[c], this.velHalflife, t);
+  }
+  /** Facing `t` s ahead (turning at the current rate, easing out). */
+  yawAhead(t) { return this.yaw + this.yawVel * Math.min(t, 0.15); }
+
   /** World hip position predicted `ahead` seconds from now (planner reach checks). */
   hipAt(side, ahead) {
     const B = this.base, k = LEG[side].hip;
     if (!B || this.firstFrame) return null;
-    const d = rotY(this.yaw, gx(B, k), gz(B, k));
-    return [this.pos[0] + this.vel[0] * ahead + d[0], gy(B, k) - this.pelvisDrop, this.pos[1] + this.vel[1] * ahead + d[1]];
+    const yaw = this.yawAhead(ahead);
+    const d = rotY(yaw, gx(B, k), gz(B, k));
+    return [this.pos[0] + this.ahead(0, ahead)[0] + d[0], gy(B, k) - this.pelvisDrop, this.pos[1] + this.ahead(1, ahead)[0] + d[1]];
   }
 
   /** Switch the dribble hand (mirrored loops); blended like any other switch. */
@@ -758,6 +889,29 @@ export class Player {
     return true;
   }
 
+  /** Features of what is on screen now (capsule space) for the matcher. */
+  currentFeatures() {
+    const P = new Float32Array(NJ * 3), W = this.world, c = Math.cos(-this.yaw), sn = Math.sin(-this.yaw);
+    for (let k = 0; k < NJ; k++) {
+      const x = W[k * 3] - this.pos[0], z = W[k * 3 + 2] - this.pos[1];
+      P[k * 3] = c * x + sn * z; P[k * 3 + 1] = W[k * 3 + 1]; P[k * 3 + 2] = -sn * x + c * z;
+    }
+    const v = this.mode === 'loco' ? this.vel : this.carryVel;
+    const lv = rotY(-this.yaw, v[0], v[1]);
+    const fs = this.feetState || {};
+    return featuresOf(P, lv, fs.left?.planted ? 1 : 0, fs.right?.planted ? 1 : 0, this.hasBall ? this.hand : null, new Float32Array(NF));
+  }
+
+  /** Move the player (tests, resets): the feet re-plant around the new spot. */
+  teleport(x, z, yaw = this.yaw) {
+    this.pos = [x, z]; this.yaw = yaw; this.vel = [0, 0]; this.accel = [0, 0]; this.want = [0, 0]; this.stopping = null;
+    if (this.mode === 'action') { this.mode = 'loco'; this.action = null; }
+    this.locks = { left: null, right: null };
+    this.planner.init(null);
+    this.firstFrame = true;
+    this.metrics.slide = { left: null, right: null };
+  }
+
   /** The page gives the ball back (after a shot lands). */
   giveBall() { this.hasBall = true; this.ballFree = false; }
 
@@ -767,7 +921,9 @@ export class Player {
     dt = clamp(dt, 0, 0.1);
     if (dt <= 0) return this.result();
     const trig = inp.trigger;
-    if (trig && this.mode === 'loco' && this.hasBall) this.startAction(trig);
+    // combos: a new move may start in the current move's cancel window
+    if (trig && this.mode === 'action' && this.action && !this.action.clip.shot && this.action.t >= this.o.moveCancel * (this.action.clip.F - 1)) this.endAction();
+    if (trig && this.mode === 'loco' && this.hasBall && !this.ballFree) this.startAction(trig);
 
     const prevSource = this.source;
     if (this.mode === 'loco') this.updateLoco(dt, inp); else this.updateAction(dt, inp);
@@ -804,18 +960,42 @@ export class Player {
     // slides and backpedals are slower than running forward (and than a sprint)
     const lm = rotY(-this.yaw, mv[0], mv[1]), lmag = Math.hypot(lm[0], lm[1]) || 1;
     const dirK = 1 - 0.3 * Math.abs(lm[0] / lmag) - 0.3 * Math.max(0, -lm[1] / lmag);
-    const maxV = (inp.sprint ? o.sprintSpeed : o.jogSpeed) * ls * clamp(dirK, 0.62, 1);
+    // running (sprint) faces where it goes, so slides/backpedals don't apply to it
+    const running = inp.sprint && this.runFace > 0.5;
+    const maxV = (inp.sprint ? o.sprintSpeed : o.jogSpeed) * ls * (running ? 1 : clamp(dirK, 0.62, 1));
     const want = [mv[0] * maxV, mv[1] * maxV];
-    this.accel = this.accel || [0, 0];
-    for (let c = 0; c < 2; c++) [this.vel[c], this.accel[c]] = springTo(this.vel[c], this.accel[c], want[c], o.accelHalflife, dt);
+    this.want = want;
+    const spNow = Math.hypot(this.vel[0], this.vel[1]), wantSp = Math.hypot(want[0], want[1]);
+    // asymmetric response: instant push, heavier reversal, a short glide into the stop
+    const reversing = wantSp > 0.05 && spNow > 0.3 * ls && (want[0] * this.vel[0] + want[1] * this.vel[1]) < 0.2 * wantSp * spNow;
+    this.velHalflife = wantSp < 0.05 * ls ? o.stopHalflife : reversing ? o.reverseHalflife : o.accelHalflife;
+    // a stop: stick released while moving — remember it (braking step, skid, crouch)
+    if (wantSp < 0.05 * ls && spNow > 1.2 * ls) { if (!this.stopping) { this.stopping = { from: spNow, skid: o.skidStops && spNow > o.skidSpeed * ls, skidDone: false }; this.events.push({ type: 'stop', speed: spNow }); } }
+    else if (wantSp > 0.05 * ls || spNow < 0.15 * ls) this.stopping = null;
+    for (let c = 0; c < 2; c++) [this.vel[c], this.accel[c]] = springTo(this.vel[c], this.accel[c], want[c], this.velHalflife, dt);
     this.pos[0] += this.vel[0] * dt; this.pos[1] += this.vel[1] * dt;
-    if (inp.face) this.yaw = dampAngle(this.yaw, Math.atan2(inp.face[0] - this.pos[0], inp.face[1] - this.pos[1]), o.turnHalflife, dt);
     const sp = Math.hypot(this.vel[0], this.vel[1]);
+    // facing: the hoop, blending to the travel direction while sprinting; turns
+    // are springs with a rate cap, the chest leads (see leanUpper's twist)
+    [this.runFace, this.runFaceV] = springTo(this.runFace, this.runFaceV, inp.sprint && sp > o.runFacingSpeed * ls ? 1 : 0, 0.15, dt);
+    this.runFace = clamp(this.runFace, 0, 1);
+    if (inp.face || this.runFace > 0.01) {
+      const hoop = inp.face ? Math.atan2(inp.face[0] - this.pos[0], inp.face[1] - this.pos[1]) : this.yaw;
+      const travel = sp > 0.3 * ls ? Math.atan2(this.vel[0], this.vel[1]) : hoop;
+      const goal = hoop + wrapPi(travel - hoop) * this.runFace;
+      const h = o.turnHalflife + (o.runTurnHalflife - o.turnHalflife) * this.runFace;
+      const y0 = this.yaw;
+      let ny = dampAngle(this.yaw, goal, h, dt);
+      const maxStep = o.maxTurnRate * dt;
+      ny = this.yaw + clamp(wrapPi(ny - this.yaw), -maxStep, maxStep);
+      this.yaw = ny;
+      this.yawVel = wrapPi(this.yaw - y0) / dt;
+    } else this.yawVel = 0;
     // recorded locomotion loops, if the library covers this direction and speed
     // hysteresis: once on recorded loops, stay until clearly below their range
     const blend = this.locoBlend(sp, inp.sprint, this.source === 'clip-loco');
     if (blend) {
-      if (this.source !== 'clip-loco') this.enterClipLoco();
+      if (this.source !== 'clip-loco') this.enterClipLoco(blend);
       this.source = 'clip-loco'; this.clipLoco(dt, blend, sp); return;
     }
     if (this.source === 'clip-loco') this.leaveClipLoco();
@@ -823,11 +1003,19 @@ export class Player {
     this.proceduralLoco(dt, sp);
   }
 
-  /** Planner feet → world locks, and a gait phase that matches the feet. */
-  enterClipLoco() {
+  /** Planner feet → world locks, and the loop frame nearest to the current pose. */
+  enterClipLoco(blend) {
     const f = this.planner.feet;
     for (const s of SIDES) this.locks[s] = f[s].mode === 'plant' ? { pts: this.planner.points(s), out: 0, keep: false } : { pts: this.planner.points(s), out: 1e-6, keep: false };
-    // phase 0 = left plant, 0.5 = right plant (sync markers)
+    const main = blend?.items?.[0]?.c;
+    if (main && main.phaseMap) {
+      const m = matchPose([{ clip: main }], this.currentFeatures());
+      const u = timeToPhase(main.phaseMap, m.frame);
+      this.gaitCycle = Math.floor(u); this.gaitPhase = u - Math.floor(u);
+      this.events.push({ type: 'loopEntry', clip: main.name, frame: m.frame });
+      return;
+    }
+    // no loop: phase 0 = left plant, 0.5 = right plant (sync markers)
     if (f.right.mode === 'swing') this.gaitPhase = 0.1 + 0.35 * clamp(f.right.t / f.right.T, 0, 1);
     else if (f.left.mode === 'swing') this.gaitPhase = 0.6 + 0.35 * clamp(f.left.t / f.left.T, 0, 1);
     else this.gaitPhase = this.planner.lastSide === 'left' ? 0.02 : 0.52;
@@ -841,7 +1029,7 @@ export class Player {
       if (L && L.out === 0) { fs.x = L.pts[0][0]; fs.z = L.pts[0][2]; fs.pts = (shown || L.pts).map((q) => q.slice()); }
       else {
         const a2 = get3(this.world, LEG[s].ankle);
-        this.planner.feet[s] = { mode: 'swing', from: { x: a2[0], z: a2[2], yaw: fs.yaw, pts: shown ? shown.map((q) => q.slice()) : null }, to: this.planner.target(s, 0.2), t: 0, T: 0.2, h: 0.04 * this.rig.ls, y0: Math.max(0, a2[1] - this.stance[s].ankle[1]) };
+        this.planner.feet[s] = { mode: 'swing', from: { x: a2[0], z: a2[2], yaw: fs.yaw, pts: shown ? shown.map((q) => q.slice()) : null }, to: ((tg) => ({ ...tg, yaw: fs.yaw + clamp(wrapPi(tg.yaw - fs.yaw), -STEP_TURN, STEP_TURN) }))(this.planner.target(s, 0.2)), t: 0, T: 0.2, h: 0.04 * this.rig.ls, y0: Math.max(0, a2[1] - this.stance[s].ankle[1]) };
       }
     }
     this.locks = { left: null, right: null };
@@ -858,7 +1046,9 @@ export class Player {
     if (!cands.length || sp < 0.25 * ls) return null;
     const lv = rotY(-this.yaw, this.vel[0], this.vel[1]);
     const th = Math.atan2(lv[0], lv[1]);
-    const pool = cands.filter((q) => (sprint ? true : q.role !== 'loco-sprint'));
+    // the run-dribble is the sprint loop; without a jog loop it also covers running forward
+    const hasFwd = cands.some((q) => q.role === 'loco-fwd');
+    const pool = cands.filter((q) => (sprint || !hasFwd ? true : q.role !== 'loco-sprint'));
     const scored = pool.map((q) => ({ ...q, d: Math.abs(wrapPi(q.c.dir - th)) + (sprint && q.role === 'loco-sprint' ? -0.3 : 0) + Math.abs(Math.log((q.c.speed || 1) / Math.max(0.1, sp))) * 0.25 }));
     scored.sort((a, b) => a.d - b.d);
     const A = scored[0];
@@ -866,7 +1056,7 @@ export class Player {
     if (sp < A.c.speed * (staying ? 0.45 : 0.55)) return null;
     // a second clip on the other side of the travel angle
     const sA = Math.sign(wrapPi(th - A.c.dir));
-    const B = scored.find((q) => q !== A && Math.sign(wrapPi(q.c.dir - A.c.dir)) === sA && Math.abs(wrapPi(q.c.dir - A.c.dir)) <= Math.PI / 2 + 0.01);
+    const B = scored.find((q) => q !== A && Math.sign(wrapPi(q.c.dir - A.c.dir)) === sA && Math.abs(wrapPi(q.c.dir - A.c.dir)) >= 0.3 && Math.abs(wrapPi(q.c.dir - A.c.dir)) <= Math.PI / 2 + 0.01);
     if (B) {
       const span = Math.abs(wrapPi(B.c.dir - A.c.dir)), t = clamp(Math.abs(wrapPi(th - A.c.dir)) / span, 0, 1);
       return { items: [{ c: A.c, w: 1 - t }, { c: B.c, w: t }], th };
@@ -904,7 +1094,8 @@ export class Player {
     const warp = clamp(wrapPi(blend.th - blendDir), -0.8, 0.8);
     if (Math.abs(warp) > 1e-3) this.rotateLegs(P, warp);
     this.contactW = cw;
-    this.ballFromClip(P, items[0].c, phaseToTime(items[0].c.phaseMap, u));
+    const top = items.reduce((m, q) => (q.w > m.w ? q : m), items[0]); // the ball follows the clip that shows most
+    this.ballFromClip(P, top.c, phaseToTime(top.c.phaseMap, u));
     this.baseVelFrom(P, dt);
   }
 
@@ -921,12 +1112,19 @@ export class Player {
     // lean into the travel (and against braking), bob with the steps
     const lv = rotY(-this.yaw, this.vel[0], this.vel[1]);
     const la = rotY(-this.yaw, (this.accel || [0, 0])[0], (this.accel || [0, 0])[1]);
-    const goal = [clamp(0.075 * lv[0] / ls + 0.02 * la[0] / ls, -0.22, 0.22), clamp(0.085 * lv[1] / ls + 0.025 * la[1] / ls, -0.14, 0.3)];
-    for (let c = 0; c < 2; c++) [this.lean[c], this.leanV[c]] = springTo(this.lean[c], this.leanV[c], goal[c], 0.12, dt);
+    // + banking into turns (centripetal: speed × turn rate), stronger when running
+    const bank = clamp(-0.018 * sp * this.yawVel / ls, -0.25, 0.25);
+    const goal = [clamp(0.075 * lv[0] / ls + 0.03 * la[0] / ls + bank, -0.3, 0.3), clamp(0.085 * lv[1] / ls + 0.028 * la[1] / ls, -0.18, 0.32)];
+    for (let c = 0; c < 2; c++) [this.lean[c], this.leanV[c]] = springTo(this.lean[c], this.leanV[c], goal[c], 0.1, dt);
+    // chest leads a turn; hips follow (twist of the spine subtree)
+    [this.twist, this.twistV] = springTo(this.twist, this.twistV, clamp(this.yawVel * 0.07, -0.45, 0.45), 0.08, dt);
+    // braking: the body dips into the stop
+    const decel = this.stopping ? Math.max(0, -(la[1] * Math.sign(lv[1] || 1))) + Math.abs(la[0]) * 0.5 : 0;
+    [this.crouch, this.crouchV] = springTo(this.crouch, this.crouchV, clamp(decel / (14 * ls), 0, 1) * 0.06 * ls, 0.06, dt);
     const since = this.planner.clock - this.planner.lastLand;
     const phase = clamp(since / (this.planner.Tstep || 0.4), 0, 1);
     // bob with the steps (lowest just after a plant)
-    const bob = -0.028 * ls * clamp(sp / (1.5 * ls), 0, 1) * (1 - Math.cos(2 * Math.PI * phase)) / 2;
+    const bob = -0.028 * ls * clamp(sp / (1.5 * ls), 0, 1) * (1 - Math.cos(2 * Math.PI * phase)) / 2 - this.crouch;
     this.leanUpper(P, this.lean, bob);
     this.contactW = null; // the planner owns the feet
     this.ballFromClip(P, idle, this.dribbleT, (q) => this.leanPoint(q, this.lean, bob));
@@ -942,7 +1140,9 @@ export class Player {
   leanPoint(q, lean, bob, P = this.base) {
     const px = gx(P, PELVIS), py = gy(P, PELVIS) - (P === this.base ? 0 : 0), pz = gz(P, PELVIS);
     let x = q[0] - px, y = q[1] - py, z = q[2] - pz;
-    // forward lean: rotate about +X (y→z); sideways: about −Z (y→x)
+    // turn lead: twist about the vertical axis, then forward lean about +X
+    // (y→z) and sideways about −Z (y→x)
+    if (this.twist) { const d = rotY(this.twist, x, z); x = d[0]; z = d[1]; }
     const af = lean[1], as = lean[0];
     let c = Math.cos(af), s = Math.sin(af);
     [y, z] = [y * c - z * s, y * s + z * c];
@@ -1012,21 +1212,26 @@ export class Player {
   }
 
   // ── actions ──
-  startAction(role) {
-    const clip = this.clipFor(role);
-    if (!clip) { this.events.push({ type: 'missing', role }); return false; }
-    // entry: best pose match inside the entry window (feet + hands, root space)
-    const cur = this.out;
-    let best = clip.entry.min, bestCost = Infinity;
-    const tmp = new Float32Array(NJ * 3);
-    const probe = [LEG.left.ankle, LEG.right.ankle, J['left-wrist'], J['right-wrist'], PELVIS];
-    for (let e = clip.entry.min; e <= clip.entry.max; e++) {
-      samplePose(clip, e, tmp);
-      let c = 0;
-      for (const k of probe) c += Math.hypot(gx(tmp, k) - gx(cur, k), gy(tmp, k) - gy(cur, k), gz(tmp, k) - gz(cur, k));
-      c -= 0.08 * (e - clip.entry.min) / clip.fps; // later = more responsive
-      if (c < bestCost) { bestCost = c; best = e; }
+  /** All clips that can play a role now: variants (+ mirrors for moves), right hand first. */
+  candidatesFor(role) {
+    const vs = this.lib[role + ':variants'] || (this.lib[role] ? [this.lib[role]] : []);
+    const out = [];
+    for (const v of vs) {
+      out.push(v);
+      if (!v.shot && v.mirrorOf === undefined && v.mirrored) out.push(v.mirrored);
     }
+    // a dribble move must start in the hand that has the ball (shots: any)
+    const inHand = out.filter((c) => c.shot || c.hand === this.hand);
+    return inHand.length ? inHand : out;
+  }
+
+  startAction(role) {
+    const cands = this.candidatesFor(role);
+    if (!cands.length) { this.events.push({ type: 'missing', role }); return false; }
+    // nearest pose over every candidate's entry window: which variant, which frame
+    const q = this.currentFeatures();
+    const m = matchPose(cands.map((c) => ({ clip: c, from: c.entry.min, to: c.entry.max })), q);
+    const clip = m.clip, best = m.frame;
     const tr0 = sampleTraj(clip, best);
     this.action = {
       clip, role, t: best, t0: best, last: tr0, yaw0: this.yaw, clipYaw0: tr0[2],
@@ -1034,14 +1239,21 @@ export class Player {
       face: null,
     };
     this.mode = 'action';
-    // planted planner feet become clip locks (no slide at the switch)
+    this.forceBlend = true; this.prevBaseSource = null;
+    // the feet as drawn become the clip's locks: planted stay planted (no slide
+    // at the switch), a foot in mid-step blends from where it is into the clip
     for (const s of SIDES) {
-      const f = this.planner.feet[s];
-      // a foot in mid-step blends from where it is into the clip (a releasing lock)
-      this.locks[s] = f.mode === 'plant' ? { pts: footPoints(this.stance[s], f.x, f.z, f.yaw), out: 0, keep: true } : { pts: this.planner.points(s), out: 1e-6, keep: false };
+      const fs = this.feetState?.[s];
+      const pts = fs?.pts ? fs.pts.map((q) => q.slice()) : this.planner.points(s);
+      this.locks[s] = fs?.planted ? { pts, out: 0, keep: true } : { pts, out: 1e-6, keep: false, swing: true };
     }
-    this.vel = [0, 0];
-    this.events.push({ type: 'action', role, entry: best });
+    // momentum: the body keeps moving into the move and it bleeds off; a
+    // travelling move already carries its own speed, so only the difference
+    const tr1 = sampleTraj(clip, Math.min(clip.F - 1, best + 1));
+    const rv = rotY(this.yaw - tr0[2], (tr1[0] - tr0[0]) * clip.fps, (tr1[1] - tr0[1]) * clip.fps);
+    this.carryVel = best + 1 <= clip.F - 1 ? [this.vel[0] - rv[0], this.vel[1] - rv[1]] : this.vel.slice();
+    this.vel = [0, 0]; this.accel = [0, 0]; this.want = [0, 0]; this.stopping = null;
+    this.events.push({ type: 'action', role, entry: best, clip: clip.name, mirror: clip.mirror, cost: +m.cost.toFixed(3), variants: cands.length });
     return true;
   }
 
@@ -1058,6 +1270,10 @@ export class Player {
     const w = rotY(a.yaw0 + (a.warp || 0) - a.clipYaw0, d[0], d[1]);
     void base;
     this.pos[0] += w[0]; this.pos[1] += w[1];
+    const kv = Math.exp(-0.69314718 * dt / 0.1);
+    this.carryVel[0] *= kv; this.carryVel[1] *= kv;
+    this.pos[0] += this.carryVel[0] * dt; this.pos[1] += this.carryVel[1] * dt;
+    a.rootVel = [w[0] / dt + this.carryVel[0], w[1] / dt + this.carryVel[1]];
     // orientation warp: shots end square to the target at release
     let warp = 0;
     if (clip.shot && inp.face) {
@@ -1080,9 +1296,12 @@ export class Player {
     // shot release
     if (clip.shot && !a.released && a.t >= clip.shot.releaseFrame && tPrev < clip.shot.releaseFrame + 1e-6) {
       a.released = true;
-      this.ballFree = true;
+      this.ballFree = true; this.hasBall = false;
       this.events.push({ type: 'release', role: clip.role });
     }
+    // cancel window: a move's recovery gives way to the stick (responsive)
+    const mv = inp.move || [0, 0];
+    if (!clip.shot && a.t >= this.o.moveCancel * (clip.F - 1) && Math.hypot(mv[0], mv[1]) > 0.3) { this.endAction(); return; }
     // end: back to the idle/locomotion layer (follow-through holds while a shot is in the air)
     if (a.t >= clip.F - 1 && (!clip.shot || !this.ballFree || a.holdDone)) this.endAction();
     else if (a.t >= clip.F - 1 && clip.shot) { a.hold = (a.hold || 0) + dt; if (a.hold > 2.5) a.holdDone = true; }
@@ -1090,9 +1309,11 @@ export class Player {
 
   endAction() {
     const a = this.action;
-    if (a.clip.switchesHand || (!a.clip.shot && a.clip.endHand !== a.clip.hand)) this.hand = a.clip.endHand;
+    if (!a.clip.shot && a.clip.endHand !== this.hand) { this.hand = a.clip.endHand; this.stance = this.idle().feet; this.forceBlend = true; this.prevBaseSource = null; }
     this.mode = 'loco';
     this.action = null;
+    // leave with the move's own speed (no dead stop at the end of a move)
+    if (a.rootVel) { this.vel = a.rootVel.slice(); this.accel = [0, 0]; }
     // the planner starts from where the feet are: planted feet stay, a foot
     // in the air lands (a short step from where it is)
     this.planner.init(this.world);
@@ -1101,7 +1322,7 @@ export class Player {
       if (L && L.out === 0) { f.x = L.pts[0][0]; f.z = L.pts[0][2]; f.pts = (this.feetState?.[s]?.pts || L.pts).map((q) => q.slice()); continue; }
       const g = this.stance[s], a2 = get3(this.world, LEG[s].ankle);
       const tg = this.planner.target(s, 0);
-      this.planner.feet[s] = { mode: 'swing', from: { x: a2[0], z: a2[2], yaw: f.yaw }, to: tg, t: 0, T: 0.22, h: 0.03 * this.rig.ls, y0: Math.max(0, a2[1] - g.ankle[1]) };
+      this.planner.feet[s] = { mode: 'swing', from: { x: a2[0], z: a2[2], yaw: f.yaw }, to: { ...tg, yaw: f.yaw + clamp(wrapPi(tg.yaw - f.yaw), -STEP_TURN, STEP_TURN) }, t: 0, T: 0.22, h: 0.03 * this.rig.ls, y0: Math.max(0, a2[1] - g.ankle[1]) };
     }
     this.locks = { left: null, right: null };
     this.dribbleT = 0;
@@ -1121,16 +1342,22 @@ export class Player {
         const cw = this.contactW ? this.contactW[s] : 0;
         const anim = FOOTPTS[s].map((k) => get3(W, k));
         let L = this.locks[s];
-        if (cw >= 0.5 && (!L || L.out > 0)) {
+        const shown = this.feetState?.[s]?.pts;
+        const cur = shown ? shown.map((q) => q.slice()) : L && L.out > 0 ? anim.map((p, q) => v3.lerp(p, L.pts[q], 1 - smooth01(L.out))) : anim;
+        const low = Math.min(...cur.slice(1).map((p) => p[1]));
+        // a foot caught mid-step when the action started blends down first: it
+        // re-plants once it is near the floor (never snapped down in one frame)
+        const settled = !L || !L.swing || low - rig.soleOffset < 0.03 * ls;
+        if (cw >= 0.5 && (!L || L.out > 0) && settled) {
           // plant where the foot is DRAWN (last frame, after IK easing), lowest point on the floor
-          const shown = this.feetState?.[s]?.pts;
-          const cur = shown ? shown.map((q) => q.slice()) : L && L.out > 0 ? anim.map((p, q) => v3.lerp(p, L.pts[q], 1 - smooth01(L.out))) : anim;
-          const low = Math.min(...cur.slice(1).map((p) => p[1]));
           L = this.locks[s] = { pts: cur.map((p) => [p[0], p[1] - low + rig.soleOffset, p[2]]), out: 0, keep: false };
         }
         if (L && L.out === 0) {
           const drift = Math.hypot(anim[0][0] - L.pts[0][0], anim[0][2] - L.pts[0][2]);
-          const lost = this.feetState?.[s]?.short && this.pelvisDrop > 0.18 * ls; // cannot reach even crouched
+          // the body has left the foot: crouched as far as allowed, or out of reach sideways
+          const hip = get3(W, LEG[s].hip), hz = Math.hypot(L.pts[0][0] - hip[0], L.pts[0][2] - hip[2]);
+          const reach = rig.boneLen[LEG[s].knee] + rig.boneLen[LEG[s].ankle];
+          const lost = (this.feetState?.[s]?.short && this.pelvisDrop >= 0.18 * ls - 1e-4) || hz > reach;
           if (cw < 0.5 || lost || (!L.keep && drift > this.o.unlockRadius * ls)) L.out = 1e-6; // start releasing
         }
         if (L && L.out > 0) {
@@ -1202,9 +1429,21 @@ export class Player {
       const bendW = smooth01(v3.len(pc) / (0.08 * ls)); // a straight leg has no bend direction: fade to the toes
       if (bendW > 0) {
         const pw = rotY(this.yaw, pc[0], pc[2]);
-        const kd2 = v3.norm(v3.add(v3.sc(v3.norm([pw[0], pc[1], pw[1]]), planner ? 0.5 : 0.75), v3.sc(fwd, planner ? 0.5 : 0.25)));
+        const pd = v3.norm([pw[0], pc[1], pw[1]]);
+        // the knee goes over the toes; the animated bend only steers it when they agree
+        const agree = smooth01((v3.dot([pd[0], 0, pd[2]], fwd) + 0.2) / 0.6);
+        const wA = (planner ? 0.5 : 0.75) * agree;
+        const kd2 = v3.norm(v3.add(v3.sc(pd, wA), v3.sc(fwd, 1 - wA)));
         dir = v3.norm(v3.add(v3.sc(fwd, 1 - bendW), v3.sc(kd2, bendW)));
       }
+      // rate-limit the bend direction (a knee never swaps sides in one frame)
+      this.kneeDir = this.kneeDir || {};
+      const kp = this.kneeDir[s];
+      if (kp) {
+        const ang = Math.acos(clamp(v3.dot(kp, dir), -1, 1)), mx = 10 * dt;
+        if (ang > mx) { const k = mx / ang; dir = v3.norm(v3.add(v3.sc(kp, 1 - k), v3.sc(dir, k))); if (v3.len(dir) < 1e-6) dir = kp; }
+      }
+      this.kneeDir[s] = dir;
       const hint = v3.add(v3.lerp(hip, t.pts[0], 0.5), v3.sc(dir, 0.3));
       const r = solveLeg(hip, hint, t.pts[0], L1, L2, t.planted ? 0.04 * ls : 0.06 * ls, t.planted ? 0.03 * ls : 0);
       set3(W, LEG[s].knee, ...r.knee);
@@ -1221,6 +1460,8 @@ export class Player {
     for (const s of SIDES) {
       const t = this.feetState?.[s];
       const m = this.metrics.slide;
+      // a deliberate stop skid is not a slide: tracking restarts after it
+      if (this.mode === 'loco' && this.planner.feet[s]?.skid) { m[s] = null; this.metrics.skids = (this.metrics.skids || 0) + dt; continue; }
       if (t?.planted) {
         const a = v3.lerp(get3(this.world, LEG[s].big), get3(this.world, LEG[s].small), 0.5);
         if (!m[s]) m[s] = { x: a[0], z: a[2], max: 0 };
@@ -1246,14 +1487,21 @@ export class Player {
   }
 }
 
-/** Build a player library from prepared clips: role → clip (+ role:mirror). */
-export function buildLibrary(clips, rig) {
-  const lib = {};
+/**
+ * Build a player library from clips: role → first clip (+ role:mirror), and
+ * role:variants → every clip of that role (the matcher picks among them).
+ * Pass an existing library to add to it.
+ */
+export function buildLibrary(clips, rig, lib = {}) {
   for (const json of clips) {
     const role = json.role;
-    if (!role || lib[role]) continue;
-    lib[role] = prepareClip(json, rig);
-    if (!lib[role].shot) lib[role + ':mirror'] = prepareClip(json, rig, { mirror: true });
+    if (!role) continue;
+    const c = prepareClip(json, rig);
+    if (!c.shot && json.game?.mirror !== false) { c.mirrored = prepareClip(json, rig, { mirror: true }); c.mirrored.mirrorOf = c; }
+    const vs = lib[role + ':variants'] || (lib[role + ':variants'] = []);
+    if (vs.some((v) => v.json === json || (json.id && v.json.id === json.id))) continue;
+    vs.push(c);
+    if (!lib[role]) { lib[role] = c; if (c.mirrored) lib[role + ':mirror'] = c.mirrored; }
   }
   return lib;
 }

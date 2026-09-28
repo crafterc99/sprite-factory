@@ -204,7 +204,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 
     <section class="card" id="gcCard">
       <h2>3D game clip</h2>
-      <p class="hint">Give this motion a role in the 3D animation set. The 3D court plays one clip per role: an explicitly saved role beats a guessed one, and the newest take wins among equals. Rebuilding is free (no API calls).</p>
+      <p class="hint">Give this motion a role in the 3D animation set. Loops (idle, locomotion) play one clip per role; moves and shots keep up to 4 takes and the pose matcher picks between them. An explicitly saved role beats a guessed one, then the newest wins. Set a take to "— none —" to keep it off the court. Rebuilding is free (no API calls).</p>
       <div class="hint" id="gcState" style="margin:0 0 10px"></div>
       <div class="row">
         <label class="f col">Role<select id="gcRole"><option value="none">— none —</option></select></label>
@@ -469,7 +469,9 @@ function updateTrim() {
   $('#startLbl').textContent = s.toFixed(2) + 's';
   $('#endLbl').textContent = e.toFixed(2) + 's';
   const fps = +$('#sampleFps').value, n = Math.min(+$('#maxFrames').value, Math.max(2, Math.round((e - s) * fps)));
-  $('#clipInfo').textContent = `${(e - s).toFixed(2)}s → ${n} frames · measure ≈ $${(n * 0.03).toFixed(2)}`;
+  const cut = (e - s) - n / fps; // the frame cap keeps the first frames: say what is lost at the end
+  $('#clipInfo').textContent = `${(e - s).toFixed(2)}s → ${n} frames · measure ≈ $${(n * 0.03).toFixed(2)}`
+    + (cut > 0.05 ? ` · ⚠ the last ${cut.toFixed(1)} s is cut (max frames) — raise max frames or lower the fps to keep the end hold` : '');
 }
 ['trimStart', 'trimEnd', 'sampleFps', 'maxFrames'].forEach((id) => $('#' + id).addEventListener('input', updateTrim));
 $('#trimStart').addEventListener('input', () => { video.currentTime = +$('#trimStart').value; });
@@ -566,6 +568,7 @@ async function loadMotions() {
 }
 
 async function openMotion(id) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(String(id || ''))) throw new Error('invalid motion id');
   const { meta, motion } = await api(`/api/mocap/motion/${id}`);
   ST.motionId = id; ST.meta = meta; ST.motion = motion;
   $('#motionTitle').textContent = `Motion · ${meta.name}`;
@@ -705,10 +708,13 @@ function gcState() {
   if (!g.role) parts.push(g.assigned ? 'No role: the 3D court ignores this clip.' : 'No role yet: pick one and save.');
   else {
     if (!g.assigned) parts.push(`Role guessed from the name: <b>${esc(gcRoleLabel(g.role))}</b>. Save to confirm it.`);
-    const used = (lib.court || []).find((c) => c.role === g.role);
+    const onCourt = (lib.court || []).filter((c) => c.role === g.role);
+    const used = onCourt[0];
+    const isAction = gcRoles()[g.role]?.type === 'action';
     if (gcRoles()[g.role]?.runtime === false) parts.push('The 3D court does not play this role yet.');
+    else if (isAction && onCourt.some((c) => c.id === GC.id)) parts.push(`<span style="color:var(--ok)">✓ The 3D court plays this clip as <b>${esc(gcRoleLabel(g.role))}</b>${onCourt.length > 1 ? ` — one of ${onCourt.length} takes; the pose matcher picks the one closest to the current pose` : ''}.</span>`);
     else if (used && used.id === GC.id) parts.push(`<span style="color:var(--ok)">✓ The 3D court plays this clip as <b>${esc(gcRoleLabel(g.role))}</b>.</span>`);
-    else if (used) parts.push(`The 3D court uses <b>${esc(used.name)}</b> for this role (explicitly assigned or newer).`);
+    else if (used) parts.push(isAction ? `Not on the court: the court already has ${onCourt.length} takes of this role (assigned first, then newest).` : `The 3D court uses <b>${esc(used.name)}</b> for this role (explicitly assigned or newer).`);
   }
   $('#gcState').innerHTML = parts.join(' ');
 }
@@ -741,7 +747,7 @@ function gcRenderResult(b, clip) {
       ${stat(`${num(q.slideMeasuredCm, '')} → ${num(q.slidePinnedCm, ' cm')}`, 'foot slide measured → pinned', `with root motion only: ${num(q.slideRootMotionCm, ' cm')}`)}
       ${stat(num(q.loopSeamCm, ' cm'), 'loop seam')}
       ${stat(`${q.contacts?.left ?? 0} / ${q.contacts?.right ?? 0}`, 'contacts L / R')}
-      ${stat(num(q.depthDriftRemovedM, ' m', 2), 'depth drift removed')}
+      ${stat(num(q.depthDriftRemovedM != null ? Math.abs(q.depthDriftRemovedM) : null, ' m', 2), 'depth drift removed')}
       ${stat(num(q.pelvisDropCm, ' cm'), 'pelvis drop')}
       ${stat(num(q.translationNoiseMps, ' m/s', 2), 'foot noise')}
       ${stat(`${q.ikClampedFrames ?? 0}`, 'IK-clamped frames')}
@@ -780,7 +786,8 @@ async function gcRefreshLib(tok) {
 }
 async function gcLoad(id, meta) {
   const tok = ++GC.tok;
-  GC.id = id; GC.meta = meta || null; GC.orig = null;
+  GC.id = id; GC.meta = meta || null;
+  gcFill({}); GC.orig = null; // no stale form from the previous motion; Save stays off until this one loads
   $('#gcCourt').href = `/court3d?focus=${encodeURIComponent(id)}`;
   $('#gcResult').innerHTML = ''; $('#gcState').innerHTML = '';
   gcStatus('Loading…');
@@ -797,7 +804,7 @@ async function gcLoad(id, meta) {
     else if (tok === GC.tok) $('#gcResult').innerHTML = '<p class="hint" style="margin:10px 0 0">Not built yet — press Rebuild.</p>';
   } catch (e) {
     if (tok === GC.tok) gcStatus(e.message, true);
-  } finally { if (tok === GC.tok) gcSetBusy(false); }
+  } finally { if (tok === GC.tok) { gcSetBusy(false); if (!GC.orig) gcSetBusy(true); } }
 }
 // Only the fields that differ from what was loaded (null resets a field to its default)
 function gcPatch() {
@@ -820,7 +827,7 @@ function gcPatch() {
   return p;
 }
 async function gcRun(kind) {
-  if (!GC.id || GC.busy) return;
+  if (!GC.id || GC.busy || !GC.orig) return;
   const tok = GC.tok, id = GC.id;
   let patch = null;
   try { patch = kind === 'save' ? gcPatch() : null; } catch (e) { gcStatus(e.message, true); return; }
@@ -844,7 +851,12 @@ async function gcRun(kind) {
     const nf = out.built?.quality?.flags?.length || 0;
     gcStatus(`✓ ${save ? 'Saved and rebuilt' : kind === 'save' ? 'Nothing changed — rebuilt' : 'Rebuilt'} · ${out.built?.frameCount ?? '?'} frames · ${nf ? `${nf} quality flag${nf > 1 ? 's' : ''}` : 'no quality flags'}`);
   } catch (e) {
-    if (tok === GC.tok) gcStatus(e.message, true);
+    if (tok !== GC.tok) return;
+    // the server keeps the last settings that built: show those again
+    await gcRefreshLib(tok).catch(() => null);
+    const entry = (GC.lib?.clips || []).find((c) => c.id === id);
+    if (tok === GC.tok && entry?.game) { gcFill(entry.game); gcState(); }
+    if (tok === GC.tok) gcStatus(`${e.message} — not saved`, true);
   } finally { if (tok === GC.tok) gcSetBusy(false); }
 }
 $('#gcSave').onclick = () => gcRun('save');

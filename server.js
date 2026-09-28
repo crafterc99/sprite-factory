@@ -88,11 +88,11 @@ class Router {
 
 // ─── Shared Helpers ─────────────────────────────────────────────────────
 
-function serveStatic(res, filePath, contentType) {
+function serveStatic(res, filePath, contentType, { revalidate = false } = {}) {
   try {
     const stat = fs.statSync(filePath);
     const etag = `"${stat.mtimeMs.toString(36)}-${stat.size.toString(36)}"`;
-    const isHtml = contentType === 'text/html';
+    const isHtml = contentType === 'text/html' || revalidate;
 
     // Conditional GET — repeat visits get a tiny 304 instead of re-downloading
     // the (large) body when nothing changed
@@ -792,7 +792,8 @@ async function handler(req, res) {
   }
   if (pathname === '/js/anim3d.mjs') {
     // the engine-agnostic animation runtime (also imported by the Node tests)
-    return serveStatic(res, path.join(__dirname, 'engine3d', 'anim3d.mjs'), 'text/javascript');
+    // the page always revalidates, so its runtime must too (new HTML never runs on an old module)
+    return serveStatic(res, path.join(__dirname, 'engine3d', 'anim3d.mjs'), 'text/javascript', { revalidate: true });
   }
   if (pathname === '/recording' || pathname === '/recording/' || pathname === '/recording.html') {
     return serveStatic(res, path.join(__dirname, 'recording.html'), 'text/html');

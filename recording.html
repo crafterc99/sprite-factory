@@ -152,7 +152,7 @@ details.rule>div{padding:0 12px 12px 30px;font-size:14px}
 
   <section class="card" id="shots">
     <h2>Shot list <span class="sp"></span><span class="badge" id="shotSummary">loading…</span><button class="small ghost" id="shotRefresh" type="button">↻ Refresh</button></h2>
-    <p class="hint">✅ means the 3D court plays that role now. Locomotion is clip-driven once recorded; until then the court uses procedural stepping. The status shows the take the court uses: an explicitly assigned role beats a guessed one, and the newest take wins among equals. Set rejected takes to "— none —" in /mocap.</p>
+    <p class="hint">✅ means the 3D court plays that role now. Locomotion is clip-driven once recorded; until then the court uses procedural stepping. The status shows the take the court uses: an explicitly assigned role beats a guessed one, then the newest wins. Loops use one take per role; moves and shots keep up to 4 and the pose matcher picks between them. Set rejected takes to "— none —" in /mocap.</p>
     <table class="tbl">
       <thead><tr><th>Role</th><th>Record as</th><th>Camera</th><th>Court</th><th>Status</th><th></th></tr></thead>
       <tbody id="shotBody"></tbody>
@@ -261,7 +261,7 @@ details.rule>div{padding:0 12px 12px 30px;font-size:14px}
         <li>Lowercase, <code>a-z 0-9 _ -</code>, ≤ 60 characters.</li>
         <li>Examples: <code>dribble-idle-r-t02</code> · <code>loco-jog-fwd-r-t03</code> · <code>move-crossover-idle-rl-t03</code> · <code>shot-stepback-r-t04</code> · <code>calib-gym1-t01</code></li>
       </ul>
-      <div class="note">The name only <b>guesses</b> the role. Any name containing <code>idle</code> is guessed as the idle hub. Always pick the role in /mocap → 3D game clip and Save.</div>
+      <div class="note">The name only <b>guesses</b> the role, from its family prefix (<code>move-crossover-…</code> → crossover, <code>loco-run-…</code> → forward loop, <code>shot-…</code> → jumper, <code>dribble-idle-…</code> → idle hub). Always pick the role in /mocap → 3D game clip and Save.</div>
     </div></details>
 
     <details class="rule"><summary><b>Calibration</b><span>~12 s, once per camera position</span></summary><div>
@@ -344,7 +344,7 @@ const PRESETS = {
   shot: { label: 'Shot / layup', fps: 30, max: 120, window: '4 s (hold + shot + landing hold)' },
   calib: { label: 'Calibration (optional)', fps: 15, max: 180, window: '12 s' },
 };
-const GROUPS = [['loops', 'Loops'], ['locomotion', 'Locomotion'], ['shots', 'Shots'], ['moves', 'Dribble moves'], ['transitions', 'Transitions'], ['extras', 'Extras (no game role yet)']];
+const GROUPS = [['loops', 'Loops'], ['locomotion', 'Locomotion'], ['shots', 'Shots'], ['moves', 'Dribble moves'], ['transitions', 'Transitions'], ['extras', 'Extras']];
 const HOLD_ACTION = '≥ 1 s still in IDS-R before · ≥ 1 s hold at the end';
 const SHOTS = [
   { id: 'idle', role: 'idle', group: 'loops', names: ['dribble-idle-r'], type: 'loop', cls: 'inplace', preset: 'idle', court: 'hub', label: 'Idle dribble (hub stance)',
@@ -556,7 +556,8 @@ function statusCell(s) {
   if (!LIB) return LIB_ERR ? '<small>unavailable</small>' : '<small>loading…</small>';
   const clips = LIB.clips || [];
   if (s.role) {
-    const takes = clips.filter((c) => c.game?.role === s.role);
+    // assigned before guessed, then newest (the court's own order)
+    const takes = clips.filter((c) => c.game?.role === s.role).sort((a, b) => (!!b.game?.assigned - !!a.game?.assigned) || String(b.createdAt).localeCompare(String(a.createdAt)));
     const used = (LIB.court || []).find((c) => c.role === s.role);
     const clip = (used && clips.find((c) => c.id === used.id)) || takes[0];
     if (!clip) return '<span class="badge">not recorded</span>';
@@ -591,7 +592,7 @@ function renderShots() {
   $$('#shotBody [data-card]').forEach((b) => b.onclick = () => { selectCard(b.dataset.card); $('#camera').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
   const roles = SHOTS.filter((s) => s.role);
   if (LIB) {
-    const filled = roles.filter((s) => (LIB.court || []).some((c) => c.role === s.role)).length;
+    const filled = roles.filter((s) => (LIB.clips || []).some((c) => c.game?.role === s.role && !c.buildError)).length;
     const live = roles.filter((s) => playsNow(s) && (LIB.court || []).some((c) => c.role === s.role)).length;
     $('#shotSummary').textContent = `${filled} / ${roles.length} roles recorded · ${live} on court`;
     $('#shotSummary').className = 'badge' + (filled === roles.length ? ' ok' : '');

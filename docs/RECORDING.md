@@ -159,7 +159,9 @@ Lane loops (jog, sprint, backpedal): record L→R **and** R→L. Joints on the f
 | `stop` | `stop-jog-r` | action | 5 m lane | Enter at jog pace → 2-count stride stop or jump stop → IDS-R hold 1.5 s | not yet |
 | `layup` | `layup-jog-r` | action | 5 m lane | Jog → gather on the right foot → step left → take off from the left foot → right-hand finish at full reach → land, hold 1 s | not yet |
 
-### Extras (no game role yet; record them now so they are ready)
+### Extras (record them now so they are ready)
+
+The name guesses a role from its family prefix, so some extras play on the court as soon as they are analysed: `move-crossover-jog-rl` → crossover, `shot-pullup-jog-r` → jumper, `loco-run-fwd-r` → forward loop. Set them to **— none —** in /mocap to keep them off. `calib-`, `turn-` and `cut-` takes get no role.
 
 | Name | Camera | Notes |
 |---|---|---|
@@ -191,7 +193,7 @@ Examples: `dribble-idle-r-t02` · `loco-jog-fwd-r-t03` · `loco-strafe-left-r-t0
 
 Say the take name out loud on camera, or rename the file right after recording.
 
-> The name only **guesses** a role, and the guess is crude: any name containing `idle` is guessed as the idle hub, and `jog` as `loco-fwd`. **Always set the role in the "3D game clip" panel and Save.** An explicitly assigned role beats a guessed one.
+> The name only **guesses** a role, from its family prefix: `dribble-idle-…` → idle hub, `loco-jog/walk/run-…` → `loco-fwd`, `loco-sprint-…` → `loco-sprint`, `move-<move>-…` → that move, `shot-stepback-…` → step-back, any other `shot-…` → jumper. `calib-`, `turn-` and `cut-` get no role. **Always set the role in the "3D game clip" panel and Save.** An explicitly assigned role beats a guessed one.
 
 ---
 
@@ -236,7 +238,7 @@ The **Clip type** buttons on the Capture step set these for you. Then set the tr
    - Choose the **role**.
    - Check the **type** (loop/action), the **trims** (raw frames cut from each end; loops: leave 0) and the **entry max** (actions: the latest frame the court may start the clip from; blank = auto).
    - Press **Save & rebuild**, then read the quality flags (see §13).
-   - Set rejected takes to **— none —**. The court uses one clip per role: an explicit role beats a guess, and the newest wins among equals.
+   - Set rejected takes to **— none —**. Loops (idle, locomotion) use one take per role; moves and shots keep up to 4 takes and the nearest-pose matcher picks between them. An explicit role beats a guess, then the newest wins.
 4. **Open in 3D court** (`/court3d?focus=<motionId>`) to play it.
 
 ---

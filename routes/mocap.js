@@ -25,6 +25,9 @@
  *   PUT  /api/mocap3d/clip/:id                   { role, type, trimStart, trimEnd, warp, entryMax, mirror, notes } → rebuilt
  *   POST /api/mocap3d/clip/:id/build             force a rebuild
  *   GET  /api/mocap3d/rig/:char                  character rig (gz JSON, ETag) ?motion&frame
+ *   POST /api/mocap3d/generate                   { kind: run-dribble | crossover | crossover-moving, hand, speed } → new motion
+ *   POST /api/mocap3d/import                     { name, role, fps, skeleton: mhr70|soma|smplx, frames, upAxis, units } → new motion
+ *   POST /api/mocap3d/import-kimodo              raw Kimodo .npz body ?name&role&arms=dribble|crossover|none&hand&prompt → new motion
  */
 'use strict';
 
@@ -54,8 +57,15 @@ function sendPng(res, buf, maxAge = 60) {
   res.end(buf);
 }
 
-function register(router, ctx) {
+function register(baseRouter, ctx) {
   const { ASSETS_DIR, TMP_DIR, json, parseBody } = ctx;
+  // Every :id must already be a canonical id: store.safeId strips characters,
+  // so '~' or 'a.' would otherwise alias another motion (or the data root).
+  const guard = (h) => (req, res, params, query) => {
+    if (params && 'id' in params && (!params.id || store.safeId(params.id) !== params.id)) return json(res, { error: 'Invalid id' }, 400);
+    return h(req, res, params, query);
+  };
+  const router = Object.fromEntries(['get', 'post', 'put', 'patch', 'delete'].map((m) => [m, (p, h) => baseRouter[m](p, guard(h))]));
 
   router.get('/api/mocap/status', (req, res) => {
     json(res, {
@@ -265,8 +275,12 @@ function register(router, ctx) {
   router.put('/api/mocap3d/clip/:id', async (req, res, params) => {
     const body = await parseBody(req);
     try {
+      const prev = (await store.loadMotionFile(params.id, 'meta'))?.game;
       const game = await GC.saveSettings(params.id, body || {});
-      const { json: j } = await GC.build(params.id, { force: true });
+      let j;
+      // settings that don't build are not kept: the motion stays as it was
+      try { ({ json: j } = await GC.build(params.id, { force: true })); }
+      catch (err) { await GC.restoreSettings(params.id, prev); throw err; }
       json(res, { success: true, game, built: GC.summary(j) });
     } catch (err) { json(res, { error: err.message }, 400); }
   });
@@ -276,6 +290,75 @@ function register(router, ctx) {
       json(res, { success: true, game: j.game, built: GC.summary(j) });
     } catch (err) { json(res, { error: err.message }, 400); }
   });
+  // Generated motions (not filmed): { kind: 'run-dribble' | 'crossover' | 'crossover-moving', hand, speed }
+  router.post('/api/mocap3d/generate', async (req, res) => {
+    const body = (await parseBody(req)) || {};
+    try {
+      const GEN = require('../lib/mocap/motion-gen');
+      const GM = require('../lib/mocap/generated-motions');
+      const hand = body.hand === 'left' ? 'left' : 'right';
+      const kinds = {
+        'run-dribble': () => GEN.runDribble({ hand, speed: Math.max(2.5, Math.min(6.5, +body.speed || 4.4)) }),
+        crossover: () => GEN.crossover({ hand }),
+        'crossover-moving': () => GEN.crossover({ hand, moving: true }),
+      };
+      if (!kinds[body.kind]) return json(res, { error: `kind must be one of ${Object.keys(kinds).join(', ')}` }, 400);
+      const id = await GM.saveGenerated(kinds[body.kind]());
+      const { json: j } = await GC.build(id, { force: true });
+      json(res, { success: true, id, name: j.name, role: j.role, built: GC.summary(j) });
+    } catch (err) { json(res, { error: err.message }, 400); }
+  });
+  // Import joint positions from a motion generator (Kimodo) or any tool:
+  // { name, role, type, fps, skeleton: 'mhr70' | 'soma' | 'smplx', jointNames?, frames, upAxis: 'y'|'z', units: 'm'|'cm', balls?, hand? }
+  router.post('/api/mocap3d/import', async (req, res) => {
+    const body = (await parseBody(req)) || {};
+    try {
+      const K = require('../lib/mocap/kimodo');
+      const GM = require('../lib/mocap/generated-motions');
+      const GEN = require('../lib/mocap/motion-gen');
+      const frames = K.toMHR70(body);
+      const fps = +body.fps || 30;
+      const balls = Array.isArray(body.balls) && body.balls.length === frames.length ? body.balls : GEN.synthesizeBall(frames, fps, { hand: body.hand || null });
+      const role = body.role && GC.ROLES[body.role] ? body.role : null;
+      const id = await GM.saveGenerated({
+        name: String(body.name || 'imported motion').slice(0, 80), role, type: body.type || (role ? GC.ROLES[role].type : 'action'),
+        fps, statureM: +body.statureM || 1.8, frames, balls, source: String(body.source || body.skeleton || 'import').slice(0, 40), prompt: body.prompt ? String(body.prompt).slice(0, 500) : null,
+        entryMax: body.entryMax != null ? +body.entryMax : undefined,
+      });
+      const { json: j } = await GC.build(id, { force: true });
+      json(res, { success: true, id, built: GC.summary(j) });
+    } catch (err) { json(res, { error: err.message }, 400); }
+  });
+
+  // Kimodo "Download → NPZ" straight in (raw body, ≤ 30 MB):
+  // ?name&role&arms=dribble|crossover|none&hand=right|left&prompt=
+  // arms: Kimodo has no ball — "dribble" scripts the dribble arm onto the body
+  // (one push per stride, synced to the foot plants), "crossover" crosses the
+  // ball at the motion's sharpest cut, "none" keeps Kimodo's arms (ball read from the hands)
+  router.post('/api/mocap3d/import-kimodo', async (req, res, params, query) => {
+    try {
+      const chunks = []; let size = 0;
+      for await (const c of req) { size += c.length; if (size > 30e6) throw new Error('file too large (max 30 MB)'); chunks.push(c); }
+      const K = require('../lib/mocap/kimodo');
+      const GEN = require('../lib/mocap/motion-gen');
+      const GM = require('../lib/mocap/generated-motions');
+      const src = K.kimodoFrames(Buffer.concat(chunks));
+      const frames = K.toMHR70({ skeleton: 'soma', frames: src.frames, rotations: src.rotations });
+      const fps = +query.fps || 30, hand = query.hand === 'left' ? 'left' : 'right';
+      const arms = ['dribble', 'crossover', 'none'].includes(query.arms) ? query.arms : 'dribble';
+      const g = arms === 'dribble' ? GEN.dribbleOnto(frames, fps, { hand }) : arms === 'crossover' ? GEN.crossoverOnto(frames, fps, { hand }) : { frames, balls: GEN.synthesizeBall(frames, fps) };
+      const role = query.role && GC.ROLES[query.role] ? query.role : (arms === 'crossover' ? 'move-crossover' : null);
+      const type = query.type || (role ? GC.ROLES[role].type : arms === 'crossover' ? 'action' : 'loop');
+      const id = await GM.saveGenerated({
+        name: String(query.name || 'Kimodo motion').slice(0, 80), role, type, fps, statureM: 1.8, frames: g.frames, balls: g.balls,
+        source: 'kimodo', prompt: query.prompt ? String(query.prompt).slice(0, 500) : null, entryMax: g.entryMax,
+        params: { arms, hand },
+      });
+      const { json: j } = await GC.build(id, { force: true });
+      json(res, { success: true, id, built: GC.summary(j) });
+    } catch (err) { json(res, { error: err.message }, 400); }
+  });
+
   // Character rig (skinned mesh + skeleton), ?motion=&frame= to build from another scan
   router.get('/api/mocap3d/rig/:char', async (req, res, params, query) => {
     try { sendGz(req, res, await RIG.buildRig(params.char, { motionId: query.motion || undefined, frame: query.frame || undefined })); }

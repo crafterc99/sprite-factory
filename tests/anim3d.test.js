@@ -17,6 +17,8 @@ const MB = require('../lib/mocap/motion-builder');
 const { synthWalk } = require('../lib/mocap/synth');
 const { poseAt } = require('../lib/mocap/mock');
 const { defaultWarps } = require('../lib/mocap/game-roles');
+const GEN = require('../lib/mocap/motion-gen');
+const K = require('../lib/mocap/kimodo');
 
 const A = import('../engine3d/anim3d.mjs');
 const { J } = S;
@@ -252,4 +254,119 @@ test('player: an action plays with root motion from its best entry frame and han
   // a missing role is reported, not crashed
   const ev3 = simulate(P, A, 0.05, () => ({ trigger: 'move-spin' }));
   assert.ok(ev3.some((e) => e.type === 'missing'));
+});
+
+// ── responsive controls, generated clips, matcher ───────────────────────────
+const genClip = (g) => { const c = CB.buildGameClip({ worldFrames: g.frames, fps: g.fps, statureM: g.statureM, balls: g.balls }, { type: g.type, role: g.role, name: g.name, entryMax: g.entryMax }); c.id = g.name; return c; };
+
+test('controls: instant first step, quick reversal, slide-in stop with a skid, sprint faces the run', async () => {
+  const { prepareRig, buildLibrary, Player } = await A;
+  const rig = prepareRig(mockRigJson(1));
+  const P = new Player(rig, buildLibrary([idleClip()], rig), { x: 0, z: 9, yaw: Math.PI });
+  simulate(P, A, 1, () => ({}));
+  let first = null;
+  const ev = simulate(P, A, 0.3, () => ({ move: [1, 0] }));
+  first = ev.findIndex((e) => e.type === 'lift');
+  assert.ok(first >= 0 && first <= 2, `first step on the first frames (event #${first})`);
+  assert.ok(Math.hypot(...P.vel) > 1.5, `speed after 0.3 s ${Math.hypot(...P.vel).toFixed(2)}`);
+  // reversal
+  let t = 0; for (; t < 0.5 && P.vel[0] > 0; t += 1 / 60) P.update(1 / 60, { face: [0, 0], move: [-1, 0] });
+  assert.ok(t < 0.15, `reversal took ${(t * 1000).toFixed(0)} ms`);
+  // sprint away from the hoop: faces the run; letting go glides into a stop (skid) with planted feet
+  simulate(P, A, 1.4, () => ({ move: [0, 1], sprint: true }));
+  assert.ok(Math.abs(Math.atan2(Math.sin(P.yaw), Math.cos(P.yaw))) < 0.2, `faces the run (yaw ${P.yaw.toFixed(2)})`);
+  const p0 = P.pos.slice(); P.metrics.slideMaxCm = 0;
+  const stopEv = simulate(P, A, 1.4, () => ({}));
+  const glide = Math.hypot(P.pos[0] - p0[0], P.pos[1] - p0[1]);
+  assert.ok(glide > 0.2 && glide < 1.2, `slide-in ${glide.toFixed(2)} m`);
+  assert.ok(stopEv.some((e) => e.type === 'stop') && stopEv.some((e) => e.type === 'skid'), 'stop + skid events');
+  assert.ok(P.metrics.slideMaxCm < 0.5, `planted feet slid ${P.metrics.slideMaxCm.toFixed(2)} cm (skid excluded)`);
+  assert.ok(faceErr(P) < 0.15, 'back to facing the hoop');
+});
+
+test('generated run-dribble + crossovers: whole ball cycles, loops, entry windows, hand change', () => {
+  const run = genClip(GEN.runDribble()), cr = genClip(GEN.crossover()), cm = genClip(GEN.crossover({ moving: true }));
+  assert.ok(run.loop && run.stats.speed > 3.8, `run loop ${JSON.stringify(run.loop)} ${run.stats.speed}`);
+  assert.ok(run.ball.some((b) => b?.held) && run.ball.some((b) => b && !b.held), 'dribble cycle');
+  for (const c of [cr, cm]) {
+    assert.strictEqual(c.ball.find((b) => b?.held).hand, 'right');
+    assert.strictEqual([...c.ball].reverse().find((b) => b?.held).hand, 'left');
+    assert.ok(c.entry.max > 3, 'entry window up to the cross');
+    assert.ok(c.quality.slidePinnedCm < 1.5);
+  }
+});
+
+test('nearest-pose matcher: variant + mirror + frame chosen from the pose, the ball hand switches', async () => {
+  const { prepareRig, buildLibrary, Player, matchPose, clipFeatures } = await A;
+  const rig = prepareRig(mockRigJson(1));
+  const lib = buildLibrary([idleClip(), genClip(GEN.crossover()), genClip(GEN.crossover({ moving: true }))], rig);
+  // a frame matches itself best
+  const c = lib['move-crossover'];
+  const f = clipFeatures(c);
+  const m = matchPose([{ clip: c }], f.subarray(20 * 19, 21 * 19));
+  assert.ok(Math.abs(m.frame - 20) <= 1, `self match ${m.frame}`);
+  const P = new Player(rig, lib, { x: 0, z: 9, yaw: Math.PI });
+  simulate(P, A, 1, () => ({}));
+  const hand0 = P.hand;
+  const ev = simulate(P, A, 0.05, () => ({ trigger: 'move-crossover' }));
+  const pick = ev.find((e) => e.type === 'action');
+  assert.ok(pick && /Crossover \(generated\)/.test(pick.clip), `standing picks the standing crossover (${pick && pick.clip})`);
+  simulate(P, A, 2.5, () => ({}));
+  assert.notStrictEqual(P.hand, hand0, 'ball changed hands');
+  // jogging forward (toward the hoop) is nearest to the crossover that enters jogging
+  simulate(P, A, 1.0, () => ({ move: [0, -1] }));
+  const ev2 = simulate(P, A, 0.05, () => ({ move: [0, -1], trigger: 'move-crossover' }));
+  const pick2 = ev2.find((e) => e.type === 'action');
+  assert.ok(pick2 && /on the move/.test(pick2.clip), `moving picks the moving crossover (${pick2 && pick2.clip})`);
+  assert.ok(P.metrics.slideMaxCm < 1, `slide ${P.metrics.slideMaxCm}`);
+});
+
+test('kimodo import: SOMA-77 joints → MHR70, npz reader, scripted dribble arm', () => {
+  // a tiny SOMA-shaped skeleton walking forward (joint names from the real skeleton)
+  const names = K.SOMA77;
+  const frames = [];
+  for (let i = 0; i < 40; i++) {
+    const P = poseAt(i / 30).P;
+    const z = i * 0.05;
+    const at = (n) => { const p = P[J[n]]; return [p[0], p[1], p[2] + z]; };
+    const m = { Hips: S.mid(at('left-hip'), at('right-hip')), Neck1: at('neck'), Head: S.add(at('neck'), [0, 0.15, 0.02]) };
+    for (const [s2, s] of [['Left', 'left'], ['Right', 'right']]) Object.assign(m, { [`${s2}Leg`]: at(`${s}-hip`), [`${s2}Shin`]: at(`${s}-knee`), [`${s2}Foot`]: at(`${s}-ankle`), [`${s2}ToeEnd`]: at(`${s}-big-toe-tip`), [`${s2}Arm`]: at(`${s}-shoulder`), [`${s2}ForeArm`]: at(`${s}-elbow`), [`${s2}Hand`]: at(`${s}-wrist`) });
+    frames.push(names.map((n) => m[n] || m.Hips));
+  }
+  // Kimodo's joint order → the fitted SOMA map: the rest pose (T-pose) gives
+  // keypoints next to the matching joints, left on +X, nose in front of the head
+  const M77 = require('../lib/mocap/kimodo-mhr70.json').soma77;
+  const rest = Array.from({ length: 5 }, (_, i) => M77.rest.map((p) => [p[0], p[1] + 0.999, p[2] + i * 0.05]));
+  const tp = K.toMHR70({ skeleton: 'soma', frames: rest });
+  assert.strictEqual(tp[0].length, 70);
+  assert.ok(tp.every((P) => P.every((q) => q.every(Number.isFinite))), 'finite keypoints');
+  const lift = rest[0][names.indexOf('LeftFoot')][1] - tp[0][J['left-ankle']][1]; // the floor snap moved everything down by this
+  const at = (k, f = 2) => [tp[f][J[k]][0], tp[f][J[k]][1] + lift, tp[f][J[k]][2]];
+  const d = (k, n) => S.len(S.sub(at(k), rest[2][names.indexOf(n)]));
+  assert.ok(d('left-knee', 'LeftShin') < 0.06 && d('right-wrist', 'RightHand') < 0.06, `keypoints by their joints (knee ${d('left-knee', 'LeftShin').toFixed(3)} m)`);
+  assert.ok(at('left-wrist')[0] > 0.3 && at('right-wrist')[0] < -0.3, 'left = +X');
+  assert.ok(at('nose')[2] > rest[2][names.indexOf('Head')][2] + 0.05, 'nose in front');
+  // any other skeleton by joint names (the common set): derived surface points
+  const alias = K.SKELETONS.soma.alias;
+  const mhr = K.toMHR70({ skeleton: 'named', jointNames: names.map((n) => alias[n] || n), frames });
+  assert.strictEqual(mhr[0].length, 70);
+  assert.ok(Math.abs(mhr[5][J['left-knee']][2] - frames[5][names.indexOf('LeftShin')][2]) < 1e-6, 'knee carried over');
+  const lowest = Math.min(...mhr.flatMap((P) => [P[J['left-heel']][1], P[J['right-heel']][1]]));
+  assert.ok(Math.abs(lowest) < 1e-6, 'feet on the floor');
+  const g = GEN.dribbleOnto(mhr, 30, { hand: 'right' });
+  assert.ok(g.balls.some((b) => b.held) && g.balls.some((b) => !b.held), 'scripted dribble has a ball cycle');
+  // npz round trip (stored, one float32 array)
+  const arr = new Float32Array([1, 2, 3, 4, 5, 6]);
+  const header = "{'descr': '<f4', 'fortran_order': False, 'shape': (1, 2, 3), }";
+  const pad = 64 - ((10 + header.length + 1) % 64);
+  const hdr = Buffer.from(header + ' '.repeat(pad) + '\n', 'latin1');
+  const npy = Buffer.concat([Buffer.from([0x93]), Buffer.from('NUMPY', 'latin1'), Buffer.from([1, 0]), Buffer.from([hdr.length & 255, hdr.length >> 8]), hdr, Buffer.from(arr.buffer)]);
+  const name = Buffer.from('posed_joints.npy');
+  const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50, 0); local.writeUInt32LE(npy.length, 18); local.writeUInt32LE(npy.length, 22); local.writeUInt16LE(name.length, 26);
+  const cen = Buffer.alloc(46); cen.writeUInt32LE(0x02014b50, 0); cen.writeUInt32LE(npy.length, 20); cen.writeUInt32LE(npy.length, 24); cen.writeUInt16LE(name.length, 28); cen.writeUInt32LE(0, 42);
+  const body = Buffer.concat([local, name, npy]);
+  const eocd = Buffer.alloc(22); eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(1, 8); eocd.writeUInt16LE(1, 10); eocd.writeUInt32LE(46 + name.length, 12); eocd.writeUInt32LE(body.length, 16);
+  const z = K.readNpz(Buffer.concat([body, cen, name, eocd]));
+  assert.deepStrictEqual(z.posed_joints.shape, [1, 2, 3]);
+  assert.deepStrictEqual(Array.from(z.posed_joints.data), [1, 2, 3, 4, 5, 6]);
 });

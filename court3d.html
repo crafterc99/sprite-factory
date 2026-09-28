@@ -23,7 +23,7 @@
   #help { position:fixed; left:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--dim); max-width:420px; }
   #help b { color:var(--txt); }
   #dbg { position:fixed; right:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 10px; color:var(--dim); display:none; min-width:220px; }
-  #dbg b { color:#fff; } #dbg .ok { color:var(--ok); } #dbg .warn { color:var(--warn); }
+  #dbg b { color:#fff; } #dbg .ok { color:var(--ok); } #dbg .warn { color:var(--warn); } #dbgBody { white-space:pre-line; }
   #toast { position:fixed; left:50%; top:64px; transform:translateX(-50%); z-index:9; background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:8px 14px; display:none; max-width:90vw; text-align:center; }
   #toast a { color:var(--accent); }
   #loading { position:fixed; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; background:var(--bg); z-index:20; color:var(--dim); }
@@ -37,6 +37,7 @@
   .tbtn { position:fixed; border-radius:50%; border:2px solid rgba(255,255,255,.25); color:#fff; font-weight:700; z-index:6; display:none; }
   #shootBtn { right:28px; bottom:34px; width:96px; height:96px; background:rgba(255,106,26,.28); }
   #moveBtn { right:140px; bottom:44px; width:72px; height:72px; background:rgba(47,107,255,.25); font-size:11px; }
+  #runBtn { right:40px; bottom:150px; width:64px; height:64px; background:rgba(25,210,122,.22); font-size:11px; }
   .tbtn.held { background:rgba(255,106,26,.7); }
   @media (pointer:coarse) { .tbtn { display:block; } #help { display:none; } }
 </style>
@@ -100,17 +101,18 @@
 </div>
 
 <div id="help">
-  <b>Controller</b> left stick move · R2 sprint · hold <b>□</b> shoot (moving = step-back) · <b>○</b> crossover · <b>△</b> spin · <b>✕</b> hesi · R1 between-legs · L1 switch hand · right stick camera<br>
-  <b>Keyboard</b> WASD move · Shift sprint · hold <b>I</b>/Space shoot · O cross · K spin · J hesi · U btl · H hand · C camera · F feet<br>
-  Standing still = idle dribble. The player always faces the basket; feet stay planted.
+  <b>Controller</b> left stick move · hold <b>R2</b> run-dribble (turns to run) · hold <b>□</b> shoot (moving = step-back) · <b>○</b> crossover · <b>△</b> spin · <b>✕</b> hesi · R1 between-legs · L1 switch hand · right stick camera<br>
+  <b>Keyboard</b> WASD move · hold Shift run · hold <b>I</b>/Space shoot · O cross · K spin · J hesi · U btl · H hand · C camera · F feet<br>
+  Standing = idle dribble facing the basket. Let go at speed = slide-in stop. Moves pick the variant + frame nearest your pose.
 </div>
-<div id="dbg"></div>
+<div id="dbg"><b>feet</b> · slide max <span id="dbgSlide"></span> <button id="dbgReset" type="button">reset</button><br><span id="dbgBody"></span></div>
 <div id="toast"></div>
 
 <div id="stickZone"></div>
 <div id="stickBase"><div id="stickKnob"></div></div>
 <button id="shootBtn" class="tbtn">SHOOT</button>
 <button id="moveBtn" class="tbtn">CROSS</button>
+<button id="runBtn" class="tbtn">RUN</button>
 
 <div id="loading"><div class="t">Loading 3D court…</div><div id="loadMsg">downloading the 3D engine…</div><div id="err"></div></div>
 
@@ -145,6 +147,12 @@ try {
   try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false }); }
   catch (e2) { window.__c3dFail('WebGL could not start on this device (' + (e2.message || e2) + '). Try closing other tabs, turning off Low Power Mode, or updating iOS.'); throw e2; }
 }
+if (!renderer.capabilities.isWebGL2) {
+  window.__c3dFail('This browser only offers WebGL 1, and the 3D player needs WebGL 2 (skinned mesh). On iPad/iPhone update to iOS 15 or later (or turn on WebGL 2.0 in Settings → Safari → Advanced → Feature Flags); on a computer, enable hardware acceleration.');
+  throw new Error('WebGL 2 required');
+}
+// a shader that fails to compile must reach the error screen, not leave an invisible player
+renderer.debug.onShaderError = (gl, program, vs, fs) => { window.__c3dFail('The 3D shaders failed to compile on this GPU: ' + (gl.getShaderInfoLog(vs) || gl.getShaderInfoLog(fs) || gl.getProgramInfoLog(program) || 'unknown error').slice(0, 200)); };
 let pixelRatio = Math.min(LITE ? 1.5 : 2, window.devicePixelRatio || 1);
 renderer.setPixelRatio(pixelRatio);
 renderer.shadowMap.enabled = true;
@@ -159,12 +167,13 @@ const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 200);
 
 scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x3a2412, 0.85));
 const sun = new THREE.DirectionalLight(0xfff1dd, 2.2);
-sun.position.set(-6, 14, 9);
 sun.castShadow = true;
 sun.shadow.mapSize.set(LITE ? 1024 : 2048, LITE ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
 sun.shadow.bias = -0.0004;
-scene.add(sun);
+// aim at the middle of the half court so the whole floor (both corners) is inside the shadow box
+sun.position.set(-6, 14, 14.6); sun.target.position.set(0, 0, 5.6);
+scene.add(sun); scene.add(sun.target);
 if (!LITE) { const fill = new THREE.PointLight(0xffa860, 0.9, 30); fill.position.set(6, 6, 10); scene.add(fill); }
 
 function resize() {
@@ -306,16 +315,30 @@ for (const s of ['left', 'right']) {
 // ═══ Input: gamepad + keyboard + touch ═══
 const keys = new Set();
 const pressedSinceTick = new Set(); // a quick tap between two frames still counts
+const GAME_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'ShiftLeft', 'ShiftRight']);
 window.addEventListener('keydown', (e) => {
-  keys.add(e.code); pressedSinceTick.add(e.code);
+  if (e.metaKey || e.ctrlKey || e.altKey) return; // browser shortcuts (Cmd+F, Ctrl+C) are not game input
+  if (GAME_KEYS.has(e.code)) {
+    // a focused dropdown would type-ahead on WASD and switch the character
+    if (document.activeElement && /^(SELECT|INPUT|BUTTON)$/.test(document.activeElement.tagName) && e.code !== 'Space') document.activeElement.blur();
+    e.preventDefault();
+  }
+  keys.add(e.code);
+  if (e.repeat) return; // auto-repeat never re-triggers a move or a toggle
+  pressedSinceTick.add(e.code);
   if (e.code === 'KeyC') cycleCam();
   if (e.code === 'KeyF') toggleDbg();
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
+// keys held while the window loses focus never get a keyup: drop all held input
+const dropInput = () => { keys.clear(); pressedSinceTick.clear(); touch.shoot = touch.run = false; touch.id = null; touch.x = touch.y = 0; sb.style.display = 'none'; };
+window.addEventListener('blur', dropInput);
+document.addEventListener('visibilitychange', () => { if (document.hidden) dropInput(); });
 const touch = { x: 0, y: 0, shoot: false, tap: false, move: false, id: null, ox: 0, oy: 0 };
 const zone = $('stickZone'), sb = $('stickBase'), knob = $('stickKnob');
-zone.addEventListener('pointerdown', (e) => { touch.id = e.pointerId; touch.ox = e.clientX; touch.oy = e.clientY; sb.style.display = 'block'; sb.style.left = (e.clientX - 60) + 'px'; sb.style.top = (e.clientY - 60) + 'px'; zone.setPointerCapture(e.pointerId); });
+zone.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse' || touch.id != null) return; // mouse drags orbit; a second finger never takes over the stick
+  touch.id = e.pointerId; touch.ox = e.clientX; touch.oy = e.clientY; sb.style.display = 'block'; sb.style.left = (e.clientX - 60) + 'px'; sb.style.top = (e.clientY - 60) + 'px'; zone.setPointerCapture(e.pointerId); });
 zone.addEventListener('pointermove', (e) => {
   if (e.pointerId !== touch.id) return;
   const dx = e.clientX - touch.ox, dy = e.clientY - touch.oy, l = Math.min(50, Math.hypot(dx, dy)), a = Math.atan2(dy, dx);
@@ -328,6 +351,9 @@ const sBtn = $('shootBtn');
 sBtn.addEventListener('pointerdown', () => { touch.shoot = true; touch.tap = true; sBtn.classList.add('held'); });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) sBtn.addEventListener(ev, () => { touch.shoot = false; sBtn.classList.remove('held'); });
 $('moveBtn').addEventListener('pointerdown', () => { touch.move = true; });
+const rBtn = $('runBtn');
+rBtn.addEventListener('pointerdown', () => { touch.run = true; rBtn.classList.add('held'); });
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) rBtn.addEventListener(ev, () => { touch.run = false; rBtn.classList.remove('held'); });
 
 const dz = (v) => (Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85);
 const padPrev = {};
@@ -358,6 +384,7 @@ function readInput() {
   if (touch.id != null) { mx = touch.x; my = touch.y; }
   if (touch.shoot || touch.tap) shoot = true;
   if (touch.move) edge.cross = true;
+  if (touch.run) sprint = true;
   touch.tap = false; touch.move = false;
   const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
   setText($('pad'), gp ? '🎮 ' + (gp.id.split('(')[0].trim().slice(0, 22) || 'controller') : (COARSE ? 'touch' : 'keyboard'));
@@ -377,13 +404,15 @@ try { S.speed = parseFloat(localStorage.getItem('court3d_speed')) || 1; } catch 
 $('speed').value = S.speed; $('speedLbl').textContent = S.speed.toFixed(2) + '×';
 $('speed').oninput = (e) => { S.speed = parseFloat(e.target.value); $('speedLbl').textContent = S.speed.toFixed(2) + '×'; try { localStorage.setItem('court3d_speed', S.speed); } catch {} };
 $('dbgBtn').onclick = () => toggleDbg();
+$('dbgReset').onclick = () => { if (S.player) S.player.metrics.slideMaxCm = 0; };
 function toggleDbg() { S.dbg = !S.dbg; $('dbgBtn').classList.toggle('on', S.dbg); $('dbg').style.display = S.dbg ? 'block' : 'none'; if (S.player) S.player.metrics.slideMaxCm = 0; }
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function toast(html, ms = 2600) { const t = $('toast'); t.innerHTML = html; t.style.display = 'block'; S.toastUntil = performance.now() + ms; }
 
 const ROLE_NAMES = { 'move-crossover': 'crossover', 'move-spin': 'spin move', 'move-hesi': 'hesitation', 'move-btl': 'between-the-legs', 'shot-jumper': 'jump shot', 'shot-stepback': 'step-back jumper' };
 function trigger(role) {
   const p = S.player;
-  if (!p || p.mode !== 'loco' || !p.hasBall) return null;
+  if (!p || p.mode !== 'loco' || !p.hasBall || p.ballFree) return null;
   if (!p.lib[role]) { toast(`No ${ROLE_NAMES[role] || role} recorded yet — <a href="/recording">record one</a> and give it the role on /mocap.`); return null; }
   return role;
 }
@@ -410,9 +439,9 @@ function setCam(m) {
 }
 $('camChase').onclick = () => setCam('chase'); $('camSide').onclick = () => setCam('side'); $('camFree').onclick = () => setCam('free');
 let drag = null;
-canvas.addEventListener('pointerdown', (e) => { if (S.cam === 'free') drag = { x: e.clientX, y: e.clientY }; });
-window.addEventListener('pointermove', (e) => { if (drag) { S.camYaw -= (e.clientX - drag.x) * 0.006; S.camPitch = Math.max(0.05, Math.min(1.3, (S.camPitch ?? 0.35) + (e.clientY - drag.y) * 0.004)); drag = { x: e.clientX, y: e.clientY }; } });
-window.addEventListener('pointerup', () => { drag = null; });
+canvas.addEventListener('pointerdown', (e) => { if (S.cam === 'free' && !drag) drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
+window.addEventListener('pointermove', (e) => { if (drag && e.pointerId === drag.id) { S.camYaw -= (e.clientX - drag.x) * 0.006; S.camPitch = Math.max(0.05, Math.min(1.3, (S.camPitch ?? 0.35) + (e.clientY - drag.y) * 0.004)); drag = { id: drag.id, x: e.clientX, y: e.clientY }; } });
+for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, (e) => { if (drag && e.pointerId === drag.id) drag = null; });
 canvas.addEventListener('wheel', (e) => { S.camDist = Math.max(2.2, Math.min(14, S.camDist * (1 + Math.sign(e.deltaY) * 0.08))); });
 
 function updateCamera(dt, inp) {
@@ -492,7 +521,8 @@ function step(now) {
   const hd = Math.hypot(P.pos[0], P.pos[1]); if (hd < 0.9) { P.pos[0] *= 0.9 / hd; P.pos[1] *= 0.9 / hd; }
   for (const e of r.events) {
     if (e.type === 'release') launchBall(S.lastBall.clone());
-    if (e.type === 'action') S.lastAction = e.role;
+    if (e.type === 'action') { S.lastAction = e.role; S.lastPick = e; }
+    if (e.type === 'skid') S.skidAt = now;
   }
   poseCharacter(S.rig, r.pose);
 
@@ -525,7 +555,8 @@ function step(now) {
   // ── HUD
   const label = S.swishAt && now - S.swishAt < 1500 ? 'SWISH'
     : P.mode === 'action' ? (ROLE_NAMES[P.action?.role] || P.action?.role || 'MOVE').toUpperCase()
-    : Math.hypot(P.vel[0], P.vel[1]) > 0.3 ? (P.source === 'clip-loco' ? 'DRIBBLE · clip' : 'DRIBBLE') : 'IDLE';
+    : P.stopping ? (S.skidAt && now - S.skidAt < 500 ? 'SKID STOP' : 'STOP')
+    : Math.hypot(P.vel[0], P.vel[1]) > 0.3 ? (P.runFace > 0.5 ? 'RUN DRIBBLE' : 'DRIBBLE') + (P.source === 'clip-loco' ? ' · clip' : '') : 'IDLE';
   setText($('state'), label);
   if (S.toastUntil && now > S.toastUntil) { $('toast').style.display = 'none'; S.toastUntil = 0; }
   if (S.dbg) {
@@ -536,11 +567,12 @@ function step(now) {
     }
     const m = P.metrics;
     const sl = m.slideMaxCm;
-    $('dbg').innerHTML = `<b>feet</b> · slide max <span class="${sl < 1 ? 'ok' : 'warn'}">${sl.toFixed(1)} cm</span> <button id="dbgReset">reset</button><br>`
-      + `source <b>${P.source}</b> · hand <b>${P.hand}</b><br>`
-      + `L ${P.feetState?.left?.planted ? 'planted' : 'free'} · R ${P.feetState?.right?.planted ? 'planted' : 'free'} · pelvis drop ${(P.pelvisDrop * 100).toFixed(1)} cm<br>`
-      + `speed ${Math.hypot(P.vel[0], P.vel[1]).toFixed(2)} m/s · steps ${(P.planner.Tstep ? 1 / P.planner.Tstep : 0).toFixed(1)}/s`;
-    const rb = $('dbgReset'); if (rb) rb.onclick = () => { P.metrics.slideMaxCm = 0; };
+    // fixed nodes, text only: the reset button stays the same element between frames
+    const slE = $('dbgSlide'); setText(slE, `${sl.toFixed(1)} cm`); slE.className = sl < 1 ? 'ok' : 'warn';
+    setText($('dbgBody'), `source ${P.source} · hand ${P.hand}\n`
+      + `L ${P.feetState?.left?.planted ? 'planted' : 'free'} · R ${P.feetState?.right?.planted ? 'planted' : 'free'} · pelvis drop ${(P.pelvisDrop * 100).toFixed(1)} cm\n`
+      + `speed ${Math.hypot(P.vel[0], P.vel[1]).toFixed(2)} m/s · steps ${(P.planner.Tstep ? 1 / P.planner.Tstep : 0).toFixed(1)}/s · run ${(P.runFace * 100).toFixed(0)}%\n`
+      + (S.lastPick ? `last pick ${S.lastPick.clip}${S.lastPick.mirror ? ' (mirrored)' : ''} · frame ${S.lastPick.entry} · of ${S.lastPick.variants} · cost ${S.lastPick.cost}` : 'last pick —'));
   } else { plantMarks.left.visible = plantMarks.right.visible = false; }
 
   updateCamera(rdt, inp);
@@ -564,7 +596,8 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     let timer = null;
     const arm = (ms) => { clearTimeout(timer); timer = setTimeout(() => ctl.abort(), ms); };
     const t0 = performance.now();
-    const shown = setInterval(() => loadMsg(`${label ? 'loading ' + label : 'loading'}… ${Math.round((performance.now() - t0) / 1000)} s`), 1000);
+    let got = 0, total = 0; // the ticker shows the bytes so far, never hides them
+    const shown = setInterval(() => loadMsg(`${label ? 'loading ' + label : 'loading'}… ${Math.round((performance.now() - t0) / 1000)} s${got > 200000 ? ` · ${(got / 1e6).toFixed(1)}${total ? ' / ' + (total / 1e6).toFixed(1) : ''} MB` : ''}`), 1000);
     try {
       arm(headerMs);
       const r = await fetch(url, { credentials: 'same-origin', signal: ctl.signal });
@@ -573,10 +606,9 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
       if (r.status >= 500 || ct.includes('text/html')) { const e = new Error(`server busy (HTTP ${r.status})`); e.retry = true; throw e; }
       arm(idleMs);
       let text;
-      const total = +(r.headers.get('x-raw-length') || 0);
+      total = +(r.headers.get('x-raw-length') || 0);
       if (r.body && r.body.getReader) {
         const reader = r.body.getReader(), chunks = [];
-        let got = 0;
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -591,6 +623,7 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
       if (!r.ok || j.error) { const e = new Error(j.error || 'HTTP ' + r.status); e.retry = r.status >= 500; throw e; }
       return j;
     } catch (e) {
+      clearTimeout(timer); clearInterval(shown); // this attempt is over: its ticker must not overwrite the retry notice
       if (e instanceof SignedOut) throw e;
       const retryable = e.name === 'AbortError' || e.retry || e instanceof TypeError;
       if (!retryable || a >= tries - 1) throw new Error((e.name === 'AbortError' ? 'timed out loading ' : 'could not load ') + (label || url) + ' (' + (e.message || e) + ')');
@@ -620,7 +653,7 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     let charId = QS.get('char');
     try { charId = charId || localStorage.getItem('court3d_char'); } catch {}
     if (!chars.find((c) => c.id === charId)) charId = chars[0].id;
-    $('selChar').innerHTML = chars.map((c) => `<option value="${c.id}" ${c.id === charId ? 'selected' : ''}>${c.name}</option>`).join('');
+    $('selChar').innerHTML = chars.map((c) => `<option value="${esc(c.id)}" ${c.id === charId ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
     $('selChar').onchange = () => { try { localStorage.setItem('court3d_char', $('selChar').value); } catch {} const q = new URLSearchParams(location.search); q.set('char', $('selChar').value); location.search = q.toString(); };
 
     // rig + clips in parallel (the rig is the big one, ~350 KB)
@@ -653,10 +686,10 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     window.__court3d = S; // for automated checks
     window.__ballProbe = () => ball.position.y;
     const showLib = () => {
-      const have = Object.keys(S.player.lib).filter((k) => !k.endsWith(':mirror'));
+      const have = Object.keys(S.player.lib).filter((k) => !k.includes(':'));
       const want = Object.entries(S.roles).filter(([, v]) => v.runtime).map(([k]) => k);
       setText($('libInfo'), `clips ${have.length}/${want.length}`);
-      $('libInfo').parentElement.title = 'In the game: ' + have.join(', ') + '\nNot recorded yet: ' + want.filter((k) => !have.includes(k)).join(', ');
+      $('libInfo').parentElement.title = 'In the game: ' + have.map((k) => k + ((S.player.lib[k + ':variants'] || []).length > 1 ? ` ×${S.player.lib[k + ':variants'].length}` : '')).join(', ') + '\nNot recorded yet: ' + want.filter((k) => !have.includes(k)).join(', ');
     };
     showLib();
     // the other roles load behind the idle (playable meanwhile)
@@ -665,14 +698,13 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     for (const c of rest) {
       getJSON(`/api/mocap3d/clip/${encodeURIComponent(c.id)}`, { label: c.name }).then((j) => {
         j.role = c.role;
-        const add = A.buildLibrary([j], rig);
-        Object.assign(S.player.lib, add);
+        A.buildLibrary([j], rig, S.player.lib);
         S.clips.push(j);
         showLib();
-      }).catch((e) => { console.warn('clip failed', c, e); toast(`Could not load ${c.name}: ${e.message}`); })
+      }).catch((e) => { console.warn('clip failed', c, e); toast(`Could not load ${esc(c.name)}: ${esc(e.message)}`); })
         .finally(() => { S.loadingRest--; });
     }
-    if (focus) toast(`Testing <b>${(court.find((c) => c.id === focus) || {}).name || focus}</b>`);
+    if (focus) toast(`Testing <b>${esc((court.find((c) => c.id === focus) || {}).name || focus)}</b>`);
   } catch (e) {
     const signedOut = e instanceof SignedOut;
     window.__c3dFail(signedOut ? 'You are not signed in on this browser.' : e.message);

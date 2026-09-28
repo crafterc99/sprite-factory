@@ -88,6 +88,51 @@ fs.mkdirSync(OUT, { recursive: true });
   rep.move = moves;
   await page.screenshot({ path: path.join(OUT, '2-moved.png') });
 
+  // Feel + moves (only when the clips exist): run-dribble, crossovers picked by the matcher, stops
+  const lib = await page.evaluate(() => Object.keys(window.__court3d.player.lib).filter((k) => !k.includes(':')));
+  rep.feel = {};
+  if (lib.includes('move-crossover')) {
+    const picks = [];
+    const cross = async (label) => {
+      await page.evaluate(() => { window.__court3d.lastPick = null; window.__court3d.player.metrics.slideMaxCm = 0; });
+      const hand0 = await page.evaluate(() => window.__court3d.player.hand);
+      const tp = Date.now();
+      await page.keyboard.press('KeyO');
+      await page.waitForFunction(() => window.__court3d.lastPick, null, { timeout: 3000 }).catch(() => {});
+      const latencyMs = Date.now() - tp;
+      const pk = await page.evaluate(() => { const S = window.__court3d, p = S.player; return { pick: S.lastPick ? { clip: S.lastPick.clip, mirror: S.lastPick.mirror, frame: S.lastPick.entry, of: S.lastPick.variants } : null, mode: p.mode }; });
+      await page.waitForFunction(() => window.__court3d.player.mode === 'loco', null, { timeout: 6000 }).catch(() => {});
+      const after = await page.evaluate(() => ({ hand: window.__court3d.player.hand, mode: window.__court3d.player.mode, slide: window.__court3d.player.metrics.slideMaxCm }));
+      pk.hand = hand0; pk.latencyMs = latencyMs;
+      picks.push({ label, ...pk, handAfter: after.hand, modeAfter: after.mode, slideCm: +after.slide.toFixed(2) });
+    };
+    await page.waitForFunction(() => window.__court3d.player.mode === 'loco' && Math.hypot(...window.__court3d.player.vel) < 0.1, null, { timeout: 4000 }).catch(() => {});
+    await cross('standing');
+    await page.waitForTimeout(600);
+    // moving: across the court (away from the stanchion, so no collision pushes the player)
+    await page.keyboard.down('KeyD'); await page.waitForTimeout(900);
+    await cross('moving');
+    await page.keyboard.up('KeyD'); await page.waitForTimeout(800);
+    rep.feel.crossovers = picks;
+  }
+  // sprint (run-dribble) then let go: slide-in stop
+  await page.evaluate(() => { const p = window.__court3d.player; p.teleport(0, 2.5); });
+  await page.waitForTimeout(700);
+  await page.evaluate(() => { window.__court3d.player.metrics.slideMaxCm = 0; });
+  await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyS');
+  await page.waitForTimeout(1600);
+  const run = await page.evaluate(() => { const S = window.__court3d, p = S.player; return { label: document.getElementById('state').textContent, speed: Math.hypot(...p.vel), runFace: p.runFace, source: p.source, pos: p.pos.slice() }; });
+  await page.screenshot({ path: path.join(OUT, '2b-run.png') });
+  await page.keyboard.up('KeyS'); await page.keyboard.up('ShiftLeft');
+  const stopSeq = [];
+  const tS = Date.now();
+  while (Date.now() - tS < 1200) { stopSeq.push(await page.evaluate(() => ({ label: document.getElementById('state').textContent, v: Math.hypot(...window.__court3d.player.vel), pos: window.__court3d.player.pos.slice() }))); await page.waitForTimeout(50); }
+  const last = stopSeq[stopSeq.length - 1];
+  rep.feel.run = { ...run, speed: +run.speed.toFixed(2), runFace: +run.runFace.toFixed(2) };
+  rep.feel.stop = { labels: [...new Set(stopSeq.map((x) => x.label))], slideInM: +Math.hypot(last.pos[0] - run.pos[0], last.pos[1] - run.pos[1]).toFixed(2), stopped: last.v < 0.1, slideCm: +(await page.evaluate(() => window.__court3d.player.metrics.slideMaxCm)).toFixed(2) };
+  await page.evaluate(() => { window.__court3d.player.teleport(1.8, 5.2); });
+  await page.waitForTimeout(900);
+
   // Shot: hold I
   await page.evaluate(() => { window.__court3d.player.metrics.slideMaxCm = 0; });
   await page.keyboard.down('KeyI'); await page.waitForTimeout(300); await page.keyboard.up('KeyI');
@@ -110,7 +155,9 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.screenshot({ path: path.join(OUT, '4-after.png') });
   rep.popMax = await page.evaluate(() => +window.__court3d.player.metrics.popMax.toFixed(0));
   const mv = Object.values(rep.move);
-  rep.pass = !errors.length && rep.dribble.bouncesToFloor && rep.dribble.backToHand && rep.dribble.idleSlideCm < 1
+  const feelOk = (!rep.feel.crossovers || rep.feel.crossovers.every((c) => c.pick && c.handAfter !== c.hand && c.slideCm < 3))
+    && rep.feel.run.speed > 3 && rep.feel.stop.stopped && rep.feel.stop.slideCm < 3;
+  rep.pass = !errors.length && feelOk && rep.dribble.bouncesToFloor && rep.dribble.backToHand && rep.dribble.idleSlideCm < 1
     && mv.every((m) => m.movedM > 0.5 && m.faceErrRad < 0.1 && m.slideCm < 2)
     && rep.shot.started && rep.shot.released && rep.shot.swish && rep.shot.backToDribble && rep.shot.slideCm < 3;
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(rep, null, 1));
