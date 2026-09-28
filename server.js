@@ -231,6 +231,12 @@ router.get('/api/storage-status', async (req, res) => {
     R2_BUCKET: !!process.env.R2_BUCKET,
   };
   vars.FIREBASE_SERVICE_ACCOUNT = !!process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const fb = require('./lib/firebase-storage');
+    vars.firebaseConfigured = fb.isConfigured();
+    vars.firebaseError = fb.configError();
+    vars.firebaseValueLength = process.env.FIREBASE_SERVICE_ACCOUNT.length; // no content, just the size
+  }
   vars.FIREBASE_STORAGE_BUCKET = !!process.env.FIREBASE_STORAGE_BUCKET;
   const storage = require('./lib/r2-storage');
   const available = storage.isAvailable();
@@ -242,6 +248,23 @@ router.get('/api/storage-status', async (req, res) => {
     if (!h.ok) vars._connectError = h.error;
   }
   return json(res, { backend, r2Available: available, available, connected, bucket: available ? storage.getBucket?.() : null, vars });
+});
+
+// PUT /api/assets/upload?path=<file under assets> — raw body; saves to disk +
+// cloud storage (used to restore/migrate sprites). Behind the password gate.
+router.put('/api/assets/upload', async (req, res, params, query) => {
+  const rel = String(query.path || '').replace(/^\/+/, '');
+  if (!rel || rel.includes('..') || !/^[\w.\-/ ]+\.(png|webp|jpe?g|json)$/i.test(rel)) return json(res, { error: 'bad path' }, 400);
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const buf = Buffer.concat(chunks);
+  if (!buf.length) return json(res, { error: 'empty body' }, 400);
+  const dest = path.join(ASSETS_DIR, rel);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, buf);
+  const storage = require('./lib/r2-storage');
+  if (storage.isAvailable()) await storage.uploadFile(rel, buf, rel.endsWith('.json') ? 'application/json' : rel.endsWith('.webp') ? 'image/webp' : 'image/png');
+  return json(res, { success: true, path: rel, bytes: buf.length, stored: storage.isAvailable() ? storage.backend : 'disk-only' });
 });
 
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
