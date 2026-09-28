@@ -353,3 +353,15 @@ test('ball proxy: magenta disc becomes the canonical ball, fingers stay in front
   // No disc drawn → no proxy (falls back to physics compositing)
   assert.strictEqual(await C.findProxy(buf, { x: 100, y: 100, r: 40 }), null);
 });
+
+test('firebase credentials from separate variables (Railway raw-editor JSON paste)', () => {
+  const fb = require('../lib/firebase-storage');
+  const { privateKey } = require('crypto').generateKeyPairSync('rsa', { modulusLength: 1024 });
+  const pem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const j = fb.splitVars({ project_id: 'p1', client_email: 'x@p1.iam.gserviceaccount.com', private_key: pem.replace(/\n/g, '\\n') });
+  assert.strictEqual(j.project_id, 'p1');
+  assert.ok(/^-----BEGIN PRIVATE KEY-----\n[A-Za-z0-9+/=\n]+-----END PRIVATE KEY-----\n$/.test(j.private_key));
+  require('crypto').createPrivateKey(j.private_key); // parses
+  assert.strictEqual(fb.splitVars({}), null);
+  assert.strictEqual(fb.splitVars({ FIREBASE_PROJECT_ID: 'p2', FIREBASE_CLIENT_EMAIL: 'e', FIREBASE_PRIVATE_KEY: pem }).project_id, 'p2');
+});

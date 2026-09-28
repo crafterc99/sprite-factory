@@ -220,7 +220,19 @@ require('./routes/movement-profiles').register(router);
 require('./routes/pose-import').register(router, ctx);
 require('./routes/mocap').register(router, ctx);
 
-router.get('/api/health', (req, res) => json(res, { ok: true, auth: require('./middleware/auth').enabled() }));
+// Public health: no secrets — only whether storage is wired and, if not, why
+let _healthStorage = null;
+router.get('/api/health', async (req, res) => {
+  if (!_healthStorage || Date.now() - _healthStorage.at > 60000) {
+    const fb = require('./lib/firebase-storage');
+    const st = require('./lib/r2-storage');
+    let connected = false, problem = null;
+    if (st.isAvailable()) { const h = await st.verifyConnection().catch((e) => ({ ok: false, error: e.message })); connected = !!h.ok; problem = h.ok ? null : h.error; }
+    else problem = fb.configError() || 'no storage variables set (FIREBASE_SERVICE_ACCOUNT or R2_*)';
+    _healthStorage = { at: Date.now(), v: { backend: st.isAvailable() ? st.backend : 'none', connected, bucket: st.isAvailable() ? st.getBucket?.() : null, credentials: fb.credentialsSource(), problem } };
+  }
+  json(res, { ok: true, auth: require('./middleware/auth').enabled(), storage: _healthStorage.v });
+});
 
 // ─── Storage Status Endpoint ─────────────────────────────────────────────
 router.get('/api/storage-status', async (req, res) => {
