@@ -1565,7 +1565,7 @@
                 <!-- Scale -->
                 <div class="tv2-set-row">
                   <span>Scale</span>
-                  <input type="range" id="testingScale" min="1" max="6" value="3" step="0.5" />
+                  <input type="range" id="testingScale" min="0.4" max="3" value="0.825" step="0.025" title="0.825 = exact Soul Jam size (180px frame × 1.1 on 1280×720, shown at 960×540)" />
                   <span id="testingScaleLabel" style="font-family:var(--mono);min-width:24px;text-align:right">3x</span>
                 </div>
                 <!-- Anim speed -->
@@ -6543,37 +6543,37 @@ function getZoneForPos(x, y) {
 // ── Net / hoop anchor ─────────────────────────────────────────────────────
 // Marks where the net sprite will be rendered. x/y = center of rim.
 // w/h = bounding box of the full net sprite.
-// Default = Soul Jam HOOP_X/HOOP_Y (265,228) × 0.75 — the game's hoop on this canvas
-let NET_ANCHOR = { x: 199, y: 171, w: 82, h: 72 };
+// Default = the base of the painted net on the Soul Jam court art (measured on
+// court.webp at this 960×540 canvas). Zones fan out from here. Drag the NET
+// marker in Edit mode to re-align it for a different court image — it is saved
+// with the court settings. (The game's own HOOP_X/HOOP_Y × 0.75 = 199,171 sits
+// left of the painted net.)
+const NET_ANCHOR_DEFAULT = { x: 240, y: 193, w: 82, h: 72 };
+let NET_ANCHOR = { ...NET_ANCHOR_DEFAULT };
 
 function drawNetMarker(ctx) {
+  // NET_ANCHOR = base of the net (where the zone wedges fan out from). The
+  // dashed box above it outlines the net; drag the centre in Edit mode to
+  // re-align, drag the box's bottom-right corner to resize the outline.
   const { x, y, w, h } = NET_ANCHOR;
-  const left = x - w / 2, top = y - h / 4, right = x + w / 2, bottom = top + h;
   ctx.save();
-  // Net bounding box
-  ctx.strokeStyle = 'rgba(255,200,0,0.7)';
+  ctx.strokeStyle = 'rgba(255,200,0,0.55)';
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 3]);
-  ctx.strokeRect(left, top, w, h);
+  ctx.strokeRect(x - w / 2, y - h, w, h);
   ctx.setLineDash([]);
-  // Rim oval at top of box
-  ctx.strokeStyle = 'rgba(255,200,0,0.9)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(x, top + 6, w / 2, 7, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  // Crosshair at rim center
   ctx.strokeStyle = '#ffcc00';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(x - 10, y); ctx.lineTo(x + 10, y);
-  ctx.moveTo(x, y - 10); ctx.lineTo(x, y + 10);
+  ctx.moveTo(x - 12, y); ctx.lineTo(x + 12, y);
+  ctx.moveTo(x, y - 12); ctx.lineTo(x, y + 12);
   ctx.stroke();
-  // Label
-  ctx.fillStyle = 'rgba(255,200,0,0.9)';
-  ctx.font = '8px "Space Mono",monospace';
+  ctx.fillStyle = 'rgba(255,200,0,0.95)';
+  ctx.font = 'bold 8px "Space Mono",monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('NET', x, top - 4);
+  ctx.fillText('NET BASE', x, y + 22);
   ctx.textAlign = 'start';
   ctx.restore();
 }
@@ -6629,9 +6629,9 @@ async function loadTestingConfig() {
     }
     // Scale + speed are global settings — the cloud copy wins over this
     // device's localStorage so every device sees the same values
-    if (Number.isFinite(d.scale) && d.scale > 0) {
-      TESTING.scale = d.scale;
-      localStorage.setItem('testing_scale', d.scale);
+    if (Number.isFinite(d.scaleV2) && d.scaleV2 > 0) {
+      TESTING.scale = d.scaleV2;
+      localStorage.setItem('testing_scale_v2', d.scaleV2);
       const el = document.getElementById('testingScale');
       if (el) { el.value = d.scale; document.getElementById('testingScaleLabel').textContent = d.scale + 'x'; }
     }
@@ -6655,7 +6655,7 @@ async function saveTestingConfig() {
     const r = await fetch(`${API}/api/testing-config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS, netAnchor: NET_ANCHOR, scale: TESTING.scale, speed: TESTING.speed }),
+      body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS, netAnchor: NET_ANCHOR, scaleV2: TESTING.scale, speed: TESTING.speed }),
     });
     const d = await r.json();
     if (d.savedToCloud) {
@@ -6723,8 +6723,8 @@ function drawOobOverlay(ctx, W, H, isOob) {
 function drawEditHandles(ctx) {
   // Net anchor — move handle at center, resize handle at bottom-right corner
   const { x: nx, y: ny, w: nw, h: nh } = NET_ANCHOR;
-  const netTop = ny - nh / 4;
-  const nrx = nx + nw / 2, nry = netTop + nh;
+  const netTop = ny - nh;           // anchor = net base, box extends upward
+  const nrx = nx + nw / 2, nry = ny;
   // Move handle (crosshair center)
   ctx.save();
   const netMoving = TESTING.editDragNet === 'move';
@@ -6820,7 +6820,7 @@ const TESTING = {
   playing: true,
   lastFrameTime: 0,
   animId: null,
-  scale: 3,
+  scale: 0.825, // exact game size: 180px frame × ANIM_SCALE 1.1 × (960/1280)
   speed: 1,
   frameSize: 180,
   pixelHeight: 112,
@@ -6920,7 +6920,8 @@ function initTestingPage() {
   checkTcPersistence();
 
   // Restore persisted scale/speed
-  const _savedScale = parseFloat(localStorage.getItem('testing_scale') || '3');
+  // v2 key: the old 'testing_scale' (default 3×) drew players 3.6× too big
+  const _savedScale = parseFloat(localStorage.getItem('testing_scale_v2') || '0.825');
   const _savedSpeed = parseFloat(localStorage.getItem('testing_speed') || '1');
   TESTING.scale = _savedScale;
   TESTING.speed = _savedSpeed;
@@ -6938,7 +6939,7 @@ function initTestingPage() {
   document.getElementById('testingScale').oninput = (e) => {
     TESTING.scale = parseFloat(e.target.value);
     document.getElementById('testingScaleLabel').textContent = TESTING.scale + 'x';
-    localStorage.setItem('testing_scale', TESTING.scale);
+    localStorage.setItem('testing_scale_v2', TESTING.scale);
     _tcSaveSettings(); // persist globally — other devices pick it up on load
   };
   document.getElementById('testingSpeed').oninput = (e) => {
@@ -7016,7 +7017,7 @@ function initTestingPage() {
       e.preventDefault(); return;
     }
     // Net resize handle (bottom-right corner of box)
-    const _nrx = NET_ANCHOR.x + NET_ANCHOR.w / 2, _nry = NET_ANCHOR.y - NET_ANCHOR.h / 4 + NET_ANCHOR.h;
+    const _nrx = NET_ANCHOR.x + NET_ANCHOR.w / 2, _nry = NET_ANCHOR.y;
     if (Math.hypot(x - _nrx, y - _nry) < SNAP) {
       TESTING.editDragNet    = 'resize';
       TESTING.editDragCorner = null;
@@ -7083,8 +7084,7 @@ function initTestingPage() {
       NET_ANCHOR.y = Math.round(Math.max(0, Math.min(_logH, cy - off.dy)));
     } else if (TESTING.editDragNet === 'resize') {
       const newW = Math.round(Math.max(20, Math.abs(cx - NET_ANCHOR.x) * 2));
-      const newH = Math.round(Math.max(20, cy - (NET_ANCHOR.y - NET_ANCHOR.h / 4)));
-      NET_ANCHOR.w = newW; NET_ANCHOR.h = newH;
+      NET_ANCHOR.w = newW; // height is set from the box top: drag the centre to move the base
     } else if (TESTING.editDragCorner) {
       OOB_BOUNDS[TESTING.editDragCorner] = { x: cx, y: cy };
     } else if (TESTING.editDragDivider) {
@@ -8212,7 +8212,7 @@ function testingRenderLoop(timestamp) {
     const scale = nw / TESTING.hoopImg.naturalWidth;
     const dw = TESTING.hoopImg.naturalWidth  * scale;
     const dh = TESTING.hoopImg.naturalHeight * scale;
-    ctx.drawImage(TESTING.hoopImg, nx - dw / 2, ny - NET_ANCHOR.h / 4, dw, dh);
+    ctx.drawImage(TESTING.hoopImg, nx - dw / 2, ny - dh, dw, dh); // overlay sits on the net base
   }
 
   // ── Sandbox: update debug panel (throttled via rAF — every frame is fine) ──

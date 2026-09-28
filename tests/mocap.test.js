@@ -236,8 +236,8 @@ test('studio image client routes to GPT Image when no Gemini key (green-flattene
 });
 
 test('court perspective zones follow the hoop (game geometry)', () => {
-  const { perspectiveZone, TEST_COURT } = require('../engine/GameCourt');
-  const h = TEST_COURT.hoop;
+  const { perspectiveZone, TEST_COURT, NET_BASE } = require('../engine/GameCourt');
+  const h = NET_BASE;
   assert.deepStrictEqual([TEST_COURT.width, TEST_COURT.height], [960, 540]);
   assert.strictEqual(perspectiveZone(h.x + 400, h.y).id, 3);           // beside the hoop → side view
   assert.strictEqual(perspectiveZone(h.x + 400, h.y).flip, false);     // hoop on the left → faces left

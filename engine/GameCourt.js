@@ -27,6 +27,9 @@ const GAME_COURT = {
 const TEST_SCALE = 0.75;                   // 960×540 testing canvas
 const DEPTH_K = 2.2;
 
+// Base of the painted net on the court art at 960×540 (the zone apex)
+const NET_BASE = { x: 240, y: 193 };
+
 const TEST_COURT = {
   width: GAME_COURT.width * TEST_SCALE,
   height: GAME_COURT.height * TEST_SCALE,
@@ -40,7 +43,7 @@ const TEST_COURT = {
 /**
  * @returns {{ id: 1..5, flip: boolean, angle: number }} zone for a player at (x, y)
  */
-function perspectiveZone(x, y, hoop = TEST_COURT.hoop, k = DEPTH_K) {
+function perspectiveZone(x, y, hoop = NET_BASE, k = DEPTH_K) {
   const fx = hoop.x - x;
   const fy = (hoop.y - y) * k;             // + = hoop is nearer the camera
   if (Math.abs(fx) < 1e-6 && Math.abs(fy) < 1e-6) return { id: 3, flip: false, angle: 90 };
@@ -49,4 +52,4 @@ function perspectiveZone(x, y, hoop = TEST_COURT.hoop, k = DEPTH_K) {
   return { id, flip: fx > 0, angle };
 }
 
-if (typeof module !== 'undefined') module.exports = { GAME_COURT, TEST_COURT, TEST_SCALE, DEPTH_K, perspectiveZone };
+if (typeof module !== 'undefined') module.exports = { GAME_COURT, TEST_COURT, TEST_SCALE, DEPTH_K, NET_BASE, perspectiveZone };
