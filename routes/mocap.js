@@ -124,7 +124,8 @@ function register(router, ctx) {
         // 7 front-left + 5 back-left (court zones), 1 front-right (the Soul Jam game angle)
         const fill = body.fillAngles === false ? [] : [7, 5, 1].filter((i) => !cutouts[i]);
         const filled = [];
-        if (fill.length && cutouts[0]) {
+        let fillError = null;
+        if (fill.length && cutouts[0]) try {
           const info = models.listModels().find((m) => m.id === body.model) || models.listModels().find((m) => m.available);
           if (info?.available) {
             const refs = [cutouts[0], cutouts[6] || cutouts[2], cutouts[4]].filter(Boolean);
@@ -152,6 +153,11 @@ function register(router, ctx) {
               filled.push(idx);
             }
           }
+        } catch (e) {
+          // Missing angles are optional — register the character with what the
+          // sheet provided (court/generation fall back to the front angle)
+          fillError = e.message;
+          console.warn('[mocap] angle fill failed, continuing:', e.message);
         }
 
         // Register (through the characters module so its cache + R2 backup stay in sync)
@@ -168,7 +174,7 @@ function register(router, ctx) {
         };
         if (Array.isArray(reg._deleted)) reg._deleted = reg._deleted.filter((n) => n !== name);
         await saveCharacters(reg);
-        patchJob(jobId, { status: 'done', result: { name, heightInches, pixelHeight, angles: Object.keys(cutouts).map(Number).concat(filled).sort((a, b) => a - b), files: written, seconds: +((Date.now() - t0) / 1000).toFixed(1) } });
+        patchJob(jobId, { status: 'done', result: { name, heightInches, pixelHeight, angles: Object.keys(cutouts).map(Number).concat(filled).sort((a, b) => a - b), files: written, fillError, seconds: +((Date.now() - t0) / 1000).toFixed(1) } });
       } catch (err) {
         console.error('[mocap] character-from-sheet failed:', err);
         patchJob(jobId, { status: 'error', error: err.message });

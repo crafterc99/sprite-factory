@@ -771,7 +771,7 @@ $('#ncCreate').onclick = async () => {
       name, heightInches: +$('#ncHeight').value, order: $('#ncOrder').value, imageBase64: ncData, model: $('#modelSel').value,
     }) });
     const out = await pollJob(jobId, (p) => { st.textContent = p.msg || 'Working…'; });
-    st.textContent = `✓ ${out.name} created — angles ${out.angles.join(', ')} in ${out.seconds}s`;
+    st.textContent = `✓ ${out.name} created — angles ${out.angles.join(', ')} in ${out.seconds}s` + (out.fillError ? ` (extra angles skipped: ${out.fillError.slice(0, 120)})` : '');
     await loadCharacters();
     $(`#charGrid .char[data-name="${out.name}"]`)?.click();
   } catch (e) { st.textContent = e.message; st.classList.add('err'); }
