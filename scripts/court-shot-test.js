@@ -82,6 +82,18 @@ fs.mkdirSync(OUT, { recursive: true });
     await page.waitForTimeout(1400);
     const idle = await page.evaluate(() => ({ anim: GM.player.currentAnim, key: GM._loadedAnimKey, mirrored: !GM.physics.facingRight, zone: getZoneForPos(TESTING.charX, TESTING.charY) }));
     await court.screenshot({ path: path.join(OUT, `z${sp.zone}${sp.flip ? 'f' : ''}-0-idle.png`) });
+    // Walk sideways (away from the hoop's side, then back): still facing the hoop?
+    const walk = [];
+    for (const k of ['KeyD', 'KeyA']) {
+      await page.keyboard.down(k);
+      for (let t = 0; t < 4; t++) {
+        await page.waitForTimeout(90);
+        walk.push(await page.evaluate(() => { const z = getZoneForPos(TESTING.charX, TESTING.charY); return { mirrored: !GM.physics.facingRight, flip: !!z?.flip, anim: GM.player.currentAnim }; }));
+      }
+      await page.keyboard.up(k);
+    }
+    await page.evaluate(({ x, y }) => { GM.physics.x = x; GM.physics.y = y; GM.physics.vx = 0; GM.physics.vy = 0; }, sp);
+    await page.waitForTimeout(700);
     // Left stick: a short push straight at the hoop (keeps the zone angle),
     // or away from it behind the hoop line; then HOLD Square
     const keys = await page.evaluate((flip) => {
@@ -128,9 +140,10 @@ fs.mkdirSync(OUT, { recursive: true });
       meta: shot.find((q) => q.meta)?.meta ?? null, backToIdle: samples[samples.length - 1].anim,
     };
     r.shotZone = start.zone?.id; r.shotZoneFlip = !!start.zone?.flip;
+    r.walkFacesHoop = walk.filter((w) => w.anim === 'idle-dribble').every((w) => w.mirrored === w.flip);
     r.pass = r.idle.key === `idle-dribble_z${sp.zone}_right` && r.idle.mirrored === sp.flip
       && r.shotKey === `stepback-jumpshot_z${r.shotZone}_right` && r.shotMirrored === r.shotZoneFlip
-      && r.movedAwayPx > 5 && r.ballLaunched && r.backToIdle === 'idle-dribble';
+      && r.movedAwayPx > 5 && r.ballLaunched && r.backToIdle === 'idle-dribble' && r.walkFacesHoop;
     report.spots.push(r);
     console.log(JSON.stringify(r));
   }

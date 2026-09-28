@@ -2859,3 +2859,10 @@ None. All terminals are clear. Human decision required to begin next phase.
   - /api/health: storage writeOk round-trip probe.
 - Validation: npm test 10/10 (mock pipeline: all 16 frames meshed from a flipped+translated PLY, mesh guide in previews + generation, enrich idempotent). Real motion (IMG_6660) with synthetic scans: align err 1.5–2 cm, 18 full renders 1.5 s, torso binding leak 35/126 → 0/126. Hand crops verified on real frames.
 - Assumptions: real .ply frame = keypoint frame up to a flip + translation (auto-detected; otherwise falls back to mannequin with meshError). Not yet run on a real fal mesh.
+
+## MOCAP-6 — Step-back jumper through the pipeline, zones 1–5, on the test court
+- Status: NEEDS_REVIEW (live run in progress at time of writing; see below)
+- Files changed: lib/mocap/motion-builder.js, lib/mocap/pipeline.js, lib/mocap/mannequin.js, lib/mocap/mesh-guide.js, index-v2.html, engine/AnimationPlayer.js, scripts/court-shot-test.js, tests/mocap.test.js, docs/MOCAP.md
+- What changed: shot release detection (+ hop frame) and genmeta.shot; jump-safe floor snap; held ball on the measured side of the palm; stepback-jumpshot slot with move + hold-Square trigger, frame-synced step-back burst, ball flight to the rim; court sprite mirroring (was never applied); mesh colour fixes.
+- Validation: npm test 11/11; court-shot-test on a local studio with stand-in strips: 6/6 spots pass (zones 1–5 + mirrored spot), no page errors. Live: clip analysed (39 frames, 39 meshes, $1.17), character rebuilt from the sheet (7 angles), release detected at frame 23 (hop at 16).
+- Assumptions: right-hand shooter only (left-hand ball hand falls back to the right-hand strip); idle dribble taken from the dribble before the step back (0–0.93 s) of the same clip.

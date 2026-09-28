@@ -8845,7 +8845,9 @@ function gmTick(timestamp) {
   const faceZoneId = GM._facingZoneId ?? 1;
   // Idle + actions: the ball handler faces the hoop — mirror when the hoop is
   // to their right (locomotion keeps the stick facing above)
-  if (!GM_LOCOMOTION_SLOTS.has(GM.player.currentAnim ?? '') && !(facing && GM.player.state !== 'ACTION')) {
+  // (A character without jog/run strips keeps its idle dribble while moving —
+  // it still faces the hoop, never the stick direction.)
+  if (!GM_LOCOMOTION_SLOTS.has(GM.player.currentAnim ?? '')) {
     const pz = getZoneForPos(TESTING.charX, TESTING.charY);
     if (pz && typeof pz.flip === 'boolean') GM.physics.facingRight = !pz.flip;
   }

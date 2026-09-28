@@ -62,3 +62,17 @@ Re-cleaning (smoothing, trim, foot lock) re-runs from `raw.json` for free.
 
 ## Tests
 `npm test` — motion recovery, auth gate and the full HTTP pipeline in mock mode.
+
+## Shots (jump shots, step-back jumpers)
+- The motion builder marks a **release** when the ball leaves the last hand upward and is
+  never caught again (`report.shotRelease`): no ball is drawn from the release frame on.
+  A hop before the jump (the step-back) is recorded as `stepFrame`.
+- Floor snap keeps hops/jumps: the floor reference is the running minimum of the lowest
+  foot over ±0.5 s, so slow depth drift is removed but a 30 cm jump is not.
+- Each variant's `-genmeta.json` carries `shot: { releaseStripFrame, stepStripFrame,
+  releasePx {x,y} (180 px frame, feet at 170), ballRadiusPx, hand }`.
+- Test court (Game Mode): move the left stick, then **hold Square** (keyboard: hold `I`)
+  → `stepback-jumpshot` for the zone you stand in, facing the hoop (mirrored when the
+  hoop is to your right). The step-back burst (away from the hoop) fires on the hop
+  frame; the ball leaves the hand on the release frame and arcs into the rim.
+  `node scripts/court-shot-test.js --base <url> --char <name>` checks every zone.
