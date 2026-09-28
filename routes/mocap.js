@@ -18,6 +18,13 @@
  *   GET  /api/mocap/results                      ?motionId
  *   GET  /api/mocap/result/:id
  *   POST /api/mocap/regen-frame                  { resultId, animName, frameIndex, customPrompt?, model? }
+ *
+ *   3D animation set (court3d.html → engine3d/anim3d.mjs)
+ *   GET  /api/mocap3d/library                    motions + game role/settings/quality, roles, characters
+ *   GET  /api/mocap3d/clip/:id                   built game clip (gz JSON, ETag)
+ *   PUT  /api/mocap3d/clip/:id                   { role, type, trimStart, trimEnd, warp, entryMax, mirror, notes } → rebuilt
+ *   POST /api/mocap3d/clip/:id/build             force a rebuild
+ *   GET  /api/mocap3d/rig/:char                  character rig (gz JSON, ETag) ?motion&frame
  */
 'use strict';
 
@@ -230,6 +237,49 @@ function register(router, ctx) {
     } catch (err) {
       json(res, { error: err.message }, 400);
     }
+  });
+
+  // ── 3D animation set (skeletal runtime: engine3d/anim3d.mjs) ──────────
+  const GC = require('../lib/mocap/game-clips');
+  const RIG = require('../lib/mocap/character-rig');
+  // gzipped JSON with an ETag (304 when the browser already has it)
+  const sendGz = (req, res, { gz, etag, json: j }) => {
+    const inm = String(req.headers['if-none-match'] || '').split(/\s*,\s*/).map((t) => t.replace(/^W\//, ''));
+    if (etag && inm.includes(etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'private, no-cache' }); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', 'Content-Length': gz.length, ETag: etag, 'Cache-Control': 'private, no-cache', 'X-Raw-Length': j ? Buffer.byteLength(JSON.stringify(j)) : '' });
+    res.end(gz);
+  };
+  // Every motion with its game role/settings + build quality; the roles table; characters
+  router.get('/api/mocap3d/library', async (req, res) => {
+    try {
+      json(res, { clips: await GC.library(), court: await GC.clipsForCourt(), roles: GC.ROLES, characters: RIG.listCharacters() });
+    } catch (err) { json(res, { error: err.message }, 500); }
+  });
+  router.get('/api/mocap3d/characters', (req, res) => json(res, { characters: RIG.listCharacters() }));
+  // Built game clip (gz JSON, ETag)
+  router.get('/api/mocap3d/clip/:id', async (req, res, params) => {
+    try { sendGz(req, res, await GC.build(params.id)); }
+    catch (err) { json(res, { error: err.message }, 400); }
+  });
+  // Save game settings { role, type, trimStart, trimEnd, warp, entryMax, mirror, notes } → rebuilt summary
+  router.put('/api/mocap3d/clip/:id', async (req, res, params) => {
+    const body = await parseBody(req);
+    try {
+      const game = await GC.saveSettings(params.id, body || {});
+      const { json: j } = await GC.build(params.id, { force: true });
+      json(res, { success: true, game, built: { frameCount: j.frameCount, fps: j.fps, loop: j.loop, stats: j.stats, quality: j.quality, shot: !!j.shot, entry: j.entry } });
+    } catch (err) { json(res, { error: err.message }, 400); }
+  });
+  router.post('/api/mocap3d/clip/:id/build', async (req, res, params) => {
+    try {
+      const { json: j } = await GC.build(params.id, { force: true });
+      json(res, { success: true, game: j.game, built: { frameCount: j.frameCount, fps: j.fps, loop: j.loop, stats: j.stats, quality: j.quality, shot: !!j.shot, entry: j.entry } });
+    } catch (err) { json(res, { error: err.message }, 400); }
+  });
+  // Character rig (skinned mesh + skeleton), ?motion=&frame= to build from another scan
+  router.get('/api/mocap3d/rig/:char', async (req, res, params, query) => {
+    try { sendGz(req, res, await RIG.buildRig(params.char, { motionId: query.motion || undefined, frame: query.frame || undefined })); }
+    catch (err) { json(res, { error: err.message }, 400); }
   });
 
   router.get('/api/mocap/motions', async (req, res) => {

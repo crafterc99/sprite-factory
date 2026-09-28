@@ -15,7 +15,7 @@ const COOKIE = 'sf_auth';
 const MAX_AGE = 30 * 24 * 3600;
 // /vendor/three.module.min.js: public library (MIT) — some WebKit versions
 // fetch module scripts without cookies, so it must not sit behind the gate
-const OPEN_PATHS = new Set(['/login', '/api/health', '/favicon.ico', '/vendor/three.module.min.js']);
+const OPEN_PATHS = new Set(['/login', '/api/health', '/favicon.ico', '/vendor/three.module.min.js', '/js/anim3d.mjs']);
 const attempts = new Map(); // ip → { n, t }
 
 const password = () => process.env.APP_PASSWORD || '';

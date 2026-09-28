@@ -96,7 +96,9 @@ function serveStatic(res, filePath, contentType) {
 
     // Conditional GET — repeat visits get a tiny 304 instead of re-downloading
     // the (large) body when nothing changed
-    if (res.req?.headers?.['if-none-match'] === etag) {
+    // (Railway's edge weakens ETags to W/"…", and a list may be sent)
+    const inm = String(res.req?.headers?.['if-none-match'] || '').split(/\s*,\s*/).map((t) => t.replace(/^W\//, ''));
+    if (inm.includes(etag)) {
       res.writeHead(304, { 'ETag': etag });
       return res.end();
     }
@@ -787,6 +789,13 @@ async function handler(req, res) {
   if (pathname === '/vendor/three.module.min.js') {
     // three.js r160, self-hosted: no CDN, no import map (older iOS lacks them)
     return serveStatic(res, path.join(__dirname, 'vendor', 'three.module.min.js'), 'text/javascript');
+  }
+  if (pathname === '/js/anim3d.mjs') {
+    // the engine-agnostic animation runtime (also imported by the Node tests)
+    return serveStatic(res, path.join(__dirname, 'engine3d', 'anim3d.mjs'), 'text/javascript');
+  }
+  if (pathname === '/recording' || pathname === '/recording/' || pathname === '/recording.html') {
+    return serveStatic(res, path.join(__dirname, 'recording.html'), 'text/html');
   }
   if (pathname === '/court3d' || pathname === '/court3d/' || pathname === '/court3d.html') {
     return serveStatic(res, path.join(__dirname, 'court3d.html'), 'text/html');
