@@ -522,6 +522,7 @@ async function loadClip(id) { loadMsg('baking 3D animation for ' + id + '… (fi
     $('loading').style.display = 'none';
     $('state').textContent = 'IDLE';
     window.__court3d = S; // for automated checks
+    window.__ballProbe = () => ball.position.y;
   } catch (e) {
     $('err').textContent = e.message;
     $('state').textContent = 'error';
