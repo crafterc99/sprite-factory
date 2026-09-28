@@ -101,9 +101,10 @@ fs.mkdirSync(OUT, { recursive: true });
     await page.waitForTimeout(60);
   }
   const shotSlide = await page.evaluate(() => window.__court3d.player.metrics.slideMaxCm);
+  const swishes = await page.evaluate(() => window.__court3d.swishes || 0);
   rep.shot = {
     started: seq.some((x) => x.mode === 'action'), role: (seq.find((x) => x.role) || {}).role || null,
-    released: seq.some((x) => x.free), swish: seq.some((x) => x.label === 'SWISH'),
+    released: seq.some((x) => x.free), swish: swishes > 0 || seq.some((x) => x.label === 'SWISH'),
     backToDribble: seq[seq.length - 1]?.mode === 'loco', slideCm: +shotSlide.toFixed(2),
   };
   await page.screenshot({ path: path.join(OUT, '4-after.png') });

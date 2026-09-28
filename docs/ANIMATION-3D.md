@@ -1,0 +1,100 @@
+# 3D animation set — pipeline, formats, runtime
+
+Phone video → SAM 3D Body → **game clips** (planted feet, root motion, loops) → **character rigs** (any height/proportions) → the **runtime** (`engine3d/anim3d.mjs`) that blends them on the court (`/court3d`). How to film is in [RECORDING.md](RECORDING.md).
+
+```
+video ─/mocap─▶ raw.json (SAM 3D Body per frame) ─motion-builder─▶ world motion
+                                                    │ (bad frames dropped, floor snap)
+                                                    ▼
+                             clip-builder ─▶ game clip (gameclip-v2) ─┐
+scan (one mesh frame) ─character-rig─▶ rig (skinned mesh + bones) ───┤
+                                                                      ▼
+                                  engine3d/anim3d.mjs (Player) ─▶ court3d.html (three.js)
+```
+
+## 1. Game clips — `lib/mocap/clip-builder.js`
+
+One camera measures body-relative pose well and absolute travel badly (depth drifts by metres). Clips therefore take travel from the feet:
+
+| Step | What | Why |
+|---|---|---|
+| contacts | per foot: lowest heel/toe near the floor **and** the grounded point nearly still; hysteresis, min length, gap fill; speed gate adapts to the clip's own noise | planted-foot detection that works on noisy side-filmed clips |
+| root | floor point under the hips + facing (hips + shoulders), smoothed; joints re-expressed in **root space** (origin, facing +Z, left = +X) | clips play anywhere, any direction |
+| root motion | foot-anchored odometry: a planted foot does not move in the world, so the root moves by minus its motion relative to the body; flight keeps take-off velocity | travel matches the feet, camera depth not trusted |
+| pinning | each contact pinned to one floor spot, two-bone IK (fixed leg lengths, soft near full extension), body lowered when out of reach | no slide baked into the clip |
+| loops | best window by seam acceleration (pose + velocity continuity), contact and ball phase; dribble loops must hold a whole ball cycle; seam error spread across the cycle | seamless loops |
+| warps | intended displacement over a frame window, put on airborne/swing frames only | travel the camera cannot see (a step-back filmed toward the lens) |
+| QC flags | plain-language warnings: low fps, depth travel, noisy feet, no contacts, slide, loop seam, no start hold | tells you how to re-record |
+
+**Format `gameclip-v2`** (JSON, arrays base64 Float32):
+
+| Field | Content |
+|---|---|
+| `fps, frameCount, type ('loop'\|'action'), role` | |
+| `joints` | F × 70 × 3 MHR70 keypoints, root space, metres |
+| `rootMotion` | F × 3: dx, dz (root frame of frame i), dyaw to the next frame |
+| `contacts.{left,right}` | `on` 0/1 and smooth `weight` per frame |
+| `markers.{leftPlant,rightPlant}` | foot-plant frames (gait phase sync) |
+| `ball[i]` | `{ p (root space), held, hand, off (held: offset from the palm) }` |
+| `shot` | `releaseFrame, lastHeldFrame, stepFrame, hand, point` |
+| `entry` | `{min, max}` — an action may start anywhere in this window |
+| `loop` | `{from, to, poseErrCm}` |
+| `stats` | `speed` (m/s), `speedHipsPerS`, `hipHeight`, `dirDeg` (0 fwd, +90 left), `turnDegPerS`, `durationS` |
+| `boneLen, parent` | per-joint bone lengths along `skeleton.PARENT` (retargeting) |
+| `quality` | slide before/after (cm), noise, drift removed, pelvis drop, warps, `flags` |
+
+Served by `lib/mocap/game-clips.js`: built on demand, cached in memory, on disk and in the cloud (`gameclip-v2.json.gz`). Game settings per motion live in `meta.game` (`role, type, trimStart, trimEnd, warp, entryMax, mirror, notes`) — set in **/mocap → 3D game clip**.
+
+## 2. Roles — `lib/mocap/game-roles.js`
+
+`idle` (hub loop, required) · `loco-fwd / loco-back / loco-left / loco-right / loco-sprint` (loops, used as a direction blend space) · `shot-stepback / shot-jumper` · `move-crossover (○) / move-spin (△) / move-hesi (✕) / move-btl (R1)`. Not played yet: `move-btb, start-fwd, stop, layup`. Unassigned motions get a guess from the naming convention (`<family>-<action>-…`).
+
+## 3. Character rigs — `lib/mocap/character-rig.js`
+
+One scan frame (the one with the limbs clearest of the body) is bound with the mesh guide's surface skinning: every vertex follows two of 47 bone segments. That is exactly linear-blend skinning:
+
+`v = Σ w · M_seg(pose) · M_seg(rest)⁻¹ · v_rest`, with `M_seg = [u·L | v | w | a]` built from joint positions (`segMatrices` in the runtime = `segFrame` in `mesh-guide.js`; tested to 0.2 mm).
+
+Presets: `ankh` 6'0", `big` 6'11" (legs ×1.07, arms ×1.08), `guard` 5'9". A preset = a scan + a height + bone-group multipliers + an outfit palette. Add one to `CHARACTERS`; any motion with a 3D body mesh can be the scan (`/api/mocap3d/rig/<id>?motion=<motionId>&frame=<file>`).
+
+**Format `rig v3`**: `verts` (Float32 rest positions), `faces` (Uint16/32), `skin` (Uint8 × 2 segment ids), `weight` (Uint8 first-segment weight), `colors` (RGB), `restJoints` (70 × 3), `boneLen`, `parent`, `legLen`, `soleOffset` (sole below the heel/toe keypoints).
+
+## 4. Runtime — `engine3d/anim3d.mjs`
+
+No renderer inside; `court3d.html` draws. Runs in Node too (`tests/anim3d.test.js` measures world foot slide).
+
+```js
+import * as A from '/js/anim3d.mjs';
+const rig = A.prepareRig(rigJson);
+const lib = A.buildLibrary([idleClip, stepbackClip, ...], rig); // role → clip (+ mirrored copies)
+const player = new A.Player(rig, lib, { x, z, yaw });
+// every frame
+const r = player.update(dt, { move: [x, z] /* world dir × 0..1 */, sprint, face: [hoopX, hoopZ], trigger: 'shot-stepback' | null });
+A.boneMatrices(r.pose, rig.restInv, boneMats);       // 47 × mat4 for GPU skinning
+// r.ball = [x,y,z] | null · r.events: plant / lift / action / release / actionEnd / missing
+```
+
+Per frame:
+1. **Base pose** in capsule space: idle loop + procedural feet, or recorded loops (direction blend, phase-synced on foot plants, playback = speed / clip speed, orientation-warped legs), or an action (root motion, best-matching entry frame, shots warped to release square to the target).
+2. **Retarget**: clip directions × rig bone lengths; root motion and pelvis scale with leg length.
+3. **Inertialization** on every source switch (offset + velocity, spring half-life ≈ 0.09 s).
+4. **Feet**: stance feet locked in the world (planner or clip contacts), toe-off heel lift, body lowered only if still out of reach, two-bone IK (soft near extension).
+5. **Skinning** matrices.
+
+The **foot planner** (used for movement until loco loops are recorded): predictive landing spots from the velocity (re-aimed every frame), reach-limited leads, running stance narrows with speed, quicker shuffle cadence sideways, slides/backpedals slower than forward, early steps before a foot leaves the leg's reach, corrective steps after turns and moves. Planted-foot world slide measured 0.00 cm in all directions at 12 and 60 fps.
+
+Tuning (`DEFAULT_OPTS`): `jogSpeed 3.1`, `sprintSpeed 5.0` m/s (at 0.86 m legs; scale with the rig), `accelHalflife 0.11`, `turnHalflife 0.07`, `blendHalflife 0.09`, `moveBlendHalflife 0.06`, `unlockRadius 0.3`.
+
+**Porting** (Godot/Unity/Unreal): the clip + rig JSON are engine-neutral; port `anim3d.mjs` (≈1.2k lines, no dependencies) or call it from a JS runtime, and feed the 47 bone matrices to the engine's skinned mesh (bind matrix identity, bone inverses = `rig.restInv`).
+
+## 5. API
+
+| Route | |
+|---|---|
+| `GET /api/mocap3d/library` | motions + game settings + current build quality, the court's clip per role, roles, characters |
+| `GET /api/mocap3d/clip/:id` | built game clip (gz JSON, ETag) |
+| `PUT /api/mocap3d/clip/:id` | save game settings → rebuilt summary |
+| `POST /api/mocap3d/clip/:id/build` | force a rebuild |
+| `GET /api/mocap3d/rig/:char` | rig (gz JSON, ETag), `?motion&frame` for another scan |
+| `GET /js/anim3d.mjs` | the runtime module |
+| `/court3d` · `/recording` | sandbox · recording guide (`/court3d?focus=<motionId>&char=big`) |

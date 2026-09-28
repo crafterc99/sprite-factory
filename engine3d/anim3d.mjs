@@ -747,6 +747,17 @@ export class Player {
     return [this.pos[0] + this.vel[0] * ahead + d[0], gy(B, k) - this.pelvisDrop, this.pos[1] + this.vel[1] * ahead + d[1]];
   }
 
+  /** Switch the dribble hand (mirrored loops); blended like any other switch. */
+  setHand(hand) {
+    if (hand === this.hand || (hand !== 'left' && hand !== 'right')) return false;
+    if (!this.lib['idle:mirror'] && this.idleClip.hand !== hand) return false;
+    this.hand = hand;
+    this.stance = this.idle().feet;
+    this.forceBlend = true;          // inertialize on the next update
+    this.prevBaseSource = null;      // and don't read a velocity across the mirror
+    return true;
+  }
+
   /** The page gives the ball back (after a shot lands). */
   giveBall() { this.hasBall = true; this.ballFree = false; }
 
@@ -761,11 +772,11 @@ export class Player {
     const prevSource = this.source;
     if (this.mode === 'loco') this.updateLoco(dt, inp); else this.updateAction(dt, inp);
     // ── inertialize on a source switch
-    if (!this.firstFrame && this.source !== prevSource && !this.skipBlend) {
+    if (!this.firstFrame && (this.source !== prevSource || this.forceBlend) && !this.skipBlend) {
       const vel = this.baseVel || this.prevBaseVel;
       this.inert.transition(this.out, this.outVel || this.prevBaseVel, this.base, vel, this.action?.blendHalflife || this.o.blendHalflife);
     }
-    this.skipBlend = false;
+    this.skipBlend = false; this.forceBlend = false;
     const prevOut = this.out.slice();
     this.out.set(this.base);
     this.inert.apply(this.out, dt);

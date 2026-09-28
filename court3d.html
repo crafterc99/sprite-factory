@@ -499,12 +499,17 @@ function step(now) {
   // ── Ball
   if (S.freeBall) {
     const fb = S.freeBall;
-    fb.t += dt;
-    fb.v.y -= G * dt;
-    fb.p.addScaledVector(fb.v, dt);
-    const hdist = Math.hypot(fb.p.x, fb.p.z);
-    if (!fb.through && fb.v.y < 0 && fb.p.y <= RIM_Y + 0.02 && hdist < RIM_R) { fb.through = true; fb.v.x *= 0.2; fb.v.z *= 0.2; fb.v.y *= 0.5; net.scale.set(0.9, 1.15, 0.9); S.swishAt = now; }
-    if (fb.p.y < BALL_R) { fb.p.y = BALL_R; fb.v.y = -fb.v.y * 0.62; fb.v.x *= 0.8; fb.v.z *= 0.8; fb.bounces++; }
+    // sub-stepped (a slow frame must not let the ball skip through the rim plane)
+    const n = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / n;
+    for (let q = 0; q < n; q++) {
+      fb.t += h;
+      const y0 = fb.p.y;
+      fb.v.y -= G * h;
+      fb.p.addScaledVector(fb.v, h);
+      // crossing the rim plane downward inside the ring → through the net
+      if (!fb.through && fb.v.y < 0 && y0 > RIM_Y && fb.p.y <= RIM_Y && Math.hypot(fb.p.x, fb.p.z) < RIM_R) { fb.through = true; fb.v.x *= 0.2; fb.v.z *= 0.2; fb.v.y *= 0.5; net.scale.set(0.9, 1.15, 0.9); S.swishAt = now; S.swishes = (S.swishes || 0) + 1; }
+      if (fb.p.y < BALL_R) { fb.p.y = BALL_R; fb.v.y = -fb.v.y * 0.62; fb.v.x *= 0.8; fb.v.z *= 0.8; fb.bounces++; }
+    }
     ball.position.copy(fb.p);
     ballSpin.set(fb.v.z, 0, -fb.v.x);
     if (fb.bounces >= 3 || fb.t > 4.5) { S.freeBall = null; P.giveBall(); }
@@ -518,7 +523,7 @@ function step(now) {
   net.scale.lerp(new THREE.Vector3(1, 1, 1), 1 - Math.exp(-dt * 5));
 
   // ── HUD
-  const label = S.swishAt && now - S.swishAt < 1200 ? 'SWISH'
+  const label = S.swishAt && now - S.swishAt < 1500 ? 'SWISH'
     : P.mode === 'action' ? (ROLE_NAMES[P.action?.role] || P.action?.role || 'MOVE').toUpperCase()
     : Math.hypot(P.vel[0], P.vel[1]) > 0.3 ? (P.source === 'clip-loco' ? 'DRIBBLE · clip' : 'DRIBBLE') : 'IDLE';
   setText($('state'), label);
@@ -544,9 +549,7 @@ function step(now) {
 
 function switchHand() {
   const p = S.player;
-  if (!p.lib['idle:mirror']) { toast('This idle has no mirrored copy.'); return; }
-  p.hand = p.hand === 'left' ? 'right' : 'left';
-  p.stance = p.idle().feet;
+  if (!p.setHand(p.hand === 'left' ? 'right' : 'left')) { toast('This idle has no mirrored copy.'); return; }
   $('handBtn').textContent = p.hand === 'left' ? 'L' : 'R';
 }
 $('handBtn').onclick = () => { if (S.player) switchHand(); };
