@@ -239,6 +239,7 @@ The game replays SAM 3D Body's own hand and finger rotations, so hands are as go
 - **Hands visible**: film from the side the ball hand is on, never with the hands hidden behind the body for long. For two-hand moves, film two takes from both sides.
 - **Start and end in a held stance** (1 s), move across the frame rather than toward the camera.
 - Check the result in `/court3d?replay=<motionId>`: the clip beside each source frame.
+- Why resolution matters so much: SAM 3D Body only runs its hand decoder when a hand is > 64 px in the image it gets. Hands in a 1080p full-body shot are ~40 px, so the analysis now sends a crop around the player enlarged ~2× (checked against a full-frame call on the first frame; `meta.zoomCheck`). Real pixels still beat enlargement: 4K keeps fingers sharp.
 
 ## 12 · Import, step by step
 

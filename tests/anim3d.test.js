@@ -441,3 +441,30 @@ test('capture layer: recorded clips replay the capture\'s own arm / hand / finge
   const got = mm(tr(Qm(mir, R.chest)), Qm(mir, R.JI.r_wrist));
   assert.ok(ang(got, expect) < 0.5, 'mirrored hand = reflected partner');
 });
+
+test('zoomed SAM 3D Body calls map back to the full frame exactly (2D, 3D direction, camera translation)', () => {
+  const Z = require('../lib/mocap/zoom');
+  const { poseAt } = require('../lib/mocap/mock');
+  const W = 1920, H = 1080, f = 1400;
+  // a body 3.5 m away, well off to the right and low in the frame (camera coords: y down)
+  const P = poseAt(0.3).P.map((p) => [p[0] - 0.1, -(p[1] - 0.9), p[2]]);   // root-relative, y down
+  const T = [1.1, 0.35, 3.5];
+  const proj = (p) => [f * (p[0] + T[0]) / (p[2] + T[2]) + W / 2, f * (p[1] + T[1]) / (p[2] + T[2]) + H / 2];
+  const kp2d = P.map(proj);
+  const xs = kp2d.map((q) => q[0]), ys = kp2d.map((q) => q[1]);
+  const crop = Z.cropFor([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], W, H);
+  assert.ok(crop.s > 1.5, `the player is enlarged (×${crop.s.toFixed(2)})`);
+  // what the model reports for the crop: it sees the person as if on its own optical axis
+  const ray = S.norm([(crop.ox + crop.outW / crop.s / 2 - W / 2) / f, (crop.oy + crop.outH / crop.s / 2 - H / 2) / f, 1]);
+  const Rinv = S.rotBetween(ray, [0, 0, 1]);
+  const body = {
+    kp2d: kp2d.map((q) => [(q[0] - crop.ox) * crop.s, (q[1] - crop.oy) * crop.s]),
+    kp3d: P.map((p) => S.mulMV(Rinv, p)), camT: S.mulMV(Rinv, T), focal: f * crop.s, bbox: null, mhr: null,
+  };
+  const out = Z.uncrop(body, crop, { W, H, focal: f });
+  const err2d = Math.max(...out.kp2d.map((q, k) => Math.hypot(q[0] - kp2d[k][0], q[1] - kp2d[k][1])));
+  const err3d = Math.max(...out.kp3d.map((p, k) => S.dist(p, P[k])));
+  assert.ok(err2d < 1e-6, `2D exact (${err2d})`);
+  assert.ok(err3d < 1e-6, `3D direction restored (${err3d})`);
+  assert.ok(S.dist(out.camT, T) < 0.01, `camera translation re-solved (${S.dist(out.camT, T).toFixed(4)} m)`);
+});
