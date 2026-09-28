@@ -2822,3 +2822,10 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Live timings (Railway, GPT Image 2.5 Sunburst): character from sheet 57s (+2 generated angles) · upload 0.4s · analyze 17 frames 50.6s ($0.51) · generate 36 frames (Z1+Z3 × both hands) 446.5s ($2.46) · save 0.6s · total 556s (~9m16s), $2.97. QC 36/36 pass.
 - Validation: npm test 4/4; court capture on live (zones 1 and 3) + local capture with the live strips after the court fix (no blank frames)
 - Blocker: Railway R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY missing → every redeploy wipes characters/motions/sprites; deploying these fixes would delete the ankh run
+
+## TASK-ADHOC-20260928C — Court/Testing audit + accurate pose reference + game deploy
+- Status: DONE (live verification run in progress at time of writing)
+- Findings (audit): zones were 4 hand-drawn horizontal bands unrelated to the hoop; zone 4/5 bands outside the physics bounds (y≤460) so Back was unreachable; OOB/CourtZones assumed a 640px canvas (court is 540); fallback court drew the hoop centre-top while the zone net anchor was top-left; court art was cover-cropped (game stretches); canvas CSS squashed sprites ~18% horizontally; deploy ignored studio slot saves (legacy {char}-{anim}.png + 4-frame contract default) so mocap/slot animations never reached the game; game art faces screen-right (¾ front) while the side-view mocap faces left.
+- Files changed: engine/GameCourt.js (new), engine/CourtZones.js, index-v2.html, server.js (bundled court), data/court-default.webp (Soul Jam court art), lib/game-deploy.js (new), routes/export.js, lib/mocap/{mannequin,pipeline,store}.js, routes/mocap.js, mocap.html, scripts/*, tests/mocap.test.js
+- Validation: npm test 6/6 (zones reachable + correct per quadrant, deploy resolver incl. per-frame mirroring, performer cut-outs recorded); local court capture with live ankh strips (16:9 css size, zone 3 side view facing hoop)
+- Assumptions: depth foreshortening 2.2 from the game court proportions; zone apex = game HOOP_X/HOOP_Y (what the game steers toward), not the painted rim
