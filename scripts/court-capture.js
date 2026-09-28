@@ -64,6 +64,7 @@ fs.mkdirSync(OUT, { recursive: true });
     pos: GM.physics ? [Math.round(GM.physics.x), Math.round(GM.physics.y)] : null,
     char: [Math.round(TESTING.charX), Math.round(TESTING.charY)], scale: TESTING.scale, pixelHeight: TESTING.pixelHeight,
     canvas: [document.getElementById('testingCourt').width, document.getElementById('testingCourt').height, TESTING._dpr],
+    cssSize: (() => { const r = document.getElementById('testingCourt').getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })(),
     selectedAnim: TESTING.selectedAnim, active: (() => { try { const a = getActiveStrip(); return a ? { src: a.img.src.slice(-60), w: a.img.naturalWidth, n: a.frameCount, zone: a.zone?.id } : null; } catch (e) { return 'err ' + e.message; } })(),
     charAnims: (GM.charAnims || []).map((a) => a.name + ':' + (a.zoneId ?? a.zone ?? '') + ':' + (a.startingHand ?? a.hand ?? '')).slice(0, 8), hasPlayer: !!GM.player,
     hd: (TESTING.hdFrames || []).map((i) => i.naturalWidth + 'x' + i.naturalHeight).slice(0, 3), frame: TESTING.currentFrame,

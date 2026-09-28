@@ -189,6 +189,10 @@ test('full pipeline: upload → analyze → render → generate → regen', asyn
   r = await req('GET', `/api/mocap/results?motionId=${motionId}`);
   assert.strictEqual(r.json.results.length, 1);
 
+  // Every analysed frame kept a real-pixel performer cut-out for the generator
+  r = await req('GET', `/api/mocap/motion/${motionId}/raw`);
+  assert.ok(r.json.frames.every((f) => f.cut), 'performer cut-outs recorded');
+
   // Re-clean the motion, then recompose from stored raws — no model calls
   r = await req('POST', '/api/mocap/recompose', { body: { resultId: result.id } });
   assert.strictEqual(r.status, 200, JSON.stringify(r.json));
@@ -228,4 +232,44 @@ test('studio image client routes to GPT Image when no Gemini key (green-flattene
     if (saved.o !== undefined) process.env.OPENAI_API_KEY = saved.o; else delete process.env.OPENAI_API_KEY;
     if (saved.m !== undefined) process.env.MOCAP_MOCK = saved.m;
   }
+});
+
+test('court perspective zones follow the hoop (game geometry)', () => {
+  const { perspectiveZone, TEST_COURT } = require('../engine/GameCourt');
+  const h = TEST_COURT.hoop;
+  assert.deepStrictEqual([TEST_COURT.width, TEST_COURT.height], [960, 540]);
+  assert.strictEqual(perspectiveZone(h.x + 400, h.y).id, 3);           // beside the hoop → side view
+  assert.strictEqual(perspectiveZone(h.x + 400, h.y).flip, false);     // hoop on the left → faces left
+  assert.strictEqual(perspectiveZone(h.x, h.y + 300).id, 5);           // straight below → back to camera
+  assert.strictEqual(perspectiveZone(h.x + 300, h.y + 300).id, 4);     // below-right → back left
+  assert.strictEqual(perspectiveZone(h.x + 100, h.y - 45).id, 2);      // above-right → front left
+  assert.strictEqual(perspectiveZone(h.x - 60, h.y + 5).flip, true);   // behind the hoop → mirrored
+  // Every zone is reachable inside the hardwood
+  const seen = new Set();
+  const b = TEST_COURT.bounds;
+  for (let x = b.left; x <= b.right; x += 8) for (let y = b.top; y <= b.bottom; y += 8) seen.add(perspectiveZone(x, y).id);
+  assert.deepStrictEqual([...seen].sort(), [1, 2, 3, 4, 5]);
+});
+
+test('game deploy resolver: game angle first, mirrored side views keep frame order', async () => {
+  const { resolveGameStrip, materialize } = require('../lib/game-deploy');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-deploy-'));
+  // 3-frame strip: frame i has a mark at x = 10 + i*20 (left part of each cell)
+  const cells = [0, 1, 2].map((i) => ({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect x="${10 + i * 20}" y="20" width="10" height="100" fill="#f00"/></svg>`), left: i * 180, top: 0 }));
+  await sharp({ create: { width: 540, height: 180, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite(cells).png().toFile(path.join(dir, 'c-side.png'));
+  fs.copyFileSync(path.join(dir, 'c-side.png'), path.join(dir, 'c-game.png'));
+  const slotDef = { sfAnim: 'crossover', fps: 13 };
+  const saved = { cross_z3_left: { spriteUrl: '/assets/c-side.png', frameCount: 3, fps: 6 } };
+  let r = resolveGameStrip({ assetsDir: dir, charId: 'c', sjSlot: 'crossover', slotDef, saved });
+  assert.deepStrictEqual([r.source, r.mirror, r.frames, r.fps], ['side-mirrored', true, 3, 6]);
+  await materialize(r, path.join(dir, 'out.png'));
+  for (let i = 0; i < 3; i++) {
+    const { data } = await sharp(path.join(dir, 'out.png')).extract({ left: i * 180, top: 0, width: 180, height: 180 }).raw().toBuffer({ resolveWithObject: true });
+    let x0 = 999; for (let x = 0; x < 180; x++) if (data[(60 * 180 + x) * 4 + 3] > 0) { x0 = x; break; }
+    assert.strictEqual(x0, 180 - (10 + i * 20) - 10, `frame ${i} mirrored in place`);
+  }
+  saved.cross_game_right = { spriteUrl: '/assets/c-game.png', frameCount: 3, fps: 6 };
+  r = resolveGameStrip({ assetsDir: dir, charId: 'c', sjSlot: 'crossover', slotDef, saved });
+  assert.deepStrictEqual([r.source, r.mirror], ['game-angle', false]);
+  fs.rmSync(dir, { recursive: true, force: true });
 });

@@ -84,12 +84,13 @@ async function job(jobId, label) {
   const saved = await step('save to slot', async () => {
     const keys = [];
     for (const v of result.variants) {
-      if (!ZL[v.view]) continue;
-      const animId = `${args.slot || 'cross'}_z${v.view}_${v.hand}`;
+      if (!ZL[v.view] && v.view !== 6) continue;
+      const animId = v.view === 6 ? `${args.slot || 'cross'}_game_${v.hand}` : `${args.slot || 'cross'}_z${v.view}_${v.hand}`;
+      if (v.view === 6) ZL[6] = ['Front Right', 1];
       await call('POST', `/api/character/${encodeURIComponent(args.name)}/save-animation`, {
         animId, animName: `${args.slot || 'cross'} — ${ZL[v.view][0]} (${v.hand})`, spriteUrl: v.spriteUrl.split('?')[0],
         fps: result.fps, frameCount: v.frameCount, angle: ZL[v.view][0], angleIndex: ZL[v.view][1],
-        slotId: args.slot || 'cross', zoneId: v.view, startingHand: v.hand,
+        slotId: args.slot || 'cross', zoneId: v.view === 6 ? null : v.view, startingHand: v.hand,
       });
       keys.push(animId);
     }

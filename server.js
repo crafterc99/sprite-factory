@@ -696,6 +696,10 @@ async function handler(req, res) {
         return res.end(buf);
       }
     }
+    // Bundled defaults (the Soul Jam court art) so the Testing court matches
+    // the game even when storage has nothing
+    const BUNDLED = { 'court.webp': path.join(__dirname, 'data/court-default.webp') };
+    if (BUNDLED[file] && fs.existsSync(BUNDLED[file])) return serveStatic(res, BUNDLED[file], 'image/webp');
     res.writeHead(404); return res.end('Not found');
   }
 

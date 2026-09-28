@@ -2,7 +2,7 @@
 /**
  * CourtZones.js — 9-region spatial court grid + perspective angle helpers
  *
- * Position zones: 3×3 grid over the 960×640 gameplay canvas
+ * Position zones: 3×3 grid over the 960×540 gameplay canvas
  *   upper-left  | top-key     | upper-right
  *   left-wing   | arc         | right-wing
  *   lower-left  | paint       | lower-right
@@ -13,7 +13,7 @@
  */
 
 const CANVAS_W = 960;
-const CANVAS_H = 640;
+const CANVAS_H = 540; // Testing canvas is 960×540 (0.75 × the 1280×720 game) — was 640
 
 // Column / row thresholds (pixels)
 const COL1 = CANVAS_W * 0.33; // ~317

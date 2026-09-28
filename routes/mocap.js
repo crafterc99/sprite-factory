@@ -121,16 +121,17 @@ function register(router, ctx) {
         }
 
         // Missing 45° game angles (Z2 front-left = 7, Z4 back-left = 5)
-        const fill = body.fillAngles === false ? [] : [7, 5].filter((i) => !cutouts[i]);
+        // 7 front-left + 5 back-left (court zones), 1 front-right (the Soul Jam game angle)
+        const fill = body.fillAngles === false ? [] : [7, 5, 1].filter((i) => !cutouts[i]);
         const filled = [];
         if (fill.length && cutouts[0]) {
           const info = models.listModels().find((m) => m.id === body.model) || models.listModels().find((m) => m.available);
           if (info?.available) {
             const refs = [cutouts[0], cutouts[6] || cutouts[2], cutouts[4]].filter(Boolean);
-            const desc = { 7: 'a three-quarter FRONT-LEFT view: body turned 45° so the character faces between the viewer and the left edge of the image (we see the face and chest, and their right side)', 5: 'a three-quarter BACK-LEFT view: body turned so the character faces away from the viewer and toward the left edge of the image (we see the back of the head and back, and a little of their right side)' };
+            const desc = { 1: 'a three-quarter FRONT-RIGHT view: body turned 45° so the character faces between the viewer and the RIGHT edge of the image (we see the face and chest, and their left side)', 7: 'a three-quarter FRONT-LEFT view: body turned 45° so the character faces between the viewer and the left edge of the image (we see the face and chest, and their right side)', 5: 'a three-quarter BACK-LEFT view: body turned so the character faces away from the viewer and toward the left edge of the image (we see the back of the head and back, and a little of their right side)' };
             let k = 0;
             for (const idx of fill) {
-              patchJob(jobId, { progress: { msg: `Generating ${idx === 7 ? 'front-left' : 'back-left'} angle…`, done: ++k, total: fill.length + 1 } });
+              patchJob(jobId, { progress: { msg: `Generating ${({ 7: 'front-left', 5: 'back-left', 1: 'front-right (game)' })[idx]} angle…`, done: ++k, total: fill.length + 1 } });
               const prompt = [
                 'These images are a character turnaround of ONE character: Image 1 front view, Image 2 side view, Image 3 back view.',
                 `Draw this exact same character standing in the same relaxed neutral pose from ${desc[idx]}.`,

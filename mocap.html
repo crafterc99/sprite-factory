@@ -307,6 +307,8 @@ const SLOTS = [
   ['jumpshot', 'Jump Shot'],
 ];
 const ZONES = { 1: { label: 'Front', angleIdx: 0 }, 2: { label: 'Front Left', angleIdx: 7 }, 3: { label: 'Left', angleIdx: 6 }, 4: { label: 'Back Left', angleIdx: 5 }, 5: { label: 'Back', angleIdx: 4 } };
+// View 6 = Front Right: the angle Soul Jam itself plays (native art faces right, the game mirrors it)
+const GAME_VIEW = { id: 6, label: 'Game angle (Front Right)', angleIdx: 1 };
 
 const ST = {
   sessionId: null, file: null, duration: 0, motionId: null, motion: null, meta: null,
@@ -583,9 +585,12 @@ async function loadCharacters() {
 
 function renderViewPills() {
   const has = new Set(ST.character?.angles || []);
-  $('#viewPills').innerHTML = Object.entries(ZONES).map(([v, z]) => `
+  $('#viewPills').innerHTML = `
+    <label class="pill" title="The angle the Soul Jam game plays — deploys without mirroring">
+      <input type="checkbox" value="6" checked> 🎮 ${GAME_VIEW.label}${ST.character && !has.has(1) ? ' ⚠' : ''}
+    </label>` + Object.entries(ZONES).map(([v, z]) => `
     <label class="pill" title="${has.has(z.angleIdx) ? 'uses this angle\'s body reference' : 'no body reference for this angle — falls back to Front'}">
-      <input type="checkbox" value="${v}" ${v === '1' ? 'checked' : ''}> Z${v} ${z.label}${ST.character && !has.has(z.angleIdx) ? ' ⚠' : ''}
+      <input type="checkbox" value="${v}" ${v === '3' ? 'checked' : ''}> Z${v} ${z.label}${ST.character && !has.has(z.angleIdx) ? ' ⚠' : ''}
     </label>`).join('');
   $$('#viewPills input').forEach((i) => i.onchange = refreshEstimate);
 }
@@ -673,7 +678,7 @@ async function showResult(id) {
       </h3>
       <div class="vwrap">
         <div><canvas class="gameview" width="180" height="180"></canvas>
-          <div class="btns" style="margin-top:8px"><button class="primary small" data-save="${vi}" ${v.view > 5 ? 'disabled' : ''}>Save to slot</button>
+          <div class="btns" style="margin-top:8px"><button class="primary small" data-save="${vi}" ${v.view > 6 ? 'disabled' : ''}>Save to slot</button>
           <a class="chip" href="${esc(v.spriteUrl)}" target="_blank" style="align-self:center">strip ↗</a></div></div>
         <div class="frames">${v.frames.map((f, fi) => `
           <div class="fr ${f.pass ? 'ok' : 'bad'}" data-vi="${vi}" data-fi="${fi}"><img loading="lazy" src="${esc(v.frameUrls[fi])}?v=${Date.now().toString(36)}"><span class="s">${f.score}</span></div>`).join('')}</div>
@@ -733,15 +738,17 @@ function openSave(vi) {
 $('#sdSave').onclick = async () => {
   const v = ST.result.variants[saveCtx];
   const slotId = $('#sdSlot').value, slot = SLOTS.find((s) => s[0] === slotId);
-  const zone = ZONES[v.view];
+  const isGame = v.view === 6;
+  const zone = isGame ? GAME_VIEW : ZONES[v.view];
+  const animId = isGame ? `${slotId}_game_${v.hand}` : `${slotId}_z${v.view}_${v.hand}`;
   const st = $('#sdStatus');
   try {
     await api(`/api/character/${encodeURIComponent(ST.result.charName)}/save-animation`, { method: 'POST', body: JSON.stringify({
-      animId: `${slotId}_z${v.view}_${v.hand}`, animName: `${slot[1]} — ${zone.label} (${v.hand})`,
+      animId, animName: `${slot[1]} — ${zone.label} (${v.hand})`,
       spriteUrl: v.spriteUrl.split('?')[0], fps: ST.result.fps, frameCount: v.frameCount,
-      angle: zone.label, angleIndex: zone.angleIdx, slotId, zoneId: v.view, startingHand: v.hand,
+      angle: zone.label, angleIndex: zone.angleIdx, slotId, zoneId: isGame ? null : v.view, startingHand: v.hand,
     }) });
-    st.innerHTML = `✓ Saved as <b>${slotId}_z${v.view}_${v.hand}</b> · <a href="/?page=testing&char=${encodeURIComponent(ST.result.charName)}">Play on the test court →</a>`;
+    st.innerHTML = `✓ Saved as <b>${animId}</b>` + (isGame ? ' — used by Deploy to Soul Jam' : ` · <a href="/?page=testing&char=${encodeURIComponent(ST.result.charName)}">Play on the test court →</a>`);
   } catch (e) { st.textContent = e.message; st.classList.add('err'); }
 };
 

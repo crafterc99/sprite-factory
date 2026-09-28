@@ -799,7 +799,10 @@
   .testing-layout { display:contents; }
   .testing-sidebar,.testing-sidebar-header,.testing-char-section,.testing-anim-section,.testing-controls,.testing-control-row,.testing-info { display:none!important; }
   .testing-court-wrap { flex:1; position:relative; display:flex; align-items:center; justify-content:center; background:#0a0a14; overflow:hidden; }
-  .testing-court-wrap canvas { image-rendering:pixelated; cursor:crosshair; max-width:100%; max-height:100%; }
+  /* Keep 16:9 when the panel is narrower than 960px — a fixed CSS height with
+     max-width:100% squashed the court (and every sprite) horizontally.
+     image-rendering:auto: sprites are illustrated art, not pixel art. */
+  .testing-court-wrap canvas { image-rendering:auto; cursor:crosshair; max-width:100%; max-height:100%; aspect-ratio:16 / 9; height:auto; }
   .gm-toggle-btn { display:none!important; }
   .gm-hud { display:none!important; }
   .gm-controls-ref { display:none!important; }
@@ -6522,7 +6525,14 @@ function lineSide(a, b, px, py) {
 }
 
 function getZoneForPos(x, y) {
-  // Count how many dividers the point is below (positive side = below/further)
+  // Perspective zone from the direction player → hoop (engine/GameCourt.js).
+  // The old hand-drawn horizontal ZONE_DIVIDERS ignored the hoop entirely and
+  // two of their bands sat outside the playable area; kept only as a legacy
+  // fallback when the geometry module isn't loaded.
+  if (typeof perspectiveZone === 'function') {
+    const pz = perspectiveZone(x, y, NET_ANCHOR);
+    return { ...COURT_ZONES[pz.id - 1], flip: pz.flip, facingAngle: pz.angle };
+  }
   let idx = 0;
   for (const d of ZONE_DIVIDERS) {
     if (lineSide(d.p1, d.p2, x, y) > 0) idx++;
@@ -6533,7 +6543,8 @@ function getZoneForPos(x, y) {
 // ── Net / hoop anchor ─────────────────────────────────────────────────────
 // Marks where the net sprite will be rendered. x/y = center of rim.
 // w/h = bounding box of the full net sprite.
-let NET_ANCHOR = { x: 204, y: 140, w: 82, h: 72 };
+// Default = Soul Jam HOOP_X/HOOP_Y (265,228) × 0.75 — the game's hoop on this canvas
+let NET_ANCHOR = { x: 199, y: 171, w: 82, h: 72 };
 
 function drawNetMarker(ctx) {
   const { x, y, w, h } = NET_ANCHOR;
@@ -6569,11 +6580,13 @@ function drawNetMarker(ctx) {
 
 // ── Out-of-bounds boundary ──────────────────────────────────────────────────
 // Editable trapezoid (4 corners). Persisted to R2 via /api/testing-config.
+// Default = the game's hardwood (COURT_LEFT/RIGHT/TOP/BOTTOM × 0.75). The old
+// defaults (y up to 628) were for a 640px canvas — the court is 540 tall.
 let OOB_BOUNDS = {
-  topLeft:     { x: 88,  y: 175 },
-  topRight:    { x: 955, y: 175 },
-  bottomRight: { x: 955, y: 628 },
-  bottomLeft:  { x: 88,  y: 628 },
+  topLeft:     { x: 49,  y: 66 },
+  topRight:    { x: 952, y: 66 },
+  bottomRight: { x: 952, y: 508 },
+  bottomLeft:  { x: 49,  y: 508 },
 };
 
 function _clampPt(pt, W, H) {
@@ -6756,8 +6769,9 @@ function drawEditHandles(ctx) {
     ctx.restore();
   }
 
-  // Zone divider handles — drawn at their actual positions (p1/p2)
-  for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
+  // Zone divider handles — legacy (zones now come from the hoop position;
+  // drag the NET marker to move them)
+  for (let i = 0; i < (TESTING.legacyZoneDividers ? ZONE_DIVIDERS.length : 0); i++) {
     const d = ZONE_DIVIDERS[i];
     const isActiveL = TESTING.editDragDivider === `${i}-L`;
     const isActiveR = TESTING.editDragDivider === `${i}-R`;
@@ -6857,7 +6871,7 @@ function initTestingPage() {
   canvas.width  = LOGICAL_W * dpr;
   canvas.height = LOGICAL_H * dpr;
   canvas.style.width  = LOGICAL_W + 'px';
-  canvas.style.height = LOGICAL_H + 'px';
+  canvas.style.height = 'auto'; // height follows width (aspect-ratio 16:9) — never squash
 
   TESTING.ctx = canvas.getContext('2d');
   TESTING.ctx.scale(dpr, dpr);
@@ -7019,8 +7033,8 @@ function initTestingPage() {
         e.preventDefault(); return;
       }
     }
-    // Check zone divider endpoints
-    for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
+    // Check zone divider endpoints (legacy only — zones follow the hoop now)
+    for (let i = 0; i < (TESTING.legacyZoneDividers ? ZONE_DIVIDERS.length : 0); i++) {
       const d = ZONE_DIVIDERS[i];
       if (Math.hypot(x - d.p1.x, y - d.p1.y) < SNAP) {
         TESTING.editDragDivider = `${i}-L`;
@@ -7863,18 +7877,10 @@ function testingRenderLoop(timestamp) {
 
   // Draw court background — cover-scale to fill canvas without stretching
   if (TESTING.courtLoaded && TESTING.courtImg) {
-    const _ci = TESTING.courtImg;
-    const _iar = _ci.naturalWidth / _ci.naturalHeight;
-    const _car = W / H;
-    let _sx, _sy, _sw, _sh;
-    if (_iar > _car) {
-      _sh = _ci.naturalHeight; _sw = _sh * _car;
-      _sx = (_ci.naturalWidth - _sw) / 2; _sy = 0;
-    } else {
-      _sw = _ci.naturalWidth; _sh = _sw / _car;
-      _sx = 0; _sy = (_ci.naturalHeight - _sh) / 2;
-    }
-    ctx.drawImage(_ci, _sx, _sy, _sw, _sh, 0, 0, W, H);
+    // Stretched to the full canvas exactly like Soul Jam's CourtRenderer
+    // (setDisplaySize(GAME_WIDTH, GAME_HEIGHT)) so hoop/bounds/zones line up
+    // with the game 1:1 — the old cover-crop shifted the art vs the geometry
+    ctx.drawImage(TESTING.courtImg, 0, 0, W, H);
   } else {
     _drawFallbackCourt(ctx, W, H);
   }
@@ -7942,57 +7948,48 @@ function testingRenderLoop(timestamp) {
   const currentZone = getZoneForPos(TESTING.charX, TESTING.charY);
   if (TESTING.showZones) {
     ctx.save();
-    // Draw each zone as a polygon defined by the divider lines.
-    // Use divEdgePoints() so polygons always span full canvas width regardless
-    // of where the drag handles are positioned.
-    const divEdges = ZONE_DIVIDERS.map(divEdgePoints);
-    const zonePolygons = COURT_ZONES.map((zone, zi) => {
-      const pts = [];
-      if (zi === 0) {
-        pts.push({ x: 0, y: 0 }, { x: W, y: 0 });
-        pts.push(divEdges[0].right, divEdges[0].left);
-      } else if (zi === COURT_ZONES.length - 1) {
-        pts.push(divEdges[zi-1].left, divEdges[zi-1].right);
-        pts.push({ x: W, y: H }, { x: 0, y: H });
-      } else {
-        pts.push(divEdges[zi-1].left, divEdges[zi-1].right);
-        pts.push(divEdges[zi].right, divEdges[zi].left);
+    // Zones fan out from the hoop (direction player → hoop decides the camera
+    // angle). Rasterised once per hoop position and cached.
+    const key = `${NET_ANCHOR.x},${NET_ANCHOR.y},${W},${H}`;
+    if (!TESTING._zoneLayer || TESTING._zoneLayer.key !== key) {
+      const cell = 6, cw = Math.ceil(W / cell), chh = Math.ceil(H / cell);
+      const ids = new Uint8Array(cw * chh);
+      for (let yy = 0; yy < chh; yy++) for (let xx = 0; xx < cw; xx++) ids[yy * cw + xx] = getZoneForPos(xx * cell + cell / 2, yy * cell + cell / 2).id;
+      TESTING._zoneLayer = { key, cell, cw, chh, ids };
+    }
+    const L = TESTING._zoneLayer;
+    for (let yy = 0; yy < L.chh; yy++) for (let xx = 0; xx < L.cw; xx++) {
+      const zid = L.ids[yy * L.cw + xx];
+      ctx.fillStyle = COURT_ZONES[zid - 1].color + (zid === currentZone.id ? '0.30)' : '0.11)');
+      ctx.fillRect(xx * L.cell, yy * L.cell, L.cell, L.cell);
+    }
+    // Wedge boundary rays from the hoop (22.5°, 67.5°, 112.5°, 157.5°), both sides
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 5]);
+    for (const b of [22.5, 67.5, 112.5, 157.5]) {
+      const r = (b * Math.PI) / 180;
+      for (const side of [-1, 1]) {
+        const dx = side * Math.sin(r), dy = -Math.cos(r) / (typeof DEPTH_K === 'number' ? DEPTH_K : 2.2);
+        const t = 2000;
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(NET_ANCHOR.x, NET_ANCHOR.y);
+        ctx.lineTo(NET_ANCHOR.x + dx * t, NET_ANCHOR.y + dy * t);
+        ctx.stroke();
       }
-      return { zone, pts };
-    });
-
-    for (const { zone, pts } of zonePolygons) {
-      const isActive = zone.id === currentZone.id;
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-      ctx.closePath();
-      ctx.fillStyle = zone.color + (isActive ? '0.35)' : '0.15)');
-      ctx.fill();
     }
-
-    // Draw divider lines (full canvas width via extrapolation)
-    for (let i = 0; i < ZONE_DIVIDERS.length; i++) {
-      const { left, right } = divEdges[i];
-      const isActiveZone = COURT_ZONES[i].id === currentZone.id || COURT_ZONES[i + 1]?.id === currentZone.id;
-      ctx.strokeStyle = COURT_ZONES[i].color + '0.9)';
-      ctx.lineWidth = isActiveZone ? 2.5 : 1.5;
-      ctx.setLineDash(isActiveZone ? [] : [8, 6]);
-      ctx.beginPath();
-      ctx.moveTo(left.x, left.y);
-      ctx.lineTo(right.x, right.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // Zone labels
-    for (const { zone, pts } of zonePolygons) {
-      const isActive = zone.id === currentZone.id;
-      const midY = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-      ctx.fillStyle = zone.color + (isActive ? '1)' : '0.7)');
-      ctx.font = `bold ${isActive ? 13 : 11}px "Space Mono", monospace`;
+    ctx.setLineDash([]);
+    // Label each zone at its first cell on the right edge (or the centroid)
+    const seenLbl = new Set();
+    for (let yy = 0; yy < L.chh; yy += 3) {
+      const zid = L.ids[yy * L.cw + (L.cw - 2)];
+      if (seenLbl.has(zid)) continue;
+      seenLbl.add(zid);
+      const z = COURT_ZONES[zid - 1];
+      ctx.fillStyle = z.color + (zid === currentZone.id ? '1)' : '0.75)');
+      ctx.font = `bold ${zid === currentZone.id ? 13 : 11}px "Space Mono", monospace`;
       ctx.textAlign = 'right';
-      ctx.fillText(`${zone.id} · ${zone.label}`, W - 10, midY + 4);
+      ctx.fillText(`${z.id} · ${z.label}`, W - 10, yy * L.cell + 16);
       ctx.textAlign = 'start';
     }
     ctx.restore();
@@ -8241,6 +8238,7 @@ function testingRenderLoop(timestamp) {
 <script src="/engine/MovementEngine.js"></script>
 <script src="/engine/ControllerInput.js"></script>
 <script src="/engine/AnimationPlayer.js"></script>
+<script src="/engine/GameCourt.js"></script>
 <script src="/engine/CourtZones.js"></script>
 <script src="/engine/AnimResolver.js"></script>
 <script src="/engine/CourtPreset.js"></script>
@@ -8361,9 +8359,9 @@ function startGameMode(silent) {
 
   // ── Initialise physics ──────────────────────────────────────────────────
   GM.physics = new PhysicsEngine({
-    groundY:     460,
-    boundsX:     [80, 880],
-    boundsY:     [60, 460],
+    groundY:     505,          // hardwood bottom (game COURT_BOTTOM × 0.75)
+    boundsX:     [55, 948],    // hardwood left/right
+    boundsY:     [72, 505],    // hardwood top/bottom — every perspective zone is reachable
     maxSpeed:    5,       // run speed (px/frame at full stick)
     sprintMult:  1.6,     // L1/R1: 8px/frame max
     walkMult:    0.52,    // walk: ~2.6px/frame
@@ -8373,7 +8371,9 @@ function startGameMode(silent) {
     friction:    0.78,    // snappy stops
     airFriction: 0.97,
   });
-  GM.physics.reset(TESTING.charX, 460);
+  // Spawn on the wing beside the hoop — the game's default side-view angle
+  TESTING.charX = 560; TESTING.charY = NET_ANCHOR.y + 40;
+  GM.physics.reset(TESTING.charX, TESTING.charY);
 
   // ── Load character animations from savedAnimations slot entries ─────────────
   loadGMAnims().then(() => {
@@ -8694,6 +8694,12 @@ function gmTick(timestamp) {
     GM.physics.facingRight = !facing.flip; // gmApplyFacingFlip mirrors when false
   }
   const faceZoneId = GM._facingZoneId ?? 1;
+  // Idle + actions: the ball handler faces the hoop — mirror when the hoop is
+  // to their right (locomotion keeps the stick facing above)
+  if (!GM_LOCOMOTION_SLOTS.has(GM.player.currentAnim ?? '') && !(facing && GM.player.state !== 'ACTION')) {
+    const pz = getZoneForPos(TESTING.charX, TESTING.charY);
+    if (pz && typeof pz.flip === 'boolean') GM.physics.facingRight = !pz.flip;
+  }
 
   // ── Net-line ball hand ─────────────────────────────────────────────────────
   // Invisible line from the net to the character (the handler faces the net):

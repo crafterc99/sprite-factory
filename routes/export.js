@@ -14,7 +14,8 @@ const SPRITE_FACTORY_ROOT = path.resolve(__dirname, '..');
 const SOUL_JAM_PUBLIC_DIR = path.resolve(SPRITE_FACTORY_ROOT, '..', 'soul-jam', 'public');
 const SOUL_JAM_IMAGES_DIR = path.join(SOUL_JAM_PUBLIC_DIR, 'assets', 'images');
 const SOUL_JAM_REGISTRY_PATH = path.join(SOUL_JAM_PUBLIC_DIR, 'characters-registry.json');
-const ASSETS_DIR_LOCAL = path.join(SPRITE_FACTORY_ROOT, 'data', 'assets');
+const ASSETS_DIR_LOCAL = process.env.ASSETS_DIR || path.join(SPRITE_FACTORY_ROOT, 'data', 'assets');
+const { resolveGameStrip, materialize } = require('../lib/game-deploy');
 const CONTRACT_PATH = path.join(SPRITE_FACTORY_ROOT, 'data', 'animation-contract.json');
 
 // Soul Jam animation slots — maps Soul Jam animation names to sprite-factory strip names
@@ -308,8 +309,8 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
       const regChar = reg.characters?.[charId];
       for (const [sjSlot, slotDef] of Object.entries(SOUL_JAM_SLOTS)) {
         const sfAnim = slotDef.sfAnim;
-        const stripPath = path.join(ASSETS_DIR_LOCAL, `${charId}-${sfAnim}.png`);
-        const ready = fs.existsSync(stripPath);
+        const resolved = resolveGameStrip({ assetsDir: ASSETS_DIR_LOCAL, charId, sjSlot, slotDef, saved: charData.savedAnimations || {}, contract });
+        const ready = !!resolved;
         if (ready) readyCount++;
 
         // "deployed" = slot exists in registry (covers both R2 and local copy)
@@ -321,7 +322,8 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
         animations[sjSlot] = {
           sfAnim, ready, deployed,
           url: regAnim?.url || null,
-          frames: contractAnim.frames || null,
+          frames: resolved?.frames ?? contractAnim.frames ?? null,
+          source: resolved?.source || null, sourceKey: resolved?.key || null,
         };
       }
 
@@ -360,23 +362,26 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
 
     for (const [sjSlot, slotDef] of Object.entries(SOUL_JAM_SLOTS)) {
       const sfAnim = slotDef.sfAnim;
-      const srcPath = path.join(ASSETS_DIR_LOCAL, `${charId}-${sfAnim}.png`);
-      if (!fs.existsSync(srcPath)) {
+      // Studio slot saves (incl. mocap) first, legacy {char}-{sfAnim}.png last
+      const resolved = resolveGameStrip({ assetsDir: ASSETS_DIR_LOCAL, charId, sjSlot, slotDef, saved: charData.savedAnimations || {}, contract });
+      if (!resolved) {
         missing.push({ slot: sjSlot, sfAnim });
         continue;
       }
 
-      const destFile = `${charId}-${sfAnim}.png`;
+      const destFile = resolved.source === 'legacy' ? `${charId}-${sfAnim}.png` : `${charId}-sj-${sjSlot}.png`;
+      const srcPath = path.join(ASSETS_DIR_LOCAL, destFile);
+      if (resolved.srcPath !== srcPath) await materialize(resolved, srcPath);
       const r2Key = `${R2_GAME_PREFIX}/${destFile}`;
 
-      const contractAnim = contract.animations?.[sfAnim] || {};
-      const frames = contractAnim.frames || 4;
+      const frames = resolved.frames;
       const animEntry = {
-        textureKey: `${charId}-${sfAnim}`,
+        textureKey: destFile.replace(/\.png$/, ''), // game falls back to assets/images/{textureKey}.png
         startFrame: 0,
         endFrame: frames - 1,
-        fps: contractAnim.fps || slotDef.fps,
+        fps: resolved.fps,
         repeat: slotDef.repeat,
+        source: resolved.source,
       };
 
       // Upload to R2 if configured
@@ -395,7 +400,7 @@ function register(router, { ASSETS_DIR, json, parseBody }) {
       }
 
       animDefs[sjSlot] = animEntry;
-      deployed.push({ slot: sjSlot, sfAnim, file: destFile, r2: !!animEntry.url });
+      deployed.push({ slot: sjSlot, sfAnim, file: destFile, source: resolved.source, from: resolved.key, frames, r2: !!animEntry.url });
     }
 
     // Build and persist registry
