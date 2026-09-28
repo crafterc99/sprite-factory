@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>3D Court — Sprite Factory</title>
+<style>
+  :root { --bg:#07070d; --panel:rgba(8,8,18,.82); --line:#262648; --txt:#d8d8f0; --dim:#7a7aa8; --accent:#ff6a1a; --ok:#19d27a; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--txt); font:13px/1.35 ui-monospace, "SF Mono", Menlo, monospace; overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none; }
+  #view { position:fixed; inset:0; display:block; }
+  .bar { position:fixed; left:12px; right:12px; top:10px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; pointer-events:none; z-index:5; }
+  .bar > * { pointer-events:auto; }
+  .pill { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:6px 12px; display:flex; gap:8px; align-items:center; white-space:nowrap; }
+  .pill b { color:#fff; }
+  a.pill { color:var(--txt); text-decoration:none; }
+  select, button { font:inherit; color:var(--txt); background:#12122a; border:1px solid var(--line); border-radius:12px; padding:4px 8px; }
+  button.on { border-color:var(--accent); color:#fff; }
+  input[type=range] { accent-color:var(--accent); width:110px; }
+  #state { color:var(--ok); }
+  #help { position:fixed; left:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--dim); max-width:360px; }
+  #help b { color:var(--txt); }
+  #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; background:var(--bg); z-index:20; color:var(--dim); }
+  #loading .t { color:#fff; font-size:16px; }
+  #err { color:#ff6a6a; max-width:520px; text-align:center; }
+  /* touch controls (iPad without a controller) */
+  #stickZone { position:fixed; left:0; bottom:0; width:45vw; height:55vh; z-index:4; }
+  #stickBase { position:fixed; width:120px; height:120px; border-radius:50%; border:2px solid rgba(255,255,255,.18); background:rgba(255,255,255,.05); display:none; z-index:6; pointer-events:none; }
+  #stickKnob { position:absolute; left:35px; top:35px; width:50px; height:50px; border-radius:50%; background:rgba(255,106,26,.55); }
+  #shootBtn { position:fixed; right:28px; bottom:34px; width:96px; height:96px; border-radius:50%; border:2px solid rgba(255,255,255,.25); background:rgba(255,106,26,.28); color:#fff; font-weight:700; z-index:6; display:none; }
+  #shootBtn.held { background:rgba(255,106,26,.7); }
+  @media (pointer:coarse) { #shootBtn { display:block; } #help { display:none; } }
+</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div class="bar">
+  <a class="pill" href="/?page=testing" title="Back to the 2D test court">← 2D court</a>
+  <span class="pill">3D COURT <span id="state">loading</span></span>
+  <span class="pill">Idle <select id="selIdle"></select></span>
+  <span class="pill">Move <select id="selMove"></select></span>
+  <span class="pill" title="Animation playback speed (1.00× = the speed you filmed it). Saved on this device.">Speed <input type="range" id="speed" min="0.25" max="1.5" step="0.05"><b id="speedLbl">1.00×</b></span>
+  <span class="pill">Camera <button id="camChase" class="on">2K</button><button id="camSide">Side</button><button id="camFree">Orbit</button></span>
+  <span class="pill" id="pad">no controller</span>
+  <span class="pill" id="fps">—</span>
+</div>
+
+<div id="help">
+  <b>Controller</b> left stick move · hold <b>□</b> step-back jumper · right stick camera · L1/R1 zoom<br>
+  <b>Keyboard</b> WASD move · hold <b>I</b> (or Space) shoot · arrows camera · C camera mode<br>
+  Standing still = idle dribble. The player always faces the basket.
+</div>
+
+<div id="stickZone"></div>
+<div id="stickBase"><div id="stickKnob"></div></div>
+<button id="shootBtn">SHOOT</button>
+
+<div id="loading"><div class="t">Loading 3D court…</div><div id="loadMsg">motions</div><div id="err"></div></div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ═══ Constants (metres; y up; rim centre above the origin; court toward +z) ═══
+const RIM_Y = 3.05, RIM_R = 0.2286, BASELINE_Z = -1.575, HALF_LEN = 14.33, HALF_W = 7.62;
+const G = 9.81;
+const MOVE_SPEED = 3.0;            // m/s dribble jog
+const HOLD_MS = 170;               // hold Square this long → step-back jumper
+const STEPBACK_DIST = 1.1;         // m straight back from the hoop during the hop
+const $ = (id) => document.getElementById(id);
+const loadMsg = (m) => { $('loadMsg').textContent = m; };
+
+// ═══ Renderer / scene ═══
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0b16);
+scene.fog = new THREE.Fog(0x0b0b16, 26, 60);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 200);
+
+scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x3a2412, 0.85));
+const sun = new THREE.DirectionalLight(0xfff1dd, 2.2);
+sun.position.set(-6, 14, 9);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
+sun.shadow.bias = -0.0004;
+scene.add(sun);
+const fill = new THREE.PointLight(0xffa860, 0.9, 30); fill.position.set(6, 6, 10); scene.add(fill);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ═══ Court ═══
+function courtTexture() {
+  const PX = 64; // px per metre
+  const W = Math.round((HALF_W * 2 + 2) * PX), H = Math.round((HALF_LEN + 2) * PX);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  // hardwood planks
+  const plankW = 0.18 * PX;
+  for (let x = 0; x < W; x += plankW) {
+    for (let y = -Math.random() * 300; y < H; y += 220 + Math.random() * 180) {
+      const t = 0.78 + Math.random() * 0.22;
+      g.fillStyle = `rgb(${Math.round(214 * t)},${Math.round(150 * t)},${Math.round(88 * t)})`;
+      g.fillRect(x, y, plankW - 1, 400);
+    }
+  }
+  g.fillStyle = 'rgba(0,0,0,.08)';
+  for (let x = 0; x < W; x += plankW) g.fillRect(x + plankW - 1, 0, 1, H);
+  // court coords → canvas: x∈[-HALF_W-1, HALF_W+1], z∈[BASELINE_Z-1, BASELINE_Z+HALF_LEN+1]
+  const X = (x) => (x + HALF_W + 1) * PX, Y = (z) => (z - BASELINE_Z + 1) * PX;
+  // paint + three-point band in Soul Jam red
+  g.fillStyle = 'rgba(190,34,40,.82)';
+  g.fillRect(X(-2.44), Y(BASELINE_Z), 4.88 * PX, 5.8 * PX);
+  g.strokeStyle = '#f4f1e8'; g.lineWidth = 0.05 * PX; g.lineCap = 'round';
+  const line = (pts) => { g.beginPath(); pts.forEach(([x, z], i) => (i ? g.lineTo(X(x), Y(z)) : g.moveTo(X(x), Y(z)))); g.stroke(); };
+  const arc = (cx, cz, r, a0, a1) => { g.beginPath(); g.arc(X(cx), Y(cz), r * PX, a0, a1); g.stroke(); };
+  line([[-HALF_W, BASELINE_Z], [HALF_W, BASELINE_Z], [HALF_W, BASELINE_Z + HALF_LEN], [-HALF_W, BASELINE_Z + HALF_LEN], [-HALF_W, BASELINE_Z]]);
+  line([[-2.44, BASELINE_Z], [-2.44, BASELINE_Z + 5.8], [2.44, BASELINE_Z + 5.8], [2.44, BASELINE_Z]]);
+  arc(0, BASELINE_Z + 5.8, 1.83, 0, Math.PI);                                // free-throw circle
+  arc(0, 0, 1.22, 0, Math.PI);                                                // restricted area
+  // three-point line: corners 6.71 m from the rim, arc 7.24 m
+  const zc = Math.sqrt(7.24 ** 2 - 6.71 ** 2);
+  line([[-6.71, BASELINE_Z], [-6.71, zc]]); line([[6.71, BASELINE_Z], [6.71, zc]]);
+  arc(0, 0, 7.24, Math.atan2(zc, 6.71), Math.PI - Math.atan2(zc, 6.71));
+  arc(0, BASELINE_Z + HALF_LEN, 1.83, Math.PI, 2 * Math.PI);                 // centre circle
+  g.fillStyle = 'rgba(255,255,255,.12)'; g.font = `bold ${1.6 * PX}px sans-serif`; g.textAlign = 'center';
+  g.fillText('SOUL JAM', X(0), Y(BASELINE_Z + 10.4));
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W * 2 + 2, HALF_LEN + 2), new THREE.MeshStandardMaterial({ map: courtTexture(), roughness: 0.42, metalness: 0.05 }));
+floor.rotation.x = -Math.PI / 2;
+floor.position.set(0, 0, BASELINE_Z + HALF_LEN / 2);
+floor.receiveShadow = true;
+scene.add(floor);
+const apron = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: 0x1a1016, roughness: 0.9 }));
+apron.rotation.x = -Math.PI / 2; apron.position.y = -0.005; apron.receiveShadow = true; scene.add(apron);
+
+// Hoop: stanchion, arm, backboard, rim, net
+const hoop = new THREE.Group(); scene.add(hoop);
+const padMat = new THREE.MeshStandardMaterial({ color: 0xb8232a, roughness: 0.6 });
+const steel = new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.4, metalness: 0.7 });
+const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.0, 1.6), padMat); base.position.set(0, 0.5, BASELINE_Z - 1.6); base.castShadow = true; hoop.add(base);
+const post = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.2, 0.28), steel); post.position.set(0, 2.1, BASELINE_Z - 1.5); post.castShadow = true; hoop.add(post);
+const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 1.3), steel); arm.position.set(0, 3.55, BASELINE_Z - 0.9); hoop.add(arm);
+const board = new THREE.Mesh(new THREE.BoxGeometry(1.83, 1.07, 0.04), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.05, transmission: 0.4 }));
+board.position.set(0, 2.9 + 0.535, BASELINE_Z + 1.22); hoop.add(board);
+const boardFrame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.83, 1.07, 0.04)), new THREE.LineBasicMaterial({ color: 0xffffff }));
+boardFrame.position.copy(board.position); hoop.add(boardFrame);
+const square = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(0.59, 0.45)), new THREE.LineBasicMaterial({ color: 0xffffff }));
+square.position.set(0, RIM_Y + 0.225 + 0.04, BASELINE_Z + 1.245); hoop.add(square);
+const rim = new THREE.Mesh(new THREE.TorusGeometry(RIM_R, 0.012, 10, 40), new THREE.MeshStandardMaterial({ color: 0xff4a10, roughness: 0.35, metalness: 0.6 }));
+rim.rotation.x = Math.PI / 2; rim.position.set(0, RIM_Y, 0); rim.castShadow = true; hoop.add(rim);
+const netGeo = new THREE.CylinderGeometry(RIM_R, RIM_R * 0.62, 0.42, 16, 5, true);
+const net = new THREE.Mesh(netGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.75 }));
+net.position.set(0, RIM_Y - 0.21, 0); hoop.add(net);
+const HOOP = new THREE.Vector3(0, 0, 0); // floor point under the rim (the player faces it)
+
+// A few arena touches: dark stands + light banks
+for (const [x, z, w, d] of [[0, BASELINE_Z - 5, 30, 4], [-HALF_W - 4, 6, 4, 22], [HALF_W + 4, 6, 4, 22]]) {
+  const st = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), new THREE.MeshStandardMaterial({ color: 0x14142a, roughness: 0.95 }));
+  st.position.set(x, 1.5, z); scene.add(st);
+}
+
+// ═══ Basketball ═══
+function ballTexture() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 256); grd.addColorStop(0, '#f08a3c'); grd.addColorStop(1, '#c95a18');
+  g.fillStyle = grd; g.fillRect(0, 0, 512, 256);
+  for (let i = 0; i < 4000; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`; g.fillRect(Math.random() * 512, Math.random() * 256, 2, 2); }
+  g.strokeStyle = '#1b0d05'; g.lineWidth = 6;
+  g.beginPath(); g.moveTo(0, 128); g.lineTo(512, 128); g.stroke();
+  for (const x of [128, 384]) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 256); g.stroke(); }
+  for (const x0 of [0, 256]) { g.beginPath(); for (let y = 0; y <= 256; y += 4) { const x = x0 + 128 + Math.sin((y / 256) * Math.PI) * 70 * (x0 ? 1 : -1); y ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+let BALL_R = 0.12;
+const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), new THREE.MeshStandardMaterial({ map: ballTexture(), roughness: 0.62 }));
+ball.castShadow = true;
+scene.add(ball);
+
+// ═══ Character (baked SAM 3D Body scan animation) ═══
+const b64 = (s, T) => { const bin = atob(s); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new T(u8.buffer); };
+
+function makeClip(data) {
+  const n = data.meta.vertexCount, q = data.meta.quant;
+  const faces = b64(data.faces, Uint32Array);
+  const frames = data.frames.map((f) => { const i16 = b64(f, Int16Array); const out = new Float32Array(n * 3); for (let k = 0; k < out.length; k++) out[k] = i16[k] * q; return out; });
+  // per-keyframe normals (smooth blending of both positions and normals)
+  const tmp = new THREE.BufferGeometry(); tmp.setIndex(new THREE.BufferAttribute(faces, 1));
+  const normals = frames.map((pos) => { tmp.setAttribute('position', new THREE.BufferAttribute(pos, 3)); tmp.computeVertexNormals(); return tmp.getAttribute('normal').array.slice(); });
+  tmp.dispose();
+  return { ...data, faces, frames, normals, colors: b64(data.colors, Uint8Array), n };
+}
+
+let charMesh = null, charGeo = null;
+const player = new THREE.Group(); scene.add(player);
+function buildCharacter(clip) {
+  if (charMesh) { player.remove(charMesh); charGeo.dispose(); }
+  charGeo = new THREE.BufferGeometry();
+  charGeo.setIndex(new THREE.BufferAttribute(clip.faces, 1));
+  charGeo.setAttribute('position', new THREE.BufferAttribute(clip.frames[0].slice(), 3));
+  charGeo.setAttribute('normal', new THREE.BufferAttribute(clip.normals[0].slice(), 3));
+  const col = new Float32Array(clip.n * 3);
+  for (let i = 0; i < col.length; i++) col[i] = Math.pow(clip.colors[i] / 255, 2.2); // sRGB → linear
+  charGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  charMesh = new THREE.Mesh(charGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0 }));
+  charMesh.castShadow = true; charMesh.receiveShadow = true;
+  charMesh.frustumCulled = false;
+  player.add(charMesh);
+}
+
+// Write a blended pose (clip frame f, fractional) into the character geometry
+const blendFrom = { pos: null, nor: null, t: 0, dur: 0 };
+function writePose(clip, f, loop) {
+  const N = clip.meta.frameCount;
+  let a = Math.floor(f), w = f - a, b = a + 1;
+  if (loop) { a = ((a % N) + N) % N; b = (a + 1) % N; } else { a = Math.min(a, N - 1); b = Math.min(b, N - 1); if (a === N - 1) w = 0; }
+  const pa = clip.frames[a], pb = clip.frames[b], na = clip.normals[a], nb = clip.normals[b];
+  const P = charGeo.getAttribute('position'), Nn = charGeo.getAttribute('normal');
+  const pos = P.array, nor = Nn.array;
+  const bw = blendFrom.pos && blendFrom.t < blendFrom.dur ? 1 - blendFrom.t / blendFrom.dur : 0;
+  for (let i = 0; i < pos.length; i++) {
+    let p = pa[i] + (pb[i] - pa[i]) * w, nn = na[i] + (nb[i] - na[i]) * w;
+    if (bw > 0) { p = p + (blendFrom.pos[i] - p) * bw; nn = nn + (blendFrom.nor[i] - nn) * bw; }
+    pos[i] = p; nor[i] = nn;
+  }
+  P.needsUpdate = true; Nn.needsUpdate = true;
+}
+function startBlend(dur = 0.18) {
+  blendFrom.pos = charGeo.getAttribute('position').array.slice();
+  blendFrom.nor = charGeo.getAttribute('normal').array.slice();
+  blendFrom.t = 0; blendFrom.dur = dur;
+}
+
+// ═══ Ball logic ═══
+// Clip-local ball: in hand = the measured position next to the palm; between
+// release and catch = gravity: down to a floor bounce and back up to the catch
+function clipBallSegments(clip) {
+  const N = clip.meta.frameCount, held = clip.balls.map((b) => !!(b && b.held));
+  return { N, held };
+}
+function lerp3(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
+function clipBallAt(clip, f, loop, speed) {
+  const N = clip.meta.frameCount, B = clip.balls;
+  const fps = clip.meta.fps * speed;
+  const idx = (k) => (loop ? ((k % N) + N) % N : Math.max(0, Math.min(N - 1, k)));
+  const a0 = Math.floor(f), w = f - a0;
+  const A = B[idx(a0)], Bn = B[idx(a0 + 1)];
+  if (!A && !Bn) return null;
+  if (A?.held && (Bn?.held || !loop && a0 >= N - 1)) return lerp3(A.p, (Bn || A).p, w);
+  // in the air: find the release (last held before) and the catch (first held after)
+  let r = a0; while (r > a0 - N && !(B[idx(r)]?.held)) r--;
+  let c = a0 + 1; while (c < a0 + 1 + N && !(B[idx(c)]?.held)) c++;
+  const R = B[idx(r)], C = B[idx(c)];
+  if (!R?.held || !C?.held || (!loop && (r < 0 || c > N - 1))) return (A || Bn).p; // no catch: follow the data
+  const T = (c - r) / fps, t = (f - r) / fps;
+  const yr = R.p[1], yc = C.p[1], rr = BALL_R;
+  const T1 = T * Math.max(0.2, Math.min(0.8, (yr - rr) / ((yr - rr) + (yc - rr) || 1)));
+  const T2 = T - T1;
+  let y;
+  if (t <= T1) { const v0 = (rr - yr + 0.5 * G * T1 * T1) / T1; y = yr + v0 * t - 0.5 * G * t * t; }
+  else { const u = t - T1; const v1 = (yc - rr + 0.5 * G * T2 * T2) / T2; y = rr + v1 * u - 0.5 * G * u * u; }
+  const k = Math.max(0, Math.min(1, t / T));
+  const p = lerp3(R.p, C.p, k);
+  return [p[0], Math.max(rr, y), p[2]];
+}
+
+// ═══ Input: gamepad + keyboard + touch ═══
+const keys = new Set();
+window.addEventListener('keydown', (e) => { keys.add(e.code); if (e.code === 'KeyC') cycleCam(); if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault(); });
+window.addEventListener('keyup', (e) => keys.delete(e.code));
+const touch = { x: 0, y: 0, shoot: false, id: null, ox: 0, oy: 0 };
+const zone = $('stickZone'), sb = $('stickBase'), knob = $('stickKnob');
+zone.addEventListener('pointerdown', (e) => { touch.id = e.pointerId; touch.ox = e.clientX; touch.oy = e.clientY; sb.style.display = 'block'; sb.style.left = (e.clientX - 60) + 'px'; sb.style.top = (e.clientY - 60) + 'px'; zone.setPointerCapture(e.pointerId); });
+zone.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== touch.id) return;
+  const dx = e.clientX - touch.ox, dy = e.clientY - touch.oy, l = Math.min(50, Math.hypot(dx, dy)), a = Math.atan2(dy, dx);
+  touch.x = (Math.cos(a) * l) / 50; touch.y = (Math.sin(a) * l) / 50;
+  knob.style.left = (35 + Math.cos(a) * l) + 'px'; knob.style.top = (35 + Math.sin(a) * l) + 'px';
+});
+const endTouch = (e) => { if (e.pointerId !== touch.id) return; touch.id = null; touch.x = touch.y = 0; sb.style.display = 'none'; knob.style.left = knob.style.top = '35px'; };
+zone.addEventListener('pointerup', endTouch); zone.addEventListener('pointercancel', endTouch);
+const sBtn = $('shootBtn');
+sBtn.addEventListener('pointerdown', () => { touch.shoot = true; sBtn.classList.add('held'); });
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) sBtn.addEventListener(ev, () => { touch.shoot = false; sBtn.classList.remove('held'); });
+
+const dz = (v) => (Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85);
+function readInput() {
+  const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+  const gp = pads[0];
+  let mx = 0, my = 0, cx = 0, cy = 0, shoot = false, zoomIn = false, zoomOut = false;
+  if (gp) {
+    mx = dz(gp.axes[0] || 0); my = dz(gp.axes[1] || 0);
+    cx = dz(gp.axes[2] || 0); cy = dz(gp.axes[3] || 0);
+    shoot = !!gp.buttons[2]?.pressed;                   // Square (PS) / X (Xbox)
+    zoomIn = !!gp.buttons[5]?.pressed; zoomOut = !!gp.buttons[4]?.pressed;
+  }
+  if (keys.has('KeyA')) mx -= 1; if (keys.has('KeyD')) mx += 1; if (keys.has('KeyW')) my -= 1; if (keys.has('KeyS')) my += 1;
+  if (keys.has('ArrowLeft')) cx -= 1; if (keys.has('ArrowRight')) cx += 1; if (keys.has('ArrowUp')) cy -= 1; if (keys.has('ArrowDown')) cy += 1;
+  if (keys.has('KeyI') || keys.has('Space')) shoot = true;
+  if (touch.id != null) { mx = touch.x; my = touch.y; }
+  if (touch.shoot) shoot = true;
+  const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
+  $('pad').textContent = gp ? '🎮 ' + (gp.id.split('(')[0].trim().slice(0, 22) || 'controller') : (matchMedia('(pointer:coarse)').matches ? 'touch' : 'keyboard');
+  return { mx, my, cx, cy, shoot, zoomIn, zoomOut };
+}
+
+// ═══ Game state ═══
+const S = {
+  idle: null, move: null, speed: 1,
+  pos: new THREE.Vector3(1.8, 0, 5.2), yaw: 0,
+  state: 'idle',          // idle | shot | follow
+  clipT: 0,               // clip time in frames (float)
+  sqAt: null, sqFired: false, lastMoveAt: -1e9,
+  shot: null,             // { t0, from, stepDone }
+  freeBall: null,         // { p, v, made, t }
+  cam: 'chase', camYaw: 0, camDist: 5.2, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(),
+};
+try { S.speed = parseFloat(localStorage.getItem('court3d_speed')) || 1; } catch {}
+$('speed').value = S.speed; $('speedLbl').textContent = S.speed.toFixed(2) + '×';
+$('speed').oninput = (e) => { S.speed = parseFloat(e.target.value); $('speedLbl').textContent = S.speed.toFixed(2) + '×'; try { localStorage.setItem('court3d_speed', S.speed); } catch {} };
+
+function faceHoopYaw(p) { return Math.atan2(HOOP.x - p.x, HOOP.z - p.z); }
+
+function startShot() {
+  if (!S.move || S.state !== 'idle') return;
+  startBlend(0.15);
+  S.state = 'shot'; S.clipT = 0;
+  const away = new THREE.Vector3(S.pos.x - HOOP.x, 0, S.pos.z - HOOP.z).normalize();
+  S.shot = { from: S.pos.clone(), away, stepDone: 0, released: false };
+  buildOrKeep(S.move);
+}
+function buildOrKeep(clip) { if (charGeo.getAttribute('position').count !== clip.n) buildCharacter(clip); }
+
+function launchBall(fromWorld) {
+  const target = new THREE.Vector3(0, RIM_Y + 0.03, 0);
+  const d = target.clone().sub(fromWorld); const horiz = Math.hypot(d.x, d.z);
+  const T = 0.75 + horiz * 0.07;                       // flight time (arc height follows)
+  const v = new THREE.Vector3(d.x / T, (d.y + 0.5 * G * T * T) / T, d.z / T);
+  S.freeBall = { p: fromWorld.clone(), v, t: 0, T, through: false, bounces: 0 };
+}
+
+function toWorld(local) {
+  const v = new THREE.Vector3(local[0], local[1], local[2]);
+  v.applyAxisAngle(new THREE.Vector3(0, 1, 0), S.yaw);
+  return v.add(player.position);
+}
+
+// ═══ Camera ═══
+function cycleCam() { const order = ['chase', 'side', 'free']; setCam(order[(order.indexOf(S.cam) + 1) % 3]); }
+function setCam(m) {
+  S.cam = m;
+  for (const [id, k] of [['camChase', 'chase'], ['camSide', 'side'], ['camFree', 'free']]) $(id).classList.toggle('on', k === m);
+}
+$('camChase').onclick = () => setCam('chase'); $('camSide').onclick = () => setCam('side'); $('camFree').onclick = () => setCam('free');
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => { if (S.cam === 'free') drag = { x: e.clientX, y: e.clientY }; });
+window.addEventListener('pointermove', (e) => { if (drag) { S.camYaw -= (e.clientX - drag.x) * 0.006; S.camPitch = Math.max(0.05, Math.min(1.3, (S.camPitch ?? 0.35) + (e.clientY - drag.y) * 0.004)); drag = { x: e.clientX, y: e.clientY }; } });
+window.addEventListener('pointerup', () => { drag = null; });
+canvas.addEventListener('wheel', (e) => { S.camDist = Math.max(2.2, Math.min(14, S.camDist * (1 + Math.sign(e.deltaY) * 0.08))); });
+
+function updateCamera(dt, inp) {
+  S.camYaw += inp.cx * dt * 1.8;
+  if (inp.zoomIn) S.camDist = Math.max(2.2, S.camDist - dt * 3);
+  if (inp.zoomOut) S.camDist = Math.min(14, S.camDist + dt * 3);
+  const p = player.position;
+  let want, look;
+  if (S.cam === 'chase') {
+    // 2K-style: behind the ball handler, looking past them at the basket
+    const toHoop = new THREE.Vector3(HOOP.x - p.x, 0, HOOP.z - p.z).normalize();
+    const back = toHoop.clone().multiplyScalar(-1).applyAxisAngle(new THREE.Vector3(0, 1, 0), S.camYaw);
+    want = p.clone().add(back.multiplyScalar(S.camDist)).add(new THREE.Vector3(0, 2.1 + inp.cy * 0.8, 0));
+    look = p.clone().add(toHoop.multiplyScalar(2.2)).add(new THREE.Vector3(0, 1.35, 0));
+  } else if (S.cam === 'side') {
+    // Broadcast side view (like the 2D court)
+    want = new THREE.Vector3(p.x * 0.35 + 10.5, 6.2, p.z * 0.6 + 8.5);
+    look = new THREE.Vector3(p.x * 0.6, 1.2, p.z * 0.7 + 1.2);
+  } else {
+    const pitch = S.camPitch ?? 0.35;
+    want = p.clone().add(new THREE.Vector3(Math.sin(S.camYaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(S.camYaw) * Math.cos(pitch)).multiplyScalar(S.camDist)).add(new THREE.Vector3(0, 1, 0));
+    look = p.clone().add(new THREE.Vector3(0, 1.1, 0));
+  }
+  const k = 1 - Math.exp(-dt * 6);
+  S.camPos.lerp(want, k); S.camLook.lerp(look, k);
+  camera.position.copy(S.camPos); camera.lookAt(S.camLook);
+}
+
+// ═══ Main loop ═══
+let last = performance.now(), fpsAcc = 0, fpsN = 0;
+const ballSpin = new THREE.Vector3();
+function tick(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { $('fps').textContent = Math.round(fpsN / fpsAcc) + ' fps'; fpsAcc = 0; fpsN = 0; }
+  const inp = readInput();
+  if (!S.idle) { requestAnimationFrame(tick); return; }
+
+  // ── Square gesture: move then hold (a tap also shoots — the only shot is the step-back jumper)
+  const moving = Math.hypot(inp.mx, inp.my) > 0.2;
+  if (moving) S.lastMoveAt = now;
+  if (inp.shoot && S.sqAt == null) { S.sqAt = now; S.sqFired = false; }
+  if (inp.shoot && !S.sqFired && now - S.sqAt >= HOLD_MS) { S.sqFired = true; startShot(); }
+  if (!inp.shoot && S.sqAt != null) { if (!S.sqFired) startShot(); S.sqAt = null; }
+
+  // ── Movement (camera-relative), always facing the basket
+  if (S.state === 'idle' && moving) {
+    const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
+    const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0));
+    const v = right.multiplyScalar(inp.mx).add(fwd.multiplyScalar(-inp.my)).multiplyScalar(MOVE_SPEED * dt);
+    S.pos.add(v);
+  }
+  S.pos.x = Math.max(-HALF_W + 0.4, Math.min(HALF_W - 0.4, S.pos.x));
+  S.pos.z = Math.max(BASELINE_Z + 0.4, Math.min(BASELINE_Z + HALF_LEN - 0.4, S.pos.z));
+  if (Math.hypot(S.pos.x, S.pos.z) < 0.9) { const k = 0.9 / Math.hypot(S.pos.x, S.pos.z); S.pos.x *= k; S.pos.z *= k; }
+
+  // ── Animation
+  const clip = S.state === 'idle' ? S.idle : S.move;
+  const fps = clip.meta.fps * S.speed;
+  if (blendFrom.pos) blendFrom.t += dt;
+  if (S.state === 'idle') {
+    S.clipT = (S.clipT + dt * fps) % clip.meta.frameCount;
+    writePose(clip, S.clipT, true);
+  } else {
+    S.clipT = Math.min(clip.meta.frameCount - 1, S.clipT + dt * fps);
+    writePose(clip, S.clipT, false);
+    // step-back: straight back from the basket over the hop frames
+    const sh = clip.shot, stepF = sh?.stepFrame ?? Math.max(0, (sh?.releaseFrame ?? 10) - 7);
+    const u = Math.max(0, Math.min(1, (S.clipT - stepF) / 6));
+    const ease = 1 - (1 - u) * (1 - u);
+    S.pos.copy(S.shot.from).add(S.shot.away.clone().multiplyScalar(STEPBACK_DIST * ease));
+    // release → the ball leaves the hand toward the rim
+    if (sh && !S.shot.released && S.clipT >= sh.releaseFrame) {
+      S.shot.released = true;
+      const lb = clip.balls[sh.lastHeldFrame];
+      launchBall(toWorld(lb ? lb.p : sh.point));
+    }
+    if (S.clipT >= clip.meta.frameCount - 1) {
+      S.state = 'follow';
+    }
+  }
+  if (S.state === 'follow' && !S.freeBall) {  // follow-through held until the ball has landed
+    startBlend(0.22); S.state = 'idle'; S.clipT = 0; S.shot = null;
+  }
+  S.yaw = faceHoopYaw(S.pos);
+  player.position.copy(S.pos); player.rotation.y = S.yaw;
+
+  // ── Ball
+  if (S.freeBall) {
+    const fb = S.freeBall;
+    fb.t += dt;
+    fb.v.y -= G * dt;
+    fb.p.addScaledVector(fb.v, dt);
+    // through the rim: slow it and drop through the net
+    const hd = Math.hypot(fb.p.x, fb.p.z);
+    if (!fb.through && fb.v.y < 0 && fb.p.y <= RIM_Y + 0.02 && hd < RIM_R) { fb.through = true; fb.v.x *= 0.2; fb.v.z *= 0.2; fb.v.y *= 0.5; net.scale.set(0.9, 1.15, 0.9); $('state').textContent = 'SWISH'; }
+    if (fb.p.y < BALL_R) { fb.p.y = BALL_R; fb.v.y = -fb.v.y * 0.62; fb.v.x *= 0.8; fb.v.z *= 0.8; fb.bounces++; }
+    ball.position.copy(fb.p);
+    ballSpin.set(fb.v.z, 0, -fb.v.x);
+    if (fb.bounces >= 3 || fb.t > 4.5) S.freeBall = null;
+  } else if (!(S.state !== 'idle' && S.shot?.released)) {
+    const bp = clipBallAt(clip, S.clipT, S.state === 'idle', S.speed);
+    if (bp) { const w = toWorld(bp); ballSpin.subVectors(w, ball.position).multiplyScalar(1 / Math.max(dt, 1e-3)); ball.position.copy(w); }
+  } else {
+    ball.position.set(0, -5, 0); // released and already caught by the net logic
+  }
+  if (ballSpin.lengthSq() > 1e-6) ball.rotateOnWorldAxis(new THREE.Vector3(ballSpin.z, 0, -ballSpin.x).normalize(), ballSpin.length() * dt / BALL_R * 0.5);
+  net.scale.lerp(new THREE.Vector3(1, 1, 1), 1 - Math.exp(-dt * 5));
+  if (S.state === 'idle' && !S.freeBall) $('state').textContent = moving ? 'DRIBBLE' : 'IDLE';
+  if (S.state === 'shot') $('state').textContent = S.shot?.released ? 'SHOT' : 'STEP BACK';
+
+  updateCamera(dt, inp);
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+// ═══ Load motions ═══
+async function getJSON(url) {
+  for (let a = 0; ; a++) {
+    try { const r = await fetch(url, { credentials: 'same-origin' }); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || r.status); return j; }
+    catch (e) { if (a >= 2) throw e; await new Promise((r) => setTimeout(r, 800 * (a + 1))); }
+  }
+}
+async function loadClip(id) { loadMsg('baking 3D animation for ' + id + '… (first time takes ~10 s)'); return makeClip(await getJSON(`/api/mocap3d/bake/${encodeURIComponent(id)}`)); }
+
+(async () => {
+  try {
+    const { motions } = await getJSON('/api/mocap3d/motions');
+    if (!motions.length) throw new Error('No motions with SAM 3D Body meshes yet — analyse a clip on /mocap first.');
+    const qs = new URLSearchParams(location.search);
+    const idleId = qs.get('idle') || (motions.find((m) => /idle/i.test(m.name) && !m.shot && m.frameCount <= 20) || motions.find((m) => !m.shot) || motions[0]).id;
+    const moveId = qs.get('move') || (motions.find((m) => m.shot) || motions[0]).id;
+    for (const [sel, cur] of [[$('selIdle'), idleId], [$('selMove'), moveId]]) {
+      sel.innerHTML = motions.map((m) => `<option value="${m.id}" ${m.id === cur ? 'selected' : ''}>${m.name} · ${m.frameCount}f${m.shot ? ' · shot' : ''}</option>`).join('');
+      sel.onchange = () => { const q = new URLSearchParams(location.search); q.set(sel.id === 'selIdle' ? 'idle' : 'move', sel.value); location.search = q.toString(); };
+    }
+    const [idle, move] = await Promise.all([loadClip(idleId), moveId === idleId ? null : loadClip(moveId)]);
+    S.idle = idle; S.move = move || idle;
+    BALL_R = idle.meta.ballRadius || 0.12;
+    ball.scale.setScalar(BALL_R);
+    buildCharacter(idle);
+    S.yaw = faceHoopYaw(S.pos);
+    player.position.copy(S.pos);
+    S.camPos.set(S.pos.x + 2, 3, S.pos.z + 6); S.camLook.set(0, 1.2, 0);
+    $('loading').style.display = 'none';
+    $('state').textContent = 'IDLE';
+    window.__court3d = S; // for automated checks
+  } catch (e) {
+    $('err').textContent = e.message;
+    $('state').textContent = 'error';
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

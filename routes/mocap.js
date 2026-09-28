@@ -209,6 +209,29 @@ function register(router, ctx) {
     json(res, { jobId });
   });
 
+  // ── 3D sandbox (court3d.html) ──────────────────────────────────────────
+  // Motions that have SAM 3D Body meshes → playable on the 3D court
+  router.get('/api/mocap3d/motions', async (req, res) => {
+    const idx = await store.loadIndex();
+    const out = [];
+    for (const m of Object.values(idx.motions || {})) {
+      const meta = await store.loadMotionFile(m.id || m.motionId || '', 'meta').catch(() => null);
+      if (meta?.mesh?.frames) out.push({ id: meta.id, name: meta.name, frameCount: meta.frameCount, fps: meta.fps, shot: !!meta.report?.shotRelease, createdAt: meta.createdAt });
+    }
+    json(res, { motions: out.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))) });
+  });
+  // Baked 3D character animation for one motion (gzipped JSON, cached)
+  router.get('/api/mocap3d/bake/:id', async (req, res, params) => {
+    try {
+      const out = await require('../lib/mocap/bake3d').bake(params.id);
+      const body = require('zlib').gzipSync(Buffer.from(JSON.stringify(out)));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', 'Cache-Control': 'private, max-age=300' });
+      res.end(body);
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+  });
+
   router.get('/api/mocap/motions', async (req, res) => {
     const idx = await store.loadIndex();
     const motions = Object.values(idx.motions || {}).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));

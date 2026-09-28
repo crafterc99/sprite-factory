@@ -784,6 +784,9 @@ async function handler(req, res) {
   if (pathname === '/v2' || pathname === '/v2/') {
     return serveStatic(res, path.join(__dirname, 'index-v2.html'), 'text/html');
   }
+  if (pathname === '/court3d' || pathname === '/court3d/' || pathname === '/court3d.html') {
+    return serveStatic(res, path.join(__dirname, 'court3d.html'), 'text/html');
+  }
   if (pathname === '/mocap' || pathname === '/mocap/' || pathname === '/mocap.html') {
     return serveStatic(res, path.join(__dirname, 'mocap.html'), 'text/html');
   }
