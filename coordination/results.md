@@ -2839,3 +2839,10 @@ None. All terminals are clear. Human decision required to begin next phase.
   - Ball grip: frames where dribble physics says "in hand" draw a magenta proxy disc in the guide; prompts ask GPT to grip it; compose finds the disc, excludes it from sizing/QC, swaps it for the canonical ball under the character (fingers stay in front, oversize disc filled from neighbours). Flight frames / no disc → physics composite. qc.metrics.ballGrip reports it.
 - Validation: npm test 9/9 (new proxy-swap test). Real clip (IMG_6660 motion): floor snap ≤4 cm, held frames 0-3,7-11,15-16, flights 4-6,12-14 correctly without disc.
 - Assumptions: stand base measured from court art by eye (draggable in Edit mode). GPT's adherence to the magenta disc not yet verified live (needs a live generation run).
+
+## MOCAP-FIX-4 — Firebase persistence on Railway
+- Status: DONE (deployed to main)
+- Files changed: lib/firebase-storage.js, server.js, tests/mocap.test.js
+- What changed: credentials also from separate variables (Railway raw-editor split / FIREBASE_PROJECT_ID etc.); bucket auto-fallback <project>.firebasestorage.app → .appspot.com → <project>-studio; public /api/health reports storage backend/connected/bucket/problem (no secrets).
+- Validation: npm test 10/10; local server with split vars connects to sprite-factory-de646-studio; live /api/health → backend firebase, connected true, bucket sprite-factory-de646-studio.
+- Follow-up: deploy wiped the on-disk data one last time (Test move) — re-upload; confirm objects land in the bucket.
