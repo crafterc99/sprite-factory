@@ -14,6 +14,7 @@ const os = require('os');
 const path = require('path');
 const http = require('http');
 const { execFileSync } = require('child_process');
+const crypto = require('crypto');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-mocap-test-'));
 Object.assign(process.env, {
@@ -303,5 +304,25 @@ test('OpenAI rate limit: learns input-image limit, waits and retries; no-credits
     models._rl.limit = null; models._rl.log = [];
     if (saved.o !== undefined) process.env.OPENAI_API_KEY = saved.o; else delete process.env.OPENAI_API_KEY;
     if (saved.m !== undefined) process.env.MOCAP_MOCK = saved.m;
+  }
+});
+
+test('firebase storage backend: service-account parsing + stable download URLs', () => {
+  const k = crypto.generateKeyPairSync('rsa', { modulusLength: 1024 }).privateKey.export({ type: 'pkcs8', format: 'pem' });
+  const sa = { type: 'service_account', project_id: 'soul-jam-test', private_key_id: 'abc123', client_email: 'firebase-adminsdk@soul-jam-test.iam.gserviceaccount.com', private_key: k.replace(/\n/g, '\\n') };
+  const saved = process.env.FIREBASE_SERVICE_ACCOUNT;
+  process.env.FIREBASE_SERVICE_ACCOUNT = Buffer.from(JSON.stringify(sa)).toString('base64');
+  delete require.cache[require.resolve('../lib/firebase-storage')];
+  const fb = require('../lib/firebase-storage');
+  try {
+    assert.strictEqual(fb.isConfigured(), true);
+    assert.strictEqual(fb.getBucket(), 'soul-jam-test.firebasestorage.app');
+    const u1 = fb.getPublicUrl('game-assets/ankh-sj-crossover.png');
+    assert.strictEqual(u1, fb.getPublicUrl('game-assets/ankh-sj-crossover.png'), 'deterministic token');
+    assert.match(u1, /^https:\/\/firebasestorage\.googleapis\.com\/v0\/b\/soul-jam-test\.firebasestorage\.app\/o\/game-assets%2Fankh-sj-crossover\.png\?alt=media&token=[0-9a-f-]{36}$/);
+    assert.notStrictEqual(fb.tokenFor('a'), fb.tokenFor('b'));
+  } finally {
+    if (saved === undefined) delete process.env.FIREBASE_SERVICE_ACCOUNT; else process.env.FIREBASE_SERVICE_ACCOUNT = saved;
+    delete require.cache[require.resolve('../lib/firebase-storage')];
   }
 });

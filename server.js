@@ -230,17 +230,18 @@ router.get('/api/storage-status', async (req, res) => {
     R2_SECRET_ACCESS_KEY: !!process.env.R2_SECRET_ACCESS_KEY,
     R2_BUCKET: !!process.env.R2_BUCKET,
   };
-  const r2Available = vars.R2_ENDPOINT && vars.R2_ACCESS_KEY_ID && vars.R2_SECRET_ACCESS_KEY;
-  const backend = r2Available ? 'r2' : 'none';
+  vars.FIREBASE_SERVICE_ACCOUNT = !!process.env.FIREBASE_SERVICE_ACCOUNT;
+  vars.FIREBASE_STORAGE_BUCKET = !!process.env.FIREBASE_STORAGE_BUCKET;
+  const storage = require('./lib/r2-storage');
+  const available = storage.isAvailable();
+  const backend = available ? storage.backend : 'none';
   let connected = false;
-  if (r2Available) {
-    try {
-      const { listFiles } = require('./lib/r2-storage');
-      await listFiles('_meta');
-      connected = true;
-    } catch (e) { vars._connectError = e.message; }
+  if (available) {
+    const h = await storage.verifyConnection();
+    connected = h.ok;
+    if (!h.ok) vars._connectError = h.error;
   }
-  return json(res, { backend, r2Available, connected, vars });
+  return json(res, { backend, r2Available: available, available, connected, bucket: available ? storage.getBucket?.() : null, vars });
 });
 
 // ─── Testing Config Endpoint ─────────────────────────────────────────────
@@ -364,6 +365,15 @@ router.get('/api/testing-images/status', (req, res) => {
 
 // POST /api/debug/r2-write-test — round-trip write+read to confirm R2 uploads work
 router.post('/api/debug/r2-write-test', async (req, res) => {
+  // Backend-agnostic round trip (Firebase or R2) through the storage module
+  const storage = require('./lib/r2-storage');
+  if (storage.backend !== 'r2' && storage.isAvailable()) {
+    const ts = Date.now();
+    await storage.uploadJson('_meta/write-test.json', { ok: true, ts });
+    const buf = await storage.downloadFile('_meta/write-test.json');
+    const readTs = buf ? JSON.parse(buf.toString('utf8')).ts : null;
+    return json(res, { ok: readTs === ts, backend: storage.backend, bucket: storage.getBucket(), match: readTs === ts });
+  }
   const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
   const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET } = process.env;
   if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
@@ -418,9 +428,11 @@ router.get('/api/debug/db', async (req, res) => {
     return json(res, _dbHealthCache.result);
   }
 
-  const bucket = process.env.R2_BUCKET || 'sprite-factory';
-  const endpointPreview = process.env.R2_ENDPOINT
-    ? `${process.env.R2_ENDPOINT.slice(0, 48)}…  bucket=${bucket}`
+  const storageMod = require('./lib/r2-storage');
+  const isFirebase = storageMod.backend === 'firebase';
+  const bucket = isFirebase ? storageMod.getBucket() : (process.env.R2_BUCKET || 'sprite-factory');
+  const endpointPreview = isFirebase ? `firebase  bucket=${bucket}`
+    : process.env.R2_ENDPOINT ? `${process.env.R2_ENDPOINT.slice(0, 48)}…  bucket=${bucket}`
     : 'NOT SET';
   const keyPreview = process.env.R2_ACCESS_KEY_ID
     ? `${process.env.R2_ACCESS_KEY_ID.slice(0, 6)}…`
@@ -434,8 +446,8 @@ router.get('/api/debug/db', async (req, res) => {
       endpointPreview, keyPreview,
       // Legacy fields kept so older clients don't break:
       urlPreview: endpointPreview, urlSet: false, keySet: false,
-      error: 'R2 not configured. Set R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY (and optionally R2_BUCKET) in Railway → Variables.',
-      fix: 'Railway dashboard → your service → Variables → add R2_ENDPOINT (https://<account>.r2.cloudflarestorage.com), R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET. Create the bucket + an Object Read/Write API token in Cloudflare → R2 first. Redeploy.',
+      error: 'Storage not configured. Set FIREBASE_SERVICE_ACCOUNT (Firebase service-account JSON), or R2_ENDPOINT + R2_ACCESS_KEY_ID + R2_SECRET_ACCESS_KEY, in Railway → Variables.',
+      fix: 'Firebase: console → Project settings → Service accounts → Generate new private key → paste the JSON into FIREBASE_SERVICE_ACCOUNT (and enable Build → Storage). Or R2: Railway dashboard → your service → Variables → add R2_ENDPOINT (https://<account>.r2.cloudflarestorage.com), R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET. Create the bucket + an Object Read/Write API token in Cloudflare → R2 first. Redeploy.',
     });
   }
 
@@ -443,12 +455,13 @@ router.get('/api/debug/db', async (req, res) => {
     const health = await verifyConnection();
     const result = {
       ok: health.ok, configured: true,
-      backend: 'r2',
+      backend: storageMod.backend,
       endpointPreview, keyPreview,
       // Legacy aliases:
       urlPreview: endpointPreview,
       keyCount: health.keyCount, metaKeys: health.metaKeys, error: health.error,
       hint: health.ok ? null
+        : isFirebase ? `Firebase Storage failed — check: 1) Storage is enabled (Firebase console → Build → Storage → Get started), 2) bucket "${bucket}" is right (set FIREBASE_STORAGE_BUCKET if not), 3) the service account has Storage access (the default firebase-adminsdk account does).`
         : `R2 connection failed — check: 1) R2_ENDPOINT is "https://<account>.r2.cloudflarestorage.com" (no trailing slash, no bucket in path), 2) bucket "${bucket}" exists in this account, 3) the API token has Object Read+Write on it.`,
     };
 
@@ -565,7 +578,7 @@ router.post('/api/migrate-to-storage', async (req, res) => {
     results.assets = `uploaded (${assetCount})`;
   } catch (e) { results.assets = `FAILED: ${e.message}`; }
 
-  json(res, { ok: true, backend: process.env.R2_ENDPOINT ? 'r2' : 'none', results });
+  json(res, { ok: true, backend: require('./lib/r2-storage').isAvailable() ? require('./lib/r2-storage').backend : 'none', results });
 });
 
 // ─── Court Presets Endpoints ─────────────────────────────────────────────
@@ -749,9 +762,9 @@ if (require.main === module) {
       const { studioProvider } = require('./lib/sprite-generator/nano-banana');
       const sp = studioProvider(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
       console.log(`  Studio images: ${sp === 'openai' ? `GPT Image (${process.env.STUDIO_OPENAI_MODEL || 'gpt-image-2.5-sunburst'})` : sp === 'gemini' ? 'Gemini (Nano Banana)' : 'NOT SET — add OPENAI_API_KEY or GEMINI_API_KEY'}`);
-      const r2On = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
-      const storageLine = r2On
-        ? `R2 (bucket=${process.env.R2_BUCKET || 'sprite-factory'})`
+      const _st = require('./lib/r2-storage');
+      const storageLine = _st.isAvailable()
+        ? `${_st.backend === 'firebase' ? 'Firebase Storage' : 'R2'} (bucket=${_st.getBucket ? _st.getBucket() : process.env.R2_BUCKET || 'sprite-factory'})`
         : 'NOT SET — data will not persist';
       console.log(`  Storage: ${storageLine}`);
       console.log(`  Auth: ${require('./middleware/auth').enabled() ? 'password gate ON (APP_PASSWORD)' : 'OFF — set APP_PASSWORD to make the studio private'}`);
@@ -762,11 +775,12 @@ if (require.main === module) {
     setImmediate(async () => {
 
     // ── R2 connectivity check — must pass before restoring any data
-    const { verifyConnection: sbVerify, isAvailable: sbIsAvailable } = require('./lib/r2-storage');
-    const storageBackend = 'R2';
+    const { verifyConnection: sbVerify, isAvailable: sbIsAvailable, backend: sbBackend } = require('./lib/r2-storage');
+    const storageBackend = sbBackend === 'firebase' ? 'Firebase Storage' : 'R2';
     if (!sbIsAvailable()) {
       console.error('\n  ╔══════════════════════════════════════════════════════════════╗');
-      console.error('  ║  CRITICAL: R2 not configured (R2_ENDPOINT et al not set)      ║');
+      console.error('  ║  CRITICAL: storage not configured (FIREBASE_SERVICE_ACCOUNT   ║');
+      console.error('  ║  or R2_* not set)                                            ║');
       console.error('  ║  All data (characters, anims, wardrobe) will be LOST on       ║');
       console.error('  ║  every Railway redeploy. Set env vars in Railway dashboard.   ║');
       console.error('  ╚══════════════════════════════════════════════════════════════╝\n');

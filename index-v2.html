@@ -2313,9 +2313,9 @@ window.addEventListener('DOMContentLoaded', () => {
       const banner = document.createElement('div');
       banner.id = 'sb-warning-banner';
       banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;padding:10px 16px;font:bold 13px monospace;text-align:center;cursor:pointer;';
-      banner.innerHTML = '⚠ DATA PERSISTENCE BROKEN — Cloudflare R2 not connected. All data will be lost on next deploy. Click for fix instructions.';
+      banner.innerHTML = '⚠ DATA PERSISTENCE BROKEN — cloud storage (Firebase / R2) not connected. All data will be lost on next deploy. Click for fix instructions.';
       banner.onclick = () => {
-        alert('Cloudflare R2 is not connected. Your data is not being saved.\n\nTo fix:\n1. Cloudflare dashboard → R2 → Create bucket (default name: "sprite-factory")\n2. R2 → Manage R2 API Tokens → Create API Token. Permissions: Object Read & Write. Scope: this bucket.\n3. Copy: Access Key ID, Secret Access Key (shown once), and your Account ID.\n4. In Railway dashboard → your service → Variables:\n   R2_ENDPOINT = https://<account-id>.r2.cloudflarestorage.com\n   R2_ACCESS_KEY_ID = <access key>\n   R2_SECRET_ACCESS_KEY = <secret>\n   R2_BUCKET = sprite-factory   (or whatever you named it)\n5. Redeploy\n\nError: ' + (db.error || db.fix || 'unknown'));
+        alert('Cloud storage is not connected. Your data is not being saved.\n\nFix (either):\n\nA) Firebase: console.firebase.google.com → your project → Build → Storage → Get started. Then Project settings → Service accounts → Generate new private key. In Railway → Variables add FIREBASE_SERVICE_ACCOUNT = <the whole JSON file contents>. Deploy.\n\nB) Cloudflare R2: R2 → Manage API Tokens → Create (Object Read & Write). In Railway add R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET. Deploy.\n\nError: ' + (db.error || db.fix || 'unknown'));
       };
       document.body.prepend(banner);
     }

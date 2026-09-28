@@ -10,6 +10,8 @@ Open **/mocap** (or the "Mocap 3D" button in the studio nav).
 | `FAL_KEY` | Analysis (required) | fal.ai key. SAM 3 image ($0.005/prompt, 2 per frame) + SAM 3D Body ($0.02/frame) ≈ **$0.03 per frame**. |
 | `OPENAI_API_KEY` | GPT Image 2.5 Sunburst / Flare | Optional. Native transparent output (no green-screen fringe). |
 | `GEMINI_API_KEY` | Nano Banana Pro / 2 | Already set for the studio. |
+| `FIREBASE_SERVICE_ACCOUNT` | Persistent storage (recommended) | Firebase console → Project settings → Service accounts → **Generate new private key** → paste the whole JSON. Enable **Build → Storage** first. Optional `FIREBASE_STORAGE_BUCKET` if the bucket isn't `<project>.firebasestorage.app` / `<project>.appspot.com`. Takes priority over R2 (`STORAGE_BACKEND=r2` forces R2). |
+| `R2_*` | Persistent storage (alternative) | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (+ `R2_PUBLIC_URL` for the game). |
 | `MOCAP_MOCK=1` | Local dev/tests only | Synthetic providers, no keys. **Never set on Railway.** |
 
 ## Pipeline
