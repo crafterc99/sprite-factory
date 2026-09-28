@@ -131,6 +131,9 @@ test('full pipeline: upload → analyze → render → generate → regen', asyn
   const motionId = an.motionId;
   assert.strictEqual(an.meta.frameCount, 16);
   assert.strictEqual(an.meta.failedFrames, 0);
+  // SAM 3D Body mesh stored (aligned from a flipped/translated .ply) + hand close-ups
+  assert.deepStrictEqual(an.meta.mesh, { frames: 16, total: 16 });
+  assert.ok(an.meta.hands >= 12, `hand crops: ${an.meta.hands}`);
 
   r = await req('GET', `/api/mocap/motion/${motionId}`);
   assert.strictEqual(r.json.motion.frames.length, 16);
@@ -141,6 +144,11 @@ test('full pipeline: upload → analyze → render → generate → regen', asyn
     assert.strictEqual(r.headers['content-type'], 'image/png');
   }
   const sheetMeta = await sharp(r.buf).metadata();
+  r = await req('GET', `/api/mocap/motion/${motionId}/render?view=6&frame=3`, { raw: true });
+  assert.strictEqual(r.headers['x-guide'], 'mesh');
+  r = await req('GET', `/api/mocap/motion/${motionId}/render?view=6&frame=3&guide=mannequin`, { raw: true });
+  assert.strictEqual(r.headers['x-guide'], 'mannequin');
+  r = await req('GET', `/api/mocap/motion/${motionId}/sheet?view=1&w=96`, { raw: true });
   assert.strictEqual(sheetMeta.width, 96 * 16);
 
   // Reprocess with different smoothing keeps frame count
@@ -162,6 +170,7 @@ test('full pipeline: upload → analyze → render → generate → regen', asyn
   assert.strictEqual(result.variants.length, 4);
   for (const v of result.variants) {
     assert.strictEqual(v.status, 'done');
+    assert.strictEqual(v.guide, 'mesh');
     const strip = path.join(process.env.ASSETS_DIR, `tst-${v.animName}.png`);
     const meta = await sharp(strip).metadata();
     assert.strictEqual(meta.height, 180);
@@ -193,6 +202,12 @@ test('full pipeline: upload → analyze → render → generate → regen', asyn
   // Every analysed frame kept a real-pixel performer cut-out for the generator
   r = await req('GET', `/api/mocap/motion/${motionId}/raw`);
   assert.ok(r.json.frames.every((f) => f.cut), 'performer cut-outs recorded');
+  assert.ok(r.json.frames.every((f) => f.mesh && f.meshFit < 0.09), 'meshes fitted');
+
+  // Enrich is idempotent on a motion that already has meshes
+  r = await req('POST', `/api/mocap/motion/${motionId}/enrich`);
+  const en = await waitJob(r.json.jobId);
+  assert.strictEqual(en.meshes, 0);
 
   // Re-clean the motion, then recompose from stored raws — no model calls
   r = await req('POST', '/api/mocap/recompose', { body: { resultId: result.id } });

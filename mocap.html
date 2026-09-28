@@ -165,8 +165,14 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <div data-panel="motion" class="hidden">
     <section class="card">
       <h2 id="motionTitle">Motion</h2>
-      <p class="hint">What SAM 3 (mask, ball) and SAM 3D Body (skeleton) measured on each frame, then the cleaned 3D motion rendered from the game angles. Blue = left limbs, red = right limbs.</p>
+      <p class="hint">What SAM 3 (mask, ball) and SAM 3D Body (skeleton + body mesh) measured on each frame, then the cleaned 3D motion rendered from the game angles — as your real body scan when the mesh is available. Blue = left limbs, red = right limbs.</p>
       <div class="stats" id="motionStats"></div>
+      <div class="row" id="meshRow" style="margin:8px 0">
+        <span id="meshInfo" class="hint" style="margin:0"></span>
+        <button id="btnEnrich" type="button" class="small">Add 3D body mesh + hand close-ups</button>
+        <label class="toggle"><input type="checkbox" id="mqMesh" checked> Show body scan</label>
+      </div>
+      <div class="status" id="enStatus"></div>
       <div class="players" id="mqPlayers"></div>
       <div class="legend"><span><i style="background:var(--blue)"></i>left</span><span><i style="background:var(--red)"></i>right</span><span><i style="background:#e06a1f;border-radius:50%"></i>ball (composited, never generated)</span></div>
       <div class="row" style="margin-top:10px">
@@ -500,6 +506,13 @@ async function openMotion(id) {
     stat(`${r.sourceYawDeg ?? 0}°`, 'filmed from'), stat(r.reprojErrPx != null ? `${r.reprojErrPx}px` : '—', 'fit error'),
     stat(r.ballFrames ?? 0, 'ball frames'), stat(`${r.lrSwaps ?? 0} / ${r.outliersFixed ?? 0}`, 'L/R fixes / outliers'),
   ].join('');
+  const mf = meta.mesh?.frames || 0, mt = meta.mesh?.total || meta.sourceFrames || meta.frameCount;
+  $('#meshInfo').textContent = mf
+    ? `3D body mesh: ${mf}/${mt} frames · hand close-ups: ${meta.hands || 0}`
+    : 'No 3D body mesh yet — the pose guide uses the stick mannequin.';
+  $('#btnEnrich').classList.toggle('hidden', mf >= mt && (meta.hands || 0) > 0);
+  $('#btnEnrich').textContent = mf ? 'Fill missing mesh / hand frames' : `Add 3D body mesh + hand close-ups (~$${(0.02 * mt).toFixed(2)})`;
+  $('#enStatus').textContent = '';
   const s = meta.settings || {};
   $('#smoothing').value = s.smoothing ?? 1.2; $('#smLbl').textContent = $('#smoothing').value;
   $('#footLock').checked = s.footLock !== false; $('#inPlace').checked = s.inPlace !== false;
@@ -523,10 +536,22 @@ function buildPlayers() {
   const char = ST.character ? `&char=${encodeURIComponent(ST.character.name)}` : '';
   $('#mqPlayers').innerHTML = [1, 2, 3, 4, 5].map((v) => `<figure><canvas class="player" width="192" height="288" data-v="${v}"></canvas><figcaption>Z${v} · ${ZONES[v].label}</figcaption></figure>`).join('');
   $$('#mqPlayers canvas').forEach((cv) => {
-    ST.players.push(sheetPlayer(cv, `/api/mocap/motion/${ST.motionId}/sheet?view=${cv.dataset.v}&mirror=${mirror}&w=192${char}`, ST.motion.frameCount, () => +$('#mqFps').value));
+    ST.players.push(sheetPlayer(cv, `/api/mocap/motion/${ST.motionId}/sheet?view=${cv.dataset.v}&mirror=${mirror}&w=192${char}${$('#mqMesh').checked ? '' : '&guide=mannequin'}`, ST.motion.frameCount, () => +$('#mqFps').value));
   });
 }
 $('#mqMirror').onchange = buildPlayers;
+$('#mqMesh').onchange = buildPlayers;
+$('#btnEnrich').onclick = async () => {
+  const st = $('#enStatus'), b = $('#btnEnrich');
+  st.classList.remove('err'); b.disabled = true;
+  try {
+    const { jobId } = await api(`/api/mocap/motion/${ST.motionId}/enrich`, { method: 'POST', body: '{}' });
+    const out = await pollJob(jobId, (p) => { st.textContent = p.msg || 'Working…'; });
+    st.textContent = `✓ ${out.meshes} meshes, ${out.hands} hand close-ups added${out.cost ? ` · $${out.cost}` : ''}`;
+    await openMotion(ST.motionId);
+  } catch (e) { st.textContent = e.message; st.classList.add('err'); }
+  b.disabled = false;
+};
 
 function sheetPlayer(cv, url, count, fpsFn) {
   const ctx = cv.getContext('2d');

@@ -2846,3 +2846,16 @@ None. All terminals are clear. Human decision required to begin next phase.
 - What changed: credentials also from separate variables (Railway raw-editor split / FIREBASE_PROJECT_ID etc.); bucket auto-fallback <project>.firebasestorage.app → .appspot.com → <project>-studio; public /api/health reports storage backend/connected/bucket/problem (no secrets).
 - Validation: npm test 10/10; local server with split vars connects to sprite-factory-de646-studio; live /api/health → backend firebase, connected true, bucket sprite-factory-de646-studio.
 - Follow-up: deploy wiped the on-disk data one last time (Test move) — re-upload; confirm objects land in the bucket.
+
+## MOCAP-5 — SAM 3D Body mesh guide (#4) + hand close-ups (#5)
+- Status: DONE (deployed)
+- Files changed: lib/mocap/mesh-guide.js (new), lib/mocap/mannequin.js, lib/mocap/pipeline.js, lib/mocap/providers.js, lib/mocap/mock.js, routes/mocap.js, mocap.html, server.js, tests/mocap.test.js, docs/MOCAP.md
+- What changed:
+  - SAM 3D Body called with export_meshes; per-frame .ply parsed (ascii/binary), auto-aligned to the frame's keypoints (4 proper flips + ICP translation, reject > 9 cm), stored gzip int16 (+ faces once).
+  - Surface (geodesic) skinning to 47 bone segments seeded on each bone's own skin; re-posed on the cleaned motion; software z-buffer clay render (L blue / R red / grey, outlines, eyes, ball proxy/preview sphere); sole snapped to floor-snapped foot keypoints.
+  - Hand close-up per frame (ball hand, person+ball mask) → extra "HANDS" reference in both prompt modes; performer cut-out kept.
+  - Source frames now kept as motion assets; POST /api/mocap/motion/:id/enrich backfills meshes + hand crops; Motion step shows mesh status + button + scan/mannequin toggle.
+  - variant.guide recorded; regen/recompose re-render with the same guide.
+  - /api/health: storage writeOk round-trip probe.
+- Validation: npm test 10/10 (mock pipeline: all 16 frames meshed from a flipped+translated PLY, mesh guide in previews + generation, enrich idempotent). Real motion (IMG_6660) with synthetic scans: align err 1.5–2 cm, 18 full renders 1.5 s, torso binding leak 35/126 → 0/126. Hand crops verified on real frames.
+- Assumptions: real .ply frame = keypoint frame up to a flip + translation (auto-detected; otherwise falls back to mannequin with meshError). Not yet run on a real fal mesh.

@@ -25,9 +25,16 @@ video ─► ffmpeg frames (sample fps, trim)
          face forward · ground + per-frame floor snap (depth drift when travelling; jumps kept)
          · foot lock (±12 cm) · stature · smoothed in-place root · dribble physics (in-hand
          vs. flight + floor bounce)                                    → motion.json (reusable)
-      ─► mannequin (per game zone yaw, character's real height, one px/m per animation;
-         blue = left limbs, red = right limbs, face dots only when facing camera)
-      ─► image model: [angle ref, mannequin, anchor frame, portrait] → character in that pose
+         + per frame: the SAM 3D Body MESH (.ply) aligned to that frame's keypoints, and a
+           close-up of the ball hand (real pixels) — stored with the motion
+      ─► pose guide (per game zone yaw, character's real height, one px/m per animation):
+         the performer's body scan re-posed on the CLEANED motion (every vertex bound to
+         its bone along the surface), software z-buffer render — shaded clay, blue = left
+         limbs, red = right, dark outlines at depth edges, eyes when facing camera.
+         Motions without a mesh fall back to the stick mannequin (MOCAP_GUIDE=mannequin
+         forces it). "Add 3D body mesh" on the Motion step backfills older motions.
+      ─► image model: [angle ref, guide, anchor frame, performer cut-out, HAND close-up,
+         portrait] → character in that pose (compact 2-sheet mode on low rate limits)
          Ball IN HAND → drawn in the guide as a flat magenta disc; the model draws the grip
          around it (fingers over the disc)
       ─► compose: bg → alpha · align silhouette to mannequin (feet/height/centre, scale

@@ -237,6 +237,25 @@ function register(router, ctx) {
     }
   });
 
+  // Add SAM 3D Body meshes + hand close-ups to an existing motion
+  router.post('/api/mocap/motion/:id/enrich', async (req, res, params) => {
+    const st = providers.status();
+    if (!st.fal && !st.mock) return json(res, { error: 'FAL_KEY is not set on the server' }, 400);
+    const jobId = startJob('enrich');
+    setImmediate(async () => {
+      try {
+        const out = await pipeline.enrichMotion(params.id, (p) => patchJob(jobId, { progress: p }));
+        if (out.cost) recordCostExact('fal-sam3dbody-mesh', 'mocap_enrich', out.cost, { motionId: params.id });
+        sheetCache.clear();
+        patchJob(jobId, { status: 'done', result: out });
+      } catch (err) {
+        console.error('[mocap] enrich failed:', err);
+        patchJob(jobId, { status: 'error', error: err.message });
+      }
+    });
+    json(res, { jobId });
+  });
+
   async function sourceFramePath(id, i) {
     const raw = await store.loadMotionFile(id, 'raw');
     const fr = raw?.frames?.[+i];
@@ -298,8 +317,9 @@ function register(router, ctx) {
   function renderOpts(query, motion) {
     let statureM = motion.statureM;
     if (query.char) statureM = pipeline.loadCharacter(query.char).statureM;
-    return { view: +query.view || 1, mirror: query.mirror === '1', statureM, drawBall: query.ball !== '0' };
+    return { view: +query.view || 1, mirror: query.mirror === '1', statureM, drawBall: query.ball !== '0', guide: query.guide === 'mannequin' ? 'mannequin' : 'mesh' };
   }
+  const meshFor = (id, o) => (o.guide === 'mesh' ? pipeline.getMeshCtx(id) : null);
 
   router.get('/api/mocap/motion/:id/render', async (req, res, params, query) => {
     const motion = await store.loadMotionFile(params.id, 'motion');
@@ -308,7 +328,8 @@ function register(router, ctx) {
     const ppm = M.fitScale(motion, { statureM: o.statureM, mirror: o.mirror });
     const fi = Math.max(0, Math.min(motion.frameCount - 1, +query.frame || 0));
     const w = Math.min(768, +query.w || 384);
-    const r = await M.renderFrame(motion, fi, { ...o, ppm, previewWidth: w });
+    const r = await M.renderFrame(motion, fi, { ...o, ppm, previewWidth: w, meshCtx: await meshFor(params.id, o) });
+    res.setHeader('X-Guide', r.guide || 'mannequin');
     sendPng(res, r.png, 30);
   });
 
@@ -319,11 +340,12 @@ function register(router, ctx) {
     const ppm = M.fitScale(motion, { statureM: o.statureM, mirror: o.mirror });
     const w = Math.min(384, +query.w || 192);
     const h = Math.round((w * M.CANVAS.h) / M.CANVAS.w);
-    const key = JSON.stringify([params.id, motion.settings, motion.frameCount, o, w]);
+    const key = JSON.stringify([params.id, motion.settings, motion.frameCount, o, w, !!(await meshFor(params.id, o))]);
     let buf = sheetCache.get(key);
+    const meshCtx = await meshFor(params.id, o);
     if (!buf) {
       const tiles = await Promise.all(Array.from({ length: motion.frameCount }, async (_, i) => {
-        const r = await M.renderFrame(motion, i, { ...o, ppm, previewWidth: w });
+        const r = await M.renderFrame(motion, i, { ...o, ppm, previewWidth: w, meshCtx });
         return { input: await sharp(r.png).resize(w, h, { fit: 'fill' }).png().toBuffer(), left: i * w, top: 0 };
       }));
       buf = await sharp({ create: { width: w * motion.frameCount, height: h, channels: 4, background: '#ffffff' } }).composite(tiles).png().toBuffer();

@@ -223,13 +223,27 @@ require('./routes/mocap').register(router, ctx);
 // Public health: no secrets — only whether storage is wired and, if not, why
 let _healthStorage = null;
 router.get('/api/health', async (req, res) => {
-  if (!_healthStorage || Date.now() - _healthStorage.at > 60000) {
+  if (!_healthStorage || Date.now() - _healthStorage.at > 5 * 60000) {
     const fb = require('./lib/firebase-storage');
     const st = require('./lib/r2-storage');
     let connected = false, problem = null;
-    if (st.isAvailable()) { const h = await st.verifyConnection().catch((e) => ({ ok: false, error: e.message })); connected = !!h.ok; problem = h.ok ? null : h.error; }
+    let writeOk = null;
+    if (st.isAvailable()) {
+      const h = await st.verifyConnection().catch((e) => ({ ok: false, error: e.message }));
+      connected = !!h.ok; problem = h.ok ? null : h.error;
+      if (connected) {
+        // Real round trip: listing can work while writes are refused (IAM)
+        const probe = { at: new Date().toISOString() };
+        try {
+          await st.uploadJson('_meta/health-probe.json', probe);
+          const back = await st.downloadFile('_meta/health-probe.json');
+          writeOk = !!back && JSON.parse(back.toString('utf8')).at === probe.at;
+          if (!writeOk) problem = 'bucket is readable but writes are not landing (check the service account has Storage Object Admin)';
+        } catch (e) { writeOk = false; problem = `write failed: ${e.message}`; }
+      }
+    }
     else problem = fb.configError() || 'no storage variables set (FIREBASE_SERVICE_ACCOUNT or R2_*)';
-    _healthStorage = { at: Date.now(), v: { backend: st.isAvailable() ? st.backend : 'none', connected, bucket: st.isAvailable() ? st.getBucket?.() : null, credentials: fb.credentialsSource(), problem } };
+    _healthStorage = { at: Date.now(), v: { backend: st.isAvailable() ? st.backend : 'none', connected, writeOk, bucket: st.isAvailable() ? st.getBucket?.() : null, credentials: fb.credentialsSource(), problem } };
   }
   json(res, { ok: true, auth: require('./middleware/auth').enabled(), storage: _healthStorage.v });
 });
