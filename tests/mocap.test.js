@@ -405,3 +405,26 @@ test('jump shot: ball leaving the hand upward is a release (no ball drawn after 
   assert.ok(m.frames.slice(m.report.shotRelease.releaseFrame).every((fr) => fr.ball === null), 'no ball after release');
   assert.ok(m.frames[m.report.shotRelease.lastHeldFrame].ball, 'ball still in hand on the last held frame');
 });
+
+test('ball in hand follows the model (performer photo), not the tracked position', async () => {
+  const C = require('../lib/mocap/compose');
+  const { CANVAS } = require('../lib/mocap/mannequin');
+  const tracked = { x: 300, y: 500, r: 40, held: true, hand: 'right' }; // tracked ball: beside the fingertips
+  const body = '<rect x="330" y="200" width="120" height="700" fill="#556070"/><rect x="440" y="560" width="60" height="18" fill="#8a6a50"/>';
+  const svg = (ball) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS.w}" height="${CANVAS.h}">${body}${ball}</svg>`);
+  // 1) model drew the magenta disc in the hand, 170 px from the tracked spot
+  const disc = await sharp(svg('<circle cx="470" cy="600" r="42" fill="#FF00FF"/><rect x="440" y="570" width="60" height="10" fill="#8a6a50"/>')).png().toBuffer();
+  let b = await C.findHeldBall(disc, tracked);
+  assert.ok(b && b.kind === 'proxy' && Math.abs(b.x - 470) < 8 && Math.abs(b.y - 600) < 9, JSON.stringify(b));
+  // 2) model drew an orange ball with seams instead → that one is used (no double ball)
+  const orange = await sharp(svg('<circle cx="470" cy="600" r="40" fill="#e0701f"/><path d="M430 600 L510 600 M470 560 L470 640" stroke="#1a0a02" stroke-width="4"/>')).png().toBuffer();
+  b = await C.findHeldBall(orange, tracked);
+  assert.ok(b && b.kind === 'drawn' && Math.abs(b.x - 470) < 6, JSON.stringify(b));
+  const out = await C.swapProxyBall(orange, b);
+  const { data, info } = await sharp(out).raw().toBuffer({ resolveWithObject: true });
+  let seam = 0;
+  for (let y = 565; y < 635; y++) for (let x = 435; x < 505; x++) { const i = (y * info.width + x) * info.channels; if (data[i + 3] > 200 && data[i] < 40 && data[i + 1] < 40) seam++; }
+  assert.ok(seam < 120, `drawn seams replaced by the canonical ball (${seam} dark px left)`);
+  // 3) nothing drawn → null (caller falls back to the tracked position)
+  assert.strictEqual(await C.findHeldBall(await sharp(svg('')).png().toBuffer(), tracked), null);
+});
