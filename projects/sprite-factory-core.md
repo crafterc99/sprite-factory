@@ -71,3 +71,5 @@ None currently — pending Railway stability.
 | 2026-03-31 | Default model changed to gemini-3-pro-image-preview across all 5 generation endpoints |
 | 2026-03-31 | Fixed chalk ESM crash in strip-builder.js and smart-selector.js |
 | 2026-03-31 | Vercel deployment added (assets excluded from bundle due to 250MB size limit) |
+
+- 2026-09-28: Mocap fix round 3 — zone apex at hoop stand base, magenta ball-proxy grip (fingers over the ball), per-frame floor snap + smoothed root for travelling moves. Tests 9/9. Railway deploy pending persistent storage.
