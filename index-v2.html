@@ -8093,7 +8093,15 @@ function testingRenderLoop(timestamp) {
     const useHD = hdImg?.complete && hdImg?.naturalWidth > 0;
 
     let drawX, drawY, drawW, drawH;
-    if (useHD) {
+    if (useHD && hdImg.naturalWidth === hdImg.naturalHeight) {
+      // Pre-aligned square frame (mocap 540×540): same geometry as a 180 strip
+      // cell — feet at 170/180, stature already baked in at pixelHeight
+      drawH = 180 * TESTING.scale;
+      drawW = drawH;
+      drawX = TESTING.charX - drawW / 2;
+      drawY = TESTING.charY - (170 / 180) * drawH;
+      ctx.drawImage(hdImg, 0, 0, hdImg.naturalWidth, hdImg.naturalHeight, drawX, drawY, drawW, drawH);
+    } else if (useHD) {
       // Native-res tight-cropped frame: feet at bottom of image, scale to pixelHeight
       drawH = TESTING.pixelHeight * TESTING.scale;
       drawW = drawH * (hdImg.naturalWidth / hdImg.naturalHeight);
@@ -8503,10 +8511,12 @@ async function loadGMAnims() {
 // Load strip image for a charAnim entry into TESTING (used by game mode on anim switch)
 function gmLoadStrip(animEntry) {
   if (!animEntry?.stripUrl) return;
-  TESTING.frameCount = animEntry.frameCount ?? 1;
-  TESTING.fps        = animEntry.fps ?? 8;
-  TESTING.loop       = animEntry.loop ?? true;
   GM._loadedAnimKey  = animEntry.animKey ?? null;
+  const applyMeta = () => {
+    TESTING.frameCount = animEntry.frameCount ?? 1;
+    TESTING.fps        = animEntry.fps ?? 8;
+    TESTING.loop       = animEntry.loop ?? true;
+  };
   // Slider reflects the active animation's own (server-persisted) speed
   const _fpsEl = document.getElementById('testingFPS');
   if (_fpsEl && document.activeElement !== _fpsEl) {
@@ -8516,15 +8526,24 @@ function gmLoadStrip(animEntry) {
   }
   // Use preloaded image (loaded during loadGMAnims) to avoid blank frame on zone transition
   if (animEntry._img?.complete && animEntry._img.naturalWidth > 0) {
+    applyMeta();
     TESTING.stripImg    = animEntry._img;
     TESTING.stripLoaded = true;
   } else {
-    TESTING.stripLoaded = false;
-    TESTING.stripImg = new Image();
-    TESTING.stripImg.onload = () => { TESTING.stripLoaded = true; };
-    TESTING.stripImg.src = animEntry.stripUrl + '?t=' + Date.now();
-    // Cache for future calls once loaded
-    TESTING.stripImg.onload = () => { TESTING.stripLoaded = true; animEntry._img = TESTING.stripImg; };
+    // Keep drawing the current strip until the new one has loaded — swapping
+    // to an empty Image blanked the player on every move/zone change (and the
+    // per-load ?t= cache-buster forced a re-download each time)
+    const img = new Image();
+    const token = (GM._stripLoadToken = (GM._stripLoadToken || 0) + 1);
+    img.onload = () => {
+      animEntry._img = img;
+      if (token !== GM._stripLoadToken) return; // a newer load superseded this one
+      applyMeta();
+      TESTING.stripImg = img;
+      TESTING.stripLoaded = true;
+    };
+    img.src = animEntry.stripUrl;
+    if (!TESTING.stripImg || !TESTING.stripLoaded) applyMeta();
   }
 }
 

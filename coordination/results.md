@@ -2815,3 +2815,10 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: npm test 3/3 (motion recovery from a 30°-yawed/6°-pitched camera, auth gate, full HTTP pipeline incl. strips 180×N with feet at y≈170, L/R mirror variants, regen); Playwright iPad Pro 11 run of the whole UI (login → upload → analyze → 5-zone mannequin previews → generate GPT 2.5 mock → results → frame QC dialog → regen → save cross_z1_right) with zero JS errors
 - Assumptions: SAM 3D Body keypoint convention auto-detected by re-projection error (4 candidates); ball radius 0.12 m for depth; fal accepts data-URI images; GPT Image 2.5 via /v1/images/edits with background=transparent; motions are in-place by default (root travel stored in motion.json)
 - Next dependency: set FAL_KEY, OPENAI_API_KEY (optional), APP_PASSWORD in Railway; first real-clip run to tune QC thresholds
+
+## TASK-ADHOC-20260928B — Live mocap run (IMG_6660 → "ankh") + Studio on GPT Image + court fixes
+- Status: DONE (court fixes on branch; deploy to main held — see blocker)
+- Files changed: lib/sprite-generator/nano-banana.js (GPT Image routing), lib/mocap/{image-models,pipeline,compose,motion-builder,character-sheet}.js, routes/mocap.js, mocap.html, index-v2.html (gmLoadStrip no-blank swap, square HD frames, ?page deep link), scripts/{mocap-e2e,court-capture}.js, tests/mocap.test.js
+- Live timings (Railway, GPT Image 2.5 Sunburst): character from sheet 57s (+2 generated angles) · upload 0.4s · analyze 17 frames 50.6s ($0.51) · generate 36 frames (Z1+Z3 × both hands) 446.5s ($2.46) · save 0.6s · total 556s (~9m16s), $2.97. QC 36/36 pass.
+- Validation: npm test 4/4; court capture on live (zones 1 and 3) + local capture with the live strips after the court fix (no blank frames)
+- Blocker: Railway R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY missing → every redeploy wipes characters/motions/sprites; deploying these fixes would delete the ankh run
