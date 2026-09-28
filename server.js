@@ -742,7 +742,9 @@ if (require.main === module) {
       console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
       console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);
       console.log(`  Animations: 8`);
-      console.log(`  API Key: ${process.env.GEMINI_API_KEY ? 'set' : 'NOT SET — export GEMINI_API_KEY'}`);
+      const { studioProvider } = require('./lib/sprite-generator/nano-banana');
+      const sp = studioProvider(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+      console.log(`  Studio images: ${sp === 'openai' ? `GPT Image (${process.env.STUDIO_OPENAI_MODEL || 'gpt-image-2.5-sunburst'})` : sp === 'gemini' ? 'Gemini (Nano Banana)' : 'NOT SET — add OPENAI_API_KEY or GEMINI_API_KEY'}`);
       const r2On = !!(process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
       const storageLine = r2On
         ? `R2 (bucket=${process.env.R2_BUCKET || 'sprite-factory'})`

@@ -189,3 +189,37 @@ test('full pipeline: upload → analyze → render → generate → regen', asyn
   r = await req('GET', `/api/mocap/results?motionId=${motionId}`);
   assert.strictEqual(r.json.results.length, 1);
 });
+
+test('studio image client routes to GPT Image when no Gemini key (green-flattened output)', async () => {
+  const saved = { g: process.env.GEMINI_API_KEY, o: process.env.OPENAI_API_KEY, m: process.env.MOCAP_MOCK };
+  delete process.env.GEMINI_API_KEY; process.env.OPENAI_API_KEY = 'sk-test'; delete process.env.MOCAP_MOCK;
+  const realFetch = global.fetch;
+  const calls = [];
+  const transparent = await sharp({ create: { width: 64, height: 64, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([{ input: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect x="24" y="8" width="16" height="48" fill="#c00"/></svg>') }]).png().toBuffer();
+  global.fetch = async (url, init) => {
+    calls.push({ url, model: init.body.get ? init.body.get('model') : null, size: init.body.get ? init.body.get('size') : null, n: init.body.getAll ? init.body.getAll('image[]').length : 0 });
+    return { ok: true, status: 200, json: async () => ({ data: [{ b64_json: transparent.toString('base64') }], usage: { input_tokens: 1000, output_tokens: 2000, input_tokens_details: { image_tokens: 800, text_tokens: 200 } } }) };
+  };
+  try {
+    const { NanaBananaClient } = require('../lib/sprite-generator/nano-banana');
+    const ref = path.join(TMP, 'ref.png');
+    fs.writeFileSync(ref, transparent);
+    const c = new NanaBananaClient();
+    assert.strictEqual(c.provider, 'openai');
+    const r = await c.generate('pose the character', { referenceImages: [ref, ref], aspectRatio: '3:4', resolution: '1K', model: 'gemini-3-pro-image-preview' });
+    assert.strictEqual(calls[0].url, 'https://api.openai.com/v1/images/edits');
+    assert.strictEqual(calls[0].model, 'gpt-image-2.5-sunburst');
+    assert.strictEqual(calls[0].size, '912x1216');
+    assert.strictEqual(calls[0].n, 2);
+    const px = await sharp(r.imageBuffer).raw().toBuffer({ resolveWithObject: true });
+    assert.deepStrictEqual([...px.data.slice(0, 3)], [0, 255, 0]); // background flattened to #00FF00
+    await c.generate('x', { referenceImages: [ref], model: 'gemini-3.1-flash-image-preview' });
+    assert.strictEqual(calls[1].model, 'gpt-image-2.5-flare');
+  } finally {
+    global.fetch = realFetch;
+    if (saved.g !== undefined) process.env.GEMINI_API_KEY = saved.g;
+    if (saved.o !== undefined) process.env.OPENAI_API_KEY = saved.o; else delete process.env.OPENAI_API_KEY;
+    if (saved.m !== undefined) process.env.MOCAP_MOCK = saved.m;
+  }
+});
