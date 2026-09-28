@@ -262,7 +262,8 @@ function register(baseRouter, ctx) {
   // Every motion with its game role/settings + build quality; the roles table; characters
   router.get('/api/mocap3d/library', async (req, res) => {
     try {
-      json(res, { clips: await GC.library(), court: await GC.clipsForCourt(), roles: GC.ROLES, characters: RIG.listCharacters() });
+      const clips = await GC.library();
+      json(res, { clips, court: await GC.clipsForCourt(clips), roles: GC.ROLES, characters: RIG.listCharacters() });
     } catch (err) { json(res, { error: err.message }, 500); }
   });
   router.get('/api/mocap3d/characters', (req, res) => json(res, { characters: RIG.listCharacters() }));
