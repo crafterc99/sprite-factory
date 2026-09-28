@@ -2829,3 +2829,13 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Files changed: engine/GameCourt.js (new), engine/CourtZones.js, index-v2.html, server.js (bundled court), data/court-default.webp (Soul Jam court art), lib/game-deploy.js (new), routes/export.js, lib/mocap/{mannequin,pipeline,store}.js, routes/mocap.js, mocap.html, scripts/*, tests/mocap.test.js
 - Validation: npm test 6/6 (zones reachable + correct per quadrant, deploy resolver incl. per-frame mirroring, performer cut-outs recorded); local court capture with live ankh strips (16:9 css size, zone 3 side view facing hoop)
 - Assumptions: depth foreshortening 2.2 from the game court proportions; zone apex = game HOOP_X/HOOP_Y (what the game steers toward), not the painted rim
+
+## MOCAP-FIX-3 — stand-base zones, ball grip, feet on a travelling player
+- Status: DONE (pushed to feature branch; Railway deploy pending user go-ahead — storage not yet confirmed persistent)
+- Files changed: lib/mocap/motion-builder.js, lib/mocap/mannequin.js, lib/mocap/compose.js, lib/mocap/pipeline.js, engine/GameCourt.js, index-v2.html, tests/mocap.test.js, docs/MOCAP.md
+- What changed:
+  - Zone apex = centre of the hoop stand's base plate (82,343 @960×540), marker "HOOP BASE"; saved as netAnchorV2 so the old net-rim anchor is ignored.
+  - Feet: per-frame floor snap (grounded frames; airborne frames interpolated, smoothed), foot-lock clamp ±5 → ±12 cm, in-place removes a Gaussian-smoothed root instead of raw per-frame pelvis.
+  - Ball grip: frames where dribble physics says "in hand" draw a magenta proxy disc in the guide; prompts ask GPT to grip it; compose finds the disc, excludes it from sizing/QC, swaps it for the canonical ball under the character (fingers stay in front, oversize disc filled from neighbours). Flight frames / no disc → physics composite. qc.metrics.ballGrip reports it.
+- Validation: npm test 9/9 (new proxy-swap test). Real clip (IMG_6660 motion): floor snap ≤4 cm, held frames 0-3,7-11,15-16, flights 4-6,12-14 correctly without disc.
+- Assumptions: stand base measured from court art by eye (draggable in Edit mode). GPT's adherence to the magenta disc not yet verified live (needs a live generation run).

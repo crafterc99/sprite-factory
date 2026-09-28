@@ -6543,17 +6543,19 @@ function getZoneForPos(x, y) {
 // ── Net / hoop anchor ─────────────────────────────────────────────────────
 // Marks where the net sprite will be rendered. x/y = center of rim.
 // w/h = bounding box of the full net sprite.
-// Default = the base of the painted net on the Soul Jam court art (measured on
-// court.webp at this 960×540 canvas). Zones fan out from here. Drag the NET
+// Default = the floor point under the hoop: the centre of the stand's base
+// plate on the Soul Jam court art (measured on court.webp at this 960×540
+// canvas). Zones fan out from here — a floor point, so the perspective angle
+// is measured on the floor like the player's feet. Drag the NET
 // marker in Edit mode to re-align it for a different court image — it is saved
 // with the court settings. (The game's own HOOP_X/HOOP_Y × 0.75 = 199,171 sits
 // left of the painted net.)
-const NET_ANCHOR_DEFAULT = { x: 240, y: 193, w: 82, h: 72 };
+const NET_ANCHOR_DEFAULT = { x: 82, y: 343, w: 110, h: 175 };
 let NET_ANCHOR = { ...NET_ANCHOR_DEFAULT };
 
 function drawNetMarker(ctx) {
-  // NET_ANCHOR = base of the net (where the zone wedges fan out from). The
-  // dashed box above it outlines the net; drag the centre in Edit mode to
+  // NET_ANCHOR = base of the hoop stand (where the zone wedges fan out from).
+  // The dashed box above it outlines the stand + net; drag the centre in Edit mode to
   // re-align, drag the box's bottom-right corner to resize the outline.
   const { x, y, w, h } = NET_ANCHOR;
   ctx.save();
@@ -6573,7 +6575,7 @@ function drawNetMarker(ctx) {
   ctx.fillStyle = 'rgba(255,200,0,0.95)';
   ctx.font = 'bold 8px "Space Mono",monospace';
   ctx.textAlign = 'center';
-  ctx.fillText('NET BASE', x, y + 22);
+  ctx.fillText('HOOP BASE', x, y + 22);
   ctx.textAlign = 'start';
   ctx.restore();
 }
@@ -6618,13 +6620,14 @@ async function loadTestingConfig() {
         };
       });
     }
-    if (d.netAnchor) {
-      const W = 960, H = 640;
+    // netAnchorV2 = stand base. The old netAnchor (net rim) is ignored.
+    if (d.netAnchorV2) {
+      const W = 960, H = 540;
       NET_ANCHOR = {
-        x: Math.max(0, Math.min(W, d.netAnchor.x)),
-        y: Math.max(0, Math.min(H, d.netAnchor.y)),
-        w: Math.max(20, Math.min(300, d.netAnchor.w ?? 82)),
-        h: Math.max(20, Math.min(300, d.netAnchor.h ?? 72)),
+        x: Math.max(0, Math.min(W, d.netAnchorV2.x)),
+        y: Math.max(0, Math.min(H, d.netAnchorV2.y)),
+        w: Math.max(20, Math.min(300, d.netAnchorV2.w ?? NET_ANCHOR_DEFAULT.w)),
+        h: Math.max(20, Math.min(400, d.netAnchorV2.h ?? NET_ANCHOR_DEFAULT.h)),
       };
     }
     // Scale + speed are global settings — the cloud copy wins over this
@@ -6655,7 +6658,7 @@ async function saveTestingConfig() {
     const r = await fetch(`${API}/api/testing-config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS, netAnchor: NET_ANCHOR, scaleV2: TESTING.scale, speed: TESTING.speed }),
+      body: JSON.stringify({ oobBounds: OOB_BOUNDS, zoneDividers: ZONE_DIVIDERS, netAnchorV2: NET_ANCHOR, scaleV2: TESTING.scale, speed: TESTING.speed }),
     });
     const d = await r.json();
     if (d.savedToCloud) {

@@ -22,12 +22,18 @@ video ─► ffmpeg frames (sample fps, trim)
       ─► SAM 3D Body per frame (MHR70 2D/3D keypoints + camera), mask-guided
       ─► motion-builder: convention auto-detect · camera→y-up world · ball depth from its
          known size · gap fill · L/R swap repair · outlier filter · smoothing · level ground ·
-         face forward · ground + foot lock · stature · in-place root   → motion.json (reusable)
+         face forward · ground + per-frame floor snap (depth drift when travelling; jumps kept)
+         · foot lock (±12 cm) · stature · smoothed in-place root · dribble physics (in-hand
+         vs. flight + floor bounce)                                    → motion.json (reusable)
       ─► mannequin (per game zone yaw, character's real height, one px/m per animation;
          blue = left limbs, red = right limbs, face dots only when facing camera)
       ─► image model: [angle ref, mannequin, anchor frame, portrait] → character in that pose
+         Ball IN HAND → drawn in the guide as a flat magenta disc; the model draws the grip
+         around it (fingers over the disc)
       ─► compose: bg → alpha · align silhouette to mannequin (feet/height/centre, scale
-         clamped ±12% of the animation median) · canonical ball composited in front/behind
+         clamped ±12% of the animation median; magenta excluded from sizing) · magenta disc →
+         canonical ball (fingers stay in front) · ball in flight / no disc → canonical ball
+         composited from physics in front/behind   (MOCAP_BALL_PROXY=0 disables the disc)
       ─► QC: pose coverage · spill · colour vs anchor · ball leak · size → auto-retry
       ─► 180×180 strip (feet y=170, stature = pixelHeight, same window every frame)
          + 540×540 frames + genmeta.json {mode:'mocap-aligned'}

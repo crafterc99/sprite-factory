@@ -27,8 +27,9 @@ const GAME_COURT = {
 const TEST_SCALE = 0.75;                   // 960×540 testing canvas
 const DEPTH_K = 2.2;
 
-// Base of the painted net on the court art at 960×540 (the zone apex)
-const NET_BASE = { x: 240, y: 193 };
+// Floor point under the hoop — centre of the stand's base plate on the court
+// art at 960×540 (the zone apex; a floor point like the player's feet)
+const NET_BASE = { x: 82, y: 343 };
 
 const TEST_COURT = {
   width: GAME_COURT.width * TEST_SCALE,

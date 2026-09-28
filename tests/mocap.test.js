@@ -326,3 +326,30 @@ test('firebase storage backend: service-account parsing + stable download URLs',
     delete require.cache[require.resolve('../lib/firebase-storage')];
   }
 });
+
+test('ball proxy: magenta disc becomes the canonical ball, fingers stay in front', async () => {
+  const C = require('../lib/mocap/compose');
+  const { CANVAS } = require('../lib/mocap/mannequin');
+  // body block + magenta disc (r=40 at 400,500) with a grey "finger" bar over it
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS.w}" height="${CANVAS.h}">
+    <rect x="300" y="200" width="120" height="600" fill="#556070"/>
+    <circle cx="400" cy="500" r="40" fill="#FF00FF"/>
+    <rect x="380" y="470" width="40" height="10" fill="#8a6a50"/></svg>`;
+  const buf = await sharp(Buffer.from(svg)).png().toBuffer();
+  const px = async (b, x, y) => { const { data } = await sharp(b).extract({ left: x, top: y, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true }); return [...data]; };
+  const prep = await C.prepareGenerated(buf, true);
+  assert.ok(prep.proxyPx > 3000, 'proxy pixels found');
+  assert.strictEqual(prep.stats.maxX, 419, 'disc excluded from body stats');
+  const proxy = await C.findProxy(buf, { x: 405, y: 495, r: 40 });
+  assert.ok(proxy && Math.abs(proxy.x - 400) < 2 && Math.abs(proxy.y - 500) < 2, 'disc located');
+  const out = await C.swapProxyBall(buf, proxy);
+  const centre = await px(out, 425, 505), finger = await px(out, 410, 475);
+  assert.ok(centre[0] > 150 && centre[1] < 140 && centre[2] < 90 && centre[3] > 200, `ball colour at disc (${centre})`);
+  assert.deepStrictEqual(finger.slice(0, 3), [0x8a, 0x6a, 0x50], 'finger drawn over the ball');
+  // No magenta left anywhere
+  const { data } = await sharp(out).raw().toBuffer({ resolveWithObject: true });
+  let mag = 0; for (let i = 0; i < data.length; i += 4) if (data[i + 3] > 24 && C.isProxy(data[i], data[i + 1], data[i + 2])) mag++;
+  assert.strictEqual(mag, 0);
+  // No disc drawn → no proxy (falls back to physics compositing)
+  assert.strictEqual(await C.findProxy(buf, { x: 100, y: 100, r: 40 }), null);
+});
