@@ -2954,3 +2954,13 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Fixes found on the way: MPFB clothes carry no rig weights, so each garment vertex had borrowed its single nearest body vertex's bones → torn hood (edges stretched up to 41×); MPFB's upper spine joint sits 25 cm below MHR's, so pinning spine joints stretched the chest. Rest-pose edge stretch after the fix: pants max 1.3× (was 39.8×), hoodie p99 1.9× (was 4.1×). Sandals decimated to 15 %, hoodie to 50 % (rig 1.26 MB, ~25k verts).
 - Validation: npm test 28/28; headless court --char player PASS twice (0 errors, dribble to floor, stop, shot SWISH); close-up renders front / side / back.
 - Limits: the hoodie model is a zip-up (the tee fills the V); MHR's shoulders sit ~10 cm higher than MPFB's, so the armpit area stretches (body p99 1.7×).
+
+## MOCAP-17 — Realistic character generated from the performer's video (replaces the MakeHuman figure)
+- Status: DONE
+- Files changed: lib/mocap/character-gen.js (new), routes/mocap.js (character/generate, character/job), .gitignore (data/.chargen/), scripts/mhr/glb_export.py (new), scripts/mhr/fit_generated.py (new), lib/mocap/mhr-rigs/player.json.gz + player-tex/{diffuse,normal}.webp + CREDITS.txt (replaced), scripts/court3d-test.js (bounce check robust to sparse frames), docs/ANIMATION-3D.md
+- What: IMG_7870 frames 0/10/182 → GPT Image 2.5 A-pose front + back views of the performer (checked before the 3D step) → Hyper3D Rodin v2.5 (TAPose, de-lit PBR, 50K tris) → rigged on the performer's own MHR body (bake_rig from the take, 1.83 m): pose fitted to the mesh (mesh→body 1.74 cm, body→mesh 1.41 cm), normal-aware weight transfer, arm/leg exclusivity, skeleton bound in the fitted pose (no un-posing → no tearing).
+- Cost: views $0.12 + Rodin $0.40 = $0.52.
+- Fixes on the way: un-posing into MHR rest tore armpits / crotch (3,390 edges > 1.5×) → bind in the fitted pose; thigh vertices beside the hanging hands took hand weights (webbing when the arms move) → normal-aware nearest points + no vertex on both an arm and a leg.
+- Validation: npm test 28/28; headless court --char player PASS 3/3 (0 errors, dribble, run, stop, crossovers, shot SWISH); renders idle front/side/back, run, gather, release.
+- Test change: the dribble "reaches the floor" check also accepts a low point < 0.4 m where the ball turns from falling to rising — at ~5 fps software rendering the floor contact falls between samples (previous rule: a sample < 0.2 m only).
+- Limits: one mesh (clothes are not separate layers, so the hoodie/pants deform with the body, no cloth sim); fingers are Rodin's (low detail); the face is lit from behind in the default camera.

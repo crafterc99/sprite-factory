@@ -25,6 +25,16 @@ const OUT = args.out || path.join(process.cwd(), 'court3d-test');
 const PW = process.env.SF_PASSWORD || '';
 fs.mkdirSync(OUT, { recursive: true });
 
+// A dribble reaches the floor: a sample under 0.2 m, or — when frames are
+// sparse (software rendering, ~5 fps) and the contact falls between samples —
+// a low point under 0.4 m (well below the hand) where the ball turns from
+// falling to rising.
+function bouncesToFloor(ys) {
+  if (Math.min(...ys) < 0.2) return true;
+  for (let i = 1; i < ys.length - 1; i++) if (ys[i] < 0.4 && ys[i - 1] > ys[i] && ys[i + 1] > ys[i]) return true;
+  return false;
+}
+
 (async () => {
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH || (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined),
@@ -74,7 +84,7 @@ fs.mkdirSync(OUT, { recursive: true });
     await new Promise((res) => { const f = () => { out.push(window.__ballProbe()); if (performance.now() - t0 < 5000) requestAnimationFrame(f); else res(); }; f(); });
     return { ys: out, slide: window.__court3d.player.metrics.slideMaxCm };
   });
-  rep.dribble = { samples: idle.ys.length, minY: +Math.min(...idle.ys).toFixed(3), maxY: +Math.max(...idle.ys).toFixed(3), bouncesToFloor: Math.min(...idle.ys) < 0.2, backToHand: Math.max(...idle.ys) > 0.6, idleSlideCm: +idle.slide.toFixed(2) };
+  rep.dribble = { samples: idle.ys.length, minY: +Math.min(...idle.ys).toFixed(3), maxY: +Math.max(...idle.ys).toFixed(3), bouncesToFloor: bouncesToFloor(idle.ys), backToHand: Math.max(...idle.ys) > 0.6, idleSlideCm: +idle.slide.toFixed(2) };
 
   // Move: each direction for 1.5 s, then stop
   const moves = {};
