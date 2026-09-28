@@ -223,10 +223,10 @@ function register(router, ctx) {
   // Baked 3D character animation for one motion (gzipped JSON, cached)
   router.get('/api/mocap3d/bake/:id', async (req, res, params) => {
     try {
-      const out = await require('../lib/mocap/bake3d').bake(params.id);
-      const body = require('zlib').gzipSync(Buffer.from(JSON.stringify(out)));
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', 'Cache-Control': 'private, max-age=300' });
-      res.end(body);
+      const { gz, rawLength } = await require('../lib/mocap/bake3d').bakeGz(params.id);
+      // X-Raw-Length: the decompressed size, so the page can show real progress
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', 'Content-Length': gz.length, 'X-Raw-Length': rawLength, 'Cache-Control': 'private, max-age=300' });
+      res.end(gz);
     } catch (err) {
       json(res, { error: err.message }, 400);
     }

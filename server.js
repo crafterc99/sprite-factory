@@ -784,6 +784,10 @@ async function handler(req, res) {
   if (pathname === '/v2' || pathname === '/v2/') {
     return serveStatic(res, path.join(__dirname, 'index-v2.html'), 'text/html');
   }
+  if (pathname === '/vendor/three.module.min.js') {
+    // three.js r160, self-hosted: no CDN, no import map (older iOS lacks them)
+    return serveStatic(res, path.join(__dirname, 'vendor', 'three.module.min.js'), 'text/javascript');
+  }
   if (pathname === '/court3d' || pathname === '/court3d/' || pathname === '/court3d.html') {
     return serveStatic(res, path.join(__dirname, 'court3d.html'), 'text/html');
   }

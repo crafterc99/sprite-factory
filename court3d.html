@@ -31,7 +31,36 @@
   #shootBtn.held { background:rgba(255,106,26,.7); }
   @media (pointer:coarse) { #shootBtn { display:block; } #help { display:none; } }
 </style>
-<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+<script>
+// ── Boot watchdog (a plain script: runs even when the 3D module can't) ──
+// Any load/startup error, or the engine not starting at all, is shown on the
+// loading screen with a Retry — the page must never sit on "Loading" silently.
+(function () {
+  function fail(msg) {
+    if (window.__c3dReady) return;
+    var e = document.getElementById('err');
+    if (!e) { window.__c3dPendingErr = msg; return; }
+    e.innerHTML = String(msg).replace(/</g, '&lt;') + '<br><br><button onclick="location.reload()">Retry</button> &nbsp; <a href="/?page=testing" style="color:#ff6a1a">Open the 2D court</a>';
+  }
+  window.__c3dFail = fail;
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t !== window && (t.src || t.href)) fail('Could not load ' + (t.src || t.href) + ' — check the connection and retry.');
+    else if (e.message) fail('3D engine error: ' + e.message);
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) { fail('3D engine error: ' + ((e.reason && e.reason.message) || e.reason)); });
+  var hasGL = false;
+  try { var c = document.createElement('canvas'); hasGL = !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (x) {}
+  window.__c3dHasGL = hasGL;
+  setTimeout(function () {
+    if (window.__c3dBoot) return;
+    var why = !('noModule' in HTMLScriptElement.prototype) ? 'this browser does not support JavaScript modules (update iOS / Safari)'
+      : !hasGL ? 'WebGL is turned off or unsupported on this device'
+      : 'the 3D engine file did not load';
+    fail('The 3D engine did not start: ' + why + '. (' + navigator.userAgent + ')');
+  }, 12000);
+})();
+</script>
 </head>
 <body>
 <canvas id="view"></canvas>
@@ -60,7 +89,9 @@
 <div id="loading"><div class="t">Loading 3D court…</div><div id="loadMsg">motions</div><div id="err"></div></div>
 
 <script type="module">
-import * as THREE from 'three';
+import * as THREE from '/vendor/three.module.min.js';
+window.__c3dBoot = true;
+if (window.__c3dPendingErr) window.__c3dFail(window.__c3dPendingErr);
 
 // ═══ Constants (metres; y up; rim centre above the origin; court toward +z) ═══
 const RIM_Y = 3.05, RIM_R = 0.2286, BASELINE_Z = -1.575, HALF_LEN = 14.33, HALF_W = 7.62;
@@ -73,10 +104,21 @@ const loadMsg = (m) => { $('loadMsg').textContent = m; };
 
 // ═══ Renderer / scene ═══
 const canvas = $('view');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+// Lite mode on phones/tablets (iPadOS reports a Mac UA but has touch points):
+// lower pixel ratio, cheaper shadows. ?hq=1 forces full quality, ?lite=1 lite.
+const QS = new URLSearchParams(location.search);
+const TOUCH = navigator.maxTouchPoints > 1 || matchMedia('(pointer:coarse)').matches;
+const LITE = QS.get('lite') === '1' || (TOUCH && QS.get('hq') !== '1');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: !LITE, powerPreference: 'high-performance' });
+} catch (e1) {
+  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false }); }
+  catch (e2) { window.__c3dFail('WebGL could not start on this device (' + (e2.message || e2) + '). Try closing other tabs, turning off Low Power Mode, or updating iOS.'); throw e2; }
+}
+renderer.setPixelRatio(Math.min(LITE ? 1.5 : 2, window.devicePixelRatio || 1));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = LITE ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -89,7 +131,7 @@ scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x3a2412, 0.85));
 const sun = new THREE.DirectionalLight(0xfff1dd, 2.2);
 sun.position.set(-6, 14, 9);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(LITE ? 1024 : 2048, LITE ? 1024 : 2048);
 Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
 sun.shadow.bias = -0.0004;
 scene.add(sun);
@@ -160,7 +202,7 @@ const steel = new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.4, 
 const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.0, 1.6), padMat); base.position.set(0, 0.5, BASELINE_Z - 1.6); base.castShadow = true; hoop.add(base);
 const post = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.2, 0.28), steel); post.position.set(0, 2.1, BASELINE_Z - 1.5); post.castShadow = true; hoop.add(post);
 const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 1.3), steel); arm.position.set(0, 3.55, BASELINE_Z - 0.9); hoop.add(arm);
-const board = new THREE.Mesh(new THREE.BoxGeometry(1.83, 1.07, 0.04), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.05, transmission: 0.4 }));
+const board = new THREE.Mesh(new THREE.BoxGeometry(1.83, 1.07, 0.04), new THREE.MeshStandardMaterial({ color: 0xdfe8ff, transparent: true, opacity: 0.32, roughness: 0.08, metalness: 0.1, depthWrite: false }));
 board.position.set(0, 2.9 + 0.535, BASELINE_Z + 1.22); hoop.add(board);
 const boardFrame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.83, 1.07, 0.04)), new THREE.LineBasicMaterial({ color: 0xffffff }));
 boardFrame.position.copy(board.position); hoop.add(boardFrame);
@@ -200,13 +242,23 @@ scene.add(ball);
 // ═══ Character (baked SAM 3D Body scan animation) ═══
 const b64 = (s, T) => { const bin = atob(s); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return new T(u8.buffer); };
 
-function makeClip(data) {
+const yieldUI = () => new Promise((r) => setTimeout(r, 0)); // let Safari paint + stay responsive
+async function makeClip(data, label) {
   const n = data.meta.vertexCount, q = data.meta.quant;
   const faces = b64(data.faces, Uint32Array);
-  const frames = data.frames.map((f) => { const i16 = b64(f, Int16Array); const out = new Float32Array(n * 3); for (let k = 0; k < out.length; k++) out[k] = i16[k] * q; return out; });
-  // per-keyframe normals (smooth blending of both positions and normals)
   const tmp = new THREE.BufferGeometry(); tmp.setIndex(new THREE.BufferAttribute(faces, 1));
-  const normals = frames.map((pos) => { tmp.setAttribute('position', new THREE.BufferAttribute(pos, 3)); tmp.computeVertexNormals(); return tmp.getAttribute('normal').array.slice(); });
+  const frames = [], normals = [];
+  for (let i = 0; i < data.frames.length; i++) {
+    const i16 = b64(data.frames[i], Int16Array);
+    const pos = new Float32Array(n * 3);
+    for (let k = 0; k < pos.length; k++) pos[k] = i16[k] * q;
+    data.frames[i] = null; // free the base64 as we go
+    // per-keyframe normals (positions and normals are both blended)
+    tmp.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    tmp.computeVertexNormals();
+    frames.push(pos); normals.push(tmp.getAttribute('normal').array.slice());
+    if (i % 3 === 2) { loadMsg(`preparing ${label}: frame ${i + 1}/${data.frames.length}`); await yieldUI(); }
+  }
   tmp.dispose();
   return { ...data, faces, frames, normals, colors: b64(data.colors, Uint8Array), n };
 }
@@ -413,10 +465,19 @@ function updateCamera(dt, inp) {
 let last = performance.now(), fpsAcc = 0, fpsN = 0;
 const ballSpin = new THREE.Vector3();
 function tick(now) {
+  try { step(now); } catch (e) {
+    console.error(e);
+    $('loading').style.display = 'flex'; window.__c3dReady = false;
+    window.__c3dFail('3D engine stopped: ' + (e.message || e));
+    return;
+  }
+  requestAnimationFrame(tick);
+}
+function step(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now; // cap: a stalled tab must not teleport the game
   fpsAcc += dt; fpsN++; if (fpsAcc > 0.5) { $('fps').textContent = Math.round(fpsN / fpsAcc) + ' fps'; fpsAcc = 0; fpsN = 0; }
   const inp = readInput();
-  if (!S.idle) { requestAnimationFrame(tick); return; }
+  if (!S.idle) return;
 
   // ── Square gesture: move then hold (a tap also shoots — the only shot is the step-back jumper)
   const moving = Math.hypot(inp.mx, inp.my) > 0.2;
@@ -488,25 +549,57 @@ function tick(now) {
   }
   if (ballSpin.lengthSq() > 1e-6) ball.rotateOnWorldAxis(new THREE.Vector3(ballSpin.z, 0, -ballSpin.x).normalize(), ballSpin.length() * dt / BALL_R * 0.5);
   net.scale.lerp(new THREE.Vector3(1, 1, 1), 1 - Math.exp(-dt * 5));
-  if (S.state === 'idle' && !S.freeBall) $('state').textContent = moving ? 'DRIBBLE' : 'IDLE';
+  if (S.state === 'idle' && !S.freeBall) $('state').textContent = (moving ? 'DRIBBLE' : 'IDLE') + (S.moveLoading ? ' · move loading…' : S.moveError ? ' · move failed (reload)' : '');
   if (S.state === 'shot') $('state').textContent = S.shot?.released ? 'SHOT' : 'STEP BACK';
 
   updateCamera(dt, inp);
   renderer.render(scene, camera);
-  requestAnimationFrame(tick);
 }
 
 // ═══ Load motions ═══
-async function getJSON(url) {
+// fetch JSON with retries, a timeout, byte progress and clear errors
+class SignedOut extends Error {}
+async function getJSON(url, { label, timeoutMs = 90000 } = {}) {
   for (let a = 0; ; a++) {
-    try { const r = await fetch(url, { credentials: 'same-origin' }); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || r.status); return j; }
-    catch (e) { if (a >= 2) throw e; await new Promise((r) => setTimeout(r, 800 * (a + 1))); }
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
+    try {
+      const r = await fetch(url, { credentials: 'same-origin', signal: ctl.signal, cache: 'no-cache' });
+      const ct = r.headers.get('content-type') || '';
+      if (r.status === 401 || r.redirected && /\/login/.test(r.url) || ct.includes('text/html')) throw new SignedOut('Not signed in on this browser.');
+      let text;
+      const total = +(r.headers.get('x-raw-length') || 0);
+      if (label && r.body && r.body.getReader) {
+        const reader = r.body.getReader(), chunks = [];
+        let got = 0, lastShown = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value); got += value.length;
+          if (got - lastShown > 150000) { lastShown = got; loadMsg(`downloading ${label}: ${(got / 1e6).toFixed(1)}${total ? ' / ' + (total / 1e6).toFixed(1) : ''} MB`); }
+        }
+        const all = new Uint8Array(got); let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; }
+        text = new TextDecoder().decode(all);
+      } else text = await r.text();
+      const j = JSON.parse(text);
+      if (!r.ok || j.error) throw new Error(j.error || 'HTTP ' + r.status);
+      return j;
+    } catch (e) {
+      if (e instanceof SignedOut) throw e;
+      if (a >= 2) throw new Error((e.name === 'AbortError' ? 'timed out loading ' : 'could not load ') + (label || url) + ' (' + (e.message || e) + ')');
+      loadMsg(`retrying ${label || url}…`);
+      await new Promise((res) => setTimeout(res, 1000 * (a + 1)));
+    } finally { clearTimeout(timer); }
   }
 }
-async function loadClip(id) { loadMsg('baking 3D animation for ' + id + '… (first time takes ~10 s)'); return makeClip(await getJSON(`/api/mocap3d/bake/${encodeURIComponent(id)}`)); }
+async function loadClip(id, label) {
+  loadMsg(`loading ${label}…`);
+  return makeClip(await getJSON(`/api/mocap3d/bake/${encodeURIComponent(id)}`, { label, timeoutMs: 120000 }), label);
+}
 
 (async () => {
   try {
+    loadMsg('finding motions…');
     const { motions } = await getJSON('/api/mocap3d/motions');
     if (!motions.length) throw new Error('No motions with SAM 3D Body meshes yet — analyse a clip on /mocap first.');
     const qs = new URLSearchParams(location.search);
@@ -516,21 +609,34 @@ async function loadClip(id) { loadMsg('baking 3D animation for ' + id + '… (fi
       sel.innerHTML = motions.map((m) => `<option value="${m.id}" ${m.id === cur ? 'selected' : ''}>${m.name} · ${m.frameCount}f${m.shot ? ' · shot' : ''}</option>`).join('');
       sel.onchange = () => { const q = new URLSearchParams(location.search); q.set(sel.id === 'selIdle' ? 'idle' : 'move', sel.value); location.search = q.toString(); };
     }
-    const [idle, move] = await Promise.all([loadClip(idleId), moveId === idleId ? null : loadClip(moveId)]);
-    S.idle = idle; S.move = move || idle;
+    // Playable as soon as the idle dribble is ready; the move loads behind it
+    const idle = await loadClip(idleId, 'idle dribble');
+    S.idle = idle; S.move = null;
     BALL_R = idle.meta.ballRadius || 0.12;
     ball.scale.setScalar(BALL_R);
     buildCharacter(idle);
     S.yaw = faceHoopYaw(S.pos);
     player.position.copy(S.pos);
     S.camPos.set(S.pos.x + 2, 3, S.pos.z + 6); S.camLook.set(0, 1.2, 0);
+    loadMsg('starting…');
+    renderer.render(scene, camera); // first frame compiles the shaders — surface failures here
     $('loading').style.display = 'none';
+    window.__c3dReady = true;
     $('state').textContent = 'IDLE';
     window.__court3d = S; // for automated checks
     window.__ballProbe = () => ball.position.y;
+    if (moveId !== idleId) {
+      S.moveLoading = true;
+      loadClip(moveId, 'move').then((m) => { S.move = m; })
+        .catch((e) => { S.moveError = e.message; console.warn('move failed to load', e); })
+        .finally(() => { S.moveLoading = false; });
+    } else S.move = idle;
   } catch (e) {
-    $('err').textContent = e.message;
+    const signedOut = e instanceof SignedOut;
+    window.__c3dFail(signedOut ? 'You are not signed in on this browser.' : e.message);
+    if (signedOut) $('err').insertAdjacentHTML('beforeend', `<br><a href="/login?next=${encodeURIComponent(location.pathname + location.search)}" style="color:#ff6a1a">Sign in</a>`);
     $('state').textContent = 'error';
+    return;
   }
   requestAnimationFrame(tick);
 })();
