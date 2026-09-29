@@ -797,11 +797,30 @@ async function handler(req, res) {
     if (fp && fs.existsSync(fp)) return serveStatic(res, fp, 'image/webp');
     res.writeHead(404); return res.end('Not found');
   }
+  if (pathname.startsWith('/vendor/three-addons/')) {
+    // three.js r160 addons (GLTFLoader, Reflector, BufferGeometryUtils), imports pointed at /vendor/three.module.min.js
+    const m = pathname.match(/^\/vendor\/three-addons\/([A-Za-z]+\.js)$/);
+    const fp = m && path.join(__dirname, 'vendor', 'three-addons', m[1]);
+    if (fp && fs.existsSync(fp)) return serveStatic(res, fp, 'text/javascript');
+    res.writeHead(404); return res.end('Not found');
+  }
+  if (pathname === '/courts/vantheah.glb') {
+    // the VANTHEAH practice court (textures as WebP: scripts/court-webp.js); geometry gzips 6.5 → 2.4 MB
+    const fp = path.join(__dirname, 'assets', 'courts', 'vantheah.glb');
+    if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return serveStatic(res, fp, 'model/gltf-binary');
+    try {
+      const st = fs.statSync(fp), etag = `"gz-${st.mtimeMs.toString(36)}-${st.size.toString(36)}"`;
+      if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).map((t) => t.replace(/^W\//, '')).includes(etag)) { res.writeHead(304, { ETag: etag }); return res.end(); }
+      if (!global.__courtGz || global.__courtGz.etag !== etag) global.__courtGz = { etag, body: require('zlib').gzipSync(fs.readFileSync(fp), { level: 6 }) };
+      res.writeHead(200, { 'Content-Type': 'model/gltf-binary', 'Content-Encoding': 'gzip', 'Content-Length': global.__courtGz.body.length, 'Cache-Control': 'public, max-age=300, stale-while-revalidate=86400', ETag: etag, Vary: 'Accept-Encoding' });
+      return res.end(global.__courtGz.body);
+    } catch { res.writeHead(404); return res.end('Not found'); }
+  }
   if (pathname === '/vendor/rapier.mjs') {
     // Rapier 3D physics (Apache-2.0), WASM inlined — the basketball's rigid-body engine
     return serveStatic(res, path.join(__dirname, 'node_modules', '@dimforge', 'rapier3d-compat', 'dist', 'rapier.mjs'), 'text/javascript');
   }
-  if (pathname === '/js/basketball-physics.mjs' || pathname === '/js/contact-ik.mjs' || pathname === '/js/ball-lab.mjs' || pathname === '/js/ball-setup.mjs') {
+  if (pathname === '/js/basketball-physics.mjs' || pathname === '/js/contact-ik.mjs' || pathname === '/js/ball-lab.mjs' || pathname === '/js/ball-setup.mjs' || pathname === '/js/court-vantheah.mjs') {
     // the basketball physics system, its contact IK and the test scenes (engine3d/)
     return serveStatic(res, path.join(__dirname, 'engine3d', pathname.slice(4)), 'text/javascript', { revalidate: true });
   }

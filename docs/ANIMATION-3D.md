@@ -189,3 +189,30 @@ The ball is a **Rapier** rigid body (`@dimforge/rapier3d-compat`, served at `/ve
 - The generated crossovers are flagged invalid for this body.
 - At 20–30 fps an occasional swinging foot can still kick the ball.
 - The replay view shows the recorded ball track (the video reference), not physics.
+
+## 8. Practice court — VANTHEAH Sunset rooftop (`engine3d/court-vantheah.mjs`)
+
+The 3D court's default environment is the VANTHEAH Sunset Practice Court pack. `?court=classic` brings back the old procedural half court.
+
+- **Asset:** `assets/courts/vantheah.glb`, served gzipped at `/courts/vantheah.glb` (2.4 MB on the wire).
+  - It's the pack's GLB with its PNG textures re-encoded as WebP (`scripts/court-webp.js`, `EXT_texture_webp`); the geometry is unchanged.
+  - Size: 14.7 → 6.5 MB.
+  - Contents: 98 meshes, 183k triangles, FIBA 28 × 15 m, rims 3.05 m.
+- **Placement:** the game plays at a hoop on the origin with the court along +Z. The court is turned −90° about Y and moved +12.425 m:
+  - glb (x, y, z) → game (−z, y, x + 12.425);
+  - the West basket sits exactly on the game's hoop and the East one at z = 24.85;
+  - the playable court is x ±7.5 and z from −1.575 to 26.425, and the player is kept 0.4 m inside it.
+- **Look:** as the pack's loader specifies:
+  - its own sun (the shadow caster) and floodlights, plus a hemisphere fill;
+  - a captured PMREM environment, with the floor and character left out of the capture;
+  - a live planar wet reflection on desktop and the static environment only on mobile or `?lite=1`;
+  - ACES tone mapping at exposure 1.1.
+
+  The classic lights and fog are removed. Three.js r160 addons are self-hosted at `/vendor/three-addons/`.
+- **Collision** (Rapier, `addVantheahColliders`), 84 colliders:
+  - both hoops: open 32-capsule rims (tube 0.0095 m) and the backboards;
+  - the padded bases, fences and retaining walls from the pack's dimensions;
+  - the hoop supports and mounts, bleachers, benches, ball rack and duffel from their measured bounds.
+
+  The floor is the physics plane at y = 0. Sky, city, banners, nets, foliage and the decorative balls have no collision.
+- **Checks:** `scripts/court-vantheah-check.js` tests the court in the game: player scale and foot contact, dribble height, the ball thrown at the rim and at the board, a shot, walking the full court to the East baseline, and the bounds clamp. It is state-driven, so it runs under software WebGL at ~1 fps.
