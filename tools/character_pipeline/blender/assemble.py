@@ -193,9 +193,6 @@ else:
 T_POSE = T_POSE_W > 0.7 * H
 report['pose'] = 'T-pose' if T_POSE else 'arms down'
 log('body pose:', report['pose'])
-T_POSE = None
-
-
 def trace_arm(P, side):
     """The arm as a chain of cross-sections from the shoulder outward: [(t, centre, radius, n)].
     A-pose / hanging arms: horizontal slices, the outermost x-cluster beside the torso. T-pose

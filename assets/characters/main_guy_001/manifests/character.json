@@ -1,0 +1,1472 @@
+{
+ "id": "main_guy_001",
+ "style": "soul-jam-illustrated",
+ "pipelineVersion": "cf-2026-09-29a",
+ "createdAt": "2026-09-29T04:50:45.284Z",
+ "heightMeters": null,
+ "quality": "hero",
+ "references": [
+  {
+   "name": "32aea470-image.png",
+   "original": "references/_original/32aea470-image.png",
+   "sha256": "41dd4741c6b60eb3ebd381b9917191f9769c6cdd18bcabb2fbc23da629ce91a4",
+   "width": 2048,
+   "height": 1360,
+   "source": "image analysis",
+   "confidence": "medium",
+   "notes": [
+    "subject 2.18× taller than wide, skin 97 %",
+    "fingers down; view assumed \"back\" (override with {\"view\":\"palm\"})",
+    "split from a two-hand sheet (image left = right hand for a back view, fingers down)"
+   ],
+   "bgSpread": 2.1,
+   "skinShare": 0.97,
+   "part": "hand_left",
+   "view": "back",
+   "box": {
+    "x0": 0.6015625,
+    "y0": 0,
+    "x1": 0.8802083333333334,
+    "y1": 0.9137254901960784
+   },
+   "cleaned": "references/hand_left/back.png",
+   "cleanedSha256": "04e9ac0eba3c1dd6631d9268b34567dbc7e211a3261097e4ceb049b87bafb47f",
+   "cropWidth": 817,
+   "cropHeight": 1325,
+   "upscaled": 1,
+   "skinTone": [
+    165,
+    85,
+    52
+   ]
+  },
+  {
+   "name": "32aea470-image.png",
+   "original": "references/_original/32aea470-image.png",
+   "sha256": "41dd4741c6b60eb3ebd381b9917191f9769c6cdd18bcabb2fbc23da629ce91a4",
+   "width": 2048,
+   "height": 1360,
+   "source": "image analysis",
+   "confidence": "medium",
+   "notes": [
+    "subject 2.18× taller than wide, skin 97 %",
+    "fingers down; view assumed \"back\" (override with {\"view\":\"palm\"})",
+    "split from a two-hand sheet (image left = right hand for a back view, fingers down)"
+   ],
+   "bgSpread": 2.1,
+   "skinShare": 0.97,
+   "part": "hand_right",
+   "view": "back",
+   "box": {
+    "x0": 0.11979166666666667,
+    "y0": 0,
+    "x1": 0.3984375,
+    "y1": 0.9137254901960784
+   },
+   "cleaned": "references/hand_right/back.png",
+   "cleanedSha256": "2043ad6cf8a291a06b1e0e8e6b305e8b6ad09d14c399f6e9a589de2020cb928e",
+   "cropWidth": 817,
+   "cropHeight": 1325,
+   "upscaled": 1,
+   "skinTone": [
+    162,
+    83,
+    50
+   ]
+  },
+  {
+   "name": "370aa863-image.png",
+   "original": "references/_original/370aa863-image.png",
+   "sha256": "e83fe19914b5068e54b9e26933c3e8f379e98cec3600e53b3f50c6390cb939e1",
+   "width": 3504,
+   "height": 2336,
+   "source": "image analysis",
+   "confidence": "medium",
+   "notes": [
+    "subject 1.69× taller than wide, skin 20 %",
+    "figure 0.29× as wide as tall: arms down at the sides",
+    "silhouette symmetry 0.72, shoulder width / height 0.29, skin share near the top 0.78"
+   ],
+   "bgSpread": 2.1,
+   "skinShare": 0.2,
+   "armsTouching": true,
+   "part": "body",
+   "view": "front",
+   "box": {
+    "x0": 0.24739583333333334,
+    "y0": 0.0234375,
+    "x1": 0.6197916666666666,
+    "y1": 0.96875
+   },
+   "cleaned": "references/body/front.png",
+   "cleanedSha256": "c54367831d629ab37a853d47e5b5ca6e7bd31109d5c98528d3202f9a5a9c09b9",
+   "cropWidth": 1726,
+   "cropHeight": 2336,
+   "upscaled": 1,
+   "skinTone": [
+    160,
+    87,
+    59
+   ]
+  },
+  {
+   "name": "6857ba92-image.jpg",
+   "original": "references/_original/6857ba92-image.jpg",
+   "sha256": "c77bf4887d852f0bf6f21c4057253f5498f7b366e2cac8595da980e97fe8d976",
+   "width": 190,
+   "height": 255,
+   "source": "image analysis",
+   "confidence": "medium",
+   "notes": [
+    "subject 1.30× taller than wide, skin 52 %",
+    "silhouette symmetry 0.97, skin share near the top 0.51"
+   ],
+   "bgSpread": 5.6,
+   "skinShare": 0.52,
+   "part": "head",
+   "view": "front",
+   "box": {
+    "x0": 0.042105263157894736,
+    "y0": 0.027450980392156862,
+    "x1": 0.968421052631579,
+    "y1": 0.9215686274509803
+   },
+   "cleaned": "references/head/front.png",
+   "cleanedSha256": "ad62f99ab33fcd080d3a3d67c422ea14d25e9282825c6f4eedf5b4950564a2ab",
+   "cropWidth": 190,
+   "cropHeight": 251,
+   "upscaled": 4.08,
+   "skinTone": [
+    142,
+    71,
+    55
+   ]
+  }
+ ],
+ "validation": {
+  "ok": true,
+  "warnings": [
+   "370aa863-image.png: the arms hang at the sides — hands and thighs would fuse and the rig could not separate them; the pipeline first makes a T-pose version of this reference (Tripo image-to-image, template t_pose, ~5 credits)",
+   "6857ba92-image.jpg: the head is only 190×251 px in the source; it was upscaled ×4.08 for generation, which adds no real detail — a ≥ 1024 px original gives a much better head master",
+   "body: one view only → single-image generation (the unseen sides are inferred; add left / back / right views for multiview)",
+   "head: one view only → single-image generation (the unseen sides are inferred; add left / back / right views for multiview)",
+   "hand_left: one view only → single-image generation (the unseen sides are inferred; add left / back / right views for multiview)",
+   "hand_right: one view only → single-image generation (the unseen sides are inferred; add left / back / right views for multiview)",
+   "not checked automatically: same identity / outfit across views, pose neutrality, perspective distortion — review the references page in the Character Lab"
+  ],
+  "blocking": [],
+  "at": "2026-09-29T07:16:46.025Z"
+ },
+ "generation": {
+  "hand_left": {
+   "seeds": {
+    "model_seed": 1424034575,
+    "texture_seed": 1044683779
+   },
+   "key": "aa23c4e0fc79c2e5",
+   "mode": "image",
+   "model": "v3.1-20260211",
+   "params": {
+    "geometry_quality": "detailed",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "extreme",
+    "texture_version": "v3.5-20260815",
+    "export_uv": true,
+    "model_seed": 1424034575,
+    "texture_seed": 1044683779
+   },
+   "views": {
+    "front": "references/hand_left/back.png"
+   },
+   "attempts": 1,
+   "fileTokens": {
+    "front": "file_40db46bf-4cf3-4983-ae26-904aaa879b9f"
+   },
+   "task": {
+    "id": "da82531e-fed6-4d0d-850f-0f11a18cfb45",
+    "status": "success",
+    "createdAt": "2026-09-29T04:51:11.973Z",
+    "type": "image_to_model",
+    "finishedAt": "2026-09-29T04:55:20.916Z",
+    "credits": 70,
+    "output": {
+     "model_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/da82531e-fed6-4d0d-850f-0f11a18cfb45/tripo_pbr_model_da82531e-fed6-4d0d-850f-0f11a18cfb45.glb?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvZGE4MjUzMWUtZmVkNi00ZDBkLTg1MGYtMGYxMWExOGNmYjQ1L3RyaXBvX3Bicl9tb2RlbF9kYTgyNTMxZS1mZWQ2LTRkMGQtODUwZi0wZjExYTE4Y2ZiNDUuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzkwNzQ0MTIwfX19XX0_&Signature=T1b83tpbJt03hxQNJMvBSZaw7AJkPG5PCjV6lXT3nYJb-tZoHN0iGxNoPTtMqaEd-GzfgtlG~0VRbfcdqpIShuUtSuzn30FfNNVmET2nyeRD2Hd5uZFQ2XvawP3jvi3uTd4FDrifGRW6RKdoTyQOufhl3PO5hX7wMQALq1hr5KHUMlMekpBpcXCFwyDd6gyBdNUigoq-8yHqQygoZHmwD0LEbihPq4p2UNUzrARhOH2x5oUpAcIuXiEVtOq8~YRFZRn61MWUqagB7wG6rCohhwcAXSfgjKF~B-Srpk36uHz7FjrIdUttTHolXvL~bYlnYAiDR9B9GDrKHfMBLT50Sg__&Key-Pair-Id=K1676C64NMVM2J",
+     "rendered_image_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/da82531e-fed6-4d0d-850f-0f11a18cfb45/legacy_mesh.webp?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvZGE4MjUzMWUtZmVkNi00ZDBkLTg1MGYtMGYxMWExOGNmYjQ1L2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTA3NDQxMjB9fX1dfQ__&Signature=aNdMx0wWQznZfN0NnnA~GSRpFX6ItVJIVqMpG0q7386ZpRdfWK4cO7~j6SfU5cVhDIYiqSv-IlPpBQ4T6ujRf7jA1FwxrzDoufydg5eQXpuvHOdoI2xAYDepw5zgsFT~E0noEbvcRpoC9BvtbVq98Bv0Nrj~Lk8DVUoBGY9I3HyxzOCxhdHaP2WqvZOpFvjfqEuD7kffpM7WYUdCzmP1RaMQkM~2kxWuZZwHnbIx9u6iIL9LWT3MOPm2jfiZqw~G4FALFibN2gACgmkg5L-Ddx5fhzvGOKFTpCELsfRAK4Jg9Bnv2g3PtfKKinJpxSIEyEgMaNM2aFG0qHUB440NvA__&Key-Pair-Id=K1676C64NMVM2J"
+    }
+   },
+   "creditsRecorded": true,
+   "files": {
+    "model_url": "source/tripo/hand_left/model.glb",
+    "rendered_image_url": "source/tripo/hand_left/rendered_image.webp"
+   },
+   "sourceHigh": "source/tripo/hand_left/model.glb"
+  },
+  "hand_right": {
+   "seeds": {
+    "model_seed": 1856951379,
+    "texture_seed": 2023707689
+   },
+   "key": "c96f1aeb13c50ff4",
+   "mode": "image",
+   "model": "v3.1-20260211",
+   "params": {
+    "geometry_quality": "detailed",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "extreme",
+    "texture_version": "v3.5-20260815",
+    "export_uv": true,
+    "model_seed": 1856951379,
+    "texture_seed": 2023707689
+   },
+   "views": {
+    "front": "references/hand_right/back.png"
+   },
+   "attempts": 1,
+   "fileTokens": {
+    "front": "file_88d963e7-a638-4c51-a8e4-e23954d63532"
+   },
+   "task": {
+    "id": "3fd61297-9329-423c-8520-3fdb77e96097",
+    "status": "success",
+    "createdAt": "2026-09-29T04:55:32.489Z",
+    "type": "image_to_model",
+    "finishedAt": "2026-09-29T04:59:11.404Z",
+    "credits": 70,
+    "output": {
+     "model_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/3fd61297-9329-423c-8520-3fdb77e96097/tripo_pbr_model_3fd61297-9329-423c-8520-3fdb77e96097.glb?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvM2ZkNjEyOTctOTMyOS00MjNjLTg1MjAtM2ZkYjc3ZTk2MDk3L3RyaXBvX3Bicl9tb2RlbF8zZmQ2MTI5Ny05MzI5LTQyM2MtODUyMC0zZmRiNzdlOTYwOTcuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzkwNzQ0MzUxfX19XX0_&Signature=qkTUhpgiXiV8ZXBRRehLbqIEQjgJMk0v6v7eukussXLCbKonvekiTRuu2o2xxTTAU15A8maRYU3S-VaUbXQ~Ksjd6Yf4XP8UxLo80sfvE66JQTq2~ZbyYKwb4Lc1WSetXCv0h2Cga67dJx525wlFLW1SoKQE4aME6rc2rbkO3TnrfBiS7PqDpgaxVKnHJ77ETMpd8Y1mb~jRtyP5CZzuWjm8MS6DlZFBqVbLTB2pc~tO5GFoixTWoVoNp~4ch1wvIzS~W0bWhg6SEMspOd89zIlb43XRfah1KbbA5J~rKqfuHiRbLu~SAvejR8u014hqC7AM6Gjpv4Db1fMrT2NXuA__&Key-Pair-Id=K1676C64NMVM2J",
+     "rendered_image_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/3fd61297-9329-423c-8520-3fdb77e96097/legacy_mesh.webp?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvM2ZkNjEyOTctOTMyOS00MjNjLTg1MjAtM2ZkYjc3ZTk2MDk3L2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTA3NDQzNTF9fX1dfQ__&Signature=UaLalfjdGnOrRv6abAKrf4ACPp-FjvvlXDgdixBVoVyj8jWEcqzjHtVStIvFa2LB73hh94t-3~BcKOExY3e4VQrRpH4tsEAYO2U9lcp~Uf1AAFEW7P0lzpLwFjmv1ctYkjcq3JJ9LG8traNP8nGzkOc6KN0LvTQjQAmCkaNrOzV1K0mxa-oUcKIIwBFdU639~6IkIFAMUNVR~YdGuS5SYmmSBm~CaumpKHE3ADsR5M6XpuQWEFNPF0VIwlsA3-RGE-mm4Cwn57TBHMf7n88xqqfSrP6eA0tSojPYdEPp9BMVEvC1QQV2XEEyYyaDDaaO4BIM8dd6E37c2m5iI00q4A__&Key-Pair-Id=K1676C64NMVM2J"
+    }
+   },
+   "creditsRecorded": true,
+   "files": {
+    "model_url": "source/tripo/hand_right/model.glb",
+    "rendered_image_url": "source/tripo/hand_right/rendered_image.webp"
+   },
+   "sourceHigh": "source/tripo/hand_right/model.glb"
+  },
+  "body": {
+   "seeds": {
+    "model_seed": 121682210,
+    "texture_seed": 1074080565
+   },
+   "key": "ef62e1c8acc8aa8d",
+   "mode": "image",
+   "model": "v3.1-20260211",
+   "params": {
+    "geometry_quality": "detailed",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "extreme",
+    "texture_version": "v3.5-20260815",
+    "export_uv": true,
+    "model_seed": 121682210,
+    "texture_seed": 1074080565
+   },
+   "views": {
+    "front": "references/body/pose/front-tpose-5ec78fdc.png"
+   },
+   "attempts": 1,
+   "fileTokens": {
+    "front": "file_73244701-8831-40ce-9387-c904858c75fd"
+   },
+   "task": {
+    "id": "82cfb0cb-40c7-4886-8e8f-4561d333bbc9",
+    "status": "success",
+    "createdAt": "2026-09-29T07:16:57.467Z",
+    "type": "image_to_model",
+    "finishedAt": "2026-09-29T07:20:36.409Z",
+    "credits": 70,
+    "output": {
+     "model_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/82cfb0cb-40c7-4886-8e8f-4561d333bbc9/tripo_pbr_model_82cfb0cb-40c7-4886-8e8f-4561d333bbc9.glb?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvODJjZmIwY2ItNDBjNy00ODg2LThlOGYtNDU2MWQzMzNiYmM5L3RyaXBvX3Bicl9tb2RlbF84MmNmYjBjYi00MGM3LTQ4ODYtOGU4Zi00NTYxZDMzM2JiYzkuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzkwNzUyODM2fX19XX0_&Signature=ewqSg6~nFvntHaBlxagxMC3wT~K3Ycqjlrtp1V3fWdteDyfOsGU5JQy3Wbhj6NSqA1h-s8Qx--A1Wa9w~PV3AypYq5Wp9gKWnjIzaLnRGeaExp4MG4ikL59fbFg4DZWhobe6JjUGJQ-kYkhbP~0QKFgQX8~3AEUe5wxwD~q8AppdxeL7i4txM96RmOxFWqGN2ZxW~wzwZVvZIem35yIpg-XaZl9GK5eo6aeuYgXFOl1JQPKtxHiq-zF1SDxexG1~zPBCF6P8hF4nYrFPeISZkEBrCM51YgVNeaTShh3gX83sXR~4ZPGv0SL~FmsLPcXnGtd9GKJB-ZrPMuxzJ9Z9-w__&Key-Pair-Id=K1676C64NMVM2J",
+     "rendered_image_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/82cfb0cb-40c7-4886-8e8f-4561d333bbc9/legacy_mesh.webp?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvODJjZmIwY2ItNDBjNy00ODg2LThlOGYtNDU2MWQzMzNiYmM5L2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTA3NTI4MzZ9fX1dfQ__&Signature=F9lmbagpkhoI~fbOXeHjnpt04JMNTx0K1FZV2bZfPt6s9MzaG1DsEnkB7Cv1-lc~pbcq1E2z0oDfPJu4ZgsKv4Bs4w0s-TAcKmt--OVKw-m37rlg4v0hO0FPSeX~DCSzx~6DSVMYORJfKIeIKq23vis1WAZD4U7UwF-j0f~af510iPthx2NXN83mXQPSsus3D3~GmDtT3qXvmmT2vLPjEA8dfgpvhKbKCKxNtweog8oanQkXZF326Acl8BJ5sVs6X9zN~pTwL4UPz9wEEDX4vLANPDO4Kn4KjAFkuY~LvOdREF0Mz-eNT-JrJa12YCkQgeMXoA3qE~hh2QwCJ1~HiQ__&Key-Pair-Id=K1676C64NMVM2J"
+    }
+   },
+   "creditsRecorded": true,
+   "files": {
+    "model_url": "source/tripo/body/82cfb0cb-40c7-4886-8e8f-4561d333bbc9/model.glb",
+    "rendered_image_url": "source/tripo/body/82cfb0cb-40c7-4886-8e8f-4561d333bbc9/rendered_image.webp"
+   },
+   "sourceHigh": "source/tripo/body/82cfb0cb-40c7-4886-8e8f-4561d333bbc9/model.glb",
+   "poseTask": {
+    "sourceSha": "c54367831d629ab37a853d47e5b5ca6e7bd31109d5c98528d3202f9a5a9c09b9",
+    "task": {
+     "id": "5ec78fdc-0962-44b1-a8f1-90316980a198",
+     "status": "success",
+     "credits": 5,
+     "type": "image_to_image",
+     "finishedAt": "2026-09-29T07:15:53.741Z"
+    },
+    "creditsRecorded": true
+   },
+   "pose": {
+    "cleaned": "references/body/pose/front-tpose-5ec78fdc.png",
+    "sha": "2cb1babc82e68038266899d03ac88e0b08942cd87a3463d4e70b61888b47952b",
+    "sourceSha": "c54367831d629ab37a853d47e5b5ca6e7bd31109d5c98528d3202f9a5a9c09b9",
+    "task": "5ec78fdc-0962-44b1-a8f1-90316980a198",
+    "template": "t_pose"
+   },
+   "history": [
+    {
+     "task": "2d456ad7-91d0-4dce-a017-e11b72112d7a",
+     "files": {
+      "model_url": "source/tripo/body/model.glb",
+      "rendered_image_url": "source/tripo/body/rendered_image.webp"
+     },
+     "sourceHigh": "source/tripo/body/model.glb",
+     "seeds": {
+      "model_seed": 326063251,
+      "texture_seed": 1848724342
+     },
+     "credits": 70,
+     "at": "2026-09-29T05:02:09.495Z"
+    }
+   ],
+   "phase": "completed"
+  },
+  "head": {
+   "seeds": {
+    "model_seed": 1944407227,
+    "texture_seed": 231754298
+   },
+   "key": "5330002f8dae781b",
+   "mode": "image",
+   "model": "v3.1-20260211",
+   "params": {
+    "geometry_quality": "detailed",
+    "texture": true,
+    "pbr": true,
+    "texture_quality": "extreme",
+    "texture_version": "v3.5-20260815",
+    "export_uv": true,
+    "model_seed": 1944407227,
+    "texture_seed": 231754298
+   },
+   "views": {
+    "front": "references/head/front.png"
+   },
+   "attempts": 1,
+   "fileTokens": {
+    "front": "file_1038d561-f542-4909-b2bf-e8a9939a588c"
+   },
+   "task": {
+    "id": "6aff8b8c-5dd3-4e95-a425-1835aede6beb",
+    "status": "success",
+    "createdAt": "2026-09-29T05:02:21.528Z",
+    "type": "image_to_model",
+    "finishedAt": "2026-09-29T05:08:02.086Z",
+    "credits": 70,
+    "output": {
+     "model_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/6aff8b8c-5dd3-4e95-a425-1835aede6beb/tripo_pbr_model_6aff8b8c-5dd3-4e95-a425-1835aede6beb.glb?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvNmFmZjhiOGMtNWRkMy00ZTk1LWE0MjUtMTgzNWFlZGU2YmViL3RyaXBvX3Bicl9tb2RlbF82YWZmOGI4Yy01ZGQzLTRlOTUtYTQyNS0xODM1YWVkZTZiZWIuZ2xiIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzkwNzQ0ODgyfX19XX0_&Signature=bFIv-S3plD02qAT7KlBcwHydggetvhxEVnDMJd9ig6CIRM~aDb6bLsccvg9TGsdxh2tM0rY15neUxi9Yb8wGK0-NtaOWVHAbDviwv2vEEU1EGlfnd74Ms0q5IdlK6NxVoweDBp-HuM05FyttH8YZUYxzUE2PWQ9gsuRjVrjKBzV4UrtBDg6xdoW7bJ0ZIjkLx4rQrXFDStILHd3JVtLeTje8MoIH6veJY6oRDSFPy1u~tSCzCviayWNMnRKJvYqAqXINCi0507LFMf9hofNk4Zw-X0nmbzsMycksj9MIpfBcDMlUKLdq~pfWf-vUqESJ8MzJ9kyq0BhEdSo7Ur8adA__&Key-Pair-Id=K1676C64NMVM2J",
+     "rendered_image_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/6aff8b8c-5dd3-4e95-a425-1835aede6beb/legacy_mesh.webp?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvNmFmZjhiOGMtNWRkMy00ZTk1LWE0MjUtMTgzNWFlZGU2YmViL2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTA3NDQ4ODJ9fX1dfQ__&Signature=kHIrLjVBb~FnWCwKUEfYr8bjjubPsY8Oopt-QZun-jq~cpMGjx5HAuMbVHrzY~ZSkJ3bpsVcPIy6nQFQwcfXIR6OGO-b8i~bC4P4m43mVZk5gGui-gccdF0kTulLLlHbaysKJoxErNRQE2KDDHaSELB0NfILLmqdIWT7agd26XIjpNFc7J7hNd3HYejdavOgPxUSCQKo7uVSCkMXml8HqHjO7IrvQgM-8wtjllbndW1cjRHe886ssoaK9WQVaua12HuwWxb9ZBx~70aidPn9WvMPFq4eg6n9kcJfhIsZkx8M7mOQTtE5tod4Q4HlfADdKm7XlQmpg2dJABRK1r6k0A__&Key-Pair-Id=K1676C64NMVM2J"
+    }
+   },
+   "creditsRecorded": true,
+   "files": {
+    "model_url": "source/tripo/head/model.glb",
+    "rendered_image_url": "source/tripo/head/rendered_image.webp"
+   },
+   "sourceHigh": "source/tripo/head/model.glb"
+  }
+ },
+ "credits": {
+  "spent": 460,
+  "log": [
+   {
+    "what": "generate hand_left",
+    "taskId": "da82531e-fed6-4d0d-850f-0f11a18cfb45",
+    "credits": 70,
+    "at": "2026-09-29T04:55:20.916Z"
+   },
+   {
+    "what": "generate hand_right",
+    "taskId": "3fd61297-9329-423c-8520-3fdb77e96097",
+    "credits": 70,
+    "at": "2026-09-29T04:59:11.405Z"
+   },
+   {
+    "what": "generate body",
+    "taskId": "2d456ad7-91d0-4dce-a017-e11b72112d7a",
+    "credits": 70,
+    "at": "2026-09-29T05:02:09.497Z"
+   },
+   {
+    "what": "generate head",
+    "taskId": "6aff8b8c-5dd3-4e95-a425-1835aede6beb",
+    "credits": 70,
+    "at": "2026-09-29T05:08:02.087Z"
+   },
+   {
+    "what": "rig",
+    "taskId": "dac19fd9-7d42-4eda-a6ea-65fa77b40214",
+    "credits": 25,
+    "at": "2026-09-29T06:54:36.716Z"
+   },
+   {
+    "what": "rig convert (Mixamo FBX)",
+    "taskId": "b1aa1b11-193a-471a-afb5-c81ff32b40c7",
+    "credits": 5,
+    "at": "2026-09-29T07:02:04.201Z"
+   },
+   {
+    "what": "rig (Mixamo body, v1.0) — manual test task, reused by the pipeline",
+    "taskId": "6ceed3cb-cf47-4f61-a7e1-4526027b9a64",
+    "credits": 25,
+    "at": "2026-09-29T07:06:44.741Z"
+   },
+   {
+    "what": "T-pose reference (image-to-image) — manual test task, reused",
+    "taskId": "5ec78fdc-0962-44b1-a8f1-90316980a198",
+    "credits": 5,
+    "at": "2026-09-29T07:15:53.743Z"
+   },
+   {
+    "what": "generate body",
+    "taskId": "82cfb0cb-40c7-4886-8e8f-4561d333bbc9",
+    "credits": 70,
+    "at": "2026-09-29T07:20:36.409Z"
+   },
+   {
+    "what": "rig (Mixamo body)",
+    "taskId": "68bfac93-fc2c-4877-a2f8-63c9b129a665",
+    "credits": 25,
+    "at": "2026-09-29T07:51:50.941Z"
+   },
+   {
+    "what": "rig (fingers)",
+    "taskId": "ee8e3587-7a9c-4b9d-ae7a-41af8b6f0578",
+    "credits": 25,
+    "at": "2026-09-29T07:52:41.149Z"
+   }
+  ]
+ },
+ "stages": {
+  "ingest": {
+   "key": "6f88cfd04e267433",
+   "at": "2026-09-29T07:16:46.023Z",
+   "images": 3,
+   "references": [
+    "hand_left/back ← 32aea470-image.png (image analysis, medium)",
+    "hand_right/back ← 32aea470-image.png (image analysis, medium)",
+    "body/front ← 370aa863-image.png (image analysis, medium)",
+    "head/front ← 6857ba92-image.jpg (image analysis, medium)"
+   ],
+   "status": "done",
+   "error": null,
+   "finishedAt": "2026-09-29T07:16:46.024Z",
+   "seconds": 1
+  },
+  "validate": {
+   "status": "done",
+   "seconds": 0,
+   "startedAt": "2026-09-29T07:16:46.025Z",
+   "error": null,
+   "finishedAt": "2026-09-29T07:16:46.026Z"
+  },
+  "generate": {
+   "status": "done",
+   "seconds": 237,
+   "startedAt": "2026-09-29T07:16:54.436Z",
+   "error": null,
+   "finishedAt": "2026-09-29T07:20:51.624Z"
+  },
+  "assemble": {
+   "key": "d2c6d8763797d2c9",
+   "at": "2026-09-29T07:28:55.215Z",
+   "outputs": {
+    "out_blend": "assembled/high.blend",
+    "out_glb": "assembled/high.glb",
+    "report": "assembled/assemble-report.json"
+   },
+   "report": {
+    "inputs": {
+     "body": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/source/tripo/body/82cfb0cb-40c7-4886-8e8f-4561d333bbc9/model.glb",
+     "head": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/source/tripo/head/model.glb",
+     "hand_left": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/source/tripo/hand_left/model.glb",
+     "hand_right": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/source/tripo/hand_right/model.glb"
+    },
+    "warnings": [],
+    "body": {
+     "vertices": 1006472,
+     "triangles": 1952427,
+     "height": 1.93,
+     "width": 1.9057698845863342
+    },
+    "neck": {
+     "y": 1.6485585964912266,
+     "radius": 0.050826997369816385
+    },
+    "head": {
+     "scale": 0.31043417618094515,
+     "landmark_scale": 0.31112558537117474,
+     "icp_rms_cm": 0.2166417820052256,
+     "landmark_error_cm": {
+      "crown": 2.34,
+      "nose": 0.59,
+      "chin": 0.63,
+      "earL": 0.92,
+      "earR": 1.35,
+      "back": 5.61,
+      "neck": 9.81
+     },
+     "donor_triangles": 1943797,
+     "cut": {
+      "body_vertices_removed": 129963,
+      "donor_vertices_removed": 88834
+     },
+     "neck_ring": {
+      "ring_mismatch_before_cm": 1.51,
+      "ring_mismatch_after_cm": 0.11
+     }
+    },
+    "pose": "T-pose",
+    "hand_left": {
+     "traced_slices": 59,
+     "wrist": [
+      0.6755603662642994,
+      1.4592939760339887,
+      -0.054162806439164435
+     ],
+     "wrist_radius_cm": 3.5260928313254594,
+     "arm_axis": [
+      0.9796705411383594,
+      -0.06500056314194201,
+      0.189790825955589
+     ],
+     "scale_from_length": 0.20773789886018648,
+     "scale_from_wrist": 0.35402693933767154,
+     "body_hand_length_cm": 20.315787781782145,
+     "icp_rms_cm": 0.2803819620898404,
+     "icp_rotation_deg": 14.495491931889129,
+     "icp_used": false,
+     "palm_sign": 1,
+     "palm_sign_rms_cm": [
+      0.28,
+      0.5
+     ],
+     "scale": 0.26552020450325364,
+     "donor_wrist_radius_cm": 9.959956261865896,
+     "donor_triangles": 1964500,
+     "body_vertices_removed": 28196,
+     "donor_vertices_removed": 32822,
+     "wrist_ring": {
+      "ring_mismatch_before_cm": 0.46,
+      "ring_mismatch_after_cm": 0.15
+     }
+    },
+    "hand_right": {
+     "traced_slices": 59,
+     "wrist": [
+      -0.687360984384188,
+      1.4571251231877758,
+      -0.05222761524980501
+     ],
+     "wrist_radius_cm": 3.4613541230843223,
+     "arm_axis": [
+      -0.9719542102757749,
+      -0.08381026104536665,
+      0.21972904512308447
+     ],
+     "scale_from_length": 0.2212714146717417,
+     "scale_from_wrist": 0.33830214008158915,
+     "body_hand_length_cm": 20.315414347980404,
+     "icp_rms_cm": 0.2775124419372032,
+     "icp_rotation_deg": 8.364886591202284,
+     "icp_used": false,
+     "palm_sign": 1,
+     "palm_sign_rms_cm": [
+      0.28,
+      0.43
+     ],
+     "scale": 0.2537266050611919,
+     "donor_wrist_radius_cm": 10.231546635352466,
+     "donor_triangles": 1887258,
+     "body_vertices_removed": 29096,
+     "donor_vertices_removed": 68690,
+     "wrist_ring": {
+      "ring_mismatch_before_cm": 0.57,
+      "ring_mismatch_after_cm": 0.27
+     }
+    },
+    "triangles": {
+     "BODY_HIGH": 1588639,
+     "HEAD_DONOR": 1772108,
+     "HAND_LEFT_DONOR": 1899602,
+     "HAND_RIGHT_DONOR": 1751957
+    }
+   },
+   "status": "done",
+   "error": null,
+   "finishedAt": "2026-09-29T07:28:55.221Z",
+   "seconds": 54
+  },
+  "gamemesh": {
+   "key": "96fb3c52b9d67235",
+   "at": "2026-09-29T07:50:19.699Z",
+   "outputs": {
+    "out_glb": "game/lod0.glb",
+    "out_blend": "game/game.blend",
+    "report": "game/gamemesh-report.json"
+   },
+   "report": {
+    "warnings": [],
+    "fragments_removed": {
+     "components": 9,
+     "vertices": 1158
+    },
+    "fused_triangles": 1087460,
+    "seams_smoothed": {
+     "seams": 3,
+     "vertices": 13116
+    },
+    "triangles": 70000,
+    "density": {
+     "head_share": 0.2662723584204812,
+     "hands_share": 0.171781244642551
+    },
+    "uv_coverage": 0.567,
+    "textures": {
+     "baseColor": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/textures/baseColor.png",
+     "normal": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/textures/normal.png",
+     "roughness": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/textures/roughness.png",
+     "metallic": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/textures/metallic.png",
+     "ao": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/textures/ao.png"
+    },
+    "seconds": 1283
+   },
+   "status": "done",
+   "error": null,
+   "finishedAt": "2026-09-29T07:50:19.712Z",
+   "seconds": 1284
+  },
+  "rig": {
+   "status": "done",
+   "startedAt": "2026-09-29T07:57:40.943Z",
+   "check": {
+    "attempts": 1,
+    "task": {
+     "id": "05c79818-0ead-4527-a7ea-29db0fe43b18",
+     "status": "success",
+     "createdAt": "2026-09-29T07:50:58.990Z",
+     "type": "animate_prerigcheck",
+     "finishedAt": "2026-09-29T07:51:02.704Z",
+     "credits": 0,
+     "output": {
+      "riggable": true,
+      "rig_type": "biped"
+     }
+    },
+    "creditsRecorded": true
+   },
+   "rigTask": {
+    "attempts": 1,
+    "task": {
+     "id": "68bfac93-fc2c-4877-a2f8-63c9b129a665",
+     "status": "success",
+     "createdAt": "2026-09-29T07:51:24.239Z",
+     "type": "animate_rig",
+     "finishedAt": "2026-09-29T07:51:50.940Z",
+     "credits": 25,
+     "output": {
+      "model_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/68bfac93-fc2c-4877-a2f8-63c9b129a665/tripo_rigging_68bfac93-fc2c-4877-a2f8-63c9b129a665.glb?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvNjhiZmFjOTMtZmMyYy00ODc3LWEyZjgtNjNjOWIxMjlhNjY1L3RyaXBvX3JpZ2dpbmdfNjhiZmFjOTMtZmMyYy00ODc3LWEyZjgtNjNjOWIxMjlhNjY1LmdsYiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc5MDc1NDcxMH19fV19&Signature=w-~qFZh8M1uYkbxpX590U7Cu1X8w1YlNoOkxbpSeWKI9tsXOXFaZVjQYbcrZAmUKYBeNJJjewu6svrRZE3c8xl261YxYiBT-KW9J~M~Vd3OTn5cSPrQlIrTXCUuUY6x9Niqoyitemq0v9LqaFvUemDBKSe8qaziQwphsgHHsccC3WAxBDMErKF0MzI6lCUPQNMn6B9qfzi83M8VhEZwB~A3oI8Q6iyQ2eGsep0wrkXD5gKX5Y7upzAx2mXPfNqBEM9Sv7VwjHx63pWHEHuxWgXW12G5PbCbNUvA0AstsC4-xoXLDgL~qZEJozgIc7RZ4t6IwhkWs9nF1PEeH~U7Dpg__&Key-Pair-Id=K1676C64NMVM2J",
+      "rendered_image_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/68bfac93-fc2c-4877-a2f8-63c9b129a665/legacy_mesh.webp?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvNjhiZmFjOTMtZmMyYy00ODc3LWEyZjgtNjNjOWIxMjlhNjY1L2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTA3NTQ3MTB9fX1dfQ__&Signature=Ouas40az919n4Ana6KwLEh5VCBHxwPYcqZmIGNvRGFP67FyG6qSEZjiPt~U5BSSGfCKksvA-~TuZ3vCIUkbiAZFn0vzqQbjF6rQix2x~BiCNDHFkLAELmslHFvRdgInBhc3zDX-MbUGUTqE62iXDevqQlQyoe~ZOo0DJh8Ttb14l5OQ078~8nSCa1IX6OWJucPL8~-Uc0wHNW~LcjlduH5e5Dtnq8V7~qCHrQuieu1PXiQsVWzUsV90IXpBy4uoXCiMOjrT5YkQC6ZDIJ-XmGb8Jhx7gZ9LZCWy8vvXHlp6xDB68cxZTBWvcJ3slcX3B4qnW-dnFmrGSe5Jp7q3FHQ__&Key-Pair-Id=K1676C64NMVM2J"
+     }
+    },
+    "creditsRecorded": true,
+    "files": {
+     "model_url": "rigs/tripo/68bfac93/model.glb",
+     "rendered_image_url": "rigs/tripo/68bfac93/rendered_image.webp"
+    }
+   },
+   "tripoKey": "e7b7c3b7e2702bd8",
+   "fileToken": "file_8276cbf3-820c-4892-aa4b-740b1693f313",
+   "riggable": true,
+   "rigType": "biped",
+   "tripoFiles": {
+    "model_url": "rigs/tripo/b1aa1b11/model.fbx"
+   },
+   "error": null,
+   "finishedAt": "2026-09-29T07:57:46.378Z",
+   "seconds": 5,
+   "key": "8536b87b101efcbe",
+   "report": {
+    "warnings": [],
+    "rig": {
+     "bones": 23,
+     "turns_about_y": 0,
+     "scale": 1.9226119696008197,
+     "mean_gap_cm": 0.29532201437650657,
+     "gap_after_placement_cm": 0.11769654833533423
+    },
+    "bones": 63,
+    "finger_rig": {
+     "bones": 52,
+     "turns_about_y": 0,
+     "scale": 1.9226132572351966,
+     "mean_gap_cm": 0.29412862271310586,
+     "gap_after_placement_cm": 0.11770108523724047
+    },
+    "fingers": {
+     "Left": {
+      "wrist_bone": "bone_8",
+      "chains": {
+       "Thumb": 3,
+       "Index": 3,
+       "Middle": 3,
+       "Ring": 3,
+       "Pinky": 3
+      },
+      "hand_vertices_split": 3577
+     },
+     "Right": {
+      "wrist_bone": "bone_27",
+      "chains": {
+       "Thumb": 3,
+       "Index": 3,
+       "Middle": 3,
+       "Ring": 3,
+       "Pinky": 3
+      },
+      "hand_vertices_split": 3226
+     }
+    },
+    "bone_names": [
+     "Root",
+     "mixamorig:Hips",
+     "mixamorig:Spine",
+     "mixamorig:Spine1",
+     "mixamorig:Spine2",
+     "mixamorig:Neck",
+     "mixamorig:Head",
+     "mixamorig:LeftShoulder",
+     "mixamorig:LeftArm",
+     "mixamorig:LeftForeArm",
+     "mixamorig:LeftHand",
+     "mixamorig:LeftHandThumb1",
+     "mixamorig:LeftHandThumb2",
+     "mixamorig:LeftHandThumb3",
+     "mixamorig:LeftHandThumb4",
+     "mixamorig:LeftHandIndex1",
+     "mixamorig:LeftHandIndex2",
+     "mixamorig:LeftHandIndex3",
+     "mixamorig:LeftHandIndex4",
+     "mixamorig:LeftHandMiddle1",
+     "mixamorig:LeftHandMiddle2",
+     "mixamorig:LeftHandMiddle3",
+     "mixamorig:LeftHandMiddle4",
+     "mixamorig:LeftHandRing1",
+     "mixamorig:LeftHandRing2",
+     "mixamorig:LeftHandRing3",
+     "mixamorig:LeftHandRing4",
+     "mixamorig:LeftHandPinky1",
+     "mixamorig:LeftHandPinky2",
+     "mixamorig:LeftHandPinky3",
+     "mixamorig:LeftHandPinky4",
+     "mixamorig:RightShoulder",
+     "mixamorig:RightArm",
+     "mixamorig:RightForeArm",
+     "mixamorig:RightHand",
+     "mixamorig:RightHandThumb1",
+     "mixamorig:RightHandThumb2",
+     "mixamorig:RightHandThumb3",
+     "mixamorig:RightHandThumb4",
+     "mixamorig:RightHandIndex1",
+     "mixamorig:RightHandIndex2",
+     "mixamorig:RightHandIndex3",
+     "mixamorig:RightHandIndex4",
+     "mixamorig:RightHandMiddle1",
+     "mixamorig:RightHandMiddle2",
+     "mixamorig:RightHandMiddle3",
+     "mixamorig:RightHandMiddle4",
+     "mixamorig:RightHandRing1",
+     "mixamorig:RightHandRing2",
+     "mixamorig:RightHandRing3",
+     "mixamorig:RightHandRing4",
+     "mixamorig:RightHandPinky1",
+     "mixamorig:RightHandPinky2",
+     "mixamorig:RightHandPinky3",
+     "mixamorig:RightHandPinky4",
+     "mixamorig:LeftUpLeg",
+     "mixamorig:LeftLeg",
+     "mixamorig:LeftFoot",
+     "mixamorig:LeftToeBase",
+     "mixamorig:RightUpLeg",
+     "mixamorig:RightLeg",
+     "mixamorig:RightFoot",
+     "mixamorig:RightToeBase"
+    ],
+    "unweighted_vertices": 0,
+    "lods": [
+     {
+      "lod": 0,
+      "file": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/rigs/lods/rigged_lod0.glb",
+      "triangles": 70000
+     },
+     {
+      "lod": 1,
+      "file": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/rigs/lods/rigged_lod1.glb",
+      "triangles": 35999
+     },
+     {
+      "lod": 2,
+      "file": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/rigs/lods/rigged_lod2.glb",
+      "triangles": 16000
+     },
+     {
+      "lod": 3,
+      "file": "/Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/rigs/lods/rigged_lod3.glb",
+      "triangles": 6000
+     }
+    ]
+   },
+   "at": "2026-09-29T07:57:46.377Z",
+   "history": [
+    {
+     "task": "dac19fd9-7d42-4eda-a6ea-65fa77b40214",
+     "credits": 25,
+     "key": "ce89ea8e18826022"
+    },
+    {
+     "step": "convertTask",
+     "task": "b1aa1b11-193a-471a-afb5-c81ff32b40c7",
+     "status": "success",
+     "credits": 5,
+     "note": "Mixamo FBX convert kept tripo names"
+    },
+    {
+     "step": "rigTask",
+     "task": "6ceed3cb-cf47-4f61-a7e1-4526027b9a64",
+     "status": "success",
+     "credits": 25,
+     "key": "9257d9a6c37802f3"
+    },
+    {
+     "step": "fingerTask",
+     "task": "dac19fd9-7d42-4eda-a6ea-65fa77b40214",
+     "status": "success",
+     "credits": 25,
+     "key": "9257d9a6c37802f3"
+    }
+   ],
+   "convertTask": {},
+   "fingerTask": {
+    "attempts": 1,
+    "task": {
+     "id": "ee8e3587-7a9c-4b9d-ae7a-41af8b6f0578",
+     "status": "success",
+     "createdAt": "2026-09-29T07:52:14.505Z",
+     "type": "animate_rig",
+     "finishedAt": "2026-09-29T07:52:41.149Z",
+     "credits": 25,
+     "output": {
+      "model_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/ee8e3587-7a9c-4b9d-ae7a-41af8b6f0578/tripo_rigging_ee8e3587-7a9c-4b9d-ae7a-41af8b6f0578.glb?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvZWU4ZTM1ODctN2E5Yy00YjlkLWFlN2EtNDFhZjhiNmYwNTc4L3RyaXBvX3JpZ2dpbmdfZWU4ZTM1ODctN2E5Yy00YjlkLWFlN2EtNDFhZjhiNmYwNTc4LmdsYiIsIkNvbmRpdGlvbiI6eyJEYXRlTGVzc1RoYW4iOnsiQVdTOkVwb2NoVGltZSI6MTc5MDc1NDc2MX19fV19&Signature=v9~KTuX5xaR4coivhnjyYaGEeJfbGwbPPaUU983VawMpKWhNOPO88BfuGUkn7uTVgsUYXAKllGdP8fzRgtE7fc8~SjRGbPtaYIwniLanZ3i9s-e~4VelSZbiqw3plT06zsrxd5Hkmoeftgc38GrZJRWN257goXUhqB08OZhA1x7eCuhCLQrkPOoYvcC9f3yo830lcQHV0G9MLdve-Pun0qxsD1FiCAbtc4g7fs-8BjOAY1RDXzRJe-5MBO1GYuRmw13xKdlFhlIZyUFanlHLPihpY674YVlMFICEvsEx6Qt1FJV580Z8AHVdQbqvPIt1aeWqMdfrrGJgH3HNLtn8KQ__&Key-Pair-Id=K1676C64NMVM2J",
+      "rendered_image_url": "https://tripo-data.rg1.data.tripo3d.com/tcli_7f03a36940184914bec8f4c832251ea4/20260929/ee8e3587-7a9c-4b9d-ae7a-41af8b6f0578/legacy_mesh.webp?Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly90cmlwby1kYXRhLnJnMS5kYXRhLnRyaXBvM2QuY29tL3RjbGlfN2YwM2EzNjk0MDE4NDkxNGJlYzhmNGM4MzIyNTFlYTQvMjAyNjA5MjkvZWU4ZTM1ODctN2E5Yy00YjlkLWFlN2EtNDFhZjhiNmYwNTc4L2xlZ2FjeV9tZXNoLndlYnAiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3OTA3NTQ3NjF9fX1dfQ__&Signature=HwGtv4OOfuLHJC2Q-boEn1V4a5LRPy~3CC-8X9BpViE8oRNfXWnvG9gzrTr8PDDuW169j2lFpoAQsWRPf~U3uBP8NnuAqLh~4MegPq8fq4lHlLXove2zEuxE~sNjBWkyO~ARCh2ERl0kHU4C~jG4DmvxgsMdOLhYjSbMXRae9chPIk-K3~eDz26BHCdPCF2CNoRM4YCl--NMVpozeVdYX30aafhWrPMtSXyUnzYsRMrAuCWwZRJjVReiUiLD4X0TFzHLXnzwrb2MdbhQWR5CMw3atFHgQX1IRohuuhh8ymHPu6InMJTJ37rpDzDm6dv1NE8QayShKMvow7NEUHr7cw__&Key-Pair-Id=K1676C64NMVM2J"
+     }
+    },
+    "creditsRecorded": true,
+    "files": {
+     "model_url": "rigs/tripo/ee8e3587/model.glb",
+     "rendered_image_url": "rigs/tripo/ee8e3587/rendered_image.webp"
+    }
+   },
+   "filesKey": "e7b7c3b7e2702bd8"
+  },
+  "import": {
+   "key": "e1f2a1559da05177",
+   "at": "2026-09-29T08:02:27.522Z",
+   "rigId": "main-guy-001",
+   "output": "lib/mocap/mhr-rigs/main-guy-001.json.gz",
+   "reports": [
+    {
+     "id": "main-guy-001",
+     "skeleton": "mixamo",
+     "scale": 0.953,
+     "vertices": 34998,
+     "renderVertices": 41992,
+     "triangles": 70000,
+     "textures": [
+      "souljamcharacter-0-color.webp",
+      "souljamcharacter-0-normal.webp",
+      "souljamcharacter-0-rough.webp"
+     ],
+     "onePieceFigure": true,
+     "strayArmWeightsCleaned": 258,
+     "parts": [
+      "body:41992 [tex]"
+     ],
+     "heightM": 1.883,
+     "soleOffset": 0.08725,
+     "legLen": 0.866,
+     "proportions": "model",
+     "segRatio": {
+      "thigh": 1.059,
+      "shin": 1.02,
+      "torso": 0.859,
+      "neck": 0.799,
+      "shoulder": 1.019,
+      "upper": 1.003,
+      "fore": 0.82,
+      "hand": 1.193
+     },
+     "lift": 0.056,
+     "garmentWeightsCleaned": 0,
+     "layeredVertices": 0,
+     "handVertices": 5757,
+     "verticesOnTwoFingers": 0,
+     "jointShiftCm": [
+      "LeftHandMiddle4 92.4",
+      "LeftHandRing4 90.2",
+      "LeftHandIndex4 90.1",
+      "LeftHandMiddle3 89.8",
+      "RightHandMiddle4 89.2",
+      "LeftHandRing3 88.5",
+      "LeftHandIndex3 88.3",
+      "RightHandIndex4 87.5"
+     ]
+    },
+    {
+     "id": "main-guy-001",
+     "skeleton": "mixamo",
+     "scale": 0.953,
+     "vertices": 18949,
+     "renderVertices": 24944,
+     "triangles": 35999,
+     "textures": [
+      "souljamcharacter-0-color.webp",
+      "souljamcharacter-0-normal.webp",
+      "souljamcharacter-0-rough.webp"
+     ],
+     "onePieceFigure": true,
+     "strayArmWeightsCleaned": 86,
+     "parts": [
+      "body:24944 [tex]"
+     ],
+     "heightM": 1.883,
+     "soleOffset": 0.08726,
+     "legLen": 0.866,
+     "proportions": "model",
+     "segRatio": {
+      "thigh": 1.059,
+      "shin": 1.02,
+      "torso": 0.859,
+      "neck": 0.799,
+      "shoulder": 1.019,
+      "upper": 1.003,
+      "fore": 0.82,
+      "hand": 1.193
+     },
+     "lift": 0.056,
+     "garmentWeightsCleaned": 0,
+     "layeredVertices": 0,
+     "handVertices": 3825,
+     "verticesOnTwoFingers": 0,
+     "jointShiftCm": [
+      "LeftHandMiddle4 92.4",
+      "LeftHandRing4 90.2",
+      "LeftHandIndex4 90.2",
+      "LeftHandMiddle3 89.8",
+      "RightHandMiddle4 89.3",
+      "LeftHandRing3 88.5",
+      "LeftHandIndex3 88.3",
+      "RightHandIndex4 87.5"
+     ]
+    },
+    {
+     "id": "main-guy-001",
+     "skeleton": "mixamo",
+     "scale": 0.953,
+     "vertices": 10812,
+     "renderVertices": 14201,
+     "triangles": 16000,
+     "textures": [
+      "souljamcharacter-0-color.webp",
+      "souljamcharacter-0-normal.webp",
+      "souljamcharacter-0-rough.webp"
+     ],
+     "onePieceFigure": true,
+     "strayArmWeightsCleaned": 54,
+     "parts": [
+      "body:14177 [tex]",
+      "shirt:9 [tex]",
+      "shorts:9 [tex]",
+      "hair:6 [tex]"
+     ],
+     "heightM": 1.881,
+     "soleOffset": 0.08626,
+     "legLen": 0.866,
+     "proportions": "model",
+     "segRatio": {
+      "thigh": 1.059,
+      "shin": 1.02,
+      "torso": 0.859,
+      "neck": 0.799,
+      "shoulder": 1.019,
+      "upper": 1.003,
+      "fore": 0.82,
+      "hand": 1.193
+     },
+     "lift": 0.055,
+     "garmentWeightsCleaned": 6,
+     "layeredVertices": 9,
+     "handVertices": 2228,
+     "verticesOnTwoFingers": 0,
+     "jointShiftCm": [
+      "LeftHandMiddle4 92.4",
+      "LeftHandRing4 90.2",
+      "LeftHandIndex4 90.2",
+      "LeftHandMiddle3 89.8",
+      "RightHandMiddle4 89.3",
+      "LeftHandRing3 88.5",
+      "LeftHandIndex3 88.3",
+      "RightHandIndex4 87.5"
+     ]
+    },
+    {
+     "id": "main-guy-001",
+     "skeleton": "mixamo",
+     "scale": 0.953,
+     "vertices": 5517,
+     "renderVertices": 5910,
+     "triangles": 6000,
+     "textures": [
+      "souljamcharacter-0-color.webp",
+      "souljamcharacter-0-normal.webp",
+      "souljamcharacter-0-rough.webp"
+     ],
+     "onePieceFigure": true,
+     "strayArmWeightsCleaned": 34,
+     "parts": [
+      "body:5359 [tex]",
+      "shirt:10 [tex]",
+      "shorts:44 [tex]",
+      "shoe:3 [tex]",
+      "hair:494 [tex]"
+     ],
+     "heightM": 1.882,
+     "soleOffset": 0.08647,
+     "legLen": 0.866,
+     "proportions": "model",
+     "segRatio": {
+      "thigh": 1.059,
+      "shin": 1.02,
+      "torso": 0.859,
+      "neck": 0.799,
+      "shoulder": 1.019,
+      "upper": 1.003,
+      "fore": 0.82,
+      "hand": 1.193
+     },
+     "lift": 0.055,
+     "garmentWeightsCleaned": 42,
+     "layeredVertices": 13,
+     "handVertices": 1041,
+     "verticesOnTwoFingers": 0,
+     "jointShiftCm": [
+      "LeftHandMiddle4 92.4",
+      "LeftHandRing4 90.2",
+      "LeftHandIndex4 90.2",
+      "LeftHandMiddle3 89.8",
+      "RightHandMiddle4 89.3",
+      "LeftHandRing3 88.5",
+      "LeftHandIndex3 88.3",
+      "RightHandIndex4 87.5"
+     ]
+    }
+   ],
+   "warnings": [
+    "segRatio.neck = 0.799 (outside 0.8–1.25: an auto-rig joint may be misplaced; compare --proportions game)"
+   ],
+   "status": "done",
+   "error": null,
+   "finishedAt": "2026-09-29T08:02:27.523Z",
+   "seconds": 8
+  },
+  "lods": {
+   "at": "2026-09-29T08:02:27.556Z",
+   "lods": [
+    {
+     "level": 0,
+     "dist": 0,
+     "tris": 70000
+    },
+    {
+     "level": 1,
+     "dist": 9,
+     "tris": 35999
+    },
+    {
+     "level": 2,
+     "dist": 18,
+     "tris": 16000
+    },
+    {
+     "level": 3,
+     "dist": 32,
+     "tris": 6000
+    }
+   ],
+   "status": "done",
+   "error": null,
+   "finishedAt": "2026-09-29T08:02:27.557Z",
+   "seconds": 0
+  },
+  "preview": {
+   "at": "2026-09-29T08:02:55.470Z",
+   "report": {
+    "char": "main-guy-001",
+    "at": "2026-09-29T08:02:55.336Z",
+    "page": "rig-preview",
+    "clipLibrary": false,
+    "allPassed": false,
+    "results": [
+     {
+      "pose": "a_pose",
+      "pass": true,
+      "tris": 70000,
+      "edges": 210000,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0,
+      "squashedPct": 0,
+      "collapsedPct": 0,
+      "worstNear": {},
+      "screenshot": "deformation/a_pose.png"
+     },
+     {
+      "pose": "deep_knee_bend",
+      "pass": false,
+      "tris": 70000,
+      "edges": 210000,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.332,
+      "squashedPct": 0.084,
+      "collapsedPct": 0.006,
+      "worstNear": {
+       "right-knee": 58,
+       "left-knee": 27,
+       "right-ankle": 3,
+       "right-elbow": 17,
+       "right-hip": 79,
+       "left-hip": 12,
+       "left-elbow": 4
+      },
+      "screenshot": "deformation/deep_knee_bend.png"
+     },
+     {
+      "pose": "elbow_90",
+      "pass": true,
+      "tris": 70000,
+      "edges": 210000,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.001,
+      "squashedPct": 0.001,
+      "collapsedPct": 0,
+      "worstNear": {
+       "left-elbow": 2,
+       "right-elbow": 2
+      },
+      "screenshot": "deformation/elbow_90.png"
+     },
+     {
+      "pose": "arms_overhead",
+      "pass": true,
+      "tris": 70000,
+      "edges": 210000,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.03,
+      "squashedPct": 0.045,
+      "collapsedPct": 0.003,
+      "worstNear": {
+       "left-shoulder": 82,
+       "right-shoulder": 74
+      },
+      "screenshot": "deformation/arms_overhead.png"
+     },
+     {
+      "pose": "wrist_extension",
+      "pass": true,
+      "tris": 70000,
+      "edges": 210000,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0,
+      "squashedPct": 0.001,
+      "collapsedPct": 0,
+      "worstNear": {
+       "left-elbow": 2
+      },
+      "screenshot": "deformation/wrist_extension.png"
+     },
+     {
+      "pose": "hand_open",
+      "pass": true,
+      "tris": 70000,
+      "edges": 210000,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0,
+      "squashedPct": 0,
+      "collapsedPct": 0,
+      "worstNear": {},
+      "screenshot": "deformation/hand_open.png"
+     },
+     {
+      "pose": "hand_closed",
+      "pass": false,
+      "tris": 70000,
+      "edges": 210000,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.297,
+      "squashedPct": 0.01,
+      "collapsedPct": 0.001,
+      "worstNear": {
+       "right-middle-second-joint": 59,
+       "left-middle-second-joint": 134,
+       "right-wrist": 7
+      },
+      "screenshot": "deformation/hand_closed.png"
+     }
+    ],
+    "missingClips": [
+     "idle",
+     "walk",
+     "run",
+     "sprint",
+     "defensive_stance",
+     "dribble",
+     "crossover",
+     "jump",
+     "shooting_pose",
+     "layup_dunk"
+    ],
+    "clipPosesSkipped": true,
+    "lods": [
+     {
+      "cameraDistance": 3,
+      "level": 0,
+      "triangles": 70000
+     },
+     {
+      "cameraDistance": 11,
+      "level": 1,
+      "triangles": 35999
+     },
+     {
+      "cameraDistance": 20,
+      "level": 2,
+      "triangles": 16000
+     },
+     {
+      "cameraDistance": 36,
+      "level": 3,
+      "triangles": 6000
+     }
+    ],
+    "pageErrors": []
+   },
+   "status": "done",
+   "error": null,
+   "finishedAt": "2026-09-29T08:02:55.471Z",
+   "seconds": 20
+  },
+  "courttest": {
+   "status": "blocked",
+   "startedAt": "2026-09-29T08:02:55.471Z",
+   "error": null,
+   "reason": "the clip library on this server is empty (cloud storage not configured), so the court cannot play animations",
+   "action": "add FIREBASE_SERVICE_ACCOUNT or the R2_* keys to .env and restart the server, then run court-test again",
+   "finishedAt": "2026-09-29T08:02:55.496Z",
+   "seconds": 0
+  }
+ },
+ "parts": {
+  "sourceHigh": {
+   "BODY_HIGH": 1588639,
+   "HEAD_DONOR": 1772108,
+   "HAND_LEFT_DONOR": 1899602,
+   "HAND_RIGHT_DONOR": 1751957
+  }
+ },
+ "skeletonVersion": "SOUL_JAM_MASTER_SKELETON (MHR 127 joints, player.json.gz)",
+ "textureVersion": "bake-4096-96fb3c52",
+ "lods": {
+  "lod0": {
+   "triangles": 70000,
+   "file": "rigs/lods/rigged_lod0.glb",
+   "dist": 0
+  },
+  "lod1": {
+   "triangles": 35999,
+   "file": "rigs/lods/rigged_lod1.glb",
+   "dist": 9
+  },
+  "lod2": {
+   "triangles": 16000,
+   "file": "rigs/lods/rigged_lod2.glb",
+   "dist": 18
+  },
+  "lod3": {
+   "triangles": 6000,
+   "file": "rigs/lods/rigged_lod3.glb",
+   "dist": 32
+  }
+ },
+ "sourceFiles": [
+  "references/_original/32aea470-image.png",
+  "references/_original/370aa863-image.png",
+  "references/_original/6857ba92-image.jpg"
+ ],
+ "warnings": [],
+ "errors": [
+  {
+   "stage": "ingest",
+   "error": "The \"paths[0]\" argument must be of type string. Received an instance of Object",
+   "at": "2026-09-29T04:50:45.285Z"
+  },
+  {
+   "stage": "gamemesh",
+   "error": "blender gamemesh.py failed (log: /Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/logs/gamemesh.log)\nTraceback (most recent call last):\n  File \"/Users/crafterc/Claude Test/sprite-factory/tools/character_pipeline/blender/gamemesh.py\", line 66, in <module>\nRuntimeError: Error: DeformGroup '' not in object 'GAME_MESH'",
+   "at": "2026-09-29T05:24:53.606Z"
+  },
+  {
+   "stage": "gamemesh",
+   "error": "blender gamemesh.py failed (log: /Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/logs/gamemesh.log)\n",
+   "at": "2026-09-29T05:42:54.185Z"
+  },
+  {
+   "stage": "gamemesh",
+   "part": null,
+   "error": "blender gamemesh.py failed (log: /Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/logs/gamemesh.log)\n",
+   "creditsSpentInJob": 0,
+   "at": "2026-09-29T06:51:19.892Z"
+  },
+  {
+   "stage": "gamemesh",
+   "part": null,
+   "error": "blender gamemesh.py failed (log: /Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/logs/gamemesh.log)\nError: Object \"BODY_HIGH\" is not enabled for rendering\nTraceback (most recent call last):\n  File \"/Users/crafterc/Claude Test/sprite-factory/tools/character_pipeline/blender/gamemesh.py\", line 281, in <module>\n  File \"/Users/crafterc/Claude Test/sprite-factory/tools/character_pipeline/blender/gamemesh.py\", line 237, in bake\nRuntimeError: Error: Object \"BODY_HIGH\" is not enabled for rendering",
+   "creditsSpentInJob": 0,
+   "at": "2026-09-29T06:51:41.065Z"
+  },
+  {
+   "stage": "rig",
+   "part": null,
+   "error": "blender rigmerge.py failed (log: /Users/crafterc/Claude Test/sprite-factory/assets/characters/main_guy_001/logs/rigmerge.log)\nTraceback (most recent call last):\n  File \"/Users/crafterc/Claude Test/sprite-factory/tools/character_pipeline/blender/rigmerge.py\", line 91, in <module>\nReferenceError: StructRNA of type Object has been removed",
+   "creditsSpentInJob": 25,
+   "at": "2026-09-29T06:54:44.090Z"
+  },
+  {
+   "stage": "rig",
+   "part": null,
+   "error": "task c648069e-4076-4409-96b7-0d3039754ae9 failed",
+   "creditsSpentInJob": 0,
+   "at": "2026-09-29T06:59:41.572Z"
+  },
+  {
+   "stage": "import",
+   "part": null,
+   "error": "importer (LOD0) failed: file:///Users/crafterc/Claude%20Test/sprite-factory/scripts/import-mixamo-character.mjs:296\n  const name = bn(bones[i]), Rp = pi >= 0 ? T[pi].R : I3;\n                                                  ^\n\nTypeError: Cannot read properties of undefined (reading 'R')\n    at file:///Users/crafterc/Claude%20Test/sprite-factory/scripts/import-mixamo-character.mjs:296:51\n\nNode.js v24.14.0\n",
+   "creditsSpentInJob": 0,
+   "at": "2026-09-29T07:07:02.701Z"
+  },
+  {
+   "stage": "preview",
+   "part": null,
+   "error": "deformation test failed: Error: rig main-guy-001: HTTP 400\n    at file:///Users/crafterc/Claude%20Test/sprite-factory/tools/character_pipeline/deform-test.mjs:68:78\n",
+   "creditsSpentInJob": 0,
+   "at": "2026-09-29T07:09:19.990Z"
+  }
+ ],
+ "updatedAt": "2026-09-29T08:02:55.496Z",
+ "name": "main_guy_001",
+ "versions": [
+  {
+   "v": 1,
+   "at": "2026-09-29T07:07:26.287Z",
+   "note": "build",
+   "sources": {
+    "hand_left": "da82531e-fed6-4d0d-850f-0f11a18cfb45",
+    "hand_right": "3fd61297-9329-423c-8520-3fdb77e96097",
+    "body": "2d456ad7-91d0-4dce-a017-e11b72112d7a",
+    "head": "6aff8b8c-5dd3-4e95-a425-1835aede6beb"
+   },
+   "triangles": 70000
+  },
+  {
+   "v": 2,
+   "at": "2026-09-29T07:09:08.419Z",
+   "note": "build",
+   "sources": {
+    "hand_left": "da82531e-fed6-4d0d-850f-0f11a18cfb45",
+    "hand_right": "3fd61297-9329-423c-8520-3fdb77e96097",
+    "body": "2d456ad7-91d0-4dce-a017-e11b72112d7a",
+    "head": "6aff8b8c-5dd3-4e95-a425-1835aede6beb"
+   },
+   "triangles": 70000
+  },
+  {
+   "v": 3,
+   "at": "2026-09-29T07:26:57.812Z",
+   "note": "regenerated body",
+   "sources": {
+    "hand_left": "da82531e-fed6-4d0d-850f-0f11a18cfb45",
+    "hand_right": "3fd61297-9329-423c-8520-3fdb77e96097",
+    "body": "82cfb0cb-40c7-4886-8e8f-4561d333bbc9",
+    "head": "6aff8b8c-5dd3-4e95-a425-1835aede6beb"
+   },
+   "triangles": 70000
+  },
+  {
+   "v": 4,
+   "at": "2026-09-29T07:53:02.254Z",
+   "note": "build",
+   "sources": {
+    "hand_left": "da82531e-fed6-4d0d-850f-0f11a18cfb45",
+    "hand_right": "3fd61297-9329-423c-8520-3fdb77e96097",
+    "body": "82cfb0cb-40c7-4886-8e8f-4561d333bbc9",
+    "head": "6aff8b8c-5dd3-4e95-a425-1835aede6beb"
+   },
+   "triangles": 70000
+  },
+  {
+   "v": 5,
+   "at": "2026-09-29T07:57:55.700Z",
+   "note": "build",
+   "sources": {
+    "hand_left": "da82531e-fed6-4d0d-850f-0f11a18cfb45",
+    "hand_right": "3fd61297-9329-423c-8520-3fdb77e96097",
+    "body": "82cfb0cb-40c7-4886-8e8f-4561d333bbc9",
+    "head": "6aff8b8c-5dd3-4e95-a425-1835aede6beb"
+   },
+   "triangles": 70000
+  },
+  {
+   "v": 6,
+   "at": "2026-09-29T08:02:04.540Z",
+   "note": "build",
+   "sources": {
+    "hand_left": "da82531e-fed6-4d0d-850f-0f11a18cfb45",
+    "hand_right": "3fd61297-9329-423c-8520-3fdb77e96097",
+    "body": "82cfb0cb-40c7-4886-8e8f-4561d333bbc9",
+    "head": "6aff8b8c-5dd3-4e95-a425-1835aede6beb"
+   },
+   "triangles": 70000
+  },
+  {
+   "v": 7,
+   "at": "2026-09-29T08:02:27.526Z",
+   "note": "build",
+   "sources": {
+    "hand_left": "da82531e-fed6-4d0d-850f-0f11a18cfb45",
+    "hand_right": "3fd61297-9329-423c-8520-3fdb77e96097",
+    "body": "82cfb0cb-40c7-4886-8e8f-4561d333bbc9",
+    "head": "6aff8b8c-5dd3-4e95-a425-1835aede6beb"
+   },
+   "triangles": 70000
+  }
+ ]
+}

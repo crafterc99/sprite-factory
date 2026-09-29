@@ -54,6 +54,7 @@ None currently — pending Railway stability.
 
 | Date | What happened |
 |---|---|
+| 2026-09-29 | Character Factory: reference images → Tripo v3.1 masters (body, head, hands; T-pose prep) → Blender assembly / game mesh / 4K bakes → Tripo rigs merged → 127-joint master skeleton with 4 LODs; /factory UI (Sprite Factory v2 design); first character main_guy_001 in the game (460 Tripo credits); court test blocked locally (no clip library) |
 | 2026-09-28 | Stage 1 mocap pipeline + /mocap iPad UI (SAM 3 masks, SAM 3D Body skeletons, cleaned reusable motion.json, colour-coded mannequin per game zone, GPT Image 2.5 / Nano Banana generation aligned to the mannequin, canonical composited ball, QC + auto-retry, save to slot); APP_PASSWORD gate; audit fixes: shared strip scale, SAM 3 cutouts |
 | 2026-06-12 | Moves panel click-to-edit: inline per-animation settings (game-wide speed, per-variant starting hand re-key); roster cache busts on writes; net-line idle hand verified vs production net |
 | 2026-06-12 | Per-animation speed persists game-wide (FPS slider PATCHes all slot variants server-side); net-line hand swap verified in all 5 zones with velocity fallback |

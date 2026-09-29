@@ -33,8 +33,15 @@ def load_rig(path, tag):
     rm, arm = import_model(path, tag)
     if not arm:
         raise RuntimeError(f'{os.path.basename(path)} has no armature')
+    # Tripo's files come posed (node transforms ≠ the bind pose): the rig meshes are weight sources
+    # only, so their armature deformation is removed (the transfer must sample the bind-pose
+    # surface), and the armature goes back to its rest (= bind) pose
     for o in rm:
-        o.modifiers.clear() if len(rm) > 1 else None
+        for mod in [x for x in o.modifiers if x.type == 'ARMATURE']:
+            o.modifiers.remove(mod)
+    for pb in arm.pose.bones:
+        pb.matrix_basis = Matrix.Identity(4)
+    bpy.context.view_layer.update()
     mesh = rm[0] if len(rm) == 1 else join(rm, tag)
     Pr0 = verts_np(mesh)
     sub = Pr0[np.random.default_rng(1).choice(len(Pr0), min(len(Pr0), 4000), replace=False)]
@@ -48,17 +55,37 @@ def load_rig(path, tag):
         if best is None or d < best[0]:
             best = (d, k, sc_)
     d, k, sc_ = best
-    if k or abs(sc_ - 1) > 1e-3:
-        arm.matrix_world = Matrix.Rotation(k * math.pi / 2, 4, 'Y') @ Matrix.Scale(sc_, 4) @ arm.matrix_world
-        bpy.context.view_layer.update()
-        Pr = verts_np(mesh)
-        off = np.array([Pg[:, 0].mean(), Pg[:, 1].min(), Pg[:, 2].mean()]) - np.array([Pr[:, 0].mean(), Pr[:, 1].min(), Pr[:, 2].mean()])
-        arm.matrix_world = Matrix.Translation(Vector(off)) @ arm.matrix_world
+    # the placement goes on the import's top-level objects (the armature and its mesh may both hang
+    # under a scene root, so moving the armature alone would leave the mesh behind)
+    def top(o):
+        while o.parent is not None:
+            o = o.parent
+        return o
+    roots = {top(arm), top(mesh)}
+    for rt in roots:
+        rt.matrix_world = Matrix.Rotation(k * math.pi / 2, 4, 'Y') @ Matrix.Scale(sc_, 4) @ rt.matrix_world
     bpy.context.view_layer.update()
+    Pr = verts_np(mesh)
+    off = np.array([Pg[:, 0].mean(), Pg[:, 1].min(), Pg[:, 2].mean()]) - np.array([Pr[:, 0].mean(), Pr[:, 1].min(), Pr[:, 2].mean()])
+    for rt in roots:
+        rt.matrix_world = Matrix.Translation(Vector(off)) @ rt.matrix_world
+    bpy.context.view_layer.update()
+    # the armature out of any root (its world transform kept), so applying it bakes the placement
+    aw = arm.matrix_world.copy(); arm.parent = None; arm.matrix_world = aw
+    # bake the placement into both: the rig mesh is unparented first (applying the armature's
+    # transform alone leaves its child mesh at Tripo's original size and place)
+    mw = mesh.matrix_world.copy(); mesh.parent = None; mesh.matrix_world = mw
+    apply_transforms([mesh])
     bpy.ops.object.select_all(action='DESELECT'); arm.select_set(True); bpy.context.view_layer.objects.active = arm
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    log(f'{tag}: {len(arm.data.bones)} bones; aligned with {k} quarter turns, gap {d * 100:.2f} cm')
-    return arm, mesh, {'bones': len(arm.data.bones), 'turns_about_y': k, 'scale': sc_, 'mean_gap_cm': d * 100}
+    bpy.context.view_layer.update()
+    # the gap as the weight transfer will see it
+    Pr = verts_np(mesh); smp = Pr[np.random.default_rng(2).choice(len(Pr), min(len(Pr), 4000), replace=False)]
+    gap = float(np.mean([tree.find(Vector(p))[2] for p in smp]))
+    if gap > 0.01:
+        report['warnings'].append(f'{tag}: the rig mesh sits {gap * 100:.1f} cm from the game mesh after placement — weights would be wrong')
+    log(f'{tag}: {len(arm.data.bones)} bones; aligned with {k} quarter turns, gap {d * 100:.2f} cm (after placement {gap * 100:.2f} cm)')
+    return arm, mesh, {'bones': len(arm.data.bones), 'turns_about_y': k, 'scale': sc_, 'mean_gap_cm': d * 100, 'gap_after_placement_cm': gap * 100}
 
 
 def transfer(src_mesh, prefix=''):
@@ -78,12 +105,20 @@ def transfer(src_mesh, prefix=''):
     return names
 
 
+PROBE = A.get('probe')
+def probe(tag):
+    if PROBE is None: return
+    i = int(np.argmin(np.linalg.norm(Pg - np.array(PROBE), axis=1)))
+    log('probe', tag, [(game.vertex_groups[x.group].name, round(x.weight, 3)) for x in game.data.vertices[i].groups])
+
+
 # the Mixamo-named rig (body: names, placement, weights) — and optionally Tripo's finger rig
 arm, rigmesh, info = load_rig(A['rig'], 'RIG')
 report['rig'] = info
 if game.parent:
     mw = game.matrix_world.copy(); game.parent = None; game.matrix_world = mw
 transfer(rigmesh)
+probe('after body transfer')
 report['bones'] = len(arm.data.bones)
 
 # ── fingers from Tripo's finger rig, grafted onto the Mixamo armature ──
@@ -91,6 +126,7 @@ if A.get('finger_rig'):
     farm, fmesh, finfo = load_rig(A['finger_rig'], 'FINGERS')
     report['finger_rig'] = finfo
     transfer(fmesh, prefix='F:')
+    probe('after finger transfer')
     fw = {b.name: (np.array(farm.matrix_world @ b.head_local), np.array(farm.matrix_world @ b.tail_local)) for b in farm.data.bones}
     kids = {b.name: [c.name for c in b.children] for b in farm.data.bones}
     mix = lambda n: 'mixamorig:' + n
@@ -181,11 +217,13 @@ if A.get('finger_rig'):
             moved += 1
         grafted[side] = {'wrist_bone': wrist, 'chains': {f: len(ch) for f, ch in order.items()}, 'hand_vertices_split': moved}
         log(f'{side} fingers grafted from {wrist}: ' + ', '.join(f'{f} {len(ch)} bones' for f, ch in order.items()) + f'; {moved} hand vertices split')
+    probe('after graft')
     report['fingers'] = grafted
     for vg in [g for g in game.vertex_groups if g.name.startswith('F:')]:
         game.vertex_groups.remove(vg)
     bpy.data.objects.remove(fmesh, do_unlink=True)
     bpy.data.objects.remove(farm, do_unlink=True)
+probe('after F: groups removed')
 report['bone_names'] = [b.name for b in arm.data.bones]
 report['bones'] = len(arm.data.bones)
 

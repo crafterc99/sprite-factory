@@ -279,7 +279,8 @@ export async function rig(m, { force } = {}) {
     r.check = {}; r.rigTask = {}; r.fingerTask = {}; r.convertTask = {}; r.tripoKey = tk; r.fileToken = null;
   }
   const rigFile = path.join(D.rigs, 'tripo_rig.glb'), fingerFile = path.join(D.rigs, 'tripo_fingers.glb');
-  if (!fs.existsSync(rigFile) || (TRIPO.fingerRigModel && !fs.existsSync(fingerFile)) || force === 'tripo') {
+  // (the rig files must belong to this game mesh: a stale pair from an earlier mesh is never reused)
+  if (!fs.existsSync(rigFile) || (TRIPO.fingerRigModel && !fs.existsSync(fingerFile)) || r.filesKey !== tk || force === 'tripo') {
     const client = new TripoClient({ log: say });
     if (!r.fileToken || !r.check?.task?.id) { r.fileToken = await client.uploadFile(game); saveManifest(m); }
     const chk = await runTask(m, (r.check ||= {}), 'rig-check', (c) => c.rigCheck(r.fileToken));
@@ -295,6 +296,7 @@ export async function rig(m, { force } = {}) {
     };
     await get('rigTask', 'rig (Mixamo body)', TRIPO.rigModel, rigFile);
     if (TRIPO.fingerRigModel) await get('fingerTask', 'rig (fingers)', TRIPO.fingerRigModel, fingerFile);
+    r.filesKey = tk; saveManifest(m);
   }
   const outDir = path.join(D.rigs, 'lods');
   const rep = path.join(D.rigs, 'rigmerge-report.json');

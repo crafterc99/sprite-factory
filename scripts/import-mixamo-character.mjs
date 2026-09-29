@@ -195,7 +195,7 @@ for (const mesh of meshes) {
 }
 // textures: the base colour and normal map of every material (bytes held by the image shim)
 const texOf = async (t) => (t?.image?._bytes ? await t.image._bytes : null);
-const MATTEX = await Promise.all(MATS.map(async (m) => ({ name: m.name || 'material', color: await texOf(m.map), normal: await texOf(m.normalMap), rgb: m.color ? m.color.clone().convertLinearToSRGB().toArray().map((x) => Math.round(x * 255)) : null })));
+const MATTEX = await Promise.all(MATS.map(async (m) => ({ name: m.name || 'material', color: await texOf(m.map), normal: await texOf(m.normalMap), rough: await texOf(m.roughnessMap || m.metalnessMap), ao: await texOf(m.aoMap), rgb: m.color ? m.color.clone().convertLinearToSRGB().toArray().map((x) => Math.round(x * 255)) : null })));
 const TEXTURED = MATTEX.some((m) => m.color);
 const NV = V.length;
 const nbr = Array.from({ length: NV }, () => new Set());
@@ -623,7 +623,8 @@ async function saveTex(mi, kind) {
   const data = MATTEX[mi][kind]; let url = null;
   if (data) {
     const fn = `${MATTEX[mi].name}-${mi}-${kind}.webp`.replace(/[^a-z0-9_.-]/gi, '_').toLowerCase();
-    await sharp(data).resize({ width: TEXSIZE, height: TEXSIZE, fit: 'inside', withoutEnlargement: true }).webp({ quality: kind === 'normal' ? 92 : 88 }).toFile(path.join(texDir, fn));
+    if (LOD && fs.existsSync(path.join(texDir, fn))) { url = `/chars/${id}/${fn}`; texUrl.set(k, url); return url; }   // LODs share LOD 0's textures (never re-encoded at another size)
+    await sharp(data).resize({ width: TEXSIZE, height: TEXSIZE, fit: 'inside', withoutEnlargement: true }).webp(kind === 'color' ? { quality: 88 } : { quality: 92 }).toFile(path.join(texDir, fn));
     url = `/chars/${id}/${fn}`;
   }
   texUrl.set(k, url); return url;
@@ -645,10 +646,12 @@ for (const g of gkeys) {
   rv.forEach((r, i) => { const u = rvPos[r]; verts.set(P[u], i * 3); uv.set(rvUV[r], i * 2); nrm.set(NRM.subarray(u * 3, u * 3 + 3), i * 3); top4[u].forEach(([j, w], c) => { si[i * 4 + c] = j; sw[i * 4 + c] = w; }); });
   const faces32 = rv.length > 65535;
   const map = TEXTURED ? await saveTex(mi, 'color') : null, normalMap = TEXTURED ? await saveTex(mi, 'normal') : null;
+  // glTF packs roughness (G) and metallic (B) into one map; three.js reads those channels as is
+  const rmap = TEXTURED ? await saveTex(mi, 'rough') : null, aoMap = TEXTURED ? await saveTex(mi, 'ao') : null;
   // untextured: the palette colour; an untextured material of a textured model: its own colour
   const color = map ? null : TEXTURED && MATTEX[mi].rgb ? MATTEX[mi].rgb : colorOf(k);
   parts.push({ name: perCls[k] > 1 ? `${k}-${mi}` : k, vertexCount: rv.length, verts: bb64(verts), uv: bb64(uv), faces: bb64(faces32 ? Uint32Array.from(fs3) : Uint16Array.from(fs3)), faces32,
-    skinIdx: bb64(si), skinW: bb64(sw), map, normalMap, alpha: false, color, ...(TEXTURED ? { normals: bb64(nrm) } : {}) });
+    skinIdx: bb64(si), skinW: bb64(sw), map, normalMap, ...(rmap ? { roughnessMap: rmap, metalnessMap: rmap } : {}), ...(aoMap ? { aoMap } : {}), alpha: false, color, ...(TEXTURED ? { normals: bb64(nrm) } : {}) });
 }
 // shoes below the game's feet: the runtime stands the feet keypoints soleOffset above the floor,
 // so the soles land on it (the skeleton and mesh stay as bound)

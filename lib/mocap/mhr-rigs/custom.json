@@ -2,5 +2,9 @@
  "athlete": {
   "name": "Athlete",
   "heightM": 1.841
+ },
+ "main-guy-001": {
+  "name": "main_guy_001",
+  "heightM": 1.883
  }
 }
