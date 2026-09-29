@@ -61,7 +61,8 @@ function bouncesToFloor(ys) {
   // failed loads are judged by URL below (a clip's source video frames may be absent on a local server)
   page.on('console', (m) => { if (m.type() === 'error' && !/^Failed to load resource/.test(m.text())) errors.push('console: ' + m.text().slice(0, 200)); });
   page.on('response', (r) => { if (r.status() >= 400 && !/\/api\/mocap\/motion\/[^/]+\/frame\//.test(r.url())) errors.push(`${r.status()} ${r.url().slice(0, 160)}`); });
-  const q = args.char ? `?char=${encodeURIComponent(args.char)}` : '';
+  const qs = new URLSearchParams(); if (args.char) qs.set('char', args.char); if (args.court) qs.set('court', args.court);
+  const q = qs.toString() ? `?${qs}` : '';   // --court classic: the timed checks need a court software GL renders fast
   await page.goto(`${BASE}/court3d${q}`, { waitUntil: 'load', timeout: 90000 });
   await page.waitForFunction(() => window.__court3d?.player || document.getElementById('err')?.textContent, null, { timeout: 180000 });
   const err = await page.evaluate(() => document.getElementById('err').textContent);
@@ -77,7 +78,16 @@ function bouncesToFloor(ys) {
     f();
   });
 
-  const rep = { errors };
+  const rep = { errors, newBalls: 0 };
+  // a lost ball stays lost (no automatic pass-back): like a player, press X for a new one before
+  // each segment — counted in the report (newBalls), so losses stay visible
+  const ensureBall = async () => {
+    const has = await page.evaluate(() => { const S = window.__court3d; return !S.freeBall && !S.phys?.lost && !/LOOSE|FREE/.test(S.phys?.state || ''); });
+    if (has) return;
+    rep.newBalls++;
+    await page.keyboard.press('KeyX');
+    await page.waitForFunction(() => { const S = window.__court3d; return S.player.hasBall && /HAND|POSSESSION/.test(S.phys.state); }, null, { timeout: 8000 }).catch(() => {});
+  };
   rep.loaded = await page.evaluate(() => {
     const S = window.__court3d;
     return { char: S.rig.name, verts: S.rig.vertexCount, clips: Object.keys(S.player.lib).filter((k) => !k.endsWith(':mirror')), hand: S.player.hand, fps: document.getElementById('fps').textContent };
@@ -112,6 +122,7 @@ function bouncesToFloor(ys) {
   if (lib.includes('move-crossover')) {
     const picks = [];
     const cross = async (label) => {
+      await ensureBall();
       await page.evaluate(() => { window.__court3d.lastPick = null; window.__court3d.player.metrics.slideMaxCm = 0; });
       const hand0 = await page.evaluate(() => window.__court3d.player.hand);
       const tp = Date.now();
@@ -151,6 +162,7 @@ function bouncesToFloor(ys) {
   await page.evaluate(() => { window.__court3d.player.teleport(1.8, 5.2); });
   await page.waitForTimeout(900);
 
+  await ensureBall();
   // Shot: hold I
   await page.evaluate(() => { window.__court3d.player.metrics.slideMaxCm = 0; });
   await page.keyboard.down('KeyI'); await page.waitForTimeout(300); await page.keyboard.up('KeyI');

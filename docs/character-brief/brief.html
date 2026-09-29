@@ -1,0 +1,268 @@
+<title>Soul Jam Character Rig Brief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: a technical spec sheet — one reading column, tables for the hard numbers, a sidebar
+   index on wide screens that stacks above the content on phones. */
+:root {
+  --bg: #f5f6f4;          /* hardwood-cool paper */
+  --panel: #ffffff;
+  --ink: #1d2320;
+  --muted: #5b655f;
+  --line: #d7dcd8;
+  --accent: #1f6f5c;      /* court-line green */
+  --accent-soft: #e2efe9;
+  --must: #9a3b1f;        /* the non-negotiables */
+  --must-soft: #f6e6df;
+  --display: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  --body: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141816; --panel: #1b201d; --ink: #e6ebe8; --muted: #9aa69f; --line: #2d3531;
+  --accent: #6cc4a8; --accent-soft: #1d3029; --must: #f09a78; --must-soft: #35211a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #141816; --panel: #1b201d; --ink: #e6ebe8; --muted: #9aa69f; --line: #2d3531;
+  --accent: #6cc4a8; --accent-soft: #1d3029; --must: #f09a78; --must-soft: #35211a; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 400 15.5px/1.6 var(--body); padding: 0 16px; padding-block: 28px 64px }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 40px }
+@media (max-width: 820px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 20px } nav.toc { position: static !important } }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; font-size: 13.5px }
+nav.toc b { display: block; font: 700 12px/1 var(--body); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px }
+nav.toc a { display: block; color: var(--ink); text-decoration: none; padding: 4px 0 4px 10px; border-left: 2px solid var(--line) }
+nav.toc a:hover, nav.toc a:focus-visible { border-left-color: var(--accent); color: var(--accent); outline: none }
+main { min-width: 0 }
+header.top { border-bottom: 3px solid var(--ink); padding-bottom: 18px; margin-bottom: 8px }
+.eyebrow { font: 600 12px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--accent) }
+h1 { font: 700 clamp(34px, 6vw, 52px)/1.02 var(--display); letter-spacing: .01em; text-transform: uppercase; margin: 10px 0 12px; text-wrap: balance }
+.lede { max-width: 66ch; font-size: 16.5px; color: var(--ink); margin: 0 }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; font: 500 13px/1.4 var(--mono); color: var(--muted) }
+.facts span b { color: var(--ink); font-weight: 500 }
+section { padding-top: 34px }
+h2 { font: 700 26px/1.1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0 0 12px; display: flex; gap: 12px; align-items: baseline; text-wrap: balance }
+h2 .n { font: 500 13px/1 var(--mono); color: var(--accent) }
+h3 { font: 600 16px/1.3 var(--body); margin: 22px 0 8px }
+p, li { max-width: 68ch }
+ul { padding-left: 20px; margin: 8px 0 } li { margin: 4px 0 }
+code, .mono { font: 400 13.5px/1.4 var(--mono); background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; word-break: break-word }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); margin: 12px 0 }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top }
+th { font: 600 12px/1.3 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--bg) }
+tr:last-child td { border-bottom: 0 }
+td.num { font-family: var(--mono); white-space: nowrap }
+.must { background: var(--must-soft); border: 1px solid color-mix(in srgb, var(--must) 35%, transparent); border-radius: 8px; padding: 14px 16px; margin: 14px 0 }
+.must b.tag { font: 700 11.5px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--must); display: block; margin-bottom: 8px }
+.why { color: var(--muted); font-size: 14.5px }
+.files { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 14px 0 }
+.file { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0 }
+.file .fn { font: 500 13.5px/1.3 var(--mono); color: var(--accent); word-break: break-all }
+.file p { margin: 6px 0 0; font-size: 14px; color: var(--muted) }
+ol.poses { counter-reset: p; list-style: none; padding: 0; display: grid; gap: 8px }
+ol.poses li { counter-increment: p; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px 10px 48px; position: relative; max-width: none }
+ol.poses li::before { content: counter(p); position: absolute; left: 14px; top: 9px; font: 700 20px/1 var(--display); color: var(--accent) }
+footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px }
+a { color: var(--accent) }
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <b>Contents</b>
+  <a href="#job">The job</a>
+  <a href="#files">What you get</a>
+  <a href="#rules">Non-negotiables</a>
+  <a href="#skeleton">Skeleton &amp; bind pose</a>
+  <a href="#mesh">Mesh budget</a>
+  <a href="#textures">Textures &amp; UVs</a>
+  <a href="#hands">Hands</a>
+  <a href="#deform">Deformation tests</a>
+  <a href="#face">Face &amp; eyes</a>
+  <a href="#deliver">Delivery &amp; acceptance</a>
+</nav>
+
+<main>
+<header class="top">
+  <div class="eyebrow">Freelance brief · 3D character + rig</div>
+  <h1>Soul Jam Character Rig Brief</h1>
+  <p class="lede">A realistic, textured basketball player for a real-time 3D web game (three.js, WebGL 2). The character is driven by motion capture on a fixed skeleton, and a physically simulated basketball touches the hands every frame, so the hands must be modelled and rigged with real care.</p>
+  <div class="facts"><span>units <b>metres</b></span><span>up <b>+Y</b></span><span>facing <b>+Z</b></span><span>skeleton <b>127 joints (supplied)</b></span><span>format <b>GLB (glTF 2.0)</b></span><span>ball <b>size 7, r = 0.12 m</b></span></div>
+</header>
+
+<section id="job">
+  <h2><span class="n">01</span>The job</h2>
+  <p>Model, texture, skin and test one game character on the skeleton we supply. The look (face, build, outfit) comes from the client's separate references. This brief covers everything the game needs technically.</p>
+  <p>The game plays motion-captured animation on this exact skeleton. The mesh, weights and hands you make are what players see catching, dribbling and shooting a physics ball, up close.</p>
+</section>
+
+<section id="files">
+  <h2><span class="n">02</span>What you get</h2>
+  <div class="files">
+    <div class="file"><div class="fn">player-rig-reference.glb</div><p>The skeleton, the current body mesh in its bind pose and its skin weights. Import it into Blender (File › Import › glTF 2.0) or Maya (glTF importer). This is your starting point and your scale reference.</p></div>
+    <div class="file"><div class="fn">skeleton.json</div><p>Every joint's name, parent and bind position / rotation (metres, world space, quaternion x y z w).</p></div>
+    <div class="file"><div class="fn">This brief</div><p>Requirements, numbers and the acceptance tests we run on delivery.</p></div>
+  </div>
+  <p class="why">The reference body is 1.83 m tall with its feet on Y = 0. Its current fingers are low-detail; replacing them with properly modelled hands is a main goal of this job.</p>
+</section>
+
+<section id="rules">
+  <h2><span class="n">03</span>Non-negotiables</h2>
+  <div class="must"><b class="tag">Must</b>
+    <ul>
+      <li>Rig to the <b>supplied skeleton</b>: same 127 joints, same names, same hierarchy. Don't rename, add, remove or re-parent joints, and don't substitute a Mixamo, UE5 or HumanIK skeleton.</li>
+      <li>Keep the supplied proportions: each bone within <b>2 cm</b> of the supplied length. If the character's build needs different proportions (taller, longer arms, bigger hands), tell us <b>before rigging</b>. We refit the skeleton to your mesh and send it back.</li>
+      <li>Metres, +Y up, character faces <b>+Z</b>, feet on <b>Y = 0</b>, centred on the origin. No scale or rotation left on the root or mesh objects.</li>
+      <li>At most <b>4 bone influences per vertex</b>, normalised, and no unweighted vertices. No weight on the end markers (joints ending in <code>_null</code>).</li>
+      <li>Deliver <b>GLB</b> with embedded textures, plus your source file and texture sources.</li>
+    </ul>
+  </div>
+  <p class="why">Why so strict: the animation data are joint rotations for this skeleton, captured from real players. Any other joint layout breaks every animation in the game.</p>
+</section>
+
+<section id="skeleton">
+  <h2><span class="n">04</span>Skeleton &amp; bind pose</h2>
+  <p>73 main joints plus 40 twist/helper joints and 14 end markers. The main chain:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Region</th><th>Joints (left side <code>l_</code>, right side <code>r_</code>)</th></tr></thead>
+    <tbody>
+      <tr><td>Root &amp; spine</td><td class="mono">body_world › root › c_spine0 › c_spine1 › c_spine2 › c_spine3 › c_neck › c_head</td></tr>
+      <tr><td>Head</td><td class="mono">c_jaw, c_teeth, c_tongue0–4, l_eye, r_eye</td></tr>
+      <tr><td>Arm</td><td class="mono">clavicle › uparm › lowarm › wrist</td></tr>
+      <tr><td>Hand</td><td class="mono">thumb0–3 · index1–3 · middle1–3 · ring1–3 · pinky0–3 (pinky0 = the pinky metacarpal, for cupping the palm)</td></tr>
+      <tr><td>Leg</td><td class="mono">upleg › lowleg › foot › talocrural › subtalar › transversetarsal › ball</td></tr>
+      <tr><td>Twist helpers</td><td class="mono">uparm_twist*, lowarm_twist*, upleg_twist*, lowleg_twist* (…_proc)</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Bind pose</h3>
+  <ul>
+    <li><b>Preferred:</b> the supplied pose: arms about 15° out from the body, elbows slightly bent (about 12°), legs about 6° apart.</li>
+    <li><b>Also accepted:</b> an A-pose or T-pose on the same skeleton, if that gives you cleaner shoulders. Our importer re-poses the mesh through your own skin weights, so keep those weights clean in the pose you bind in.</li>
+  </ul>
+  <h3>Twist joints</h3>
+  <p>Weight the upper arm, forearm, thigh and shin twist joints in a smooth gradient along each limb. A wrist that turns 90° must not candy-wrap the forearm.</p>
+</section>
+
+<section id="mesh">
+  <h2><span class="n">05</span>Mesh budget</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Part</th><th>Triangles</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Whole character</td><td class="num">40k – 60k</td><td>Hard max 80k. It runs in a web browser, on laptops and iPads.</td></tr>
+      <tr><td>Each hand</td><td class="num">4k – 6k</td><td>Up to 15% of the budget. The camera goes close to the hands.</td></tr>
+      <tr><td>Head &amp; hair</td><td class="num">8k – 12k</td><td>Hair as geometry or alpha cards (alpha cut-out, not blended).</td></tr>
+      <tr><td>Clothing</td><td class="num">rest</td><td>Separate meshes are fine, all skinned to the same skeleton. At most 4 meshes / materials in total.</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li>Quads in the source, triangulated in the GLB.</li>
+    <li>Edge loops where it bends: at least 3 at elbows, knees and shoulders, 2 at each finger joint, and loops at the wrist, ankle, hip and neck.</li>
+    <li>No holes where they'd be visible. No clothing passing through the body in any of the deformation tests.</li>
+  </ul>
+</section>
+
+<section id="textures">
+  <h2><span class="n">06</span>Textures &amp; UVs</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Map</th><th>Spec</th></tr></thead>
+    <tbody>
+      <tr><td>Base colour</td><td>sRGB, 2048 × 2048 per material (4096 source files welcome)</td></tr>
+      <tr><td>Normal</td><td>tangent space, <b>OpenGL / +Y</b> (glTF convention), 2048 × 2048</td></tr>
+      <tr><td>ORM</td><td>packed: R occlusion, G roughness, B metalness (glTF metallic-roughness)</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li>UVs in the 0–1 range with no overlaps.</li>
+    <li>Even texel density across the body, with the face and hands at 1.5× or more.</li>
+    <li>No lighting baked into the base colour. The game lights the character in real time on a sunset rooftop court.</li>
+  </ul>
+</section>
+
+<section id="hands">
+  <h2><span class="n">07</span>Hands</h2>
+  <p>This is the most important part of the job. The game keeps a physical ball on the palm and wraps each fingertip onto the ball's surface. What you model is exactly what touches the ball.</p>
+  <h3>Supplied joint lengths (right hand, left is mirrored)</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Finger</th><th>Wrist → base</th><th>Segment 1</th><th>Segment 2</th><th>Segment 3 → tip</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td>Thumb</td><td class="num">1.8 cm (thumb0)</td><td class="num">2.3 / 3.3 cm</td><td class="num">3.6 cm</td><td class="num">2.6 cm</td><td class="num">13.6 cm</td></tr>
+      <tr><td>Index</td><td class="num">8.7 cm</td><td class="num">4.0 cm</td><td class="num">2.6 cm</td><td class="num">2.1 cm</td><td class="num">17.3 cm</td></tr>
+      <tr><td>Middle</td><td class="num">8.5 cm</td><td class="num">4.4 cm</td><td class="num">2.7 cm</td><td class="num">2.2 cm</td><td class="num">17.8 cm</td></tr>
+      <tr><td>Ring</td><td class="num">7.9 cm</td><td class="num">4.0 cm</td><td class="num">2.7 cm</td><td class="num">2.2 cm</td><td class="num">16.8 cm</td></tr>
+      <tr><td>Pinky</td><td class="num">3.3 + 4.6 cm (pinky0)</td><td class="num">3.1 cm</td><td class="num">2.0 cm</td><td class="num">2.0 cm</td><td class="num">15.0 cm</td></tr>
+    </tbody>
+  </table></div>
+  <p class="why">Knuckle width (index to pinky base) is 6.5 cm, and the hand is 17.8 cm long from wrist to middle fingertip. If the character needs bigger hands, say so before rigging and we'll refit the skeleton.</p>
+  <h3>Modelling</h3>
+  <ul>
+    <li>Fully separate fingers with natural webbing, and fingernails modelled as geometry.</li>
+    <li>Knuckle and crease detail in the normal map, plus palm pads with a slight natural cup.</li>
+    <li>Finger thickness close to the game's contact sizes, within ±20%: about <b>1.9 cm</b> across the index to ring fingers, about <b>2.2 cm</b> for the thumb, and a <b>1.4 cm</b> thick palm pad over the bones. If the visible hand is much thicker or thinner, the ball will visibly float or sink into it.</li>
+    <li>Palm centre between the wrist joint and the middle-finger knuckle. The ball sits there during a dribble.</li>
+  </ul>
+  <h3>Rigging</h3>
+  <ul>
+    <li>Each finger segment moves rigidly with its own joint. Weights blend only across the joint crease, over about 2 edge loops.</li>
+    <li>No weight bleeding between neighbouring fingers.</li>
+    <li>thumb0 and thumb1 drive the thumb's base muscle, so it bulges and flattens believably.</li>
+    <li>pinky0 cups the outer palm.</li>
+    <li>A full fist must close without any finger collapsing or poking through another.</li>
+  </ul>
+  <h3>Hand pose tests (render each, and include the poses in your source file)</h3>
+  <ol class="poses">
+    <li><b>Open palm</b>: fingers straight and together, palm flat.</li>
+    <li><b>Fist</b>: all fingers fully curled, thumb over the middle segments.</li>
+    <li><b>Ball grip</b>: a 0.12 m radius sphere (a size 7 basketball) held in the right hand, every fingertip on its surface, nothing passing into it.</li>
+    <li><b>Dribble push</b>: fingers spread over the top of the ball, palm slightly cupped.</li>
+    <li><b>Shooting hand</b>: ball on the finger pads, wrist cocked back about 70°, guide hand on the side of the ball.</li>
+    <li><b>Two-hand gather</b>: both palms on opposite sides of the ball, chest height.</li>
+  </ol>
+</section>
+
+<section id="deform">
+  <h2><span class="n">08</span>Deformation tests</h2>
+  <p>We play a range-of-motion clip on delivery. Please check these poses yourself first:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Joint</th><th>Range</th><th>Look for</th></tr></thead>
+    <tbody>
+      <tr><td>Shoulder</td><td class="num">raise to 90° and 170°, forward 120°</td><td>shoulder volume kept, no armpit collapse</td></tr>
+      <tr><td>Elbow</td><td class="num">flex 140°</td><td>no pinching on the inside of the elbow</td></tr>
+      <tr><td>Forearm</td><td class="num">twist ±90°</td><td>no candy-wrapping (twist joints)</td></tr>
+      <tr><td>Wrist</td><td class="num">±70° flex, ±25° side to side</td><td>clean wrist, sleeve cuff stays outside</td></tr>
+      <tr><td>Hip / knee</td><td class="num">squat: hip 110°, knee 140°</td><td>buttocks and knee keep their volume</td></tr>
+      <tr><td>Spine</td><td class="num">twist 45°, bend 40°</td><td>shirt follows, no tearing at the waist</td></tr>
+      <tr><td>Neck</td><td class="num">turn ±70°, nod ±40°</td><td>collar and hood stay clear of the neck</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="face">
+  <h2><span class="n">09</span>Face &amp; eyes</h2>
+  <ul>
+    <li>Neutral expression, mouth closed.</li>
+    <li>Eyes as separate meshes, each weighted 100% to <code>l_eye</code> / <code>r_eye</code>. Lower jaw and chin weighted to <code>c_jaw</code>.</li>
+    <li>Blendshapes aren't required. If you offer the ARKit 52 set, quote it as a separate optional extra.</li>
+  </ul>
+</section>
+
+<section id="deliver">
+  <h2><span class="n">10</span>Delivery &amp; acceptance</h2>
+  <h3>Deliver</h3>
+  <ul>
+    <li><code>character.glb</code>: glTF 2.0 binary with embedded textures, rigged to the supplied skeleton, under 25 MB.</li>
+    <li>Source file: <code>.blend</code>, or <code>.ma</code> / <code>.mb</code>, with the hand test poses as keyframes or pose-library entries.</li>
+    <li>Texture sources (PSD / Substance / 4K PNG).</li>
+    <li>Renders: front, side and back turnaround, the 6 hand poses, and the deformation poses.</li>
+  </ul>
+  <h3>How we accept it</h3>
+  <ol class="poses">
+    <li>Our import tool reads the GLB and reports no warnings: all joints matched by name, bone lengths within 2 cm, at most 4 influences per vertex.</li>
+    <li>The bind pose imports clean: feet on the floor, nothing inverted, textures the right way up.</li>
+    <li>In the game, a range-of-motion clip plays without the deformation problems listed above.</li>
+    <li>In the game, the dribble, crossover and shot animations play with the physics ball. Fingers meet the ball's surface without visible gaps or passing into it.</li>
+  </ol>
+  <p class="why">Questions about joints, pose or scale are always welcome before you start. It's much cheaper to adjust the skeleton to your model up front than to redo skin weights later.</p>
+</section>
+
+<footer>Soul Jam · character rig brief · skeleton: the 127-joint MHR body rig used by the game's motion capture (units in metres).</footer>
+</main>
+</div>

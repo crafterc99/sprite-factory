@@ -131,6 +131,26 @@ test('moving dribble: the ball travels with the player, every catch made', async
   assert.ok(r.final.p[2] > 5, `travelled ${r.final.p[2].toFixed(2)} m`);
 });
 
+test('teleport / new possession: the body jumps metres, the ball on the new palm stays there (no swept limb, no pop velocity)', async () => {
+  const { R, BP, LAB } = await mods;
+  const sys = new BP.BasketballPhysicsSystem(R, {});
+  const sc = LAB.scenes()['dribble-right'];
+  const f = sc.at(0), J1 = f.joints;
+  const shift = (J, d) => (typeof J === 'function' ? (n) => { const v = J(n); return v && [v[0] + d[0], v[1], v[2] + d[1]]; }
+    : Object.fromEntries(Object.entries(J).map(([k, v]) => [k, Array.isArray(v) ? [v[0] + d[0], v[1], v[2] + d[1]] : v])));
+  const far = BP.bodySampleFromJoints(shift(J1, [1.6, 4.6]), sys.cfg, sys.legYield), here = BP.bodySampleFromJoints(J1, sys.cfg, sys.legYield);
+  // the body plays a moment at the old spot (limb and palm velocities history there)
+  sys.placeBall([5, 1, 9]);
+  for (let i = 0; i < 20; i++) sys.advance(1 / 60, far, far, f.intent, f.intent);
+  // new possession here: the body is snapped, the ball placed on the palm
+  sys.snapBody(here);
+  sys.placeBall(sys.palmTarget(here.palms[f.intent.hand]));
+  let vmax = 0;
+  for (let i = 0; i < 12; i++) { sys.advance(1 / 60, here, here, f.intent, f.intent); vmax = Math.max(vmax, len(sys.cur.v)); }
+  sys.dispose?.();
+  assert.ok(vmax < 3, `ball speed after the reset ${vmax.toFixed(1)} m/s (a swept / popped limb throws it at hundreds)`);
+});
+
 test('gather: a bounce into a two-hand hold (possession control)', async () => {
   const r = await scene('gather');
   assert.strictEqual(r.sys.lost, false);

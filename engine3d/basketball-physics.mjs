@@ -514,6 +514,20 @@ export class BasketballPhysicsSystem {
     this.parts.set(name, p); this.names.set(col.handle, name);
     return p;
   }
+  /**
+   * Put the whole body at a pose NOW, with no motion (a teleport / new possession): every part is
+   * repositioned, its colliders follow at once and no part has a velocity, so the next step can't
+   * sweep the old pose through a ball placed on the new palm.
+   */
+  snapBody(S) {
+    if (!S) return;
+    for (const p of this.parts.values()) p.fresh = true;
+    this.applySample(S);
+    this.world.propagateModifiedBodyPositionsToColliders?.();
+    this.lastSample = S; this.partVel = {};
+    this.palmPrev = {}; this.palmVel = { left: [0, 0, 0], right: [0, 0, 0] }; this.palmAcc = { left: [0, 0, 0], right: [0, 0, 0] };
+    for (const side of ['left', 'right']) if (S.palms?.[side]?.c) this.palmPrev[side] = S.palms[side].c;
+  }
   /** Move every body part to its pose at the end of the coming step (kinematic: contacts get the limb's velocity). */
   applySample(S, h = 1 / this.cfg.hz) {
     const seen = new Set(), maxMove = this.cfg.limbMaxSpeed * h;
@@ -605,7 +619,8 @@ export class BasketballPhysicsSystem {
       for (const side of ['left', 'right']) {
         const pc = S.palms[side]?.c;
         if (pc && this.palmPrev[side]) {
-          const nv = sc(sub(pc, this.palmPrev[side]), 1 / h);
+          let nv = sc(sub(pc, this.palmPrev[side]), 1 / h);
+          if (len(nv) > c.limbMaxSpeed) nv = [0, 0, 0];   // a pop (teleport / blend jump), not a hand speed
           // hand acceleration (smoothed): the controller's feed-forward, so it leads instead of lagging
           this.palmAcc[side] = lerp(this.palmAcc[side], clampLen(sc(sub(nv, this.palmVel[side]), 1 / h), 120), 0.25);
           this.palmVel[side] = nv;
@@ -781,7 +796,9 @@ export class BasketballPhysicsSystem {
     // body part velocities (consecutive samples): the release planner moves the limbs on
     if (S && this.lastSample && h > 0) {
       const L = this.lastSample, pv = this.partVel || (this.partVel = {}), vm = c.limbMaxSpeed;   // a pop is not a velocity
-      const vel = (x, o) => clampLen(sc(sub(x, o), 1 / h), vm);
+      // (a jump no limb can make — a teleport, a reset — is a reposition: no velocity at all, else
+      // every part carries limbMaxSpeed along the jump and the ball in the hand is thrown with it)
+      const vel = (x, o) => { const v = sc(sub(x, o), 1 / h); return len(v) > vm ? [0, 0, 0] : v; };
       for (const [n, cp] of Object.entries(S.caps)) { const o = L.caps[n]; if (o) pv[n] = { a: vel(cp.a, o.a), b: vel(cp.b, o.b) }; }
       for (const [n, bx] of Object.entries(S.boxes)) { const o = L.boxes[n]; if (o) pv[n] = { c: vel(bx.c, o.c) }; }
     }

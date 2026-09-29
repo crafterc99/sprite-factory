@@ -1,0 +1,1913 @@
+{
+ "units": "metres",
+ "up": "+Y",
+ "forward": "+Z",
+ "heightM": 1.83,
+ "joints": [
+  {
+   "name": "body_world",
+   "parent": null,
+   "bindPosition": [
+    0,
+    -0.05056,
+    0
+   ],
+   "bindRotation": [
+    0,
+    0,
+    0,
+    1
+   ]
+  },
+  {
+   "name": "root",
+   "parent": "body_world",
+   "bindPosition": [
+    -0.00508,
+    0.93914,
+    0.05228
+   ],
+   "bindRotation": [
+    -0.000675,
+    0.002617,
+    0.00068,
+    0.999996
+   ]
+  },
+  {
+   "name": "l_upleg",
+   "parent": "root",
+   "bindPosition": [
+    0.04564,
+    0.91635,
+    0.0576
+   ],
+   "bindRotation": [
+    -0.596042,
+    0.501421,
+    -0.432542,
+    0.454113
+   ]
+  },
+  {
+   "name": "l_lowleg",
+   "parent": "l_upleg",
+   "bindPosition": [
+    0.09977,
+    0.49473,
+    0.09136
+   ],
+   "bindRotation": [
+    -0.564932,
+    0.536249,
+    -0.406335,
+    0.477683
+   ]
+  },
+  {
+   "name": "l_foot",
+   "parent": "l_lowleg",
+   "bindPosition": [
+    0.13844,
+    0.08854,
+    0.06962
+   ],
+   "bindRotation": [
+    -0.443758,
+    0.55193,
+    -0.559446,
+    0.430666
+   ]
+  },
+  {
+   "name": "l_talocrural",
+   "parent": "l_foot",
+   "bindPosition": [
+    0.13892,
+    0.09061,
+    0.06994
+   ],
+   "bindRotation": [
+    -0.409577,
+    0.554192,
+    -0.557161,
+    0.463346
+   ]
+  },
+  {
+   "name": "l_subtalar",
+   "parent": "l_talocrural",
+   "bindPosition": [
+    0.13462,
+    0.05368,
+    0.07771
+   ],
+   "bindRotation": [
+    -0.02079,
+    0.699502,
+    -0.14309,
+    0.69985
+   ]
+  },
+  {
+   "name": "l_transversetarsal",
+   "parent": "l_subtalar",
+   "bindPosition": [
+    0.1359,
+    0.0687,
+    0.14143
+   ],
+   "bindRotation": [
+    -0.054952,
+    0.705656,
+    -0.108749,
+    0.697999
+   ]
+  },
+  {
+   "name": "l_ball",
+   "parent": "l_transversetarsal",
+   "bindPosition": [
+    0.1387,
+    0.04139,
+    0.22241
+   ],
+   "bindRotation": [
+    -0.046891,
+    0.783732,
+    -0.016209,
+    0.619115
+   ]
+  },
+  {
+   "name": "l_lowleg_twist1_proc",
+   "parent": "l_lowleg",
+   "bindPosition": [
+    0.1075,
+    0.41349,
+    0.08701
+   ],
+   "bindRotation": [
+    -0.5544,
+    0.527278,
+    -0.417911,
+    0.489867
+   ]
+  },
+  {
+   "name": "l_lowleg_twist2_proc",
+   "parent": "l_lowleg",
+   "bindPosition": [
+    0.11524,
+    0.33225,
+    0.08266
+   ],
+   "bindRotation": [
+    -0.543606,
+    0.518056,
+    -0.429288,
+    0.501818
+   ]
+  },
+  {
+   "name": "l_lowleg_twist3_proc",
+   "parent": "l_lowleg",
+   "bindPosition": [
+    0.12297,
+    0.25101,
+    0.07831
+   ],
+   "bindRotation": [
+    -0.532555,
+    0.508589,
+    -0.440463,
+    0.513531
+   ]
+  },
+  {
+   "name": "l_lowleg_twist4_proc",
+   "parent": "l_lowleg",
+   "bindPosition": [
+    0.13071,
+    0.16977,
+    0.07397
+   ],
+   "bindRotation": [
+    -0.521251,
+    0.498882,
+    -0.451429,
+    0.525001
+   ]
+  },
+  {
+   "name": "l_upleg_twist0_proc",
+   "parent": "l_upleg",
+   "bindPosition": [
+    0.04564,
+    0.91635,
+    0.0576
+   ],
+   "bindRotation": [
+    -0.549996,
+    0.457865,
+    -0.478409,
+    0.508909
+   ]
+  },
+  {
+   "name": "l_upleg_twist1_proc",
+   "parent": "l_upleg",
+   "bindPosition": [
+    0.05917,
+    0.81094,
+    0.06604
+   ],
+   "bindRotation": [
+    -0.561995,
+    0.469162,
+    -0.467336,
+    0.495626
+   ]
+  },
+  {
+   "name": "l_upleg_twist2_proc",
+   "parent": "l_upleg",
+   "bindPosition": [
+    0.0727,
+    0.70554,
+    0.07448
+   ],
+   "bindRotation": [
+    -0.573674,
+    0.480191,
+    -0.455996,
+    0.482061
+   ]
+  },
+  {
+   "name": "l_upleg_twist3_proc",
+   "parent": "l_upleg",
+   "bindPosition": [
+    0.08623,
+    0.60013,
+    0.08292
+   ],
+   "bindRotation": [
+    -0.585025,
+    0.490946,
+    -0.444396,
+    0.46822
+   ]
+  },
+  {
+   "name": "l_upleg_twist4_proc",
+   "parent": "l_upleg",
+   "bindPosition": [
+    0.09977,
+    0.49473,
+    0.09136
+   ],
+   "bindRotation": [
+    -0.596042,
+    0.501421,
+    -0.432542,
+    0.454113
+   ]
+  },
+  {
+   "name": "r_upleg",
+   "parent": "root",
+   "bindPosition": [
+    -0.05567,
+    0.91621,
+    0.05814
+   ],
+   "bindRotation": [
+    0.46051,
+    0.438141,
+    0.499475,
+    0.588632
+   ]
+  },
+  {
+   "name": "r_lowleg",
+   "parent": "r_upleg",
+   "bindPosition": [
+    -0.10713,
+    0.49411,
+    0.09003
+   ],
+   "bindRotation": [
+    0.483709,
+    0.412349,
+    0.532948,
+    0.558534
+   ]
+  },
+  {
+   "name": "r_foot",
+   "parent": "r_lowleg",
+   "bindPosition": [
+    -0.14467,
+    0.08785,
+    0.06758
+   ],
+   "bindRotation": [
+    0.441327,
+    0.550822,
+    0.549941,
+    0.446532
+   ]
+  },
+  {
+   "name": "r_talocrural",
+   "parent": "r_foot",
+   "bindPosition": [
+    -0.1451,
+    0.08994,
+    0.06793
+   ],
+   "bindRotation": [
+    0.465883,
+    0.543476,
+    0.557133,
+    0.42094
+   ]
+  },
+  {
+   "name": "r_subtalar",
+   "parent": "r_talocrural",
+   "bindPosition": [
+    -0.14193,
+    0.05284,
+    0.07543
+   ],
+   "bindRotation": [
+    0.694217,
+    0.131619,
+    0.70726,
+    0.022862
+   ]
+  },
+  {
+   "name": "r_transversetarsal",
+   "parent": "r_subtalar",
+   "bindPosition": [
+    -0.14423,
+    0.06692,
+    0.13932
+   ],
+   "bindRotation": [
+    0.692687,
+    0.102381,
+    0.71208,
+    0.051431
+   ]
+  },
+  {
+   "name": "r_ball",
+   "parent": "r_transversetarsal",
+   "bindPosition": [
+    -0.14841,
+    0.03842,
+    0.21984
+   ],
+   "bindRotation": [
+    0.612761,
+    0.025779,
+    0.788829,
+    0.040113
+   ]
+  },
+  {
+   "name": "r_lowleg_twist1_proc",
+   "parent": "r_lowleg",
+   "bindPosition": [
+    -0.11464,
+    0.41286,
+    0.08554
+   ],
+   "bindRotation": [
+    0.494633,
+    0.422783,
+    0.52471,
+    0.548883
+   ]
+  },
+  {
+   "name": "r_lowleg_twist2_proc",
+   "parent": "r_lowleg",
+   "bindPosition": [
+    -0.12215,
+    0.33161,
+    0.08105
+   ],
+   "bindRotation": [
+    0.505366,
+    0.433052,
+    0.516267,
+    0.539018
+   ]
+  },
+  {
+   "name": "r_lowleg_twist3_proc",
+   "parent": "r_lowleg",
+   "bindPosition": [
+    -0.12965,
+    0.25036,
+    0.07656
+   ],
+   "bindRotation": [
+    0.515901,
+    0.443153,
+    0.507623,
+    0.528943
+   ]
+  },
+  {
+   "name": "r_lowleg_twist4_proc",
+   "parent": "r_lowleg",
+   "bindPosition": [
+    -0.13716,
+    0.1691,
+    0.07207
+   ],
+   "bindRotation": [
+    0.526236,
+    0.453082,
+    0.498781,
+    0.518662
+   ]
+  },
+  {
+   "name": "r_upleg_twist0_proc",
+   "parent": "r_upleg",
+   "bindPosition": [
+    -0.05567,
+    0.91621,
+    0.05814
+   ],
+   "bindRotation": [
+    0.511461,
+    0.481184,
+    0.458154,
+    0.544945
+   ]
+  },
+  {
+   "name": "r_upleg_twist1_proc",
+   "parent": "r_upleg",
+   "bindPosition": [
+    -0.06854,
+    0.81069,
+    0.06611
+   ],
+   "bindRotation": [
+    0.499094,
+    0.470774,
+    0.468845,
+    0.556293
+   ]
+  },
+  {
+   "name": "r_upleg_twist2_proc",
+   "parent": "r_upleg",
+   "bindPosition": [
+    -0.0814,
+    0.70516,
+    0.07409
+   ],
+   "bindRotation": [
+    0.486476,
+    0.460126,
+    0.479298,
+    0.56736
+   ]
+  },
+  {
+   "name": "r_upleg_twist3_proc",
+   "parent": "r_upleg",
+   "bindPosition": [
+    -0.09427,
+    0.59964,
+    0.08206
+   ],
+   "bindRotation": [
+    0.473612,
+    0.449247,
+    0.48951,
+    0.578142
+   ]
+  },
+  {
+   "name": "r_upleg_twist4_proc",
+   "parent": "r_upleg",
+   "bindPosition": [
+    -0.10713,
+    0.49411,
+    0.09003
+   ],
+   "bindRotation": [
+    0.46051,
+    0.438141,
+    0.499475,
+    0.588632
+   ]
+  },
+  {
+   "name": "c_spine0",
+   "parent": "root",
+   "bindPosition": [
+    -0.00529,
+    0.96076,
+    0.01739
+   ],
+   "bindRotation": [
+    0.493925,
+    0.504447,
+    0.493598,
+    0.50787
+   ]
+  },
+  {
+   "name": "c_spine1",
+   "parent": "c_spine0",
+   "bindPosition": [
+    -0.00488,
+    1.08316,
+    0.03089
+   ],
+   "bindRotation": [
+    0.493771,
+    0.506733,
+    0.489258,
+    0.509939
+   ]
+  },
+  {
+   "name": "c_spine2",
+   "parent": "c_spine1",
+   "bindPosition": [
+    -0.00397,
+    1.20484,
+    0.00367
+   ],
+   "bindRotation": [
+    0.500668,
+    0.503874,
+    0.491486,
+    0.50387
+   ]
+  },
+  {
+   "name": "c_spine3",
+   "parent": "c_spine2",
+   "bindPosition": [
+    -0.00193,
+    1.40921,
+    0.0194
+   ],
+   "bindRotation": [
+    0.487253,
+    0.514756,
+    0.47982,
+    0.517091
+   ]
+  },
+  {
+   "name": "r_clavicle",
+   "parent": "c_spine3",
+   "bindPosition": [
+    -0.03103,
+    1.47346,
+    0.12589
+   ],
+   "bindRotation": [
+    0.63942,
+    0.222592,
+    0.064151,
+    -0.73313
+   ]
+  },
+  {
+   "name": "r_uparm",
+   "parent": "r_clavicle",
+   "bindPosition": [
+    -0.18616,
+    1.44202,
+    0.04647
+   ],
+   "bindRotation": [
+    0.587966,
+    0.458239,
+    -0.418926,
+    -0.518474
+   ]
+  },
+  {
+   "name": "r_lowarm",
+   "parent": "r_uparm",
+   "bindPosition": [
+    -0.2504,
+    1.16878,
+    0.05088
+   ],
+   "bindRotation": [
+    0.627003,
+    0.397386,
+    -0.475921,
+    -0.471648
+   ]
+  },
+  {
+   "name": "r_wrist_twist",
+   "parent": "r_lowarm",
+   "bindPosition": [
+    -0.31556,
+    0.90176,
+    0.11345
+   ],
+   "bindRotation": [
+    -0.099302,
+    -0.227559,
+    -0.616702,
+    -0.747017
+   ]
+  },
+  {
+   "name": "r_wrist",
+   "parent": "r_wrist_twist",
+   "bindPosition": [
+    -0.31556,
+    0.90176,
+    0.11345
+   ],
+   "bindRotation": [
+    -0.047689,
+    -0.289524,
+    -0.64012,
+    -0.710034
+   ]
+  },
+  {
+   "name": "r_pinky0",
+   "parent": "r_wrist",
+   "bindPosition": [
+    -0.3171,
+    0.87344,
+    0.09689
+   ],
+   "bindRotation": [
+    0.0057,
+    -0.047222,
+    -0.685914,
+    -0.726126
+   ]
+  },
+  {
+   "name": "r_pinky1",
+   "parent": "r_pinky0",
+   "bindPosition": [
+    -0.3197,
+    0.82711,
+    0.09936
+   ],
+   "bindRotation": [
+    -0.070298,
+    -0.089386,
+    -0.773803,
+    -0.623135
+   ]
+  },
+  {
+   "name": "r_pinky2",
+   "parent": "r_pinky1",
+   "bindPosition": [
+    -0.31317,
+    0.79726,
+    0.09944
+   ],
+   "bindRotation": [
+    -0.081111,
+    -0.028339,
+    -0.810002,
+    -0.580099
+   ]
+  },
+  {
+   "name": "r_pinky3",
+   "parent": "r_pinky2",
+   "bindPosition": [
+    -0.30677,
+    0.77797,
+    0.09743
+   ],
+   "bindRotation": [
+    -0.042508,
+    -0.058117,
+    -0.815326,
+    -0.574507
+   ]
+  },
+  {
+   "name": "r_pinky_null",
+   "parent": "r_pinky3",
+   "bindPosition": [
+    -0.30018,
+    0.75953,
+    0.09738
+   ],
+   "bindRotation": [
+    -0.042508,
+    -0.058117,
+    -0.815326,
+    -0.574507
+   ]
+  },
+  {
+   "name": "r_ring1",
+   "parent": "r_wrist",
+   "bindPosition": [
+    -0.31844,
+    0.82292,
+    0.12118
+   ],
+   "bindRotation": [
+    -0.086868,
+    -0.166854,
+    -0.771777,
+    -0.607432
+   ]
+  },
+  {
+   "name": "r_ring2",
+   "parent": "r_ring1",
+   "bindPosition": [
+    -0.30863,
+    0.78451,
+    0.1239
+   ],
+   "bindRotation": [
+    -0.084789,
+    -0.129817,
+    -0.84396,
+    -0.513507
+   ]
+  },
+  {
+   "name": "r_ring3",
+   "parent": "r_ring2",
+   "bindPosition": [
+    -0.29612,
+    0.76026,
+    0.12364
+   ],
+   "bindRotation": [
+    -0.061905,
+    -0.141084,
+    -0.85791,
+    -0.490157
+   ]
+  },
+  {
+   "name": "r_ring_null",
+   "parent": "r_ring3",
+   "bindPosition": [
+    -0.2849,
+    0.74145,
+    0.12434
+   ],
+   "bindRotation": [
+    -0.061905,
+    -0.141084,
+    -0.85791,
+    -0.490157
+   ]
+  },
+  {
+   "name": "r_middle1",
+   "parent": "r_wrist",
+   "bindPosition": [
+    -0.313,
+    0.82183,
+    0.14179
+   ],
+   "bindRotation": [
+    -0.094966,
+    -0.239165,
+    -0.743934,
+    -0.61672
+   ]
+  },
+  {
+   "name": "r_middle2",
+   "parent": "r_middle1",
+   "bindPosition": [
+    -0.30322,
+    0.77923,
+    0.14859
+   ],
+   "bindRotation": [
+    -0.118952,
+    -0.214967,
+    -0.81737,
+    -0.521101
+   ]
+  },
+  {
+   "name": "r_middle3",
+   "parent": "r_middle2",
+   "bindPosition": [
+    -0.29168,
+    0.75492,
+    0.14939
+   ],
+   "bindRotation": [
+    -0.094735,
+    -0.189633,
+    -0.803235,
+    -0.556667
+   ]
+  },
+  {
+   "name": "r_middle_null",
+   "parent": "r_middle3",
+   "bindPosition": [
+    -0.28353,
+    0.73399,
+    0.15071
+   ],
+   "bindRotation": [
+    -0.094735,
+    -0.189633,
+    -0.803235,
+    -0.556667
+   ]
+  },
+  {
+   "name": "r_index1",
+   "parent": "r_wrist",
+   "bindPosition": [
+    -0.2965,
+    0.83121,
+    0.16013
+   ],
+   "bindRotation": [
+    -0.119976,
+    -0.271334,
+    -0.689879,
+    -0.660341
+   ]
+  },
+  {
+   "name": "r_index2",
+   "parent": "r_index1",
+   "bindPosition": [
+    -0.29257,
+    0.79242,
+    0.16779
+   ],
+   "bindRotation": [
+    -0.121302,
+    -0.242383,
+    -0.73116,
+    -0.626052
+   ]
+  },
+  {
+   "name": "r_index3",
+   "parent": "r_index2",
+   "bindPosition": [
+    -0.28779,
+    0.76749,
+    0.17101
+   ],
+   "bindRotation": [
+    -0.120412,
+    -0.217834,
+    -0.70632,
+    -0.662693
+   ]
+  },
+  {
+   "name": "r_index_null",
+   "parent": "r_index3",
+   "bindPosition": [
+    -0.28582,
+    0.74644,
+    0.17354
+   ],
+   "bindRotation": [
+    -0.120412,
+    -0.217834,
+    -0.70632,
+    -0.662693
+   ]
+  },
+  {
+   "name": "r_thumb0",
+   "parent": "r_wrist",
+   "bindPosition": [
+    -0.29892,
+    0.89671,
+    0.11914
+   ],
+   "bindRotation": [
+    -0.045884,
+    -0.826038,
+    -0.504399,
+    -0.24726
+   ]
+  },
+  {
+   "name": "r_thumb1",
+   "parent": "r_thumb0",
+   "bindPosition": [
+    -0.27932,
+    0.88779,
+    0.1282
+   ],
+   "bindRotation": [
+    -0.17328,
+    -0.929815,
+    -0.32467,
+    0.002823
+   ]
+  },
+  {
+   "name": "r_thumb2",
+   "parent": "r_thumb1",
+   "bindPosition": [
+    -0.24831,
+    0.87722,
+    0.12431
+   ],
+   "bindRotation": [
+    -0.157175,
+    -0.902609,
+    -0.389585,
+    -0.093891
+   ]
+  },
+  {
+   "name": "r_thumb3",
+   "parent": "r_thumb2",
+   "bindPosition": [
+    -0.21515,
+    0.86453,
+    0.12598
+   ],
+   "bindRotation": [
+    -0.106997,
+    -0.941639,
+    -0.317012,
+    -0.037025
+   ]
+  },
+  {
+   "name": "r_thumb_null",
+   "parent": "r_thumb3",
+   "bindPosition": [
+    -0.1898,
+    0.85868,
+    0.12603
+   ],
+   "bindRotation": [
+    -0.106997,
+    -0.941639,
+    -0.317012,
+    -0.037025
+   ]
+  },
+  {
+   "name": "r_lowarm_twist1_proc",
+   "parent": "r_lowarm",
+   "bindPosition": [
+    -0.26343,
+    1.11537,
+    0.06339
+   ],
+   "bindRotation": [
+    0.621336,
+    0.391684,
+    -0.480624,
+    -0.479089
+   ]
+  },
+  {
+   "name": "r_lowarm_twist2_proc",
+   "parent": "r_lowarm",
+   "bindPosition": [
+    -0.27646,
+    1.06197,
+    0.07591
+   ],
+   "bindRotation": [
+    0.61558,
+    0.385926,
+    -0.485259,
+    -0.486462
+   ]
+  },
+  {
+   "name": "r_lowarm_twist3_proc",
+   "parent": "r_lowarm",
+   "bindPosition": [
+    -0.2895,
+    1.00857,
+    0.08842
+   ],
+   "bindRotation": [
+    0.609737,
+    0.380114,
+    -0.489826,
+    -0.493766
+   ]
+  },
+  {
+   "name": "r_lowarm_twist4_proc",
+   "parent": "r_lowarm",
+   "bindPosition": [
+    -0.30253,
+    0.95516,
+    0.10093
+   ],
+   "bindRotation": [
+    0.603807,
+    0.374247,
+    -0.494323,
+    -0.501
+   ]
+  },
+  {
+   "name": "r_uparm_twist0_proc",
+   "parent": "r_uparm",
+   "bindPosition": [
+    -0.18616,
+    1.44202,
+    0.04647
+   ],
+   "bindRotation": [
+    0.638595,
+    0.499238,
+    -0.36911,
+    -0.454659
+   ]
+  },
+  {
+   "name": "r_uparm_twist1_proc",
+   "parent": "r_uparm",
+   "bindPosition": [
+    -0.20222,
+    1.37371,
+    0.04757
+   ],
+   "bindRotation": [
+    0.626564,
+    0.489477,
+    -0.38196,
+    -0.471101
+   ]
+  },
+  {
+   "name": "r_uparm_twist2_proc",
+   "parent": "r_uparm",
+   "bindPosition": [
+    -0.21828,
+    1.3054,
+    0.04868
+   ],
+   "bindRotation": [
+    0.61411,
+    0.479386,
+    -0.394551,
+    -0.487225
+   ]
+  },
+  {
+   "name": "r_uparm_twist3_proc",
+   "parent": "r_uparm",
+   "bindPosition": [
+    -0.23434,
+    1.23709,
+    0.04978
+   ],
+   "bindRotation": [
+    0.601241,
+    0.468971,
+    -0.406876,
+    -0.503019
+   ]
+  },
+  {
+   "name": "r_uparm_twist4_proc",
+   "parent": "r_uparm",
+   "bindPosition": [
+    -0.2504,
+    1.16878,
+    0.05088
+   ],
+   "bindRotation": [
+    0.587966,
+    0.458239,
+    -0.418926,
+    -0.518474
+   ]
+  },
+  {
+   "name": "l_clavicle",
+   "parent": "c_spine3",
+   "bindPosition": [
+    0.02945,
+    1.47286,
+    0.1256
+   ],
+   "bindRotation": [
+    0.729192,
+    0.068981,
+    -0.242148,
+    0.636306
+   ]
+  },
+  {
+   "name": "l_uparm",
+   "parent": "l_clavicle",
+   "bindPosition": [
+    0.18091,
+    1.43847,
+    0.04054
+   ],
+   "bindRotation": [
+    0.505522,
+    -0.415829,
+    -0.472505,
+    0.590146
+   ]
+  },
+  {
+   "name": "l_lowarm",
+   "parent": "l_uparm",
+   "bindPosition": [
+    0.23914,
+    1.16386,
+    0.04372
+   ],
+   "bindRotation": [
+    0.461059,
+    -0.469557,
+    -0.41404,
+    0.628897
+   ]
+  },
+  {
+   "name": "l_wrist_twist",
+   "parent": "l_lowarm",
+   "bindPosition": [
+    0.30007,
+    0.89501,
+    0.10258
+   ],
+   "bindRotation": [
+    0.742582,
+    -0.626229,
+    0.218406,
+    -0.093316
+   ]
+  },
+  {
+   "name": "l_wrist",
+   "parent": "l_wrist_twist",
+   "bindPosition": [
+    0.30007,
+    0.89501,
+    0.10258
+   ],
+   "bindRotation": [
+    0.701304,
+    -0.649546,
+    0.292215,
+    -0.029536
+   ]
+  },
+  {
+   "name": "l_pinky0",
+   "parent": "l_wrist",
+   "bindPosition": [
+    0.30036,
+    0.86597,
+    0.08649
+   ],
+   "bindRotation": [
+    0.714123,
+    -0.697984,
+    0.049433,
+    0.020093
+   ]
+  },
+  {
+   "name": "l_pinky1",
+   "parent": "l_pinky0",
+   "bindPosition": [
+    0.30138,
+    0.81915,
+    0.09004
+   ],
+   "bindRotation": [
+    0.611053,
+    -0.783925,
+    0.087084,
+    -0.06703
+   ]
+  },
+  {
+   "name": "l_pinky2",
+   "parent": "l_pinky1",
+   "bindPosition": [
+    0.29383,
+    0.7892,
+    0.09008
+   ],
+   "bindRotation": [
+    0.561006,
+    -0.82365,
+    0.025721,
+    -0.078808
+   ]
+  },
+  {
+   "name": "l_pinky3",
+   "parent": "l_pinky2",
+   "bindPosition": [
+    0.28644,
+    0.77004,
+    0.08799
+   ],
+   "bindRotation": [
+    0.552685,
+    -0.830662,
+    0.054466,
+    -0.039673
+   ]
+  },
+  {
+   "name": "l_pinky_null",
+   "parent": "l_pinky3",
+   "bindPosition": [
+    0.2788,
+    0.75178,
+    0.08788
+   ],
+   "bindRotation": [
+    0.552685,
+    -0.830662,
+    0.054466,
+    -0.039673
+   ]
+  },
+  {
+   "name": "l_ring1",
+   "parent": "l_wrist",
+   "bindPosition": [
+    0.3003,
+    0.81547,
+    0.11219
+   ],
+   "bindRotation": [
+    0.594942,
+    -0.783854,
+    0.15921,
+    -0.079181
+   ]
+  },
+  {
+   "name": "l_ring2",
+   "parent": "l_ring1",
+   "bindPosition": [
+    0.28907,
+    0.77699,
+    0.11482
+   ],
+   "bindRotation": [
+    0.497339,
+    -0.855403,
+    0.122541,
+    -0.076957
+   ]
+  },
+  {
+   "name": "l_ring3",
+   "parent": "l_ring2",
+   "bindPosition": [
+    0.27546,
+    0.753,
+    0.11455
+   ],
+   "bindRotation": [
+    0.47705,
+    -0.867022,
+    0.133687,
+    -0.05313
+   ]
+  },
+  {
+   "name": "l_ring_null",
+   "parent": "l_ring3",
+   "bindPosition": [
+    0.26352,
+    0.73436,
+    0.11533
+   ],
+   "bindRotation": [
+    0.47705,
+    -0.867022,
+    0.133687,
+    -0.05313
+   ]
+  },
+  {
+   "name": "l_middle1",
+   "parent": "l_wrist",
+   "bindPosition": [
+    0.2951,
+    0.81503,
+    0.13313
+   ],
+   "bindRotation": [
+    0.604505,
+    -0.742921,
+    0.286804,
+    -0.01963
+   ]
+  },
+  {
+   "name": "l_middle2",
+   "parent": "l_middle1",
+   "bindPosition": [
+    0.2831,
+    0.77437,
+    0.14733
+   ],
+   "bindRotation": [
+    0.512897,
+    -0.81278,
+    0.271932,
+    -0.048764
+   ]
+  },
+  {
+   "name": "l_middle3",
+   "parent": "l_middle2",
+   "bindPosition": [
+    0.27033,
+    0.75095,
+    0.15276
+   ],
+   "bindRotation": [
+    0.550606,
+    -0.797989,
+    0.244116,
+    -0.021314
+   ]
+  },
+  {
+   "name": "l_middle_null",
+   "parent": "l_middle3",
+   "bindPosition": [
+    0.2614,
+    0.73073,
+    0.1581
+   ],
+   "bindRotation": [
+    0.550606,
+    -0.797989,
+    0.244116,
+    -0.021314
+   ]
+  },
+  {
+   "name": "l_index1",
+   "parent": "l_wrist",
+   "bindPosition": [
+    0.27905,
+    0.82551,
+    0.15169
+   ],
+   "bindRotation": [
+    0.653466,
+    -0.69969,
+    0.26125,
+    -0.123142
+   ]
+  },
+  {
+   "name": "l_index2",
+   "parent": "l_index1",
+   "bindPosition": [
+    0.27441,
+    0.7862,
+    0.15848
+   ],
+   "bindRotation": [
+    0.619566,
+    -0.739551,
+    0.232076,
+    -0.123868
+   ]
+  },
+  {
+   "name": "l_index3",
+   "parent": "l_index2",
+   "bindPosition": [
+    0.2692,
+    0.76101,
+    0.16118
+   ],
+   "bindRotation": [
+    0.656305,
+    -0.714724,
+    0.207671,
+    -0.123718
+   ]
+  },
+  {
+   "name": "l_index_null",
+   "parent": "l_index3",
+   "bindPosition": [
+    0.26687,
+    0.73971,
+    0.16324
+   ],
+   "bindRotation": [
+    0.656305,
+    -0.714724,
+    0.207671,
+    -0.123718
+   ]
+  },
+  {
+   "name": "l_thumb0",
+   "parent": "l_wrist",
+   "bindPosition": [
+    0.28318,
+    0.89064,
+    0.1087
+   ],
+   "bindRotation": [
+    0.247764,
+    -0.497422,
+    0.831076,
+    -0.022298
+   ]
+  },
+  {
+   "name": "l_thumb1",
+   "parent": "l_thumb0",
+   "bindPosition": [
+    0.26326,
+    0.8826,
+    0.11852
+   ],
+   "bindRotation": [
+    0.008196,
+    -0.299138,
+    0.94071,
+    -0.159729
+   ]
+  },
+  {
+   "name": "l_thumb2",
+   "parent": "l_thumb1",
+   "bindPosition": [
+    0.23162,
+    0.87241,
+    0.11585
+   ],
+   "bindRotation": [
+    0.102029,
+    -0.366092,
+    0.913712,
+    -0.143863
+   ]
+  },
+  {
+   "name": "l_thumb3",
+   "parent": "l_thumb2",
+   "bindPosition": [
+    0.19793,
+    0.86028,
+    0.11876
+   ],
+   "bindRotation": [
+    0.042733,
+    -0.291883,
+    0.950046,
+    -0.101932
+   ]
+  },
+  {
+   "name": "l_thumb_null",
+   "parent": "l_thumb3",
+   "bindPosition": [
+    0.17228,
+    0.85453,
+    0.11933
+   ],
+   "bindRotation": [
+    0.042733,
+    -0.291883,
+    0.950046,
+    -0.101932
+   ]
+  },
+  {
+   "name": "l_lowarm_twist1_proc",
+   "parent": "l_lowarm",
+   "bindPosition": [
+    0.25132,
+    1.11009,
+    0.05549
+   ],
+   "bindRotation": [
+    0.469359,
+    -0.475006,
+    -0.407777,
+    0.622727
+   ]
+  },
+  {
+   "name": "l_lowarm_twist2_proc",
+   "parent": "l_lowarm",
+   "bindPosition": [
+    0.26351,
+    1.05632,
+    0.06726
+   ],
+   "bindRotation": [
+    0.477575,
+    -0.480372,
+    -0.401442,
+    0.616448
+   ]
+  },
+  {
+   "name": "l_lowarm_twist3_proc",
+   "parent": "l_lowarm",
+   "bindPosition": [
+    0.2757,
+    1.00255,
+    0.07903
+   ],
+   "bindRotation": [
+    0.485708,
+    -0.485654,
+    -0.395036,
+    0.610061
+   ]
+  },
+  {
+   "name": "l_lowarm_twist4_proc",
+   "parent": "l_lowarm",
+   "bindPosition": [
+    0.28789,
+    0.94878,
+    0.09081
+   ],
+   "bindRotation": [
+    0.493756,
+    -0.490849,
+    -0.388561,
+    0.603566
+   ]
+  },
+  {
+   "name": "l_uparm_twist0_proc",
+   "parent": "l_uparm",
+   "bindPosition": [
+    0.18091,
+    1.43847,
+    0.04054
+   ],
+   "bindRotation": [
+    0.440243,
+    -0.363501,
+    -0.51385,
+    0.640321
+   ]
+  },
+  {
+   "name": "l_uparm_twist1_proc",
+   "parent": "l_uparm",
+   "bindPosition": [
+    0.19547,
+    1.36981,
+    0.04133
+   ],
+   "bindRotation": [
+    0.457056,
+    -0.37699,
+    -0.504037,
+    0.628431
+   ]
+  },
+  {
+   "name": "l_uparm_twist2_proc",
+   "parent": "l_uparm",
+   "bindPosition": [
+    0.21003,
+    1.30116,
+    0.04213
+   ],
+   "bindRotation": [
+    0.473548,
+    -0.390213,
+    -0.493871,
+    0.616099
+   ]
+  },
+  {
+   "name": "l_uparm_twist3_proc",
+   "parent": "l_uparm",
+   "bindPosition": [
+    0.22458,
+    1.23251,
+    0.04292
+   ],
+   "bindRotation": [
+    0.489707,
+    -0.403163,
+    -0.483358,
+    0.603334
+   ]
+  },
+  {
+   "name": "l_uparm_twist4_proc",
+   "parent": "l_uparm",
+   "bindPosition": [
+    0.23914,
+    1.16386,
+    0.04372
+   ],
+   "bindRotation": [
+    0.505522,
+    -0.415829,
+    -0.472505,
+    0.590146
+   ]
+  },
+  {
+   "name": "c_neck",
+   "parent": "c_spine3",
+   "bindPosition": [
+    -0.00068,
+    1.51421,
+    0.06376
+   ],
+   "bindRotation": [
+    0.557629,
+    0.447752,
+    0.540723,
+    0.44293
+   ]
+  },
+  {
+   "name": "c_neck_twist1_proc",
+   "parent": "c_neck",
+   "bindPosition": [
+    0.00003,
+    1.563,
+    0.07405
+   ],
+   "bindRotation": [
+    0.55566,
+    0.445351,
+    0.542702,
+    0.445397
+   ]
+  },
+  {
+   "name": "c_neck_twist0_proc",
+   "parent": "c_neck",
+   "bindPosition": [
+    -0.00063,
+    1.51771,
+    0.0645
+   ],
+   "bindRotation": [
+    0.55368,
+    0.442941,
+    0.544671,
+    0.447856
+   ]
+  },
+  {
+   "name": "c_head",
+   "parent": "c_neck",
+   "bindPosition": [
+    0.00075,
+    1.61179,
+    0.08435
+   ],
+   "bindRotation": [
+    0.534625,
+    0.478478,
+    0.515174,
+    0.468861
+   ]
+  },
+  {
+   "name": "c_jaw",
+   "parent": "c_head",
+   "bindPosition": [
+    0.00154,
+    1.6289,
+    0.10645
+   ],
+   "bindRotation": [
+    0.05123,
+    0.014534,
+    -0.004917,
+    0.998569
+   ]
+  },
+  {
+   "name": "c_teeth",
+   "parent": "c_jaw",
+   "bindPosition": [
+    0.00216,
+    1.61672,
+    0.13077
+   ],
+   "bindRotation": [
+    0.05123,
+    0.014534,
+    -0.004917,
+    0.998569
+   ]
+  },
+  {
+   "name": "c_jaw_null",
+   "parent": "c_jaw",
+   "bindPosition": [
+    0.00343,
+    1.57444,
+    0.1857
+   ],
+   "bindRotation": [
+    0.05123,
+    0.014534,
+    -0.004917,
+    0.998569
+   ]
+  },
+  {
+   "name": "c_tongue0",
+   "parent": "c_jaw",
+   "bindPosition": [
+    0.00145,
+    1.61928,
+    0.10596
+   ],
+   "bindRotation": [
+    -0.126719,
+    -0.684965,
+    0.124634,
+    0.706563
+   ]
+  },
+  {
+   "name": "c_tongue1",
+   "parent": "c_tongue0",
+   "bindPosition": [
+    0.00181,
+    1.62339,
+    0.11698
+   ],
+   "bindRotation": [
+    -0.092611,
+    -0.690404,
+    0.089458,
+    0.711873
+   ]
+  },
+  {
+   "name": "c_tongue2",
+   "parent": "c_tongue1",
+   "bindPosition": [
+    0.00252,
+    1.62932,
+    0.13943
+   ],
+   "bindRotation": [
+    0.079097,
+    -0.692083,
+    -0.087406,
+    0.712128
+   ]
+  },
+  {
+   "name": "c_tongue3",
+   "parent": "c_tongue2",
+   "bindPosition": [
+    0.00305,
+    1.62471,
+    0.1586
+   ],
+   "bindRotation": [
+    0.17613,
+    -0.673953,
+    -0.187188,
+    0.692623
+   ]
+  },
+  {
+   "name": "c_tongue4",
+   "parent": "c_tongue3",
+   "bindPosition": [
+    0.0033,
+    1.61897,
+    0.16863
+   ],
+   "bindRotation": [
+    0.17613,
+    -0.673953,
+    -0.187188,
+    0.692623
+   ]
+  },
+  {
+   "name": "r_eye",
+   "parent": "c_head",
+   "bindPosition": [
+    -0.03041,
+    1.69856,
+    0.16949
+   ],
+   "bindRotation": [
+    -0.050932,
+    0.033827,
+    0.007391,
+    -0.998102
+   ]
+  },
+  {
+   "name": "r_eye_null",
+   "parent": "r_eye",
+   "bindPosition": [
+    -0.03165,
+    1.69672,
+    0.18754
+   ],
+   "bindRotation": [
+    -0.050932,
+    0.033827,
+    0.007391,
+    -0.998102
+   ]
+  },
+  {
+   "name": "l_eye",
+   "parent": "c_head",
+   "bindPosition": [
+    0.03831,
+    1.69799,
+    0.16746
+   ],
+   "bindRotation": [
+    0.051408,
+    0.062862,
+    -0.002431,
+    0.996694
+   ]
+  },
+  {
+   "name": "l_eye_null",
+   "parent": "l_eye",
+   "bindPosition": [
+    0.04059,
+    1.69612,
+    0.18541
+   ],
+   "bindRotation": [
+    0.051408,
+    0.062862,
+    -0.002431,
+    0.996694
+   ]
+  },
+  {
+   "name": "c_head_null",
+   "parent": "c_head",
+   "bindPosition": [
+    0.00306,
+    1.81513,
+    0.10523
+   ],
+   "bindRotation": [
+    0.534625,
+    0.478478,
+    0.515174,
+    0.468861
+   ]
+  }
+ ]
+}

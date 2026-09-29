@@ -569,10 +569,15 @@ function looseBall() {
 function resetPossession() {
   const ph = S.phys, P = S.player;
   if (!ph || !P) return;
+  S.ballLog?.push(`${(performance.now() / 1000).toFixed(2)} resetPossession (was ${ph.state}${S.freeBall ? ' ' + S.freeBall.kind : ''})`);
   P.giveBall(); P.syncDribbleToCatch();
+  // pose the body at that catch frame BEFORE placing the ball on its palm (else the ball appears
+  // where the hand was a moment ago, and the hand never takes it)
+  poseCharacter(S.rig, P.update(1 / 120, { face: HOOP }).pose);
   const J = mhrRig ? IK.jointAccessor(boneMats, mhrRig) : null;
   const body = J ? BP.bodySampleFromJoints(J, ph.cfg, null) : null;
   const hand = P.ballIntent()?.hand || P.hand || 'right';
+  if (body) ph.snapBody(body);   // the body is here now (after a teleport its colliders must not sweep here)
   ph.placeBall(body ? ph.palmTarget(body.palms[hand]) : [P.pos[0], 1.0, P.pos[1]]);
   ph.lost = false; ph.wasHeld = true; ph.heldFor = 0;
   S.freeBall = null; S.body0 = body; S.intent0 = null;
@@ -931,14 +936,16 @@ function gameTick(dt, rdt, inp, now) {
   if (inp.edge.hand && P.mode === 'loco') switchHand();
   // input buffer: a move / shot starts when the ball is physically in the hand (never mid-dribble,
   // when it is on its way to the floor) — at most one dribble later
-  const inHand = () => !S.freeBall && S.phys && (S.phys.state === 'HAND_CONTACT' || S.phys.state === 'POSSESSION_CONTROL');
+  const inHand = () => !S.freeBall && S.phys && (S.phys.state === 'HAND_CONTACT' || S.phys.state === 'POSSESSION_CONTROL'
+    || (S.phys.state === 'HAND_APPROACH' && (S.phys.handGap ?? 1) < 0.2));   // arriving in the hand: the move / gather takes it
   const blog = (m) => S.ballLog?.push(`${(now / 1000).toFixed(2)} input ${m}`);
   if (trig) blog(`${trig} (${inHand() ? 'in hand' : 'buffered'})`);
   // (game time: a slow frame is capped, the wait is measured in dribbles, not wall-clock)
   S.gameT = (S.gameT || 0) + dt;
   if (trig && !inHand()) { S.pendingTrig = { role: trig, at: S.gameT }; trig = null; }
   else if (!trig && S.pendingTrig) {
-    if (S.gameT - S.pendingTrig.at > 0.7 || P.mode !== 'loco') { blog(`${S.pendingTrig.role} dropped`); S.pendingTrig = null; }
+    // waits ≈ one dribble
+    if (S.gameT - S.pendingTrig.at > 1.0 || P.mode !== 'loco') { blog(`${S.pendingTrig.role} dropped`); S.pendingTrig = null; }
     else if (inHand()) { trig = S.pendingTrig.role; S.pendingTrig = null; blog(`${trig} fires`); }
   }
 
