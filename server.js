@@ -797,6 +797,14 @@ async function handler(req, res) {
     if (fp && fs.existsSync(fp)) return serveStatic(res, fp, 'image/webp');
     res.writeHead(404); return res.end('Not found');
   }
+  if (pathname === '/vendor/rapier.mjs') {
+    // Rapier 3D physics (Apache-2.0), WASM inlined — the basketball's rigid-body engine
+    return serveStatic(res, path.join(__dirname, 'node_modules', '@dimforge', 'rapier3d-compat', 'dist', 'rapier.mjs'), 'text/javascript');
+  }
+  if (pathname === '/js/basketball-physics.mjs' || pathname === '/js/contact-ik.mjs' || pathname === '/js/ball-lab.mjs' || pathname === '/js/ball-setup.mjs') {
+    // the basketball physics system, its contact IK and the test scenes (engine3d/)
+    return serveStatic(res, path.join(__dirname, 'engine3d', pathname.slice(4)), 'text/javascript', { revalidate: true });
+  }
   if (pathname === '/js/mhr-skin.mjs') {
     // MHR skeleton solver + skinning matrices (engine3d/mhr-skin.mjs)
     return serveStatic(res, path.join(__dirname, 'engine3d', 'mhr-skin.mjs'), 'text/javascript', { revalidate: true });

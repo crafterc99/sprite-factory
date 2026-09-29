@@ -88,6 +88,8 @@ const get3 = (P, k) => [P[k * 3], P[k * 3 + 1], P[k * 3 + 2]];
 const v3 = { add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], sc: (a, s) => [a[0] * s, a[1] * s, a[2] * s], dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], len: (a) => Math.hypot(a[0], a[1], a[2]) };
 v3.norm = (a) => { const l = v3.len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 v3.lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+v3.dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+v3.scale = v3.sc;
 export const rotY = (yaw, x, z) => { const c = Math.cos(yaw), s = Math.sin(yaw); return [c * x + s * z, -s * x + c * z]; };
 const wrapPi = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -319,7 +321,103 @@ export function prepareClip(json, rig, { mirror = false } = {}) {
   };
   clip.feet = restFeetOf(clip);
   clip.phaseMap = phaseMapOf(clip);
+  // a free run's recorded positions are the video's ball (tracker, gravity-fitted) only if it
+  // really travels (a dribble / cross reaches the floor); synthetic tracks fall back to the arc
+  for (let i = 0; i < F; i++) {
+    if (!ball[i] || ball[i].held) continue;
+    let j = i; while (j + 1 < F && ball[j + 1] && !ball[j + 1].held) j++;
+    let minY = Infinity; for (let q = i; q <= j; q++) minY = Math.min(minY, ball[q].p[1]);
+    const caught = j + 1 < F ? !!ball[j + 1]?.held : clip.loop && !!ball[0]?.held;
+    const ok = !caught || minY < (rig.soleOffset || 0) + 0.12 + 0.07;
+    for (let q = i; q <= j; q++) ball[q].rec = ok;
+    i = j;
+  }
+  clip.ballEvents = classifyBallEvents(clip);
   return clip;
+}
+
+/**
+ * What the ball is doing, frame by frame, from the clip itself (no manual
+ * tagging): RIGHT_HAND_DRIBBLE / LEFT_HAND_DRIBBLE (released and caught by
+ * the same hand), CROSSOVER / BETWEEN_LEGS / BEHIND_BACK (caught by the other
+ * hand — where the ball crosses the body's midline decides which: behind the
+ * hips = behind the back; between the feet, below the knees = between the
+ * legs; else in front), GATHER (both palms on the ball), HOLD (held > 0.4 s),
+ * SHOT (from the release on), PASS (released, never caught, travelling fast),
+ * BALL_FREE. Positions are the clip's root space.
+ * @returns {{ frames: string[], segments: { from: number, to: number, label: string }[] }}
+ */
+export function classifyBallEvents(clip) {
+  const F = clip.F, fps = clip.fps;
+  let out = new Array(F).fill('BALL_FREE');
+  if (!clip.ball?.length) return { frames: out, segments: [] };
+  // a loop is read from its first held frame (so no run is split by the wrap)
+  const h0 = clip.loop ? Math.max(0, clip.ball.findIndex((b) => b?.held)) : 0;
+  const rot = (i) => (i + h0) % F;
+  const ball = clip.ball.map((_, i) => clip.ball[rot(i)]);
+  const P = new Float32Array(NJ * 3);
+  const pose = (i) => samplePose(clip, rot(i), P).slice();
+  const palm = (Q, hand) => { const [w, m] = PALM[hand]; return [(gx(Q, w) + gx(Q, m)) / 2, (gy(Q, w) + gy(Q, m)) / 2, (gz(Q, w) + gz(Q, m)) / 2]; };
+  // held runs
+  let i = 0;
+  while (i < F) {
+    const b = ball[i];
+    if (b?.held) {
+      let j = i; while (j + 1 < F && ball[j + 1]?.held) j++;
+      const T = (j - i + 1) / fps;
+      let both = 0;
+      for (let k = i; k <= j; k++) {
+        const Q = pose(k), bp = ball[k].p;
+        if (v3.dist(palm(Q, 'left'), bp) < 0.2 && v3.dist(palm(Q, 'right'), bp) < 0.2) both++;
+      }
+      const label = both > (j - i + 1) * 0.5 ? 'GATHER' : T > 0.6 && !clip.loop ? 'HOLD' : b.hand === 'left' ? 'LEFT_HAND_DRIBBLE' : 'RIGHT_HAND_DRIBBLE';
+      for (let k = i; k <= j; k++) out[k] = label;
+      i = j + 1;
+      continue;
+    }
+    // a free run: what happens between the release and the next catch
+    let j = i; while (j + 1 < F && !ball[j + 1]?.held) j++;
+    // a loop wraps around (its last free frames lead into frame 0)
+    const before = i > 0 ? ball[i - 1] : clip.loop ? ball[F - 1] : null;
+    const after = j + 1 < F ? ball[j + 1] : clip.loop ? ball[0] : null;
+    let label = 'BALL_FREE';
+    if (clip.shot && i >= clip.shot.releaseFrame - 1) label = 'SHOT';
+    else if (before?.held && after?.held) {
+      if (before.hand === after.hand) label = before.hand === 'left' ? 'LEFT_HAND_DRIBBLE' : 'RIGHT_HAND_DRIBBLE';
+      else {
+        label = 'CROSSOVER';
+        // where the ball crosses the midline, in the body's frame at that moment
+        for (let k = i; k <= j + 1 && k < F; k++) {
+          const Q = pose(k), bp = (ball[k] || ball[k - 1]).p;
+          const hl = get3(Q, J['left-hip']), hr = get3(Q, J['right-hip']), pel = v3.lerp(hl, hr, 0.5);
+          const ax = v3.norm([hl[0] - hr[0], 0, hl[2] - hr[2]]), fw = [-ax[2], 0, ax[0]]; // forward = across × up
+          const side = (p) => (p[0] - pel[0]) * ax[0] + (p[2] - pel[2]) * ax[2];
+          const fwd = (p) => (p[0] - pel[0]) * fw[0] + (p[2] - pel[2]) * fw[2];
+          const pb = k > i ? (ball[k - 1] || ball[k]).p : bp;
+          if (Math.sign(side(pb)) !== Math.sign(side(bp)) || k === j + 1) {
+            const f = fwd(bp);
+            const fa = [fwd(get3(Q, J['left-ankle'])), fwd(get3(Q, J['right-ankle']))];
+            const kneeY = (gy(Q, J['left-knee']) + gy(Q, J['right-knee'])) / 2;
+            if (f < -0.12) label = 'BEHIND_BACK';
+            else if (f > Math.min(...fa) - 0.08 && f < Math.max(...fa) + 0.08 && bp[1] < kneeY) label = 'BETWEEN_LEGS';
+            break;
+          }
+        }
+      }
+    } else if (before?.held && !after) {
+      const a = ball[Math.min(F - 1, i + 1)]?.p, b0 = ball[Math.min(F - 1, i + 3)]?.p;
+      label = a && b0 && v3.dist(a, b0) * fps / 2 > 3 ? 'PASS' : 'BALL_FREE';
+    }
+    for (let k = i; k <= j; k++) out[k] = label;
+    i = j + 1;
+  }
+  if (h0) out = out.map((_, i) => out[(i - h0 + F) % F]);
+  const segments = [];
+  for (let k = 0; k < F; k++) {
+    if (!segments.length || segments[segments.length - 1].label !== out[k]) segments.push({ from: k, to: k, label: out[k] });
+    else segments[segments.length - 1].to = k;
+  }
+  return { frames: out, segments };
 }
 
 /** Average root-space foot geometry of a clip (the stance the planner steps to). */
@@ -774,6 +872,7 @@ export function matchPose(cands, query) {
     for (let i = Math.max(0, c.from || 0); i <= to; i++) {
       let d = c.bias || 0;
       for (let q = 0; q < NF; q++) { const e = feat[i * NF + q] - query[q]; d += e * e; }
+      if (c.extra) d += c.extra(i);
       d -= 0.02 * (i - (c.from || 0)) / c.clip.fps;
       if (!best || d < best.cost) best = { clip: c.clip, frame: i, cost: d };
     }
@@ -870,6 +969,15 @@ export class Player {
   }
   /** Facing `t` s ahead (turning at the current rate, easing out). */
   yawAhead(t) { return this.yaw + this.yawVel * Math.min(t, 0.15); }
+  /** Facing `t` s ahead for the ball's intent: the facing spring integrated toward where it heads. */
+  ballYawAhead(t) {
+    const f = this.mode === 'loco' ? this.faceAhead : null;
+    if (!f) return this.yawAhead(t);
+    // the facing spring (rate-capped) toward where it is heading
+    let y = this.yaw;
+    for (let u = 0; u < t - 1e-9; u += 0.02) { const h = Math.min(0.02, t - u); const ny = dampAngle(y, f.goal, f.h, h); y += clamp(wrapPi(ny - y), -f.rate * h, f.rate * h); }
+    return y;
+  }
 
   /** World hip position predicted `ahead` seconds from now (planner reach checks). */
   hipAt(side, ahead) {
@@ -916,6 +1024,18 @@ export class Player {
 
   /** The page gives the ball back (after a shot lands). */
   giveBall() { this.hasBall = true; this.ballFree = false; }
+  /**
+   * A ball arriving in the hand (a pass caught, a new possession): the standing /
+   * procedural dribble continues from its catch frame, so the animation says
+   * "in the hand" when the ball physically is.
+   */
+  syncDribbleToCatch() {
+    const idle = this.idle(), B = idle?.ball;
+    if (!B?.length || this.mode !== 'loco' || this.source === 'clip-loco') return false;
+    const F = idle.F;
+    for (let i = 0; i < F; i++) if (B[i]?.held && !B[(i - 1 + F) % F]?.held) { this.dribbleT = i + 0.5; return true; }
+    return false;
+  }
 
   // ── main update ──
   update(dt, inp = {}) {
@@ -948,6 +1068,71 @@ export class Player {
     this.trackMetrics(dt);
     this.firstFrame = false;
     return this.result();
+  }
+
+  /** A capsule-space point in the world, the capsule advanced d seconds at its current velocity / turn rate. */
+  toWorldPoint(q, d = 0) {
+    // where the body WILL be (the locomotion spring: a start or a stop is still accelerating)
+    const yaw = d ? this.ballYawAhead(d) : this.yaw, c = Math.cos(yaw), s = Math.sin(yaw);
+    const x = this.pos[0] + (d ? this.ahead(0, d)[0] : 0), z = this.pos[1] + (d ? this.ahead(1, d)[0] : 0);
+    return [c * q[0] + s * q[2] + x, q[1], -s * q[0] + c * q[2] + z];
+  }
+
+  /**
+   * What the animation intends for the ball — the physics system's input (it
+   * never places the ball). held / hand: who should control it now; releaseIn,
+   * catchIn, catchHand: the next release and catch (s); target / targetVel /
+   * targetAhead / catchTarget: where the video says the ball is, moves, will be
+   * in `la` s and at the catch (world); event: the clip's ball event label.
+   */
+  ballIntent(la = 0.15) {
+    const src = this.ballSrc;
+    if (!this.hasBall || this.ballFree || !src || !src.clip.ball?.length) return { has: false };
+    const { clip, t, xf } = src, F = clip.F, fps = clip.fps;
+    const idx = clip.loop ? (i) => ((i % F) + F) % F : (i) => clamp(i, 0, F - 1);
+    const bAt = (tt) => clip.ball[idx(Math.round(tt))];
+    const cur = bAt(t);
+    const held = !!cur?.held;
+    let releaseIn = null, catchIn = null, catchHand = null, catchT = null;
+    const maxK = clip.loop ? F : F - 1 - Math.round(t);
+    for (let k = 1; k <= maxK; k++) {
+      const b = bAt(t + k);
+      if (held && !b?.held && releaseIn == null) { releaseIn = k / fps; continue; }
+      if ((!held || releaseIn != null) && b?.held) { catchIn = k / fps; catchHand = b.hand; catchT = t + k; break; }
+    }
+    const tmp = this.base.slice();
+    const xfAt = src.xfAt;
+    const fut = new Float32Array(NP * 3);
+    const tr0 = src.rootSpace ? sampleTraj(clip, t) : null;
+    const pure = src.rootSpace
+      // an action: the clip's own pose at tt (its hands) and its own root motion from t to tt
+      ? (tt) => {
+        samplePose(clip, tt, fut); this.ballFromClip(fut, clip, tt, null, true);
+        const q = get3(fut, BALL), tr1 = sampleTraj(clip, tt);
+        const cq = rotY(tr1[2], q[0], q[2]), l = rotY(-tr0[2], cq[0] + tr1[0] - tr0[0], cq[1] + tr1[1] - tr0[1]);
+        return this.toWorldPoint([l[0], q[1], l[1]], 0);
+      }
+      : (tt, d) => { this.ballFromClip(tmp, clip, tt, xfAt ? xfAt(d) : xf); return this.toWorldPoint(get3(tmp, BALL), d); };
+    const now = pure(t, 0), next = pure(t + fps / 120, 1 / 120);
+    const ahead = pure(t + la * fps, la);
+    const catchTarget = catchT != null ? pure(catchT, catchIn) : null;
+    // the ball's velocity just after the coming release (the first stretch of the free path)
+    let releaseVel = null;
+    if (held && releaseIn != null) {
+      const tr = t + releaseIn * fps, a = pure(tr, releaseIn), b = pure(tr + 0.5, releaseIn + 0.5 / fps);
+      releaseVel = v3.scale(v3.sub(b, a), fps / 0.5);
+    }
+    this.ballSrc = src;
+    // the posed (inertialized) ball is the target; the pure samples give its motion
+    const target = get3(this.world, BALL);
+    const off = v3.sub(target, now);
+    return {
+      has: true, held, hand: cur?.hand || this.hand, catchHand, catchIn, releaseIn, releaseVel,
+      target, targetVel: v3.scale(v3.sub(next, now), 120), targetAhead: v3.add(ahead, off), catchTarget: catchTarget ? v3.add(catchTarget, off) : null,
+      event: clip.ballEvents?.frames?.[idx(Math.round(t))] || null, clip: clip.name,
+      // where the body will have moved in t s (the locomotion spring) — the physics tests flights against it
+      bodyShift: (tt) => [this.ahead(0, tt)[0], 0, this.ahead(1, tt)[0]],
+    };
   }
 
   result() {
@@ -992,7 +1177,10 @@ export class Player {
       ny = this.yaw + clamp(wrapPi(ny - this.yaw), -maxStep, maxStep);
       this.yaw = ny;
       this.yawVel = wrapPi(this.yaw - y0) / dt;
-    } else this.yawVel = 0;
+      // where the facing is heading (runFace settled at its target): yawAhead() integrates toward it
+      const rfT = inp.sprint && sp > o.runFacingSpeed * ls ? 1 : 0;
+      this.faceAhead = { goal: hoop + wrapPi(travel - hoop) * rfT, h: o.turnHalflife + (o.runTurnHalflife - o.turnHalflife) * rfT, rate: o.maxTurnRate };
+    } else { this.yawVel = 0; this.faceAhead = null; }
     // recorded locomotion loops, if the library covers this direction and speed
     // hysteresis: once on recorded loops, stay until clearly below their range
     const blend = this.locoBlend(sp, inp.sprint, this.source === 'clip-loco');
@@ -1011,7 +1199,7 @@ export class Player {
     for (const s of SIDES) this.locks[s] = f[s].mode === 'plant' ? { pts: this.planner.points(s), out: 0, keep: false } : { pts: this.planner.points(s), out: 1e-6, keep: false };
     const main = blend?.items?.[0]?.c;
     if (main && main.phaseMap) {
-      const m = matchPose([{ clip: main }], this.currentFeatures());
+      const m = matchPose([{ clip: main, extra: this.dribblePhaseCost(main) }], this.currentFeatures());
       const u = timeToPhase(main.phaseMap, m.frame);
       this.gaitCycle = Math.floor(u); this.gaitPhase = u - Math.floor(u);
       this.events.push({ type: 'loopEntry', clip: main.name, frame: m.frame });
@@ -1021,6 +1209,32 @@ export class Player {
     if (f.right.mode === 'swing') this.gaitPhase = 0.1 + 0.35 * clamp(f.right.t / f.right.T, 0, 1);
     else if (f.left.mode === 'swing') this.gaitPhase = 0.6 + 0.35 * clamp(f.left.t / f.left.T, 0, 1);
     else this.gaitPhase = this.planner.lastSide === 'left' ? 0.02 : 0.52;
+  }
+  /**
+   * Entering a dribbling loop mid-dribble: the entry frame must be at the same
+   * point of the dribble (ball in the hand vs on its way, time to the next
+   * catch / release), not only the same body pose — the ball is a physical body
+   * already in flight, the new hand path has to meet it.
+   */
+  dribblePhaseCost(clip) {
+    const I = this.hasBall && !this.ballFree ? this.ballIntent(0) : null;
+    const B = clip.ball;
+    if (!I?.has || !B?.length) return null;
+    const F = clip.F, fps = clip.fps;
+    const nextFlip = (i, held) => { for (let k = 1; k < F; k++) if (!!B[(i + k) % F]?.held !== held) return k / fps; return null; };
+    const cache = new Map();
+    return (i) => {
+      if (cache.has(i)) return cache.get(i);
+      const held = !!B[i]?.held;
+      let d = 0;
+      if (held !== I.held) d = 1.8;
+      else {
+        const want = I.held ? I.releaseIn : I.catchIn, have = nextFlip(i, held);
+        if (want != null && have != null) d = 60 * (want - have) ** 2;
+      }
+      cache.set(i, d);
+      return d;
+    };
   }
   /** World locks → planner feet (planted stay exactly where they are). */
   leaveClipLoco() {
@@ -1132,6 +1346,15 @@ export class Player {
     this.leanUpper(P, this.lean, bob);
     this.contactW = null; // the planner owns the feet
     this.ballFromClip(P, idle, this.dribbleT, (q) => this.leanPoint(q, this.lean, bob));
+    // the lean `d` s ahead (same goal, from the predicted travel): the upper body — and the
+    // dribbling hand — carries forward as the run builds, the ball intent must know where to
+    this.ballSrc.xfAt = (d) => {
+      const yw = this.ballYawAhead(d), v1 = [this.ahead(0, d)[1], this.ahead(1, d)[1]], v2 = [this.ahead(0, d + 0.02)[1], this.ahead(1, d + 0.02)[1]];
+      const lvd = rotY(-yw, v1[0], v1[1]), lad = rotY(-yw, (v2[0] - v1[0]) / 0.02, (v2[1] - v1[1]) / 0.02);
+      const gd = [clamp(0.075 * lvd[0] / ls + 0.03 * lad[0] / ls + bank, -0.3, 0.3), clamp(0.085 * lvd[1] / ls + 0.028 * lad[1] / ls, -0.18, 0.32)];
+      const k = Math.pow(2, -d / 0.1), ld = [gd[0] + (this.lean[0] - gd[0]) * k, gd[1] + (this.lean[1] - gd[1]) * k];
+      return (q) => this.leanPoint(q, ld, bob);
+    };
     this.baseVelFrom(P, dt);
   }
 
@@ -1174,7 +1397,8 @@ export class Player {
   }
 
   /** Ball in hand (palm + offset) or in a dribble's flight — capsule space, slot BALL. */
-  ballFromClip(P, clip, t, xf = null) {
+  ballFromClip(P, clip, t, xf = null, rootSpace = false) {
+    this.ballSrc = { clip, t, xf, rootSpace };
     const F = clip.F;
     const idx = clip.loop ? (i) => ((i % F) + F) % F : (i) => clamp(i, 0, F - 1);
     const i0 = Math.floor(t), u = t - i0;
@@ -1190,20 +1414,34 @@ export class Player {
       set3(P, BALL, q[0], q[1], q[2]);
       return;
     }
-    // free: release (last held) → floor bounce → catch (next held), gravity
+    // free: the recorded path (the tracker's gravity-fitted ball from the video, repaired
+    // against the body — BP.repairClipBall). Its ends meet the hands: a held neighbour
+    // frame contributes its palm position.
+    if (A?.p && B?.p && (!A.held || !B.held) && (A.held || A.rec) && (B.held || B.rec)) {
+      let qa = A.held ? heldPos(P, A) : A.p, qb = B.held ? heldPos(P, B) : B.p;
+      if (xf) { if (!A.held) qa = xf(qa); if (!B.held) qb = xf(qb); }
+      const q = v3.lerp(qa, qb, u);
+      set3(P, BALL, q[0], Math.max(this.ballR || 0.12, q[1]), q[2]);
+      return;
+    }
+    // (no recorded free positions) release (last held) → floor bounce → catch (next held), gravity
     let r = i0; while (r > i0 - F && !clip.ball[idx(r)]?.held) r--;
     let c = i0 + 1; while (c < i0 + 1 + F && !clip.ball[idx(c)]?.held) c++;
     const R = clip.ball[idx(r)], C = clip.ball[idx(c)];
     if (!R?.held || !C?.held || (!clip.loop && (r < 0 || c > F - 1))) { const q = (A || B).p; set3(P, BALL, q[0], q[1], q[2]); return; }
     // hand positions at release / catch, from the clip frames (+ the same lean)
     const fr = new Float32Array(NJ * 3);
+    // P is in clip space (trajectory included) — or, for an action (rootSpace), in the root
+    // space at t: the hands at release / catch are carried there through the clip's root motion
+    const trT = rootSpace ? sampleTraj(clip, t) : null;
     const at = (fi) => {
       samplePose(clip, fi, fr);
       const tr = sampleTraj(clip, fi);
       const w = new Float32Array(NJ * 3); placePose(fr, tr[0], tr[1], tr[2], w, NJ);
       return w;
     };
-    let pr = heldPos(at(r), R), pc = heldPos(at(c), C);
+    const toT = (q) => { if (!trT) return q; const l = rotY(-trT[2], q[0] - trT[0], q[2] - trT[1]); return [l[0], q[1], l[1]]; };
+    let pr = toT(heldPos(at(r), R)), pc = toT(heldPos(at(c), C));
     if (xf) { pr = xf(pr); pc = xf(pc); }
     const fps = clip.fps, T = (c - r) / fps, tt = (t - r) / fps, rr = this.ballR || 0.12;
     const yr = pr[1], yc = pc[1];
@@ -1222,10 +1460,12 @@ export class Player {
     const out = [];
     for (const v of vs) {
       out.push(v);
-      if (!v.shot && v.mirrorOf === undefined && v.mirrored) out.push(v.mirrored);
+      if (v.mirrorOf === undefined && v.mirrored) out.push(v.mirrored);
     }
     // a dribble move must start in the hand that has the ball (shots: any)
-    const inHand = out.filter((c) => c.shot || c.hand === this.hand);
+    // every move and shot starts in the hand that has the ball (the ball is physical: the other hand
+    // cannot take it from across the body); the filmed side first, its mirror when that is the ball's hand
+    const inHand = out.filter((c) => c.hand === this.hand);
     return inHand.length ? inHand : out;
   }
 
@@ -1296,7 +1536,7 @@ export class Player {
     samplePose(clip, a.t, this.base);
     this.rotSrc = [{ clip, t: a.t, w: 1 }];
     this.contactW = { left: contactAt(clip, 'left', a.t), right: contactAt(clip, 'right', a.t) };
-    if (!a.released && this.hasBall) this.ballFromClip(this.base, clip, a.t);
+    if (!a.released && this.hasBall) this.ballFromClip(this.base, clip, a.t, null, true);
     else set3(this.base, BALL, gx(this.out, BALL), gy(this.out, BALL), gz(this.out, BALL));
     this.baseVelFrom(this.base, dt);
     // shot release
@@ -1503,7 +1743,7 @@ export function buildLibrary(clips, rig, lib = {}) {
     const role = json.role;
     if (!role) continue;
     const c = prepareClip(json, rig);
-    if (!c.shot && json.game?.mirror !== false) { c.mirrored = prepareClip(json, rig, { mirror: true }); c.mirrored.mirrorOf = c; }
+    if (json.game?.mirror !== false) { c.mirrored = prepareClip(json, rig, { mirror: true }); c.mirrored.mirrorOf = c; }
     const vs = lib[role + ':variants'] || (lib[role + ':variants'] = []);
     if (vs.some((v) => v.json === json || (json.id && v.json.id === json.id))) continue;
     vs.push(c);

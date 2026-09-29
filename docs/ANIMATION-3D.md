@@ -145,3 +145,47 @@ Motions that were not filmed are stored like analysed ones (`raw.json` holds `wo
 | `POST /api/mocap3d/import-kimodo` | raw `.npz` body, `?name&role&arms=dribble\|crossover\|none&hand&prompt&type` (≤ 30 MB) → new motion |
 | `GET /js/anim3d.mjs` | the runtime module (revalidated on every load, like the page) |
 | `/court3d` · `/recording` | sandbox · recording guide (`/court3d?focus=<motionId>&char=big`) |
+
+## 7. Basketball physics — `engine3d/basketball-physics.mjs`
+
+The ball is a **Rapier** rigid body (`@dimforge/rapier3d-compat`, served at `/vendor/rapier.mjs`) and Rapier is authoritative: the mesh follows the body, interpolated between physics states. Nothing sets the ball's position during play; the only placements are at setup (a new possession, the test scenes). **1 unit = 1 m**, the ball is 0.12 m / 0.62 kg (a thin shell, I = ⅔mR²), all values are in `BALL_DEFAULTS` and can be tuned live (`setConfig`).
+
+**Order of authority per frame:** video intent → animated body → video ball as a soft target → physics → contact IK → render.
+
+- **Step:** fixed 120 Hz with an accumulator, 240 Hz while the ball moves > 3 cm per step, ≤ 24 substeps. CCD and soft CCD are on the ball; collision and contact-force events are drained every step. A slow render frame runs as several ≤ 1/30 s game ticks (animation, hands and ball together).
+- **Body:** articulated kinematic colliders built from the skinned bone matrices every frame: head, chest and pelvis boxes, upper arms, forearms, palms, 15 finger capsules per hand, thighs, shins and feet. They are moved with `setNextKinematic*`, so a moving limb pushes the ball with its real velocity. Anything faster than 12 m/s in one step is an animation pop and is repositioned rather than swept. Fingers are solid only on the controlling hand, and a releasing hand's fingers open. The court, rim (24 capsules), backboard and stanchion are static colliders.
+- **State machine** (`BALL_STATES`): FREE, AIRBORNE, HAND_APPROACH, HAND_CONTACT, HAND_RELEASE, FLOOR_CONTACT, BOUNCE_RISING, POSSESSION_CONTROL, plus BODY_CONTACT and LOOSE.
+- **Hand control:** a clamped PD force (kp/kd, ≤ `maxHandForce`) pulls the ball onto the palm surface, i.e. palm + normal × (R + palm thickness). It adds gravity compensation and palm-acceleration feed-forward. Holds and gathers get `holdGain`, and two palms on the ball share it. The target is projected out of the torso, legs and arms.
+- **Release** (a dribble is impulses, not a loop), in this order:
+  1. The push blends the video's release velocity with the pushing hand's velocity (`handInfluence`, `pressureGain`).
+  2. The hand's tangential motion becomes a friction impulse at the contact point: top, back or side spin, with linear velocity kept exact.
+  3. `bounceMatch` sets the downward speed so the real restitution brings the ball back up to the catch height on time.
+  4. `catchMatch` aims the bounce horizontally at where the catching hand will be. It models floor friction (v′ = v − (v + ω×r)·k/(1+k)) and uses the body's predicted motion and lean.
+  5. `planRelease` flies the ball against the moving limbs and picks the smallest change that keeps `planMargin` clearance and still reaches the catch. If nothing does, the release is logged as an `invalidPath` warning.
+- **Release guards:** a hand can release only a ball it is touching. A hand that just let go cannot touch it again for `regrabTime`. A late touch (up to `lateCatchTime` after the video released) still catches, then pushes. A ball squeezed between the hand and the body is limited to `pinchMaxVel` relative to the hand.
+- **Video as a soft target:** during flight a weak steering force (≤ `videoMaxForce`) pulls toward the video ball. The video never places it.
+  - **Single camera:** `repairClipBall` moves recorded free paths out of the body along the camera's depth axis, the least certain one (`engine3d/ball-setup.mjs` does this per clip on the character at load).
+  - **Invalid clips:** clips whose synthetic flight would pass > 3 cm into a leg are flagged `ballInvalid` and dropped when a valid variant of the role exists.
+  - **Two cameras:** `lib/mocap/ball-triangulate.js` (DLT with reprojection error) is ready for synced, calibrated views.
+- **Contact IK** (`engine3d/contact-ik.mjs`, runs on the MHR skinning matrices): two-bone arm reach (≤ `ikMax`; ≤ `ikCatchMax` when a catch would otherwise be missed, ramped in), palm aim, fingers conformed to the ball surface by bisection, and a bounded leg yield (≤ `legYieldMax`) when a ball passes between the legs. The IK moves the hands and legs, never the ball.
+- **Classifier** (`classifyBallEvents` in the runtime): RIGHT/LEFT_HAND_DRIBBLE, CROSSOVER, BETWEEN_LEGS, BEHIND_BACK, GATHER, HOLD, PASS, SHOT, BALL_FREE.
+- **Look-ahead** (`Player.ballIntent`): the intent says whether the ball is held, by which hand, when the next release and catch are, the video target and its velocity, and the catch point. Future points are predicted:
+  - with the locomotion spring (speed, facing, lean) in locomotion;
+  - with the clip's own pose and root motion during a move.
+- **Debug and tuning** (court: the **Ball** button or `B`; `?balldbg=1`):
+  - Draws the colliders, contact points and normals, velocity and spin, the video target and its error, and penetration warnings, with physics Hz.
+  - Every `BALL_DEFAULTS` value can be tuned live and is saved per browser.
+  - Test scenes run at `?balltest=<scene>`: dribble-right/left, pound, low, cross-rl/lr, btl, btl-narrow, btb, moving, gather, drop, drop-spin.
+- **Tests:** `tests/basketball-physics.test.js` runs every scene headless and asserts:
+  - no penetration, a separation on every dribble, a bounce each time, catches by the right hand and video error;
+  - COR, spin, BTL through the gap and BTB behind the pelvis;
+  - the fixed rate, ballistic and catch aiming, live tuning, IK, single-camera repair and triangulation.
+
+  `scripts/court3d-test.js` also writes `ball-log.txt`, a state timeline.
+
+**Known limits:**
+- Very fast source switches (the procedural idle → a recorded jog or sprint loop in its first half second) can still make a catch miss.
+- The Kimodo "Crossover cut" clip is a 0.17 s cross with a bounce and its path clips this character's leg. It usually loses the ball at the end of the move (the rebounder passes it back).
+- The generated crossovers are flagged invalid for this body.
+- At 20–30 fps an occasional swinging foot can still kick the ball.
+- The replay view shows the recorded ball track (the video reference), not physics.

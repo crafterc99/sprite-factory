@@ -468,3 +468,15 @@ test('zoomed SAM 3D Body calls map back to the full frame exactly (2D, 3D direct
   assert.ok(err3d < 1e-6, `3D direction restored (${err3d})`);
   assert.ok(S.dist(out.camT, T) < 0.01, `camera translation re-solved (${S.dist(out.camT, T).toFixed(4)} m)`);
 });
+
+test('ball events: a one-hand dribble loop is classified as that hand\'s dribble; a hand change as a crossover', async () => {
+  const { prepareRig, prepareClip, classifyBallEvents } = await A;
+  const rig = prepareRig(mockRigJson(1));
+  const c = prepareClip(idleClip(), rig);
+  const ev = c.ballEvents || classifyBallEvents(c);
+  assert.deepStrictEqual([...new Set(ev.frames)], ['RIGHT_HAND_DRIBBLE'], ev.segments.map((s) => s.label).join(' '));
+  // the same loop with the second half's catches in the other hand: its flights become crossovers
+  const cross = { ...c, ball: c.ball.map((b, i) => (b ? { ...b, hand: i >= c.F / 2 ? 'left' : 'right' } : b)) };
+  const labels = new Set(classifyBallEvents(cross).frames);
+  assert.ok(labels.has('CROSSOVER') && labels.has('LEFT_HAND_DRIBBLE') && labels.has('RIGHT_HAND_DRIBBLE'), [...labels].join(' '));
+});

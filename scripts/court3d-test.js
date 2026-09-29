@@ -70,6 +70,12 @@ function bouncesToFloor(ys) {
   await page.waitForTimeout(1500);
   await page.mouse.click(600, 400);
   await page.evaluate(() => { const p = window.__court3d.player; p.metrics.slideMaxCm = 0; p.metrics.popMax = 0; });
+  // ball timeline (physics state transitions, possession changes) for the report
+  await page.evaluate(() => {
+    const S = window.__court3d; S.ballLog = []; let last = '';
+    const f = () => { const ph = S.phys; if (ph) { const k = [S.player.mode, ph.state, S.freeBall?.kind || '-', ph.lost ? 'lost' : ''].join(' '); if (k !== last) { last = k; S.ballLog.push(`${(performance.now() / 1000).toFixed(2)} ${k} y=${ph.cur.p[1].toFixed(2)}`); } } requestAnimationFrame(f); };
+    f();
+  });
 
   const rep = { errors };
   rep.loaded = await page.evaluate(() => {
@@ -173,6 +179,7 @@ function bouncesToFloor(ys) {
     && mv.every((m) => m.movedM > 0.5 && m.faceErrRad < 0.1 && m.slideCm < 2)
     && rep.shot.started && rep.shot.released && rep.shot.swish && rep.shot.backToDribble && rep.shot.slideCm < 3;
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(rep, null, 1));
+  fs.writeFileSync(path.join(OUT, 'ball-log.txt'), (await page.evaluate(() => window.__court3d.ballLog || [])).join('\n'));
   console.log(JSON.stringify(rep, null, 1));
   await browser.close();
   process.exit(rep.pass ? 0 : 1);

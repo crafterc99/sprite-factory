@@ -30,6 +30,14 @@
   #vid button { padding:1px 7px; font-size:11px; }
   #dbg { position:fixed; right:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 10px; color:var(--dim); display:none; min-width:220px; }
   #dbg b { color:#fff; } #dbg .ok { color:var(--ok); } #dbg .warn { color:var(--warn); } #dbgBody { white-space:pre-line; }
+  #ballPanel { position:fixed; left:12px; top:100px; z-index:7; width:330px; max-width:calc(100vw - 24px); max-height:calc(100vh - 120px); overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 10px; display:none; }
+  #ballPanel .bh { display:flex; gap:8px; align-items:center; margin-bottom:4px; } #ballPanel .bh b { flex:1; color:#fff; }
+  #ballHud { margin:4px 0; white-space:pre-wrap; font:11px/1.35 ui-monospace, Menlo, monospace; color:var(--txt); }
+  #ballHud .warn { color:var(--warn); }
+  #ballBtns, #ballScenes { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0; } #ballBtns button, #ballScenes a { font-size:11px; padding:2px 6px; }
+  #ballScenes a { color:var(--accent); border:1px solid var(--line); border-radius:10px; text-decoration:none; }
+  #ballTune label { display:grid; grid-template-columns: 1fr 90px 46px; gap:4px; align-items:center; font-size:11px; color:var(--dim); margin:2px 0; }
+  #ballTune input[type=range] { width:90px; } #ballTune output { color:var(--txt); text-align:right; }
   #toast { position:fixed; left:50%; top:64px; transform:translateX(-50%); z-index:9; background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:8px 14px; display:none; max-width:90vw; text-align:center; }
   #toast a { color:var(--accent); }
   #loading { position:fixed; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; background:var(--bg); z-index:20; color:var(--dim); }
@@ -101,7 +109,7 @@
   <span class="pill" title="Game speed (1.00× = real time). Saved on this device.">Speed <input type="range" id="speed" min="0.25" max="1.5" step="0.05"><b id="speedLbl">1.00×</b></span>
   <span class="pill">Cam <button id="camChase" class="on">2K</button><button id="camSide">Side</button><button id="camFree">Orbit</button></span>
   <span class="pill" title="Clips the game has, by role — record the rest (see the recording guide)"><span id="libInfo">clips…</span> <a href="/recording" style="color:var(--accent)">guide</a></span>
-  <span class="pill"><button id="dbgBtn" title="Foot plants + slide meter (F)">Feet</button></span>
+  <span class="pill"><button id="dbgBtn" title="Foot plants + slide meter (F)">Feet</button><button id="ballBtn" title="Basketball physics: colliders, contacts, forces + live tuning (B)">Ball</button></span>
   <span class="pill" id="pad">no controller</span>
   <span class="pill" id="fps">—</span>
 </div>
@@ -113,6 +121,12 @@
 </div>
 <div id="dbg"><b>feet</b> · slide max <span id="dbgSlide"></span> <button id="dbgReset" type="button">reset</button><br><span id="dbgBody"></span></div>
 <div id="toast"></div>
+<div id="ballPanel"><div class="bh"><b>Basketball physics</b><span id="ballHz"></span><button id="ballClose" type="button">×</button></div>
+  <pre id="ballHud"></pre>
+  <div id="ballBtns"><button id="bDrop" type="button">Drop ball</button><button id="bSpin" type="button">Drop + spin</button><button id="bGive" type="button">Give ball</button><button id="bReset" type="button">Defaults</button></div>
+  <div id="ballScenes"></div>
+  <div id="ballTune"></div>
+</div>
 <div id="vid"><div class="vh"><span id="vidLbl">original video</span><button id="vidBig" type="button" title="enlarge">⤢</button><button id="vidHide" type="button" title="hide (V)">×</button></div><img id="vidImg" alt="the recorded frame of the move playing"></div>
 <div id="replay" style="display:none;position:fixed;right:12px;top:110px;z-index:6;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px;width:min(42vw,420px)">
   <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><b style="color:#fff">Replay vs video</b><span id="rpInfo" style="color:var(--dim);font-size:12px"></span></div>
@@ -137,6 +151,11 @@
 import * as THREE from '/vendor/three.module.min.js';
 import * as A from '/js/anim3d.mjs';
 import * as MS from '/js/mhr-skin.mjs';
+import RAPIER from '/vendor/rapier.mjs';
+import * as BP from '/js/basketball-physics.mjs';
+import * as IK from '/js/contact-ik.mjs';
+import * as LAB from '/js/ball-lab.mjs';
+import * as SU from '/js/ball-setup.mjs';
 window.__c3dBoot = true;
 { const e = document.getElementById('err'); if (e && e.getAttribute('data-src') === 'watchdog') e.innerHTML = ''; }
 if (window.__c3dPendingErr) window.__c3dFail(window.__c3dPendingErr);
@@ -386,7 +405,7 @@ for (const s of ['left', 'right']) {
 // ═══ Input: gamepad + keyboard + touch ═══
 const keys = new Set();
 const pressedSinceTick = new Set(); // a quick tap between two frames still counts
-const GAME_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'KeyV', 'ShiftLeft', 'ShiftRight']);
+const GAME_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'KeyV', 'KeyB', 'ShiftLeft', 'ShiftRight']);
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return; // browser shortcuts (Cmd+F, Ctrl+C) are not game input
   if (GAME_KEYS.has(e.code)) {
@@ -399,6 +418,7 @@ window.addEventListener('keydown', (e) => {
   pressedSinceTick.add(e.code);
   if (e.code === 'KeyC') cycleCam();
   if (e.code === 'KeyF') toggleDbg();
+  if (e.code === 'KeyB') toggleBallDbg();
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
 // keys held while the window loses focus never get a keyup: drop all held input
@@ -466,7 +486,9 @@ function readInput() {
 const S = {
   rig: null, lib: null, player: null, clips: [], roles: {}, speed: 1,
   sqAt: null, sqFired: false, lastMoveAt: -1e9,
-  freeBall: null,         // released shot in flight { p, v, t, through, bounces }
+  freeBall: null,         // a shot / pass in the air (nobody controls the ball): { kind, t, through }
+  phys: null,             // BasketballPhysicsSystem (Rapier) — the ball's only authority
+  body0: null, intent0: null, dbgBall: false, lab: null,
   lastBall: new THREE.Vector3(),
   cam: 'chase', camYaw: 0, camDist: 5.2, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(),
   dbg: false, toastUntil: 0,
@@ -494,12 +516,299 @@ function shotRole(moving) {
   return L['shot-stepback'] ? 'shot-stepback' : 'shot-jumper';
 }
 
-function launchBall(from) {
-  const target = new THREE.Vector3(0, RIM_Y + 0.03, 0);
-  const d = target.clone().sub(from); const horiz = Math.hypot(d.x, d.z);
+// ═══ The ball in play (physics owns it; these only give it impulses) ═══
+/** Shot release: the shooting hand's impulse sends the ball (wherever it physically is) toward the rim. */
+function shootRelease() {
+  const ph = S.phys, from = ph.pos;
+  const target = [0, RIM_Y + 0.03, 0];
+  const horiz = Math.hypot(target[0] - from[0], target[2] - from[2]);
   const T = 0.75 + horiz * 0.07;                       // flight time (arc height follows)
-  const v = new THREE.Vector3(d.x / T, (d.y + 0.5 * G * T * T) / T, d.z / T);
-  S.freeBall = { p: from.clone(), v, t: 0, T, through: false, bounces: 0 };
+  ph.throwBall(ph.ballisticTo(target, T), 'both');
+  S.freeBall = { kind: 'shot', t: 0, through: false, bounces0: ph.stats.bounces };
+}
+/** A rebounder passes the ball back: one throw impulse from where it lies to the player's hand. */
+function passBack() {
+  const ph = S.phys, P = S.player;
+  const hand = P.hand || 'right';
+  const palm = S.body0?.palms?.[hand];
+  const at = palm ? ph.palmTarget(palm) : [P.pos[0], 1.0, P.pos[1]];
+  const d = Math.hypot(at[0] - ph.pos[0], at[2] - ph.pos[2]);
+  const T = Math.max(0.55, Math.min(1.2, d / 6));
+  const to = [at[0] + P.vel[0] * T, at[1], at[2] + P.vel[1] * T];   // lead a moving player
+  ph.impartVelocity(ph.ballisticTo(to, T), 16);
+  ph.lost = false;
+  S.freeBall = { kind: 'pass', t: 0, T };
+}
+/** Possession lost (knocked away, out of reach): the player lets it go; it is passed back shortly. */
+function looseBall() {
+  const P = S.player;
+  P.hasBall = false; P.ballFree = true;
+  S.freeBall = { kind: 'loose', t: 0 };
+}
+/** A new possession (start, reset, debug teleport): the ball on the palm of the dribbling hand, at rest. */
+function resetPossession() {
+  const ph = S.phys, P = S.player;
+  if (!ph || !P) return;
+  P.giveBall(); P.syncDribbleToCatch();
+  const J = mhrRig ? IK.jointAccessor(boneMats, mhrRig) : null;
+  const body = J ? BP.bodySampleFromJoints(J, ph.cfg, null) : null;
+  const hand = P.ballIntent()?.hand || P.hand || 'right';
+  ph.placeBall(body ? ph.palmTarget(body.palms[hand]) : [P.pos[0], 1.0, P.pos[1]]);
+  ph.lost = false; ph.wasHeld = true; ph.heldFor = 0;
+  S.freeBall = null; S.body0 = body; S.intent0 = null;
+  P.giveBall();
+}
+
+// ═══ Basketball physics: the frame step ═══
+/**
+ * One rendered frame of the ball. The animated body (bone matrices, before
+ * contact IK) becomes the articulated kinematic collision body; the runtime's
+ * intent (who should control the ball, the video's ball path) becomes forces;
+ * Rapier steps at a fixed rate (accumulator) and the mesh follows it.
+ */
+function ballStep(dt, r, now) {
+  const ph = S.phys, P = S.player;
+  if (!ph) return;
+  // contact correction first (bounded; toward where the ball physically is): the hands, fingers
+  // and legs the ball collides with are exactly the ones drawn
+  const ctl = ikControl(ph, S.body0);
+  if (mhrRig) S.ikOut = IK.contactPass(boneMats, mhrRig, { p: ph.cur.p, R: ph.cfg.radius }, ctl && { ...ctl, grip: false }, ph.cfg, ph.legYield);
+  // (the matrices already carry the leg yield: the colliders are built from them as they are)
+  const body = mhrRig ? BP.bodySampleFromJoints(IK.jointAccessor(boneMats, mhrRig), ph.cfg, null) : null;
+  const intent = S.freeBall ? { has: false } : P.ballIntent(0.15);
+  if (S.freeBall) S.intent0 = intent;   // the frame of a release/pass: no hand pulls the ball back
+  // a move / shot that starts in the other hand: the ball is tossed across to it first
+  if (body && !S.freeBall && r.events.some((e) => e.type === 'action')) {
+    const startHand = P.action?.clip?.hand;
+    if (startHand && ph.heldHand && startHand !== ph.heldHand && ph.wasHeld) ph.handTransfer(body.palms[startHand], 0.3, P.ballIntent(0.3).targetAhead);
+  }
+  const pBefore = ph.cur.p;
+  const alpha = ph.advance(dt, S.body0 || body, body, S.intent0 || intent, intent);
+  S.body0 = body; S.intent0 = intent;
+  const pNow = ph.cur.p;
+  // possession lost (knocked away by a leg, out of reach): the player lets go
+  if (ph.lost && !S.freeBall && !S.lab) looseBall();
+  const f = S.freeBall;
+  if (f) {
+    f.t += dt;
+    // through the net: the ball crosses the rim plane downward inside the ring
+    if (f.kind === 'shot' && !f.through && pBefore[1] > RIM_Y && pNow[1] <= RIM_Y && Math.hypot(pNow[0], pNow[2]) < RIM_R - 0.03) {
+      f.through = true; net.scale.set(0.9, 1.15, 0.9); S.swishAt = now; S.swishes = (S.swishes || 0) + 1;
+    }
+    const settled = ph.state === 'FREE' || ph.stats.bounces - (f.bounces0 ?? 0) >= 3 || f.t > 4.5;
+    if (f.kind === 'shot' && settled) passBack();
+    else if (f.kind === 'loose' && f.t > 0.6) passBack();
+    else if (f.kind === 'pass') {
+      // the receiving hand takes over as the pass arrives
+      // (closest approach over this frame's path — a slow frame moves a pass a metre)
+      const palm = body?.palms?.[P.hand || 'right'];
+      let d = 0;
+      if (palm) {
+        const q = ph.palmTarget(palm), ab = pNow.map((v, k) => v - pBefore[k]), l2 = ab.reduce((a, v) => a + v * v, 0) || 1;
+        const u = Math.max(0, Math.min(1, ab.reduce((a, v, k) => a + v * (q[k] - pBefore[k]), 0) / l2));
+        d = Math.hypot(...q.map((v, k) => v - (pBefore[k] + ab[k] * u)));
+      }
+      if (d < ph.cfg.catchDist + 0.1 || f.t > f.T - 0.03 || f.t > f.T + 1.2) { S.freeBall = null; ph.lost = false; ph.wasHeld = false; P.giveBall(); P.syncDribbleToCatch(); }
+    }
+  }
+  // render: the mesh follows the rigid body (interpolated between the last two physics states)
+  const rs = ph.renderState(alpha);
+  ball.position.set(rs.p[0], rs.p[1], rs.p[2]);
+  ball.quaternion.set(rs.q[0], rs.q[1], rs.q[2], rs.q[3]);
+  ball.scale.setScalar(ph.cfg.radius);
+  ball.visible = true;
+  S.lastBall.set(rs.p[0], rs.p[1], rs.p[2]);
+  // fingers against where the ball is drawn now: out of it, and the controlling hand's curled onto it
+  if (mhrRig) for (const s of ['l', 'r']) IK.conformFingers(boneMats, mhrRig, s, rs.p, ph.cfg.radius, { grip: !!ctl?.grip && ctl.hand?.[0] === s, rf: ph.cfg.radii.finger });
+  window.__ballState = ph.state;
+}
+/** How much each hand should reach for the ball, from the controller state. */
+function ikControl(ph, body) { return ph.ikControl(body); }
+
+// ═══ Ball lab: the physics test scenes on the court (?balltest=<scene>) ═══
+const LAB_AT = [0, 4.2]; // the lab mannequin stands here (in front of the hoop)
+const offP = (p) => (p ? [p[0] + LAB_AT[0], p[1], p[2] + LAB_AT[1]] : p);
+function labIntent(I) {
+  if (!I?.has) return I;
+  return { ...I, target: offP(I.target), targetAhead: offP(I.targetAhead), catchTarget: offP(I.catchTarget) };
+}
+function labStart(name) {
+  const scenes = LAB.scenes();
+  const sc = scenes[name];
+  if (!sc) { toast(`No ball test "${esc(name)}" — try: ${Object.keys(scenes).join(', ')}`, 6000); return; }
+  const ph = S.phys;
+  S.lab = { name, sc, t: 0, runs: 0 };
+  for (const m of charMeshes) m.visible = false;
+  S.player.teleport(LAB_AT[0], LAB_AT[1]);
+  S.dbgBall = true; $('ballPanel').style.display = 'block'; $('ballBtn').classList.add('on');
+  setCam('free'); S.camDist = 3.2;
+  ph.stats.penetrations = []; ph.stats.maxPenetration = 0; ph.warnings = []; ph.legYield = { left: [0, 0, 0], right: [0, 0, 0] };
+  const f0 = sc.at(0), st = sc.start ? sc.start() : { p: [0, 1, 0] };
+  const J0 = f0.joints ? (n) => offP(f0.joints(n)) : null;
+  const body = J0 ? BP.bodySampleFromJoints(J0, ph.cfg, ph.legYield) : null;
+  if (body && f0.intent?.held) ph.placeBall(ph.palmTarget(body.palms[f0.intent.hand]));
+  else ph.placeBall(offP(st.p), st.v || [0, 0, 0], st.w || [0, 0, 0]);
+  if (!body) ph.clearBody();
+  ph.wasHeld = !!f0.intent?.held; ph.lost = false;
+  S.body0 = body; S.intent0 = labIntent(f0.intent);
+  setText($('state'), 'BALL TEST · ' + name);
+}
+function labStep(dt, rdt) {
+  const L = S.lab, ph = S.phys;
+  if (L.t >= L.sc.duration) { L.runs++; labStart(L.name); return; }
+  const f = L.sc.at(L.t + dt);
+  const J = f.joints ? (n) => offP(f.joints(n)) : null;
+  const body = J ? BP.bodySampleFromJoints(J, ph.cfg, ph.legYield) : null;
+  const I = labIntent(f.intent);
+  const alpha = ph.advance(dt, S.body0 || body, body, S.intent0 || I, I);
+  S.body0 = body; S.intent0 = I; L.t += dt;
+  const rs = ph.renderState(alpha);
+  ball.position.set(rs.p[0], rs.p[1], rs.p[2]); ball.quaternion.set(rs.q[0], rs.q[1], rs.q[2], rs.q[3]); ball.scale.setScalar(ph.cfg.radius);
+  S.lastBall.set(rs.p[0], rs.p[1], rs.p[2]);
+  window.__ballState = ph.state;
+  drawBallDbg();
+  updateCamera(rdt, { cx: 0, cy: 0 });
+  renderer.render(scene, camera);
+}
+
+// ═══ Basketball physics: debug view + live tuning (B) ═══
+const BALL_CFG_KEY = 'court3d_ballcfg';
+// the recorded ball tracks are made to fit THIS body (single-camera depth repair) and
+// clips whose ball would have to pass through a leg are left out when a valid variant exists
+function fitBallPaths(lib) {
+  if (!mhrRig) return;
+  try {
+    for (const r of SU.repairLibrary(lib, mhrRig, S.phys ? S.phys.cfg : { ...BP.BALL_DEFAULTS, ...loadBallCfg() })) {
+      if (r.dropped) console.info(`[ball] ${r.clip}: its ball path does not fit this body, left out of ${r.role}`);
+      else if (r.invalid) console.warn(`[ball] ${r.clip}: ball path ${(r.arcClearance * 100).toFixed(1)} cm into a leg (no valid variant to swap in)`);
+    }
+  } catch (e) { console.warn('ball path fit failed', e); }
+}
+function loadBallCfg() { try { return JSON.parse(localStorage.getItem(BALL_CFG_KEY) || '{}') || {}; } catch { return {}; } }
+function saveBallCfg() {
+  const c = S.phys.cfg, d = BP.BALL_DEFAULTS, out = {};
+  for (const [k] of TUNE) if (c[k] !== d[k]) out[k] = c[k];
+  for (const k of TOGGLES) if (c[k] !== d[k]) out[k] = c[k];
+  try { localStorage.setItem(BALL_CFG_KEY, JSON.stringify(out)); } catch {}
+}
+const TUNE = [
+  ['gravity', 'gravity (m/s²)', 1, 20, 0.01], ['mass', 'ball mass (kg)', 0.3, 1.2, 0.01], ['radius', 'ball radius (m)', 0.09, 0.15, 0.001],
+  ['ballRestitution', 'ball restitution', 0, 1, 0.01], ['courtRestitution', 'floor restitution', 0, 1, 0.01],
+  ['ballFriction', 'ball friction', 0, 1.5, 0.01], ['courtFriction', 'floor friction', 0, 1.5, 0.01], ['rollingResistance', 'rolling resistance', 0, 0.1, 0.001],
+  ['linearDamping', 'linear damping', 0, 1, 0.01], ['angularDamping', 'angular damping', 0, 2, 0.01],
+  ['kp', 'PD position strength (N/m)', 0, 3000, 10], ['kd', 'PD velocity damping', 0, 150, 1], ['maxHandForce', 'max hand force (N)', 0, 150, 1],
+  ['maxCorrectionVel', 'max correction velocity (m/s)', 0, 15, 0.1], ['contactDist', 'contact distance (m)', 0.01, 0.2, 0.005],
+  ['releaseDist', 'release distance (m)', 0.005, 0.1, 0.005], ['catchDist', 'catch distance (m)', 0.05, 0.6, 0.01],
+  ['handInfluence', 'hand influence', 0, 1, 0.01], ['pressureGain', 'dribble pressure', 0, 3, 0.05], ['spinGain', 'spin from the hand', 0, 2, 0.05],
+  ['videoKp', 'video target strength (N/m)', 0, 60, 0.5], ['videoMaxForce', 'video target max force (N)', 0, 10, 0.1],
+  ['ikStrength', 'IK strength', 0, 1, 0.01], ['ikMax', 'IK max reach (m)', 0, 0.2, 0.005], ['legYieldMax', 'leg yield max (m)', 0, 0.12, 0.005],
+  ['hz', 'physics timestep (Hz)', 60, 240, 10], ['softCcd', 'soft CCD distance (m)', 0, 0.2, 0.005],
+];
+const TOGGLES = ['ccd', 'fingerColliders', 'legYield'];
+function buildBallPanel() {
+  const box = $('ballTune'), c = S.phys.cfg;
+  box.innerHTML = TUNE.map(([k, l, a, b, st]) => `<label>${esc(l)}<input type="range" data-k="${k}" min="${a}" max="${b}" step="${st}" value="${c[k]}"><output>${c[k]}</output></label>`).join('')
+    + TOGGLES.map((k) => `<label>${k === 'ccd' ? 'CCD (continuous collision)' : k === 'fingerColliders' ? 'finger colliders' : 'legs make room (yield)'}<input type="checkbox" data-t="${k}" ${c[k] ? 'checked' : ''}><output></output></label>`).join('');
+  box.querySelectorAll('input[type=range]').forEach((el) => { el.oninput = () => { const v = parseFloat(el.value); el.nextElementSibling.textContent = v; S.phys.setConfig({ [el.dataset.k]: v }); saveBallCfg(); }; });
+  box.querySelectorAll('input[type=checkbox]').forEach((el) => { el.onchange = () => { S.phys.setConfig({ [el.dataset.t]: el.checked }); saveBallCfg(); }; });
+  $('ballScenes').innerHTML = 'Test scenes: ' + Object.keys(LAB.scenes()).map((n) => `<a href="?balltest=${n}">${n}</a>`).join('') + (S.lab ? ' <a href="?">× back to play</a>' : '');
+}
+$('ballBtn').onclick = () => toggleBallDbg();
+$('ballClose').onclick = () => toggleBallDbg(false);
+function toggleBallDbg(on = !S.dbgBall) {
+  S.dbgBall = on; $('ballBtn').classList.toggle('on', on); $('ballPanel').style.display = on ? 'block' : 'none';
+  if (on && S.phys) buildBallPanel();
+  dbg.group.visible = on;
+}
+$('bDrop').onclick = () => { const P = S.player, ph = S.phys; looseBall(); S.freeBall.t = -3; const f = [Math.sin(P.yaw), Math.cos(P.yaw)]; ph.placeBall([P.pos[0] + f[0] * 0.8, 1.8, P.pos[1] + f[1] * 0.8]); };
+$('bSpin').onclick = () => { const P = S.player, ph = S.phys; looseBall(); S.freeBall.t = -3; const f = [Math.sin(P.yaw), Math.cos(P.yaw)]; ph.placeBall([P.pos[0] + f[0] * 0.8, 1.6, P.pos[1] + f[1] * 0.8], [f[0] * 0.8, 0, f[1] * 0.8], [-f[1] * 20, 0, f[0] * 20]); };
+$('bGive').onclick = () => { if (S.lab) return; passBack(); };
+$('bReset').onclick = () => { S.phys.setConfig({ ...BP.BALL_DEFAULTS }); try { localStorage.removeItem(BALL_CFG_KEY); } catch {} buildBallPanel(); };
+
+const dbg = { group: new THREE.Group(), parts: new Map(), contacts: [] };
+dbg.group.visible = false; scene.add(dbg.group);
+const wire = (color, opacity = 0.9) => new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity, depthTest: false });
+const partColor = (n) => (/palm/.test(n) ? 0xff8a1a : /thumb|index|middle|ring|pinky/.test(n) ? 0xffd21a : /arm/.test(n) ? 0xf2e05a : /thigh|shin|foot/.test(n) ? 0x37d7ff : /head/.test(n) ? 0xffffff : 0xd060ff);
+dbg.ball = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), wire(0xff5a1a, 0.55)); dbg.group.add(dbg.ball);
+dbg.center = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false })); dbg.group.add(dbg.center);
+dbg.vel = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.3, 0x19d27a); dbg.group.add(dbg.vel);
+dbg.spin = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.2, 0xa35cff); dbg.group.add(dbg.spin);
+dbg.force = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.2, 0xff3355); dbg.group.add(dbg.force);
+dbg.target = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), wire(0xffe14a, 0.45)); dbg.group.add(dbg.target);
+dbg.err = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe14a, depthTest: false })); dbg.group.add(dbg.err);
+dbg.floor = new THREE.GridHelper(6, 12, 0x37d7ff, 0x1f5f70); dbg.floor.position.y = 0.003; dbg.group.add(dbg.floor);
+dbg.rim = new THREE.Mesh(new THREE.TorusGeometry(RIM_R, 0.012, 6, 24), wire(0x37d7ff)); dbg.rim.rotation.x = Math.PI / 2; dbg.rim.position.set(0, RIM_Y, 0); dbg.group.add(dbg.rim);
+dbg.board = new THREE.Mesh(new THREE.BoxGeometry(1.83, 1.07, 0.04), wire(0x37d7ff, 0.5)); dbg.board.position.set(0, 2.9 + 0.535, BASELINE_Z + 1.22); dbg.group.add(dbg.board);
+const vA = new THREE.Vector3(), vB = new THREE.Vector3();
+function partMesh(name, kind, dims) {
+  let m = dbg.parts.get(name);
+  const key = kind === 'cap' ? `${dims.r.toFixed(3)}|${dims.half.toFixed(2)}` : dims.h.map((x) => x.toFixed(3)).join('|');
+  if (m && m.userData.key === key) return m;
+  if (m) { dbg.group.remove(m); m.geometry.dispose(); }
+  const geo = kind === 'cap' ? new THREE.CapsuleGeometry(dims.r, dims.half * 2, 3, 8) : new THREE.BoxGeometry(dims.h[0] * 2, dims.h[1] * 2, dims.h[2] * 2);
+  m = new THREE.Mesh(geo, wire(partColor(name), 0.7)); m.userData.key = key; m.renderOrder = 5;
+  dbg.group.add(m); dbg.parts.set(name, m);
+  return m;
+}
+function drawBallDbg() {
+  const ph = S.phys; if (!ph) return;
+  const S0 = ph.lastSample, seen = new Set();
+  if (S0) {
+    for (const [n, c] of Object.entries(S0.caps)) {
+      vA.set(...c.b).sub(vB.set(...c.a)); const half = vA.length() / 2;
+      const m = partMesh(n, 'cap', { r: c.r, half: Math.round(half * 50) / 50 });
+      m.position.set((c.a[0] + c.b[0]) / 2, (c.a[1] + c.b[1]) / 2, (c.a[2] + c.b[2]) / 2);
+      const q = BP.quatYTo([c.b[0] - c.a[0], c.b[1] - c.a[1], c.b[2] - c.a[2]]); m.quaternion.set(q[0], q[1], q[2], q[3]);
+      m.visible = true; seen.add(n);
+    }
+    for (const [n, b] of [...Object.entries(S0.boxes), ...Object.entries(S0.palms).map(([k, v]) => [`palm_${k[0]}`, v])]) {
+      const m = partMesh(n, 'box', { h: b.h }); m.position.set(...b.c); m.quaternion.set(b.q[0], b.q[1], b.q[2], b.q[3]); m.visible = true; seen.add(n);
+    }
+  }
+  for (const [n, m] of dbg.parts) if (!seen.has(n)) m.visible = false;
+  const p = ph.cur.p, v = ph.cur.v, w = ph.cur.w, R = ph.cfg.radius;
+  dbg.ball.position.copy(ball.position); dbg.ball.scale.setScalar(R);
+  dbg.center.position.copy(ball.position);
+  const setArrow = (a, vec, k, min = 0.02) => { const l = Math.hypot(...vec) * k; a.visible = l > min; if (a.visible) { a.position.copy(ball.position); a.setDirection(vA.set(...vec).normalize()); a.setLength(l, Math.min(0.08, l * 0.3), Math.min(0.05, l * 0.2)); } };
+  setArrow(dbg.vel, v, 0.15); setArrow(dbg.spin, w, 0.012); setArrow(dbg.force, ph.ctl?.force || [0, 0, 0], 0.01);
+  const I = S.intent0, T = I?.has ? I.target : null;
+  dbg.target.visible = dbg.err.visible = !!T;
+  let err = null;
+  if (T) {
+    dbg.target.position.set(...T); dbg.target.scale.setScalar(R);
+    dbg.err.geometry.setFromPoints([vA.set(...T), vB.copy(ball.position)]);
+    err = Math.hypot(T[0] - p[0], T[1] - p[1], T[2] - p[2]);
+  }
+  dbg.floor.position.x = p[0]; dbg.floor.position.z = p[2];
+  // contact points (red) + normals
+  const cs = ph.contacts();
+  while (dbg.contacts.length < cs.length) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.01, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff2244, depthTest: false })));
+    g.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.08, 0xff2244, 0.02, 0.012));
+    dbg.group.add(g); dbg.contacts.push(g);
+  }
+  dbg.contacts.forEach((g, i) => { const c = cs[i]; g.visible = !!c; if (c) { g.position.set(...c.p); g.children[1].setDirection(vA.set(...c.n).normalize()); } });
+  // HUD (text)
+  const st = ph.stats, last = ph.warnings[ph.warnings.length - 1];
+  const f2 = (x) => (x == null ? '—' : (x * 100).toFixed(1) + ' cm');
+  const pen = st.penetrations.length;
+  const lines = [
+    `state      ${ph.state}${ph.ctl?.mode && ph.ctl.mode !== 'none' ? ' · ' + ph.ctl.mode : ''}`,
+    `hand       ${ph.hand || '—'}${I?.has ? ` · intent ${I.held ? 'held' : 'free'} · ${I.event || ''}` : ' · no control'}`,
+    `ball       y ${p[1].toFixed(2)} m · |v| ${Math.hypot(...v).toFixed(2)} m/s · spin ${Math.hypot(...w).toFixed(1)} rad/s`,
+    `video err  ${f2(err)} · hand gap ${f2(ph.handGap)}`,
+    `bounces    ${st.bounces} · apex ${st.apexes.slice(-3).map((a) => a.toFixed(2)).join(' ') || '—'} m`,
+    `touching   ${[...ph.touching].join(' ') || '—'}`,
+    `leg yield  L ${f2(Math.hypot(...ph.legYield.left))} · R ${f2(Math.hypot(...ph.legYield.right))}`,
+    `release    ${ph.lastPlan ? (ph.lastPlan.changed ? `re-planned (clearance ${f2(ph.lastPlan.clearance)} → ${f2(ph.lastPlan.newClearance)})` : `clear by ${f2(ph.lastPlan.clearance)}`) : '—'}`,
+    `penetration max ${(st.maxPenetration * 1000).toFixed(1)} mm · ${pen} over ${(ph.cfg.penetrationTol * 1000).toFixed(0)} mm`,
+    last ? `⚠ ${last.invalidPath ? `path invalid (${last.event || 'move'}): needs ${last.needCm} cm more room` : `${last.collider} overlap ${(last.depth * 1000).toFixed(1)} mm`}` : '',
+    S.lab ? `test ${S.lab.name} · t ${S.lab.t.toFixed(2)} / ${S.lab.sc.duration.toFixed(2)} s · run ${S.lab.runs + 1}` : '',
+  ];
+  $('ballHud').textContent = lines.filter(Boolean).join('\n');
+  setText($('ballHz'), `${st.stepHz} Hz physics`);
+  if (last && S.dbgBall && last !== dbg.lastWarn) { dbg.lastWarn = last; console.warn('[ball]', last); }
 }
 
 // ═══ Camera ═══
@@ -541,7 +850,6 @@ function updateCamera(dt, inp) {
 
 // ═══ Main loop ═══
 let last = performance.now(), fpsAcc = 0, fpsN = 0, slowFor = 0;
-const ballSpin = new THREE.Vector3();
 function tick(now) {
   try { step(now); } catch (e) {
     console.error(e);
@@ -551,21 +859,9 @@ function tick(now) {
   }
   requestAnimationFrame(tick);
 }
-function step(now) {
-  const rdt = Math.min(0.1, (now - last) / 1000); last = now; // cap: a stalled tab must not teleport the game
-  fpsAcc += rdt; fpsN++;
-  if (fpsAcc > 0.5) {
-    const f = fpsN / fpsAcc;
-    setText($('fps'), Math.round(f) + ' fps');
-    // adaptive quality: a slow tablet drops to 1× pixels
-    if (LITE && f < 45 && pixelRatio > 1) { slowFor += fpsAcc; if (slowFor > 2) { pixelRatio = 1; renderer.setPixelRatio(1); resize(); } } else slowFor = 0;
-    fpsAcc = 0; fpsN = 0;
-  }
-  if (S.replay) { replayStep(rdt); return; }
-  const inp = readInput();
+/** One game tick: input → animation → pose → ball physics. Returns the animation result. */
+function gameTick(dt, rdt, inp, now) {
   const P = S.player;
-  if (!P) return;
-  const dt = rdt * S.speed;
 
   // camera-relative stick → world direction
   const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
@@ -585,6 +881,18 @@ function step(now) {
   if (!trig && inp.edge.hesi) trig = trigger('move-hesi');
   if (!trig && inp.edge.btl) trig = trigger('move-btl');
   if (inp.edge.hand && P.mode === 'loco') switchHand();
+  // input buffer: a move / shot starts when the ball is physically in the hand (never mid-dribble,
+  // when it is on its way to the floor) — at most one dribble later
+  const inHand = () => !S.freeBall && S.phys && (S.phys.state === 'HAND_CONTACT' || S.phys.state === 'POSSESSION_CONTROL');
+  const blog = (m) => S.ballLog?.push(`${(now / 1000).toFixed(2)} input ${m}`);
+  if (trig) blog(`${trig} (${inHand() ? 'in hand' : 'buffered'})`);
+  // (game time: a slow frame is capped, the wait is measured in dribbles, not wall-clock)
+  S.gameT = (S.gameT || 0) + dt;
+  if (trig && !inHand()) { S.pendingTrig = { role: trig, at: S.gameT }; trig = null; }
+  else if (!trig && S.pendingTrig) {
+    if (S.gameT - S.pendingTrig.at > 0.7 || P.mode !== 'loco') { blog(`${S.pendingTrig.role} dropped`); S.pendingTrig = null; }
+    else if (inHand()) { trig = S.pendingTrig.role; S.pendingTrig = null; blog(`${trig} fires`); }
+  }
 
   const r = P.update(dt, { move: [mv.x, mv.z], sprint: inp.sprint, face: HOOP, trigger: trig });
   // court bounds + keep off the stanchion (the capsule only; planted feet stay put)
@@ -592,40 +900,38 @@ function step(now) {
   P.pos[1] = Math.max(BASELINE_Z + 0.4, Math.min(BASELINE_Z + HALF_LEN - 0.4, P.pos[1]));
   const hd = Math.hypot(P.pos[0], P.pos[1]); if (hd < 0.9) { P.pos[0] *= 0.9 / hd; P.pos[1] *= 0.9 / hd; }
   for (const e of r.events) {
-    if (e.type === 'release') launchBall(S.lastBall.clone());
+    if (e.type === 'release') shootRelease();
     if (e.type === 'action') { S.lastAction = e.role; S.lastPick = e; }
     if (e.type === 'skid') S.skidAt = now;
   }
   poseCharacter(S.rig, r.pose, r, rdt);
   updateVideoBox(r);
 
-  // ── Ball
-  if (S.freeBall) {
-    const fb = S.freeBall;
-    // sub-stepped (a slow frame must not let the ball skip through the rim plane)
-    const n = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / n;
-    for (let q = 0; q < n; q++) {
-      fb.t += h;
-      const y0 = fb.p.y;
-      fb.v.y -= G * h;
-      fb.p.addScaledVector(fb.v, h);
-      // crossing the rim plane downward inside the ring → through the net
-      if (!fb.through && fb.v.y < 0 && y0 > RIM_Y && fb.p.y <= RIM_Y && Math.hypot(fb.p.x, fb.p.z) < RIM_R) { fb.through = true; fb.v.x *= 0.2; fb.v.z *= 0.2; fb.v.y *= 0.5; net.scale.set(0.9, 1.15, 0.9); S.swishAt = now; S.swishes = (S.swishes || 0) + 1; }
-      if (fb.p.y < BALL_R) { fb.p.y = BALL_R; fb.v.y = -fb.v.y * 0.62; fb.v.x *= 0.8; fb.v.z *= 0.8; fb.bounces++; }
-    }
-    ball.position.copy(fb.p);
-    ballSpin.set(fb.v.z, 0, -fb.v.x);
-    if (fb.bounces >= 3 || fb.t > 4.5) { S.freeBall = null; P.giveBall(); }
-  } else if (r.ball) {
-    const w = new THREE.Vector3(r.ball[0], r.ball[1], r.ball[2]);
-    const hb = heldInMeshHand(r);
-    if (hb) w.lerp(hb, capState.w);
-    ballSpin.subVectors(w, ball.position).multiplyScalar(1 / Math.max(dt, 1e-3));
-    ball.position.copy(w);
-    S.lastBall.copy(w);
-  }
-  if (ballSpin.lengthSq() > 1e-6) ball.rotateOnWorldAxis(new THREE.Vector3(ballSpin.z, 0, -ballSpin.x).normalize(), ballSpin.length() * dt / BALL_R * 0.5);
+  // ── Ball (Rapier is authoritative: the animation gives intent, physics decides, IK adjusts the hands)
+  ballStep(dt, r, now);
   net.scale.lerp(new THREE.Vector3(1, 1, 1), 1 - Math.exp(-dt * 5));
+  return r;
+}
+function step(now) {
+  const rdt = Math.min(0.1, (now - last) / 1000); last = now; // cap: a stalled tab must not teleport the game
+  fpsAcc += rdt; fpsN++;
+  if (fpsAcc > 0.5) {
+    const f = fpsN / fpsAcc;
+    setText($('fps'), Math.round(f) + ' fps');
+    // adaptive quality: a slow tablet drops to 1× pixels
+    if (LITE && f < 45 && pixelRatio > 1) { slowFor += fpsAcc; if (slowFor > 2) { pixelRatio = 1; renderer.setPixelRatio(1); resize(); } } else slowFor = 0;
+    fpsAcc = 0; fpsN = 0;
+  }
+  if (S.replay) { replayStep(rdt); return; }
+  if (S.lab) { labStep(rdt * S.speed, rdt); return; }
+  const inp = readInput();
+  const P = S.player;
+  if (!P) return;
+  // a slow frame runs as several short game ticks (animation, hands and ball together): a
+  // 0.1 s animation jump would move the dribbling hand 20+ cm between two physics targets
+  const DT = rdt * S.speed, nTick = Math.min(3, Math.max(1, Math.ceil(DT / (1 / 30) - 1e-6)));
+  let r;
+  for (let k = 0; k < nTick; k++) r = gameTick(DT / nTick, rdt / nTick, k === 0 ? inp : { ...inp, edge: {} }, now);
 
   // ── HUD
   const label = S.swishAt && now - S.swishAt < 1500 ? 'SWISH'
@@ -650,6 +956,7 @@ function step(now) {
       + (S.lastPick ? `last pick ${S.lastPick.clip}${S.lastPick.mirror ? ' (mirrored)' : ''} · frame ${S.lastPick.entry} · of ${S.lastPick.variants} · cost ${S.lastPick.cost}` : 'last pick —'));
   } else { plantMarks.left.visible = plantMarks.right.visible = false; }
 
+  if (S.dbgBall) drawBallDbg();
   updateCamera(rdt, inp);
   renderer.render(scene, camera);
 }
@@ -839,12 +1146,25 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     idleJson.role = 'idle';
     S.clips = [idleJson];
     S.lib = A.buildLibrary(S.clips, rig);
+    fitBallPaths(S.lib);
     const start = { x: 1.8, z: 5.2 };
     S.player = new A.Player(rig, S.lib, { x: start.x, z: start.z, yaw: Math.atan2(HOOP[0] - start.x, HOOP[1] - start.z) });
     $('handBtn').textContent = S.player.hand === 'left' ? 'L' : 'R';
     // first pose before the first render
     const r0 = S.player.update(1 / 60, { face: HOOP });
     poseCharacter(rig, r0.pose);
+    // the basketball: a Rapier rigid body (the court, rim, backboard and stands are its colliders)
+    loadMsg('starting the ball physics…');
+    await RAPIER.init();
+    S.phys = new BP.BasketballPhysicsSystem(RAPIER, loadBallCfg());
+    S.phys.addHoop({ center: [0, RIM_Y, 0], rimR: RIM_R, tube: 0.012, board: { center: [0, 2.9 + 0.535, BASELINE_Z + 1.22], half: [0.915, 0.535, 0.02] } });
+    S.phys.addStaticBox([0, 0.5, BASELINE_Z - 1.6], [0.6, 0.5, 0.8], { kind: 'stanchion' });
+    S.phys.addStaticBox([0, 2.1, BASELINE_Z - 1.5], [0.14, 1.6, 0.14], { kind: 'stanchion' });
+    for (const [x, z, w, d] of [[0, BASELINE_Z - 5, 30, 4], [-HALF_W - 4, 6, 4, 22], [HALF_W + 4, 6, 4, 22], [0, BASELINE_Z + HALF_LEN + 4, 30, 4]]) S.phys.addStaticBox([x, 1.5, z], [w / 2, 1.5, d / 2], { kind: 'stands', restitution: 0.3 });
+    resetPossession();
+    // a debug teleport (tests) starts a new possession with the ball in the hand
+    const tp = S.player.teleport.bind(S.player);
+    S.player.teleport = (...a) => { const out = tp(...a); if (!S.lab && S.phys) { poseCharacter(rig, S.player.update(1 / 60, { face: HOOP }).pose); resetPossession(); } return out; };
     S.camPos.set(start.x + 2, 3, start.z + 6); S.camLook.set(0, 1.2, 0);
     loadMsg('compiling shaders…');
     await new Promise((r) => requestAnimationFrame(r));
@@ -853,6 +1173,8 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     $('loading').style.display = 'none';
     window.__c3dReady = true;
     if (QS.get('replay')) startReplay(QS.get('replay')).catch((e) => toast(`Replay failed: ${esc(e.message)}`, 6000));
+    if (QS.get('balltest')) labStart(QS.get('balltest'));
+    if (QS.get('balldbg') === '1' || QS.get('balltest')) toggleBallDbg(true);
     window.__court3d = S; // for automated checks
     window.__ballProbe = () => ball.position.y;
     const showLib = () => {
@@ -869,6 +1191,7 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
       getJSON(`/api/mocap3d/clip/${encodeURIComponent(c.id)}`, { label: c.name }).then((j) => {
         j.role = c.role;
         A.buildLibrary([j], rig, S.player.lib);
+        fitBallPaths(S.player.lib);
         S.clips.push(j);
         showLib();
       }).catch((e) => { console.warn('clip failed', c, e); toast(`Could not load ${esc(c.name)}: ${esc(e.message)}`); })
