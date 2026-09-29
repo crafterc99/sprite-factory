@@ -27,6 +27,23 @@ export const VANTHEAH = {
 };
 
 /** A glb-space point → game space. */
+/**
+ * Floor layers of the pack lie 0–12 mm apart and the roof slab's top is exactly
+ * coplanar with the court surface (y = 0): on a depth buffer they fight (flicker
+ * as the camera moves). Each layer gets a fixed depth priority instead
+ * (polygon offset, negative = drawn in front): markings > wet reflection > key
+ * paint > court surface > roof slab. Depth-independent, so it holds at any
+ * distance and grazing angle.
+ */
+const FLOOR_LAYERS = [
+  [/^(COURT_Painted_Lines|Court_Baseline|Court_Wordmark|Brand_Motifs_Floor)/, -6],
+  [/^Paint_Key/, -2],
+  [/^COURT_Surface/, 0],
+  [/^Roof_Slab/, 4],
+];
+export const REFLECTION_OFFSET = -4;
+function layerOffset(name) { for (const [re, o] of FLOOR_LAYERS) if (re.test(name)) return o; return null; }
+
 export const toGame = ([x, y, z]) => [-z, y, x + VANTHEAH.offsetZ];
 /** A glb-space axis-aligned box (centre, half extents) → game space (still axis aligned: a 90° turn). */
 export const boxToGame = (c, h) => ({ center: toGame(c), half: [h[2], h[1], h[0]] });
@@ -53,6 +70,15 @@ export async function loadVantheahCourt({ scene, renderer, quality = 'desktop', 
       o.receiveShadow = !/^ENV_/.test(o.name);
       if (/^ENV_/.test(o.name)) o.frustumCulled = false;
       if (/COURT_Surface|Paint_Key|COURT_Painted|Court_|Brand_Motifs_Floor/.test(o.name)) floorMeshes.push(o);
+      const lo = layerOffset(o.name);
+      if (lo != null) {
+        // a material of its own (the paint material is shared with non-floor parts)
+        o.material = Array.isArray(o.material) ? o.material.map((m) => m.clone()) : o.material.clone();
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+          m.polygonOffset = lo !== 0; m.polygonOffsetFactor = lo; m.polygonOffsetUnits = lo;
+        }
+        o.renderOrder = -lo;   // lower layers first, markings last
+      }
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
         for (const p of ['map', 'normalMap', 'roughnessMap', 'metalnessMap']) if (m[p]) m[p].anisotropy = aniso;
         if (/glass/i.test(m.name)) { m.transparent = true; m.opacity = 0.26; m.transmission = 0; m.depthWrite = false; }
@@ -96,6 +122,9 @@ export async function loadVantheahCourt({ scene, renderer, quality = 'desktop', 
     reflection.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);
     reflection.position.set(0, 0.004, VANTHEAH.offsetZ);
     reflection.material.transparent = true; reflection.material.depthWrite = false;
+    reflection.material.polygonOffset = true; reflection.material.polygonOffsetFactor = REFLECTION_OFFSET; reflection.material.polygonOffsetUnits = REFLECTION_OFFSET;
+    reflection.position.y = 0.001;         // just above the surface; the offset (not the height) keeps it in front
+    reflection.renderOrder = 5;
     reflection.material.uniforms.reflectionAmount = { value: 0.32 };
     reflection.material.vertexShader = reflection.material.vertexShader
       .replace('uniform mat4 textureMatrix;', 'uniform mat4 textureMatrix;\nvarying vec3 vReflectionWorld;')

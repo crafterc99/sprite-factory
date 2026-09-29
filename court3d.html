@@ -303,7 +303,7 @@ async function loadPracticeCourt() {
   scene.remove(hemi, sun, sun.target); if (fillLight) scene.remove(fillLight);
   scene.fog = null;
   renderer.toneMappingExposure = 1.1;       // as the pack's preview
-  camera.far = 350; camera.updateProjectionMatrix();
+  camera.near = 0.1; camera.far = 350; camera.updateProjectionMatrix();   // as the pack's preview (depth precision for the floor layers)
   S.court = court;
   return court;
 }
@@ -863,7 +863,8 @@ function updateCamera(dt, inp) {
     look = p.clone().add(new THREE.Vector3(0, 1.1, 0));
   }
   const k = 1 - Math.exp(-dt * 6);
-  S.camPos.lerp(want, k); S.camLook.lerp(look, k);
+  if (S.camFixed) { S.camPos.set(...S.camFixed.pos); S.camLook.set(...S.camFixed.look); }   // tests: a camera held still
+  else { S.camPos.lerp(want, k); S.camLook.lerp(look, k); }
   camera.position.copy(S.camPos); camera.lookAt(S.camLook);
 }
 
