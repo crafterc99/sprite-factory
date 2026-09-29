@@ -20,7 +20,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js --ignore data/ --ignore coordination/ --ignore .video-tmp/",
     "test": "node --test --test-timeout=240000 tests/*.test.js",
-    "character": "node tools/character_pipeline/cli.mjs"
+    "character": "node tools/character_pipeline/cli.mjs",
+    "clips:pull": "gsutil -m rsync -r gs://sprite-factory-de646-studio/_meta/mocap data/mocap"
   },
   "main": "server.js",
   "bin": {
