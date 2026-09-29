@@ -1,0 +1,217 @@
+{
+ "about": "Tripo / Mixamo skeleton → SOUL_JAM_MASTER_SKELETON (MHR, 127 joints). target: the game joint each source joint is fitted onto. weights: the game joints a source bone's skin weight is spread over (twist joints included). ueMannequin: UE4/UE5 names mapped onto the Mixamo names first. Fingers: one finger per vertex along that finger's own joints (import-mixamo-character.mjs).",
+ "skeleton": {
+  "joints": 127,
+  "root": "body_world"
+ },
+ "target": {
+  "Hips": "root",
+  "Spine": "c_spine1",
+  "Spine1": "c_spine2",
+  "Spine2": "c_spine3",
+  "Neck": "c_neck",
+  "Head": "c_head",
+  "LeftShoulder": "l_clavicle",
+  "LeftArm": "l_uparm",
+  "LeftForeArm": "l_lowarm",
+  "LeftHand": "l_wrist",
+  "LeftUpLeg": "l_upleg",
+  "LeftLeg": "l_lowleg",
+  "LeftFoot": "l_foot",
+  "LeftToeBase": "l_ball",
+  "LeftHandThumb1": "l_thumb1",
+  "LeftHandThumb2": "l_thumb2",
+  "LeftHandThumb3": "l_thumb3",
+  "LeftHandThumb4": "l_thumb_null",
+  "LeftHandIndex1": "l_index1",
+  "LeftHandIndex2": "l_index2",
+  "LeftHandIndex3": "l_index3",
+  "LeftHandIndex4": "l_index_null",
+  "LeftHandMiddle1": "l_middle1",
+  "LeftHandMiddle2": "l_middle2",
+  "LeftHandMiddle3": "l_middle3",
+  "LeftHandMiddle4": "l_middle_null",
+  "LeftHandRing1": "l_ring1",
+  "LeftHandRing2": "l_ring2",
+  "LeftHandRing3": "l_ring3",
+  "LeftHandRing4": "l_ring_null",
+  "LeftHandPinky1": "l_pinky1",
+  "LeftHandPinky2": "l_pinky2",
+  "LeftHandPinky3": "l_pinky3",
+  "LeftHandPinky4": "l_pinky_null",
+  "RightShoulder": "r_clavicle",
+  "RightArm": "r_uparm",
+  "RightForeArm": "r_lowarm",
+  "RightHand": "r_wrist",
+  "RightUpLeg": "r_upleg",
+  "RightLeg": "r_lowleg",
+  "RightFoot": "r_foot",
+  "RightToeBase": "r_ball",
+  "RightHandThumb1": "r_thumb1",
+  "RightHandThumb2": "r_thumb2",
+  "RightHandThumb3": "r_thumb3",
+  "RightHandThumb4": "r_thumb_null",
+  "RightHandIndex1": "r_index1",
+  "RightHandIndex2": "r_index2",
+  "RightHandIndex3": "r_index3",
+  "RightHandIndex4": "r_index_null",
+  "RightHandMiddle1": "r_middle1",
+  "RightHandMiddle2": "r_middle2",
+  "RightHandMiddle3": "r_middle3",
+  "RightHandMiddle4": "r_middle_null",
+  "RightHandRing1": "r_ring1",
+  "RightHandRing2": "r_ring2",
+  "RightHandRing3": "r_ring3",
+  "RightHandRing4": "r_ring_null",
+  "RightHandPinky1": "r_pinky1",
+  "RightHandPinky2": "r_pinky2",
+  "RightHandPinky3": "r_pinky3",
+  "RightHandPinky4": "r_pinky_null"
+ },
+ "weights": {
+  "Hips": [
+   "root",
+   "c_spine0"
+  ],
+  "Spine": [
+   "c_spine1"
+  ],
+  "Spine1": [
+   "c_spine2"
+  ],
+  "Spine2": [
+   "c_spine3"
+  ],
+  "Neck": [
+   "c_neck",
+   "c_neck_twist0_proc",
+   "c_neck_twist1_proc"
+  ],
+  "Head": [
+   "c_head"
+  ],
+  "HeadTop_End": [
+   "c_head"
+  ],
+  "LeftShoulder": [
+   "l_clavicle"
+  ],
+  "LeftArm": [
+   "l_uparm",
+   "l_uparm_twist0_proc",
+   "l_uparm_twist1_proc",
+   "l_uparm_twist2_proc",
+   "l_uparm_twist3_proc",
+   "l_uparm_twist4_proc"
+  ],
+  "LeftForeArm": [
+   "l_lowarm",
+   "l_lowarm_twist1_proc",
+   "l_lowarm_twist2_proc",
+   "l_lowarm_twist3_proc",
+   "l_lowarm_twist4_proc",
+   "l_wrist_twist"
+  ],
+  "LeftUpLeg": [
+   "l_upleg",
+   "l_upleg_twist0_proc",
+   "l_upleg_twist1_proc",
+   "l_upleg_twist2_proc",
+   "l_upleg_twist3_proc",
+   "l_upleg_twist4_proc"
+  ],
+  "LeftLeg": [
+   "l_lowleg",
+   "l_lowleg_twist1_proc",
+   "l_lowleg_twist2_proc",
+   "l_lowleg_twist3_proc",
+   "l_lowleg_twist4_proc"
+  ],
+  "LeftFoot": [
+   "l_foot",
+   "l_talocrural",
+   "l_subtalar",
+   "l_transversetarsal"
+  ],
+  "LeftToeBase": [
+   "l_ball"
+  ],
+  "LeftToe_End": [
+   "l_ball"
+  ],
+  "LeftHand": [
+   "l_wrist",
+   "l_pinky0",
+   "l_thumb0"
+  ],
+  "RightShoulder": [
+   "r_clavicle"
+  ],
+  "RightArm": [
+   "r_uparm",
+   "r_uparm_twist0_proc",
+   "r_uparm_twist1_proc",
+   "r_uparm_twist2_proc",
+   "r_uparm_twist3_proc",
+   "r_uparm_twist4_proc"
+  ],
+  "RightForeArm": [
+   "r_lowarm",
+   "r_lowarm_twist1_proc",
+   "r_lowarm_twist2_proc",
+   "r_lowarm_twist3_proc",
+   "r_lowarm_twist4_proc",
+   "r_wrist_twist"
+  ],
+  "RightUpLeg": [
+   "r_upleg",
+   "r_upleg_twist0_proc",
+   "r_upleg_twist1_proc",
+   "r_upleg_twist2_proc",
+   "r_upleg_twist3_proc",
+   "r_upleg_twist4_proc"
+  ],
+  "RightLeg": [
+   "r_lowleg",
+   "r_lowleg_twist1_proc",
+   "r_lowleg_twist2_proc",
+   "r_lowleg_twist3_proc",
+   "r_lowleg_twist4_proc"
+  ],
+  "RightFoot": [
+   "r_foot",
+   "r_talocrural",
+   "r_subtalar",
+   "r_transversetarsal"
+  ],
+  "RightToeBase": [
+   "r_ball"
+  ],
+  "RightToe_End": [
+   "r_ball"
+  ],
+  "RightHand": [
+   "r_wrist",
+   "r_pinky0",
+   "r_thumb0"
+  ]
+ },
+ "ueMannequin": {
+  "pelvis": "Hips",
+  "spine_01": "Spine",
+  "spine_03 (UE5) / spine_02 (UE4)": "Spine1",
+  "spine_05 (UE5) / spine_03 (UE4)": "Spine2",
+  "neck_01": "Neck",
+  "head": "Head",
+  "clavicle_l/r": "Left/RightShoulder",
+  "upperarm_l/r": "Left/RightArm",
+  "lowerarm_l/r": "Left/RightForeArm",
+  "hand_l/r": "Left/RightHand",
+  "thigh_l/r": "Left/RightUpLeg",
+  "calf_l/r": "Left/RightLeg",
+  "foot_l/r": "Left/RightFoot",
+  "ball_l/r": "Left/RightToeBase",
+  "<finger>_0<k>_l/r": "Left/RightHand<Finger><k>",
+  "twist / metacarpal / ik / in-between spine": "ride with the parent bone"
+ }
+}

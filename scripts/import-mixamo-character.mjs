@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 /**
- * Import a Mixamo-rigged character (FBX — Mixamo, Tripo, Meshy, AccuRig "mixamorig" skeletons)
- * as a court character on the game's MHR skeleton, with the hands re-rigged for ball contact.
+ * Import a rigged character (FBX or GLB; Mixamo "mixamorig" skeletons from Mixamo, Tripo, Meshy,
+ * AccuRig, or a UE4 / UE5 Mannequin skeleton) as a court character on the game's MHR skeleton,
+ * with the hands re-rigged for ball contact.
  *
- *   node scripts/import-mixamo-character.mjs <model.fbx> <id> ["Display name"] [--from player]
- *        [--palette '{"skin":[120,80,55],"shirt":[245,245,245],...}']
+ *   node scripts/import-mixamo-character.mjs <model.glb|model.fbx> <id> ["Display name"] [--from player]
+ *        [--palette '{"skin":[120,80,55],"shirt":[245,245,245],...}'] [--proportions model|game]
+ *
+ * Textures: the base colour and normal map of each material are written to
+ * lib/mocap/mhr-rigs/<id>-tex/*.webp (max 2048) and served at /chars/<id>/…; UVs are kept (the
+ * mesh is welded on position for the rig, on position + UV for rendering, so seams stay sharp).
+ * A model without texture gets a flat colour per garment piece (--palette).
  *
  * 1. Pose fit: every Mixamo bone is moved onto the matching game joint (rotation + its length
  *    along the bone; bones with several children — hips, chest, hands — by a least-squares fit
@@ -27,15 +33,38 @@ import zlib from 'zlib';
 import { fileURLToPath } from 'url';
 import * as THREE from 'three';
 
+import { resolveObjectURL } from 'buffer';
+
+// Node shims for the three.js loaders. An <img> here "loads" at once and keeps the bytes behind
+// its src (blob: from an embedded texture, data:, or a file next to the model), so the textures
+// can be re-encoded below; nothing is decoded or uploaded.
+function grabImage(u) {
+  if (u.startsWith('blob:')) { const b = resolveObjectURL(u); return b ? b.arrayBuffer().then((a) => Buffer.from(a)) : Promise.resolve(null); }
+  if (u.startsWith('data:')) return Promise.resolve(Buffer.from(u.slice(u.indexOf(',') + 1), 'base64'));
+  const rel = decodeURIComponent(u).replace(/\\/g, '/');
+  const f = [rel, path.join(path.dirname(file), rel), path.join(path.dirname(file), path.basename(rel))].find((c) => { try { return fs.statSync(c).isFile(); } catch { return false; } });
+  return Promise.resolve(f ? fs.readFileSync(f) : null);
+}
+function fakeImage() {
+  const L = {};
+  const img = { style: {}, width: 1, height: 1, addEventListener(t, f) { (L[t] ||= []).push(f); }, removeEventListener(t, f) { L[t] = (L[t] || []).filter((g) => g !== f); } };
+  Object.defineProperty(img, 'src', { get() { return img._src; }, set(u) { img._src = u; img._bytes = grabImage(String(u)); setTimeout(() => (L.load || []).slice().forEach((f) => f.call(img, {})), 0); } });
+  return img;
+}
 globalThis.self ??= globalThis; globalThis.window ??= globalThis;
-globalThis.document ??= { createElementNS: () => ({ style: {}, addEventListener() {}, getContext: () => null }) };
+globalThis.document ??= { createElementNS: (ns, name) => (name === 'img' ? fakeImage() : { style: {}, addEventListener() {}, getContext: () => null }) };
 const { FBXLoader } = await import('three/examples/jsm/loaders/FBXLoader.js');
+const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
 
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf('--' + k); if (i < 0) return d; const v = args[i + 1]; args.splice(i, 2); return v; };
 const FROM = opt('from', 'player');
 const PAL_IN = JSON.parse(opt('palette', '{}'));
 const PROPS = opt('proportions', 'model');
+const TEXSIZE = +opt('tex-size', 2048);
+const LOD = +opt('lod', 0), LOD_DIST = +opt('lod-dist', 0);   // LOD n of an imported character: same skeleton, scale and textures
+const MAPPING_FILE = opt('mapping', path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'tools', 'character_pipeline', 'tripo_to_souljam_bones.json'));
+const MATERIAL = JSON.parse(opt('material', 'null'));
 const [file, id, dispName] = args;
 if (!file || !id || !/^[a-z0-9-]+$/.test(id)) { console.error('usage: import-mixamo-character.mjs <model.fbx> <id: a-z0-9-> ["Display name"] [--from player] [--palette json]'); process.exit(2); }
 const RIGS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'mocap', 'mhr-rigs');
@@ -80,29 +109,61 @@ const b64 = (s, T) => { const b = Buffer.from(s, 'base64'); return new T(b.buffe
 const refPart = ref.parts.find((p) => p.name === 'body') || ref.parts[0];
 let RV = b64(refPart.verts, Float32Array); const RSI = b64(refPart.skinIdx, Uint8Array), RSW = b64(refPart.skinW, Float32Array), RN = RV.length / 3;
 
-// ── the model ──
+// ── the model (FBX, or GLB / glTF with embedded data) ──
 const buf = fs.readFileSync(file);
+const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+const IS_GLTF = /\.(glb|gltf)$/i.test(file);
 console.warn = () => {};   // FBXLoader: ">4 weights" notices
-const root = new FBXLoader().parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
+const root = IS_GLTF
+  ? (await new Promise((res, rej) => new GLTFLoader().parse(ab, path.dirname(path.resolve(file)) + '/', res, rej))).scene
+  : new FBXLoader().parse(ab, path.dirname(path.resolve(file)) + '/');
 root.updateMatrixWorld(true);
 const meshes = []; root.traverse((o) => { if (o.isSkinnedMesh) meshes.push(o); });
-if (!meshes.length) throw new Error('no skinned mesh in the FBX (it must be rigged)');
+if (!meshes.length) throw new Error(`no skinned mesh in ${path.basename(file)} (it must be rigged)`);
 const bones = meshes[0].skeleton.bones;
-const bn = (b) => b.name.replace(/^mixamorig\d*:?/, '');
+// bone names: Mixamo ("mixamorig:Hips", Tripo / Meshy / AccuRig) as they are; a UE4 / UE5
+// Mannequin skeleton is mapped onto the Mixamo names. Its extra bones (the in-between spine and
+// neck bones, twist, metacarpal and IK bones) ride rigidly with their parent and give their
+// weight to their parent's game joints.
+const rawName = (b) => (b?.name || '').replace(/^mixamorig\d*:?/, '');
+const UEMAP = {};
+{
+  const have = new Set(bones.map((b) => rawName(b).toLowerCase()));
+  if (have.has('pelvis') && have.has('hand_l')) {
+    const sp = [1, 2, 3, 4, 5].map((k) => `spine_0${k}`).filter((n) => have.has(n));
+    const pick = sp.length >= 5 ? [sp[0], sp[2], sp[4]] : sp.length === 4 ? [sp[0], sp[1], sp[3]] : sp;
+    ['Spine', 'Spine1', 'Spine2'].forEach((m, i) => { if (pick[i]) UEMAP[pick[i]] = m; });
+    Object.assign(UEMAP, { pelvis: 'Hips', neck_01: 'Neck', head: 'Head' });
+    for (const [s, x] of [['Left', 'l'], ['Right', 'r']]) {
+      Object.assign(UEMAP, { [`clavicle_${x}`]: `${s}Shoulder`, [`upperarm_${x}`]: `${s}Arm`, [`lowerarm_${x}`]: `${s}ForeArm`, [`hand_${x}`]: `${s}Hand`,
+        [`thigh_${x}`]: `${s}UpLeg`, [`calf_${x}`]: `${s}Leg`, [`foot_${x}`]: `${s}Foot`, [`ball_${x}`]: `${s}ToeBase` });
+      for (const f of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) for (let k = 1; k <= 3; k++) UEMAP[`${f.toLowerCase()}_0${k}_${x}`] = `${s}Hand${f}${k}`;
+    }
+  }
+}
+const SKELETON = Object.keys(UEMAP).length ? 'ue-mannequin' : 'mixamo';
+const bn = (b) => { const n = rawName(b); return UEMAP[n.toLowerCase()] || n; };
 const BI = Object.fromEntries(bones.map((b, i) => [bn(b), i]));
-if (BI.Hips == null || BI.LeftHand == null || BI.RightHandIndex1 == null) throw new Error('not a Mixamo skeleton (mixamorig Hips / hands / fingers)');
+if (BI.Hips == null || BI.LeftHand == null || BI.RightHandIndex1 == null) throw new Error('not a Mixamo or UE Mannequin skeleton (Hips / hands / fingers not found)');
+const MISSING = ['LeftHandMiddle1', 'LeftHandIndex1', 'LeftHandPinky1', 'RightHandMiddle1', 'RightHandPinky1', 'LeftUpLeg', 'RightUpLeg', 'LeftArm', 'RightArm', 'Neck', 'Head', 'LeftFoot', 'RightFoot', 'LeftToeBase', 'RightToeBase'].filter((n) => BI[n] == null);
+if (MISSING.length) throw new Error('skeleton is missing ' + MISSING.join(', '));
 // bind pose (world) of every bone: matrixWorld of the bind = inverse(boneInverse)
 const bw = bones.map((b, i) => new THREE.Matrix4().copy(meshes[0].skeleton.boneInverses[i]).invert());
 const bpos0 = bw.map((m) => [m.elements[12], m.elements[13], m.elements[14]]);
 
-// welded vertices (FBX triangles carry their own corners) + faces, per mesh piece
-const V = [], W = [], faces = [];
-const key = new Map();
+// welded vertices (FBX triangles carry their own corners) + faces, per mesh piece.
+// Two levels: V (welded on position: the rig works on these, so the surface stays connected
+// across UV seams) and render vertices (welded on position + UV: a seam keeps its separate UVs,
+// every copy takes its position's weights). Each face also keeps its material.
+const V = [], W = [], faces = [], facesR = [], faceMat = [];
+const rvPos = [], rvUV = [];
+const key = new Map(), rkey = new Map();
+const MATS = [], matIndex = new Map();
 for (const mesh of meshes) {
-  const g = mesh.geometry, pa = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
+  const g = mesh.geometry, pa = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, ua = g.attributes.uv;
   const bm = mesh.bindMatrix, v3 = new THREE.Vector3();
   const idx = g.index ? g.index.array : null, n = idx ? idx.length : pa.count;
-  const remap = new Int32Array(pa.count).fill(-1);
+  const remap = new Int32Array(pa.count).fill(-1), rremap = new Int32Array(pa.count).fill(-1);
   for (let i = 0; i < pa.count; i++) {
     v3.fromBufferAttribute(pa, i).applyMatrix4(bm);
     const k = [v3.x, v3.y, v3.z].map((x) => Math.round(x * 1e5)).join(',');
@@ -113,16 +174,38 @@ for (const mesh of meshes) {
       const s = inf.reduce((a, x) => a + x[1], 0) || 1; W.push(inf.map(([j, w]) => [j, w / s]));
     }
     remap[i] = u;
+    // the rigs store UVs with v up (Blender's); glTF's v runs down the image, FBX's already up
+    const uv = ua ? [ua.getX(i), IS_GLTF ? 1 - ua.getY(i) : ua.getY(i)] : [0, 0];
+    const rk = u + '|' + Math.round(uv[0] * 1e5) + ',' + Math.round(uv[1] * 1e5);
+    let r = rkey.get(rk);
+    if (r == null) { r = rvPos.length; rkey.set(rk, r); rvPos.push(u); rvUV.push(uv); }
+    rremap[i] = r;
   }
-  for (let t = 0; t < n; t += 3) { const a = remap[idx ? idx[t] : t], b = remap[idx ? idx[t + 1] : t + 1], c = remap[idx ? idx[t + 2] : t + 2]; if (a !== b && b !== c && a !== c) faces.push([a, b, c]); }
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  const gm = mats.map((m) => { if (!matIndex.has(m)) { matIndex.set(m, MATS.length); MATS.push(m); } return matIndex.get(m); });
+  const groups = g.groups.length ? g.groups : [{ start: 0, count: n, materialIndex: 0 }];
+  for (const grp of groups) {
+    const mi = gm[grp.materialIndex ?? 0] ?? gm[0];
+    for (let t = grp.start; t < Math.min(n, grp.start + grp.count); t += 3) {
+      const i0 = idx ? idx[t] : t, i1 = idx ? idx[t + 1] : t + 1, i2 = idx ? idx[t + 2] : t + 2;
+      const a = remap[i0], b = remap[i1], c = remap[i2];
+      if (a !== b && b !== c && a !== c) { faces.push([a, b, c]); facesR.push([rremap[i0], rremap[i1], rremap[i2]]); faceMat.push(mi); }
+    }
+  }
 }
+// textures: the base colour and normal map of every material (bytes held by the image shim)
+const texOf = async (t) => (t?.image?._bytes ? await t.image._bytes : null);
+const MATTEX = await Promise.all(MATS.map(async (m) => ({ name: m.name || 'material', color: await texOf(m.map), normal: await texOf(m.normalMap), rgb: m.color ? m.color.clone().convertLinearToSRGB().toArray().map((x) => Math.round(x * 255)) : null })));
+const TEXTURED = MATTEX.some((m) => m.color);
 const NV = V.length;
 const nbr = Array.from({ length: NV }, () => new Set());
 for (const [a, b, c] of faces) { nbr[a].add(b).add(c); nbr[b].add(a).add(c); nbr[c].add(a).add(b); }
 
 // ── 1. pose fit ──
 let minY0 = Infinity, maxY0 = -Infinity; for (const v of V) { minY0 = Math.min(minY0, v[1]); maxY0 = Math.max(maxY0, v[1]); }
-const S = ref.heightM / (maxY0 - minY0);             // uniform scale to the game character's height
+const BASE = LOD ? JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(RIGS, `${id}.json.gz`)))) : null;
+if (LOD && !BASE) throw new Error(`LOD ${LOD}: import LOD 0 of ${id} first`);
+const S = LOD ? BASE.source.scale : ref.heightM / (maxY0 - minY0);   // uniform scale to the game character's height (LODs: LOD 0's)
 const X = (p) => sc(p, S);
 const A = bpos0.map(X);                               // bone heads, scaled
 const side = (s) => (s === 'Left' ? 'l_' : 'r_');
@@ -132,6 +215,7 @@ const side = (s) => (s === 'Left' ? 'l_' : 'r_');
 // and rotations); the feet, head and hip width keep the game's sizes. The rest keypoints, bone
 // lengths and leg length the animations retarget to are re-derived from it.
 const segRatio = {};
+if (process.env.DEBUG_JOINTS) for (const n of process.env.DEBUG_JOINTS.split(',')) console.error('joint', n, BI[n] != null ? A[BI[n]].map((x) => x.toFixed(3)).join(', ') : 'missing', 'scale', S.toFixed(3));
 if (PROPS === 'model') {
   const Ab = (n) => A[BI[n]], L = (a, b) => len(sub(a, b)), G0 = (n) => M.bindPos[JI[n]];
   const both = (f) => (f('Left', 'l_') + f('Right', 'r_')) / 2;
@@ -144,7 +228,13 @@ if (PROPS === 'model') {
   segRatio.upper = both((s, p) => L(Ab(s + 'ForeArm'), Ab(s + 'Arm')) / L(G0(p + 'lowarm'), G0(p + 'uparm')));
   segRatio.fore = both((s, p) => L(Ab(s + 'Hand'), Ab(s + 'ForeArm')) / L(G0(p + 'wrist'), G0(p + 'lowarm')));
   const handLen = (pts) => pts.slice(1).reduce((a, q, i) => a + L(q, pts[i]), 0);
-  segRatio.hand = both((s, p) => handLen([s + 'Hand', s + 'HandMiddle1', s + 'HandMiddle2', s + 'HandMiddle3', s + 'HandMiddle4'].map(Ab)) / handLen(['wrist', 'middle1', 'middle2', 'middle3', 'middle_null'].map((n) => G0(p + n))));
+  // wrist → middle fingertip; a skeleton without fingertip end bones (UE) stops at the last knuckle
+  segRatio.hand = both((s, p) => {
+    const tip = BI[s + 'HandMiddle4'] != null;
+    const mix = [s + 'Hand', s + 'HandMiddle1', s + 'HandMiddle2', s + 'HandMiddle3', ...(tip ? [s + 'HandMiddle4'] : [])];
+    const game = ['wrist', 'middle1', 'middle2', 'middle3', ...(tip ? ['middle_null'] : [])];
+    return handLen(mix.map(Ab)) / handLen(game.map((n) => G0(p + n)));
+  });
   // which ratio moves joint j (its offset from its parent): by the segment it lies on
   const inSub = (j, rootName) => { for (let q = j; q >= 0; q = M.parents[q]) if (M.names[q] === rootName) return true; return false; };
   const ratioOf = (j) => {
@@ -204,7 +294,7 @@ const T = new Array(bones.length);                    // per bone: x' = t + R·S
 const order = []; (function walk(i) { order.push(i); children[i].forEach(walk); })(BI.Hips);
 for (const i of order) {
   const pi = bones[i].parent?.isBone ? bones.indexOf(bones[i].parent) : -1;
-  const name = bn(bones[i]), Rp = pi >= 0 ? T[pi].R : I3;
+  const name = bn(bones[i]), Rp = pi >= 0 && T[pi] ? T[pi].R : I3;   // (a bone above Hips, e.g. Tripo's Root, is not fitted)
   // limb joints are pinned onto the game's; the spine, neck, head and clavicles ride with their
   // parent (the two skeletons place those joints differently — the game's clavicles sit at the
   // sternum, its neck ~10 cm further forward — pinning them would shear the chest and push the
@@ -229,7 +319,9 @@ for (const i of order) {
     const R = new Array(9).fill(0);
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) for (let k = 0; k < 3; k++) R[r * 3 + c] += Fg[k][r] * Fm[k][c];
     T[i] = { R, a, A: A[i], k: 1, d: [0, 1, 0], apply(x) { return add(this.a, mv(this.R, sub(x, this.A))); } };
-  } else if (AXIAL.test(name) && !/Shoulder/.test(name)) {
+  } else if ((AXIAL.test(name) && !/Shoulder/.test(name)) || !(name in TARGET || /_End$/.test(name))) {
+    // the spine / neck / head ride with their parent; so do bones the game has no joint for
+    // (UE's in-between spine / neck, twist, metacarpal bones)
     T[i] = { R: Rp, a, A: A[i], k: 1, d: [0, 1, 0], apply(x) { return add(this.a, mv(this.R, sub(x, this.A))); } };
   } else if (kids.length === 1) {
     const c = kids[0], d = sub(A[c], A[i]), dT = sub(tgt(c), a);
@@ -246,13 +338,22 @@ const par = Int32Array.from({ length: NV }, (_, i) => i), fr = (x) => { while (p
 for (const [a, b, c] of faces) { par[fr(a)] = fr(b); par[fr(c)] = fr(b); }
 const comps = new Map(); for (let u = 0; u < NV; u++) { const r = fr(u); if (!comps.has(r)) comps.set(r, []); comps.get(r).push(u); }
 const domBone = (vs) => { const acc = {}; for (const u of vs) for (const [j, w] of W[u]) acc[bn(bones[j])] = (acc[bn(bones[j])] || 0) + w; return Object.entries(acc).sort((a, b) => b[1] - a[1]).map(([n]) => n); };
-const headSkinN = Math.max(...[...comps.values()].filter((vs) => /Head|Neck/.test(domBone(vs)[0] || '')).map((vs) => vs.length));
+// a piece spanning most of the height is the whole figure in one mesh (a textured single-mesh
+// export: skin and clothes one surface, told apart only by the texture): it keeps the model's own
+// weights mapped like skin, cleaned of stray arm / hand weight below
+const bbOfQ = (vs) => vs.reduce((o, u) => { const p = Q[u]; for (let k = 0; k < 3; k++) { o.mn[k] = Math.min(o.mn[k], p[k]); o.mx[k] = Math.max(o.mx[k], p[k]); } return o; }, { mn: [9, 9, 9], mx: [-9, -9, -9] });
+const WHOLE = new Set([...comps.values()].filter((vs) => { const b = bbOfQ(vs); return b.mx[1] - b.mn[1] > 0.6 * ref.heightM; }));
+const headSkinN = Math.max(0, ...[...comps.values()].filter((vs) => !WHOLE.has(vs) && /Head|Neck/.test(domBone(vs)[0] || '')).map((vs) => vs.length));
 // small pieces in front of the face come in left / right pairs: from the bottom up lips, eyes, brows
 const faceLevel = new Map();
 {
-  const bbOf = (vs) => vs.reduce((o, u) => { const p = Q[u]; for (let k = 0; k < 3; k++) { o.mn[k] = Math.min(o.mn[k], p[k]); o.mx[k] = Math.max(o.mx[k], p[k]); } return o; }, { mn: [9, 9, 9], mx: [-9, -9, -9] });
-  const heads = [...comps.values()].filter((vs) => /Head|Neck/.test(domBone(vs)[0] || ''));
-  const skin = heads.find((vs) => vs.length === headSkinN), sb = bbOf(skin), midZ = (sb.mn[2] + sb.mx[2]) / 2;
+  const bbOf = bbOfQ;
+  const heads = [...comps.values()].filter((vs) => !WHOLE.has(vs) && /Head|Neck/.test(domBone(vs)[0] || ''));
+  // the head's skin: its biggest piece, or (one-mesh figure) the vertices the head bone carries
+  const skin = heads.find((vs) => vs.length === headSkinN)
+    || [...WHOLE].flatMap((vs) => vs.filter((u) => /^(Head|HeadTop_End)$/.test(bn(bones[(W[u].slice().sort((a, b) => b[1] - a[1])[0] || [BI.Hips])[0]]))));
+  const sb = skin?.length ? bbOf(skin) : null, midZ = sb ? (sb.mn[2] + sb.mx[2]) / 2 : 0;
+  if (sb) {
   const small = heads.filter((vs) => vs !== skin).map((vs) => ({ vs, bb: bbOf(vs) })).filter(({ bb }) => bb.mx[1] - bb.mn[1] < 0.045 && bb.mn[2] > midZ + 0.03 && bb.mn[1] > sb.mn[1] + 0.1);
   const levels = [];
   for (const it of small.sort((x, y) => x.bb.mn[1] - y.bb.mn[1])) {
@@ -262,10 +363,12 @@ const faceLevel = new Map();
   const pairs = levels.filter((l) => l.items.length === 2 && l.items[0].bb.mn[0] * l.items[1].bb.mn[0] < 0 || (l.items.length === 2 && Math.sign((l.items[0].bb.mn[0] + l.items[0].bb.mx[0])) !== Math.sign((l.items[1].bb.mn[0] + l.items[1].bb.mx[0]))));
   const names = pairs.length >= 3 ? ['lips', 'eyes', 'brows'] : pairs.length === 2 ? ['eyes', 'brows'] : ['eyes'];
   pairs.slice(-names.length).forEach((l, i) => l.items.forEach((it) => faceLevel.set(it.vs, names[i])));
+  }
 }
 const CLS_LOG = [];
 function classify(vs) { const r = classify0(vs); if (process.env.CLS) { const bb = vs.reduce((o, u) => { const p = Q[u]; for (let k = 0; k < 3; k++) { o.mn[k] = Math.min(o.mn[k], p[k]); o.mx[k] = Math.max(o.mx[k], p[k]); } return o; }, { mn: [9, 9, 9], mx: [-9, -9, -9] }); console.error(r.padEnd(7), vs.length, "y", bb.mn[1].toFixed(3), bb.mx[1].toFixed(3), "x", bb.mn[0].toFixed(3), bb.mx[0].toFixed(3), "z", bb.mn[2].toFixed(3), bb.mx[2].toFixed(3), domBone(vs)[0]); } return r; }
 function classify0(vs) {
+  if (WHOLE.has(vs)) return 'body';
   const db = domBone(vs), top = db[0] || '';
   const bb = vs.reduce((o, u) => { const p = Q[u]; for (let k = 0; k < 3; k++) { o.mn[k] = Math.min(o.mn[k], p[k]); o.mx[k] = Math.max(o.mx[k], p[k]); } return o; }, { mn: [9, 9, 9], mx: [-9, -9, -9] });
   const hands = db.slice(0, 3).some((n) => isHandBone(n) || /ForeArm/.test(n));
@@ -295,21 +398,35 @@ for (const vs of comps.values()) { const c = classify(vs); const k = ['body', 'a
 // vertex left without weight takes its neighbours'
 const OWN = { shorts: /^(Hips|Spine|Spine1|(Left|Right)(UpLeg|Leg))$/, shirt: /^(Hips|Spine|Spine1|Spine2|Neck|(Left|Right)(Shoulder|Arm|ForeArm))$/,
   shoe: /^(Left|Right)(Leg|Foot|ToeBase|Toe_End)$/, hair: /^(Head|HeadTop_End|Neck)$/, eyes: /^(Head|HeadTop_End)$/, brows: /^(Head|HeadTop_End)$/, lips: /^(Head|HeadTop_End)$/ };
-let bled = 0;
+// on a one-piece figure there are no garment edges, so the arm, forearm and hand weights are kept
+// only near their own bone (the auto-rig's hands bleed into the hips and thighs they rest on)
+const wholeV = new Uint8Array(NV); for (const vs of WHOLE) for (const u of vs) wholeV[u] = 1;
+const segD = (p, a, b) => { const ab = sub(b, a), t = Math.max(0, Math.min(1, dot(sub(p, a), ab) / (dot(ab, ab) || 1e-9))); return len(sub(p, add(a, sc(ab, t)))); };
+const effName = (j) => { const n = bn(bones[j]); return n in TARGET || /_End$/.test(n) ? n : bn(bones[j].parent); };
+const handLenM = (s) => { const pts = ['Hand', 'HandMiddle1', 'HandMiddle2', 'HandMiddle3'].map((n) => A[BI[s + n]]); return pts.slice(1).reduce((a, q, i) => a + len(sub(q, pts[i])), 0); };
+const stray = (u, j) => {
+  const m = /^(Left|Right)(Arm|ForeArm|Hand)/.exec(effName(j)); if (!m) return false;
+  const s = m[1], p = Q[u];
+  if (m[2] === 'Arm') return segD(p, A[BI[s + 'Arm']], A[BI[s + 'ForeArm']]) > 0.14;
+  if (m[2] === 'ForeArm') return segD(p, A[BI[s + 'ForeArm']], A[BI[s + 'Hand']]) > 0.12;
+  return len(sub(p, A[BI[s + 'Hand']])) > 1.6 * handLenM(s) + 0.03;
+};
+let bled = 0, strayCleaned = 0;
 {
   const empty = [];
   for (let u = 0; u < NV; u++) {
-    const re = OWN[cls[u]]; if (!re) continue;
-    const keep = W[u].filter(([j]) => re.test(bn(bones[j])));
+    const re = OWN[cls[u]]; if (!re && (!wholeV[u] || process.env.CF_NO_STRAY)) continue;
+    const keep = W[u].filter(([j]) => (re ? re.test(bn(bones[j])) : !stray(u, j)));
     if (keep.length === W[u].length) continue;
-    bled++;
+    if (re) bled++; else strayCleaned++;
     const s1 = keep.reduce((q, x) => q + x[1], 0);
     W[u] = s1 > 1e-3 ? keep.map(([j, w]) => [j, w / s1]) : null; if (!W[u]) empty.push(u);
   }
   for (let it = 0; it < 50 && empty.some((u) => !W[u]); it++) for (const u of empty) if (!W[u]) { const nb = [...nbr[u]].find((v) => W[v]); if (nb != null) W[u] = W[nb].slice(); }
   for (const u of empty) if (!W[u]) W[u] = [[BI.Hips, 1]];
 }
-const P = V.map((v, u) => { const x = X(v); let o = [0, 0, 0]; for (const [j, w] of W[u]) o = add(o, sc(T[j].apply(x), w)); return o; });
+// (bones outside the Hips tree — a UE root or IK bone — move with the hips)
+const P = V.map((v, u) => { const x = X(v); let o = [0, 0, 0]; for (const [j, w] of W[u]) o = add(o, sc((T[j] || T[BI.Hips]).apply(x), w)); return o; });
 // the spine / neck / head pivots of the game skeleton move to where the model's own joints landed
 // (the mesh bends and turns about the points it was built around); the head's inner joints and the
 // neck's twist joints move with them, the clavicles and limbs stay
@@ -334,6 +451,26 @@ for (const s of ['Left', 'Right']) {
   G[`${s}UpLeg`] = J(...tw(p, 'upleg', 0, 4)); G[`${s}Leg`] = J(...tw(p, 'lowleg', 1, 4));
   G[`${s}Foot`] = J(p + 'foot', p + 'talocrural', p + 'subtalar', p + 'transversetarsal'); G[`${s}ToeBase`] = J(p + 'ball'); G[`${s}Toe_End`] = G[`${s}ToeBase`];
   G[`${s}Hand`] = J(p + 'wrist', p + 'pinky0', p + 'thumb0');   // the palm (fingers: below)
+}
+// the persistent mapping (tools/character_pipeline/tripo_to_souljam_bones.json): written once from
+// the tables above, then read — every character maps through the same file
+{
+  const toNames = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.isArray(v) ? v.map((j) => M.names[j]) : v]));
+  if (!fs.existsSync(MAPPING_FILE) || process.argv.includes('--write-mapping')) {
+    fs.mkdirSync(path.dirname(MAPPING_FILE), { recursive: true });
+    fs.writeFileSync(MAPPING_FILE, JSON.stringify({
+      about: 'Tripo / Mixamo skeleton → SOUL_JAM_MASTER_SKELETON (MHR, 127 joints). target: the game joint each source joint is fitted onto. weights: the game joints a source bone\'s skin weight is spread over (twist joints included). ueMannequin: UE4/UE5 names mapped onto the Mixamo names first. Fingers: one finger per vertex along that finger\'s own joints (import-mixamo-character.mjs).',
+      skeleton: { joints: M.names.length, root: M.names[M.parents.indexOf(-1)] },
+      target: TARGET, weights: toNames(G),
+      ueMannequin: { pelvis: 'Hips', 'spine_01': 'Spine', 'spine_03 (UE5) / spine_02 (UE4)': 'Spine1', 'spine_05 (UE5) / spine_03 (UE4)': 'Spine2', neck_01: 'Neck', head: 'Head', 'clavicle_l/r': 'Left/RightShoulder', 'upperarm_l/r': 'Left/RightArm', 'lowerarm_l/r': 'Left/RightForeArm', 'hand_l/r': 'Left/RightHand', 'thigh_l/r': 'Left/RightUpLeg', 'calf_l/r': 'Left/RightLeg', 'foot_l/r': 'Left/RightFoot', 'ball_l/r': 'Left/RightToeBase', '<finger>_0<k>_l/r': 'Left/RightHand<Finger><k>', 'twist / metacarpal / ik / in-between spine': 'ride with the parent bone' },
+    }, null, 1));
+  } else {
+    const mp = JSON.parse(fs.readFileSync(MAPPING_FILE, 'utf8'));
+    for (const k of Object.keys(TARGET)) delete TARGET[k];
+    Object.assign(TARGET, mp.target);
+    for (const k of Object.keys(G)) delete G[k];
+    for (const [k, v] of Object.entries(mp.weights)) G[k] = v.map((n) => JI[n]).filter((x) => x != null);
+  }
 }
 const FINGERS = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky'];
 const handSide = (n) => (n.startsWith('Left') ? 'Left' : 'Right');
@@ -475,14 +612,43 @@ const colorOf = (k) => PALETTE[k] || [200, 200, 200];
 const ORDER = ['body', 'shirt', 'shorts', 'shoe', 'hair', 'eyes', 'brows', 'lips'];
 const parts = [];
 const bb64 = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength).toString('base64');
-for (const k of Object.keys(partsVerts).sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b))) {
-  const vs = partsVerts[k], loc = new Map(vs.map((u, i) => [u, i]));
-  const fs3 = faces.filter(([a, b, c]) => loc.has(a) && loc.has(b) && loc.has(c)).flatMap(([a, b, c]) => [loc.get(a), loc.get(b), loc.get(c)]);
-  const verts = new Float32Array(vs.length * 3), si = new Uint8Array(vs.length * 4), sw = new Float32Array(vs.length * 4);
-  vs.forEach((u, i) => { verts.set(P[u], i * 3); top4[u].forEach(([j, w], c) => { si[i * 4 + c] = j; sw[i * 4 + c] = w; }); });
-  const faces32 = vs.length > 65535;
-  parts.push({ name: k, vertexCount: vs.length, verts: bb64(verts), uv: bb64(new Float32Array(vs.length * 2)), faces: bb64(faces32 ? Uint32Array.from(fs3) : Uint16Array.from(fs3)), faces32,
-    skinIdx: bb64(si), skinW: bb64(sw), map: null, normalMap: null, alpha: false, color: colorOf(k) });
+// one part per garment piece and material (a part carries one texture); the render vertices
+// keep the UV seams, the weights are their position's
+const texDir = path.join(RIGS, `${id}-tex`);
+if (TEXTURED) { if (!LOD) fs.rmSync(texDir, { recursive: true, force: true }); fs.mkdirSync(texDir, { recursive: true }); }
+const { default: sharp } = TEXTURED ? await import('sharp') : { default: null };
+const texUrl = new Map();
+async function saveTex(mi, kind) {
+  const k = mi + kind; if (texUrl.has(k)) return texUrl.get(k);
+  const data = MATTEX[mi][kind]; let url = null;
+  if (data) {
+    const fn = `${MATTEX[mi].name}-${mi}-${kind}.webp`.replace(/[^a-z0-9_.-]/gi, '_').toLowerCase();
+    await sharp(data).resize({ width: TEXSIZE, height: TEXSIZE, fit: 'inside', withoutEnlargement: true }).webp({ quality: kind === 'normal' ? 92 : 88 }).toFile(path.join(texDir, fn));
+    url = `/chars/${id}/${fn}`;
+  }
+  texUrl.set(k, url); return url;
+}
+// normals on the welded surface (area-weighted), shared by every UV-seam copy: no lighting seam
+const NRM = new Float32Array(NV * 3);
+for (const [a, b, c] of faces) { const n = cross(sub(P[b], P[a]), sub(P[c], P[a])); for (const u of [a, b, c]) { NRM[u * 3] += n[0]; NRM[u * 3 + 1] += n[1]; NRM[u * 3 + 2] += n[2]; } }
+for (let u = 0; u < NV; u++) { const l = Math.hypot(NRM[u * 3], NRM[u * 3 + 1], NRM[u * 3 + 2]) || 1; NRM[u * 3] /= l; NRM[u * 3 + 1] /= l; NRM[u * 3 + 2] /= l; }
+const groupsOut = new Map();
+faces.forEach(([a], f) => { const g = `${cls[a]}|${TEXTURED ? faceMat[f] : 0}`; (groupsOut.get(g) || groupsOut.set(g, []).get(g)).push(f); });
+const perCls = {}; for (const g of groupsOut.keys()) { const c = g.split('|')[0]; perCls[c] = (perCls[c] || 0) + 1; }
+const gkeys = [...groupsOut.keys()].sort((x, y) => ORDER.indexOf(x.split('|')[0]) - ORDER.indexOf(y.split('|')[0]) || +x.split('|')[1] - +y.split('|')[1]);
+for (const g of gkeys) {
+  const [k, miS] = g.split('|'), mi = +miS, fl = groupsOut.get(g);
+  const loc = new Map(), rv = [];
+  const fs3 = fl.flatMap((f) => facesR[f].map((r) => { if (!loc.has(r)) { loc.set(r, rv.length); rv.push(r); } return loc.get(r); }));
+  const verts = new Float32Array(rv.length * 3), uv = new Float32Array(rv.length * 2), si = new Uint8Array(rv.length * 4), sw = new Float32Array(rv.length * 4);
+  const nrm = new Float32Array(rv.length * 3);
+  rv.forEach((r, i) => { const u = rvPos[r]; verts.set(P[u], i * 3); uv.set(rvUV[r], i * 2); nrm.set(NRM.subarray(u * 3, u * 3 + 3), i * 3); top4[u].forEach(([j, w], c) => { si[i * 4 + c] = j; sw[i * 4 + c] = w; }); });
+  const faces32 = rv.length > 65535;
+  const map = TEXTURED ? await saveTex(mi, 'color') : null, normalMap = TEXTURED ? await saveTex(mi, 'normal') : null;
+  // untextured: the palette colour; an untextured material of a textured model: its own colour
+  const color = map ? null : TEXTURED && MATTEX[mi].rgb ? MATTEX[mi].rgb : colorOf(k);
+  parts.push({ name: perCls[k] > 1 ? `${k}-${mi}` : k, vertexCount: rv.length, verts: bb64(verts), uv: bb64(uv), faces: bb64(faces32 ? Uint32Array.from(fs3) : Uint16Array.from(fs3)), faces32,
+    skinIdx: bb64(si), skinW: bb64(sw), map, normalMap, alpha: false, color, ...(TEXTURED ? { normals: bb64(nrm) } : {}) });
 }
 // shoes below the game's feet: the runtime stands the feet keypoints soleOffset above the floor,
 // so the soles land on it (the skeleton and mesh stay as bound)
@@ -498,15 +664,23 @@ const sole0 = Math.min(...['left-big-toe-tip', 'left-small-toe-tip', 'left-heel'
 void PELVIS;
 const rig = { ...ref, id, name: dispName || id, heightM: +(headY + lift).toFixed(3), soleOffset: +(sole0 + lift).toFixed(5), parts,
   mhr: { ...ref.mhr, bindPos: B2.map((p) => p.map((v) => +v.toFixed(5))) }, restJoints, boneLen, legLen,
-  source: { model: path.basename(file), importedFrom: 'mixamo rig', skeleton: FROM, scale: +S.toFixed(4) } };
-fs.writeFileSync(path.join(RIGS, `${id}.json.gz`), zlib.gzipSync(JSON.stringify(rig), { level: 9 }));
+  source: { model: path.basename(file), importedFrom: SKELETON === 'mixamo' ? 'mixamo rig' : 'ue mannequin rig', skeleton: FROM, scale: +S.toFixed(4) } };
+delete rig.lods;                                      // LOD 0 re-imported: its LODs follow
+if (MATERIAL) rig.material = MATERIAL;
+else if (TEXTURED && !rig.material) rig.material = { preset: 'souljam-illustrated' };
+if (LOD) {
+  BASE.lods = (BASE.lods || []).filter((l) => l.level !== LOD).concat([{ level: LOD, dist: LOD_DIST, parts }]).sort((a, b) => a.level - b.level);
+  fs.writeFileSync(path.join(RIGS, `${id}.json.gz`), zlib.gzipSync(JSON.stringify(BASE), { level: 9 }));
+} else fs.writeFileSync(path.join(RIGS, `${id}.json.gz`), zlib.gzipSync(JSON.stringify(rig), { level: 9 }));
 const regPath = path.join(RIGS, 'custom.json');
 const reg = fs.existsSync(regPath) ? JSON.parse(fs.readFileSync(regPath, 'utf8')) : {};
-reg[id] = { name: dispName || id, heightM: rig.heightM };
+if (!LOD) reg[id] = { name: dispName || id, heightM: rig.heightM };
 fs.writeFileSync(regPath, JSON.stringify(reg, null, 1));
 
 // ── report ──
 const fingerCross = (() => { let n = 0; for (let u = 0; u < NV; u++) { const fs1 = new Set(top4[u].map(([j]) => (/(thumb|index|middle|ring|pinky)/.exec(M.names[j]) || [])[1]).filter(Boolean)); if (fs1.size > 1) n++; } return n; })();
-console.log(JSON.stringify({ id, scale: +S.toFixed(3), vertices: NV, triangles: faces.length, parts: parts.map((p) => `${p.name}:${p.vertexCount}`), heightM: rig.heightM, soleOffset: rig.soleOffset, legLen: +legLen.toFixed(3), proportions: PROPS, segRatio: Object.fromEntries(Object.entries(segRatio).map(([k, v]) => [k, +v.toFixed(3)])), lift: +lift.toFixed(3),
+console.log(JSON.stringify({ id, skeleton: SKELETON, scale: +S.toFixed(3), vertices: NV, renderVertices: rvPos.length, triangles: faces.length,
+  textures: TEXTURED ? [...texUrl.values()].filter(Boolean).map((u) => path.basename(u)) : 'none (flat part colours)', onePieceFigure: WHOLE.size > 0, strayArmWeightsCleaned: strayCleaned,
+  parts: parts.map((p) => `${p.name}:${p.vertexCount}${p.map ? ' [tex]' : ''}`), heightM: rig.heightM, soleOffset: rig.soleOffset, legLen: +legLen.toFixed(3), proportions: PROPS, segRatio: Object.fromEntries(Object.entries(segRatio).map(([k, v]) => [k, +v.toFixed(3)])), lift: +lift.toFixed(3),
   garmentWeightsCleaned: bled, layeredVertices: layered, handVertices: fingerLabel.filter(Boolean).length, verticesOnTwoFingers: fingerCross,
   jointShiftCm: order.filter((i) => tgt(i)).map((i) => [bn(bones[i]), len(sub(T[i].a, A[i]))]).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, d]) => `${n} ${(d * 100).toFixed(1)}`) }, null, 1));
