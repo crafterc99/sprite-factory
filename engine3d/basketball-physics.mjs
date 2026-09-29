@@ -352,6 +352,7 @@ export class BasketballPhysicsSystem {
     this.acc = 0; this.time = 0; this.steps = 0;
     this.state = 'FREE'; this.hand = null; this.mode = 'none';
     this.touching = new Set(); this.forces = new Map();
+    this.touchedSince = new Set(); // every collider touched since the caller last cleared it (contacts shorter than a frame)
     this.wasHeld = false; this.heldFor = 0; this.sinceRelease = 1e9; this.lostFor = 0; this.lost = false;
     this.lastFloorAt = -1e9; this.prevSample = null; this.palmPrev = {}; this.palmVel = { left: [0, 0, 0], right: [0, 0, 0] };
     this.pushVel = { left: [0, 0, 0], right: [0, 0, 0] }; // the controlling palm's velocity while it had the ball (the release uses the push, not the follow-through)
@@ -718,7 +719,7 @@ export class BasketballPhysicsSystem {
       const name = this.names.get(other);
       if (!name) return;
       if (started) {
-        this.touching.add(name);
+        this.touching.add(name); this.touchedSince.add(name);
         if (name === 'floor') { this.stats.bounces++; this.lastFloorAt = this.time; this.stats.lastBounceAt = this.time; this._risingFromFloor = true; this._apex = 0; }
       } else this.touching.delete(name);
     });

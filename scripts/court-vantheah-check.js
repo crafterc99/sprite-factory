@@ -61,10 +61,10 @@ const PW = process.env.SF_PASSWORD || '';
   const throwAt = (target, T) => page.evaluate(({ target, T }) => new Promise((res) => {
     const S = window.__court3d, ph = S.phys;
     S.freeBall = { kind: 'test', t: 0 }; S.player.hasBall = false; S.player.ballFree = true;
-    ph.placeBall([0, 2.2, 3.2]);
+    ph.placeBall([0, 2.2, 3.2]); ph.touchedSince.clear();
     ph.throwBall(ph.ballisticTo(target, T), 'both');
     const hits = new Set(); const path = []; let n = 0;
-    const f = () => { for (const t of ph.touching) hits.add(t); path.push(ph.cur.p.slice()); if (++n < 90) requestAnimationFrame(f); else res({ hits: [...hits], path }); };
+    const f = () => { for (const t of ph.touchedSince) hits.add(t); path.push(ph.cur.p.slice()); if (++n < 90) requestAnimationFrame(f); else res({ hits: [...hits], path }); };
     requestAnimationFrame(f);
   }), { target, T });
   const rimHit = await throwAt([0, 3.05, 0.2286], 0.9);
