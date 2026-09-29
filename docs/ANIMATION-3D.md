@@ -216,3 +216,29 @@ The 3D court's default environment is the VANTHEAH Sunset Practice Court pack. `
 
   The floor is the physics plane at y = 0. Sky, city, banners, nets, foliage and the decorative balls have no collision.
 - **Checks:** `scripts/court-vantheah-check.js` tests the court in the game: player scale and foot contact, dribble height, the ball thrown at the rim and at the board, a shot, walking the full court to the East baseline, and the bounds clamp. It is state-driven, so it runs under software WebGL at ~1 fps.
+
+## 9. Keeping possession, playing without the ball, video ball ↔ hand
+
+- **Dribble layer** (`Player.dribbleLayer`): while the player has the ball, both arms and the ball follow one dribble cycle, the idle dribble on the same clock as procedural locomotion.
+  - They're aligned to the blended torso and pushed ahead with speed.
+  - The legs blend freely between locomotion loops.
+  - Losses came from blended loops changing the dribble's timing mid-flight; a new locomotion clip now needs no matching ball timing.
+  - The corner video box still shows the locomotion clip (`result.videoSrc`).
+- **Possession assist** (`BasketballPhysicsSystem.assistForce`): undefended, the ball tracks the animation's own ball path (already a physical dribble) with a bounded PD force.
+  - The force is capped at 5 g, never lifts more than half the ball's weight, and its target clears where the legs will be.
+  - Contacts stay Rapier's.
+  - Set `defended = true` (future defense) to turn it off. `possessionAssist` 0…1 is a live tunable.
+- **Measured** (offline, real rig, % of frames within 30 cm of the animation's ball):
+  - walking in 6 directions: 100 %;
+  - W/A/S/D with stops: 97–100 % at 60 and 30 fps;
+  - sprints: 75–96 %, no possession lost.
+- **Without the ball:**
+  - The empty-hands layer swings the arms opposite to the legs.
+  - A lost ball stays on the court: walk onto it to pick it up, or press **X** / **✕** (or tap on touch) for a new ball in the dribbling hand.
+  - Shots are still rebounded.
+- **Spin:** every dribble push adds fingertip backspin (`dribbleSpin` ≈ 2 rev/s, ±35 %, tilted axis) on top of the hand-friction spin.
+- **Video ball ↔ hand** (`motion-builder` step 8). SAM 3 segments the ball in every frame (a circle: centre and radius). A frame is held when:
+  - a hand keypoint (wrist or any finger joint) lies on or over that circle in the image, where both are exact;
+  - and 3D confirms it (< 0.4 m).
+
+  The held ball sits on its camera ray where the ray meets the palm surface (radius + 1.4 cm along the palm normal, the same contact the physics keeps). Its place on the hand is then smoothed over each hold in the hand's own frame. Frames carry `ball.hand`. `BUILDER_REV cb-2026-09-29a` rebuilds the clips.

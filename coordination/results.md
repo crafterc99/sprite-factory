@@ -2981,3 +2981,14 @@ None. All terminals are clear. Human decision required to begin next phase.
 - What: glb (x,y,z) → game (−z, y, x+12.425): the West basket sits on the game's hoop, the court runs along +Z (full 28 × 15 m navigable). Pack lighting (sun + floodlights + captured env), live wet reflection on desktop / static on lite. 84 colliders: open 32-capsule rims, boards, bases, fences, walls, measured supports and props.
 - Validation: scripts/court-vantheah-check.js PASS (0 errors; top joint 1.61 m in the dribble stance, lowest joint 2.2 cm above the floor, dribble 0.12–0.94 m, thrown ball hits rim and board without passing, shot starts and releases, walks to z 25.5 of 26.4 keeping the ball, bounds clamp at x 7.1 / z 26.03); offline rim/board/swish collider test; physics tests 23/23.
 - Limits: under software WebGL the court renders at ~1 fps (183k tris, reflection pass) — the timed scripts/court3d-test.js cannot run on it (use ?court=classic there); real GPUs not profiled here. The shot in this check did not swish (the swish is covered on the classic court + offline). The user's character upload contained only a texture (no mesh); per the user, the current player character stays.
+
+## MOCAP-20 — Court flicker, possession, play without the ball, spin, video ball ↔ hand
+- Status: DONE (sprint possession 75–96 %, see limits)
+- Files changed: engine3d/court-vantheah.mjs (floor-layer depth priority, chain-link as mip-mapped texture panels, markings baked to a decal, city/trees removed), court3d.html (near 0.1 m, X/✕ new ball, pick-up, no auto pass-back for losses, HUD labels, S.camFixed), engine3d/anim3d.mjs (dribble layer, empty-hands layer, stable ball source, videoSrc), engine3d/basketball-physics.mjs (possession assist, fingertip spin, touchedSince), lib/mocap/motion-builder.js (2D contact, palm-surface placement, hold smoothing, ball.hand), lib/mocap/game-clips.js (BUILDER_REV), scripts/court-flicker-map.js (new), docs §9
+- Validation:
+  - Flicker: near-still camera heat map. The fence and palm sparkle is gone; the line edges mostly are (a residual on the near sideline and the thin poles).
+  - Possession, offline sim on the real rig: walking in 6 directions 100 %; WASD at 60/30 fps 97–100 %; sprints 75–96 %; crossover 99 %; nothing lost.
+  - No-ball flow in the browser: lose the ball → NO BALL / JOG with the arms swinging → X gives a new ball in hand → walking onto a loose ball picks it up; 0 errors.
+  - Video ball: two real takes. Held ball 13.4 cm from the palm centre in every held frame (on the palm surface); hand-relative jitter 7 → 3.6–4.5 cm per frame; holding hand agrees with the old rule.
+  - npm test 52/52.
+- Limits: sprint dribbles still drift from the animation 4–25 % of the time (none lost). The flicker was measured under software GL; the user's GPU was not tested.
