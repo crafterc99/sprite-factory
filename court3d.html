@@ -157,6 +157,7 @@ import * as IK from '/js/contact-ik.mjs';
 import * as LAB from '/js/ball-lab.mjs';
 import * as SU from '/js/ball-setup.mjs';
 import * as VC from '/js/court-vantheah.mjs';
+import * as CM from '/js/souljam-material.mjs';
 window.__c3dBoot = true;
 { const e = document.getElementById('err'); if (e && e.getAttribute('data-src') === 'watchdog') e.innerHTML = ''; }
 if (window.__c3dPendingErr) window.__c3dFail(window.__c3dPendingErr);
@@ -329,11 +330,12 @@ scene.add(ball);
 // MHR rigs (v4): the body model's own mesh, 127-joint skeleton and skin
 // weights, posed by engine3d/mhr-skin.mjs from the runtime's keypoints.
 // Older scan rigs (?legacy=1): 47 segment bones from keypoints.
-let charMeshes = [], boneMats = null, mhrRig = null;
+let charMeshes = [], charLods = [], boneMats = null, mhrRig = null;
+const FORCE_LOD = QS.get('lod') != null ? +QS.get('lod') : null;
 function buildCharacter(rig) {
   mhrRig = rig.json.kind === 'mhr' ? MS.prepareMhr(rig.json, A.MHR70) : null;
   for (const m of charMeshes) { scene.remove(m); m.geometry.dispose(); m.material.map?.dispose(); m.material.normalMap?.dispose(); m.material.dispose(); }
-  charMeshes = [];
+  charMeshes = []; charLods = [];
   const nb = mhrRig ? mhrRig.n : A.NSEG;
   const bones = Array.from({ length: nb }, () => new THREE.Bone());
   const skeleton = new THREE.Skeleton(bones, bones.map(() => new THREE.Matrix4()));
@@ -341,7 +343,7 @@ function buildCharacter(rig) {
   // bone matrices come straight from the runtime (world-space segment frames × rest inverse)
   skeleton.update = function () { this.boneMatrices.set(boneMats); if (this.boneTexture) this.boneTexture.needsUpdate = true; };
   const addMesh = (geo, mat) => {
-    geo.computeVertexNormals();
+    if (!geo.getAttribute('normal')) geo.computeVertexNormals();
     const mesh = new THREE.SkinnedMesh(geo, mat);
     mesh.bindMode = 'detached';
     mesh.bind(skeleton, new THREE.Matrix4());
@@ -355,8 +357,13 @@ function buildCharacter(rig) {
   // clothes, hair, eyes — all on the same MHR skeleton
   if (mhrRig && rig.json.parts) {
     const tl = new THREE.TextureLoader();
-    const tex = (url, srgb) => { if (!url) return null; const t = tl.load(url); t.flipY = false; t.anisotropy = 4; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
-    for (const p of rig.json.parts) {
+    const texCache = new Map();
+    const tex = (url, srgb) => { if (!url) return null; if (texCache.has(url)) return texCache.get(url); const t = tl.load(url); t.flipY = false; t.anisotropy = Math.min(LITE ? 4 : 16, renderer.capabilities.getMaxAnisotropy()); if (srgb) t.colorSpace = THREE.SRGBColorSpace; texCache.set(url, t); return t; };
+    // LOD 0 is rig.json.parts; lower LODs (rig.json.lods) share the skeleton and the textures
+    const levels = [{ level: 0, dist: 0, parts: rig.json.parts }, ...(rig.json.lods || [])];
+    for (const lv of levels) {
+    const lodMeshes = [];
+    for (const p of lv.parts) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(A.b64(p.verts, Float32Array), 3));
       const uv = A.b64(p.uv, Float32Array);
@@ -365,15 +372,26 @@ function buildCharacter(rig) {
       geo.setIndex(new THREE.BufferAttribute(A.b64(p.faces, p.faces32 ? Uint32Array : Uint16Array), 1));
       geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Uint16Array.from(A.b64(p.skinIdx, Uint8Array)), 4));
       geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(A.b64(p.skinW, Float32Array), 4));
+      // normals stored on the welded surface: UV-seam copies share them (no lighting seams)
+      if (p.normals) geo.setAttribute('normal', new THREE.BufferAttribute(A.b64(p.normals, Float32Array), 3));
       // untextured parts (an imported model without a texture): a flat sRGB colour per part
       const col = !p.map && Array.isArray(p.color) ? new THREE.Color().setRGB(p.color[0] / 255, p.color[1] / 255, p.color[2] / 255, THREE.SRGBColorSpace) : null;
-      const mat = new THREE.MeshStandardMaterial({ map: tex(p.map, true), normalMap: tex(p.normalMap, false), ...(col ? { color: col } : {}), roughness: /high-poly/.test(p.name) ? 0.25 : /eyes/.test(p.name) ? 0.3 : 0.78, metalness: 0,
+      const mp = { map: tex(p.map, true), normalMap: tex(p.normalMap, false), roughnessMap: tex(p.roughnessMap, false), metalnessMap: tex(p.metalnessMap, false), aoMap: tex(p.aoMap, false),
+        ...(col ? { color: col } : {}), roughness: p.roughnessMap ? 1 : /high-poly/.test(p.name) ? 0.25 : /eyes/.test(p.name) ? 0.3 : 0.78, metalness: p.metalnessMap ? 1 : 0,
         // garments are single sheets (open hoods, hems, cuffs): both sides drawn, like Blender
-        side: p.name === 'body' || /high-poly/.test(p.name) ? THREE.FrontSide : THREE.DoubleSide, ...(p.alpha ? { alphaTest: 0.45 } : {}) });
+        side: p.name === 'body' || /high-poly/.test(p.name) ? THREE.FrontSide : THREE.DoubleSide, ...(p.alpha ? { alphaTest: 0.45 } : {}) };
+      for (const k of ['roughnessMap', 'metalnessMap', 'aoMap']) if (!mp[k]) delete mp[k];
+      // factory characters (rig.json.material): the Soul Jam character material; others as before
+      const mat = rig.json.material && QS.get('mat') !== 'pbr' ? CM.characterMaterial(THREE, mp, rig.json.material) : new THREE.MeshStandardMaterial(mp);
       const m = addMesh(geo, mat);
+      m.userData.part = p.name;
       // shadows from the big parts only (each shadow caster is another skinned pass)
-      if (p.alpha || !/body|hood|pants|sandal|shoe|shorts|top/.test(p.name)) m.castShadow = false;
+      if (p.alpha || !/body|hood|pants|sandal|shoe|shorts|top/.test(p.name) || lv.level > 0) m.castShadow = false;
+      lodMeshes.push(m);
     }
+    charLods.push({ level: lv.level, dist: lv.dist, meshes: lodMeshes });
+    }
+    updateCharLod();
     return;
   }
   const n = rig.vertexCount;
@@ -398,6 +416,78 @@ function buildCharacter(rig) {
   geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
   geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
   addMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0 }));
+}
+/**
+ * Test hooks (deformation checks, previews): hold a pose from a clip or a synthetic pose (rest
+ * keypoints with chains rotated about a joint), and read the skinned vertices of the visible LOD.
+ */
+function c3dTestHooks() {
+  const J = A.J;
+  const rodrigues = (v, k, a) => { const c = Math.cos(a), s = Math.sin(a), d = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+    return [v[0] * c + (k[1] * v[2] - k[2] * v[1]) * s + k[0] * d * (1 - c), v[1] * c + (k[2] * v[0] - k[0] * v[2]) * s + k[1] * d * (1 - c), v[2] * c + (k[0] * v[1] - k[1] * v[0]) * s + k[2] * d * (1 - c)]; };
+  const place = (P) => { const out = new Float32Array(A.NP * 3); const pp = S.player.pos; A.placePose(P, pp[0], pp[1], S.player.yaw, out, A.NJ); return out; };
+  let held = null;
+  const hold = (P) => { held = P; S.freezePose = true; poseCharacter(S.rig, P); updateCharLod(); return true; };
+  return {
+    release() { S.freezePose = false; },
+    clips: () => Object.keys(S.player.lib).filter((k) => !k.includes(':')),
+    poseClip(role, frac) {
+      const c = S.player.lib[role] || (S.player.lib[role + ':variants'] || [])[0]; if (!c) return false;
+      const P = A.samplePose(c, Math.max(0, Math.min(c.F - 1, frac * (c.F - 1))), new Float32Array(A.NJ * 3));
+      return hold(place(P));
+    },
+    /** ops: [{ pivot: name, chain: [names], toward: [x,y,z] | 'palm', deg }] on the rest pose (root space, facing +Z) */
+    poseSynthetic(ops) {
+      const K = mhrRig.K0 || S.rig.json.restJoints;
+      const P = new Float32Array(A.NJ * 3);
+      K.forEach((p, i) => P.set(p, i * 3));
+      const hipL = J['left-hip'], hipR = J['right-hip'];
+      for (let c = 0; c < 3; c++) P[A.PELVIS * 3 + c] = (P[hipL * 3 + c] + P[hipR * 3 + c]) / 2;
+      const get = (n) => [P[J[n] * 3], P[J[n] * 3 + 1], P[J[n] * 3 + 2]];
+      for (const op of ops) {
+        const pv = get(op.pivot), first = get(op.chain[0]);
+        const bone = [first[0] - pv[0], first[1] - pv[1], first[2] - pv[2]];
+        let tw = op.toward;
+        if (tw === 'palm') { const side = op.pivot.startsWith('left') ? 'left' : 'right'; const w = get(side + '-wrist'); tw = [-Math.sign(w[0]) * 0.7, 0, 0.7]; }
+        let ax = [bone[1] * tw[2] - bone[2] * tw[1], bone[2] * tw[0] - bone[0] * tw[2], bone[0] * tw[1] - bone[1] * tw[0]];
+        const l = Math.hypot(...ax) || 1; ax = ax.map((x) => x / l);
+        for (const n of op.chain) { const q = get(n), r = rodrigues([q[0] - pv[0], q[1] - pv[1], q[2] - pv[2]], ax, (op.deg * Math.PI) / 180); P.set([pv[0] + r[0], pv[1] + r[1], pv[2] + r[2]], J[n] * 3); }
+      }
+      return hold(place(P));
+    },
+    /** Skinned positions of the visible LOD's meshes (from the runtime's bone matrices). */
+    skinned() {
+      const lod = charLods.length ? charLods.find((l) => l.meshes[0].visible) || charLods[0] : { meshes: charMeshes };
+      return lod.meshes.map((m) => {
+        const g = m.geometry, pos = g.getAttribute('position').array, si = g.getAttribute('skinIndex').array, sw = g.getAttribute('skinWeight').array, n = pos.length / 3;
+        const out = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) for (let c = 0; c < 4; c++) { const w = sw[i * 4 + c]; if (!w) continue; const b = si[i * 4 + c] * 16, x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+          out[i * 3] += w * (boneMats[b] * x + boneMats[b + 4] * y + boneMats[b + 8] * z + boneMats[b + 12]);
+          out[i * 3 + 1] += w * (boneMats[b + 1] * x + boneMats[b + 5] * y + boneMats[b + 9] * z + boneMats[b + 13]);
+          out[i * 3 + 2] += w * (boneMats[b + 2] * x + boneMats[b + 6] * y + boneMats[b + 10] * z + boneMats[b + 14]); }
+        return { name: m.userData.part || '', rest: Array.from(pos), pos: Array.from(out), faces: Array.from(g.index.array) };
+      });
+    },
+    lod: () => S.charLod || { level: 0 },
+    kp: (n) => (held ? [held[(n === 'pelvis' ? A.PELVIS : J[n]) * 3], held[(n === 'pelvis' ? A.PELVIS : J[n]) * 3 + 1], held[(n === 'pelvis' ? A.PELVIS : J[n]) * 3 + 2]] : null),
+    facing: () => [Math.sin(S.player.yaw), Math.cos(S.player.yaw)],
+  };
+}
+/** Character LOD by camera distance (?lod=N forces a level). Hysteresis: 8 % of the switch distance. */
+let charLodLevel = 0;
+function updateCharLod() {
+  if (charLods.length < 2) return;
+  let want;
+  if (FORCE_LOD != null) want = Math.min(FORCE_LOD, charLods.length - 1);
+  else {
+    const c = S.player?.pos ? new THREE.Vector3(S.player.pos[0], 1, S.player.pos[1]) : new THREE.Vector3(0, 1, 0);
+    const d = camera.position.distanceTo(c);
+    want = 0;
+    for (let i = 1; i < charLods.length; i++) if (d > charLods[i].dist * (i > charLodLevel ? 1.08 : 0.92)) want = i;
+  }
+  charLodLevel = want;
+  charLods.forEach((l, i) => l.meshes.forEach((m) => { m.visible = i === want; }));
+  S.charLod = { level: want, triangles: charLods[want].meshes.reduce((a, m) => a + m.geometry.index.count / 3, 0) };
 }
 const boneTmp = new Float32Array(A.NSEG * 16);
 // Recorded clips carry the capture's own joint rotations: arms, hands, fingers
@@ -961,7 +1051,8 @@ function gameTick(dt, rdt, inp, now) {
     if (e.type === 'action') { S.lastAction = e.role; S.lastPick = e; }
     if (e.type === 'skid') S.skidAt = now;
   }
-  poseCharacter(S.rig, r.pose, r, rdt);
+  if (!S.freezePose) poseCharacter(S.rig, r.pose, r, rdt);
+  updateCharLod();
   updateVideoBox(r);
 
   // ── Ball (Rapier is authoritative: the animation gives intent, physics decides, IK adjusts the hands)
@@ -1246,6 +1337,7 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     if (QS.get('balltest')) labStart(QS.get('balltest'));
     if (QS.get('balldbg') === '1' || QS.get('balltest')) toggleBallDbg(true);
     window.__court3d = S; // for automated checks
+    window.__c3dTest = c3dTestHooks();
     window.__ballProbe = () => ball.position.y;
     const showLib = () => {
       const have = Object.keys(S.player.lib).filter((k) => !k.includes(':'));

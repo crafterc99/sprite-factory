@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soul Jam · Rig preview</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1d1b20; color: #EEE9D9; font: 13px/1.4 "Space Mono", ui-monospace, monospace; overflow: hidden; }
+  #hud { position: fixed; left: 10px; top: 10px; background: rgba(9,9,11,.72); padding: 8px 10px; border: 2px solid #09090B; }
+  #err { color: #ff8a4e; }
+</style>
+</head>
+<body>
+<div id="hud"><b id="name">loading…</b> · <span id="info"></span> <span id="err"></span></div>
+<script type="module">
+/**
+ * Rig preview: a Soul Jam character on its game skeleton with the game's own runtime (rig loader,
+ * 127-joint MHR skin solver, Soul Jam character material, LODs), without the court or any clip.
+ * Same test hooks as court3d.html (window.__c3dTest: poseSynthetic, skinned, kp, facing, lod) so
+ * the deformation test runs where no clip library is available. ?char=<rig id>&lod=N
+ */
+import * as THREE from '/vendor/three.module.min.js';
+import * as A from '/js/anim3d.mjs';
+import * as MS from '/js/mhr-skin.mjs';
+import * as CM from '/js/souljam-material.mjs';
+
+const QS = new URLSearchParams(location.search);
+const charId = QS.get('char') || 'player';
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#2a2730');
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 200);
+scene.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3440, 0.9));
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.2); sun.position.set(3, 6, 4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -2, right: 2, top: 3, bottom: -1 }); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xbcd0ff, 0.6); fill.position.set(-4, 3, -2); scene.add(fill);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(3, 64), new THREE.MeshStandardMaterial({ color: '#5E6B4E', roughness: 0.9 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const S = { player: { pos: [0, 0], yaw: 0 }, camFixed: null, charLod: null };
+window.__court3d = S;
+let mhrRig = null, boneMats = null, charLods = [], held = null;
+const FORCE_LOD = QS.get('lod') != null ? +QS.get('lod') : null;
+
+function build(rig) {
+  mhrRig = MS.prepareMhr(rig.json, A.MHR70);
+  const bones = Array.from({ length: mhrRig.n }, () => new THREE.Bone());
+  const skeleton = new THREE.Skeleton(bones, bones.map(() => new THREE.Matrix4()));
+  boneMats = new Float32Array(mhrRig.n * 16);
+  skeleton.update = function () { this.boneMatrices.set(boneMats); if (this.boneTexture) this.boneTexture.needsUpdate = true; };
+  const tl = new THREE.TextureLoader(), cache = new Map();
+  const tex = (url, srgb) => { if (!url) return null; if (cache.has(url)) return cache.get(url); const t = tl.load(url); t.flipY = false; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); if (srgb) t.colorSpace = THREE.SRGBColorSpace; cache.set(url, t); return t; };
+  const levels = [{ level: 0, dist: 0, parts: rig.json.parts || [] }, ...(rig.json.lods || [])];
+  for (const lv of levels) {
+    const meshes = [];
+    for (const p of lv.parts) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(A.b64(p.verts, Float32Array), 3));
+      const uv = A.b64(p.uv, Float32Array); for (let i = 1; i < uv.length; i += 2) uv[i] = 1 - uv[i];
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.setIndex(new THREE.BufferAttribute(A.b64(p.faces, p.faces32 ? Uint32Array : Uint16Array), 1));
+      geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Uint16Array.from(A.b64(p.skinIdx, Uint8Array)), 4));
+      geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(A.b64(p.skinW, Float32Array), 4));
+      if (p.normals) geo.setAttribute('normal', new THREE.BufferAttribute(A.b64(p.normals, Float32Array), 3)); else geo.computeVertexNormals();
+      const col = !p.map && Array.isArray(p.color) ? new THREE.Color().setRGB(p.color[0] / 255, p.color[1] / 255, p.color[2] / 255, THREE.SRGBColorSpace) : null;
+      const mp = { map: tex(p.map, true), normalMap: tex(p.normalMap, false), ...(col ? { color: col } : {}), roughness: /eyes/.test(p.name) ? 0.3 : 0.78, metalness: 0, side: p.name === 'body' ? THREE.FrontSide : THREE.DoubleSide };
+      const mat = rig.json.material && QS.get('mat') !== 'pbr' ? CM.characterMaterial(THREE, mp, rig.json.material) : new THREE.MeshStandardMaterial(mp);
+      const m = new THREE.SkinnedMesh(geo, mat); m.bindMode = 'detached'; m.bind(skeleton, new THREE.Matrix4());
+      m.frustumCulled = false; m.castShadow = lv.level === 0; m.userData.part = p.name;
+      scene.add(m); meshes.push(m);
+    }
+    charLods.push({ level: lv.level, dist: lv.dist, meshes });
+  }
+}
+function updateLod() {
+  let want = 0;
+  if (FORCE_LOD != null) want = Math.min(FORCE_LOD, charLods.length - 1);
+  else { const d = camera.position.distanceTo(new THREE.Vector3(0, 1, 0)); for (let i = 1; i < charLods.length; i++) if (d > charLods[i].dist) want = i; }
+  charLods.forEach((l, i) => l.meshes.forEach((m) => { m.visible = i === want; }));
+  S.charLod = { level: want, triangles: charLods[want]?.meshes.reduce((a, m) => a + m.geometry.index.count / 3, 0) || 0 };
+}
+const J = A.J;
+const rodrigues = (v, k, a) => { const c = Math.cos(a), s = Math.sin(a), d = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+  return [v[0] * c + (k[1] * v[2] - k[2] * v[1]) * s + k[0] * d * (1 - c), v[1] * c + (k[2] * v[0] - k[0] * v[2]) * s + k[1] * d * (1 - c), v[2] * c + (k[0] * v[1] - k[1] * v[0]) * s + k[2] * d * (1 - c)]; };
+function hold(P) { held = P; MS.mhrBoneMatrices(P, mhrRig, boneMats); updateLod(); }
+window.__c3dTest = {
+  release() {}, clips: () => [], poseClip: () => false,
+  poseSynthetic(ops) {
+    const K = mhrRig.K0, P = new Float32Array(A.NP * 3);
+    K.forEach((p, i) => P.set(p, i * 3));
+    for (let c = 0; c < 3; c++) P[A.PELVIS * 3 + c] = (P[J['left-hip'] * 3 + c] + P[J['right-hip'] * 3 + c]) / 2;
+    const get = (n) => [P[J[n] * 3], P[J[n] * 3 + 1], P[J[n] * 3 + 2]];
+    for (const op of ops) {
+      const pv = get(op.pivot), first = get(op.chain[0]);
+      const bone = [first[0] - pv[0], first[1] - pv[1], first[2] - pv[2]];
+      let tw = op.toward;
+      if (tw === 'palm') { const w = get((op.pivot.startsWith('left') ? 'left' : 'right') + '-wrist'); tw = [-Math.sign(w[0]) * 0.7, 0, 0.7]; }
+      let ax = [bone[1] * tw[2] - bone[2] * tw[1], bone[2] * tw[0] - bone[0] * tw[2], bone[0] * tw[1] - bone[1] * tw[0]];
+      const l = Math.hypot(...ax) || 1; ax = ax.map((x) => x / l);
+      for (const n of op.chain) { const q = get(n), r = rodrigues([q[0] - pv[0], q[1] - pv[1], q[2] - pv[2]], ax, (op.deg * Math.PI) / 180); P.set([pv[0] + r[0], pv[1] + r[1], pv[2] + r[2]], J[n] * 3); }
+    }
+    hold(P); return true;
+  },
+  skinned() {
+    const lod = charLods.find((l) => l.meshes[0]?.visible) || charLods[0];
+    return lod.meshes.map((m) => {
+      const g = m.geometry, pos = g.getAttribute('position').array, si = g.getAttribute('skinIndex').array, sw = g.getAttribute('skinWeight').array, n = pos.length / 3, out = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) for (let c = 0; c < 4; c++) { const w = sw[i * 4 + c]; if (!w) continue; const b = si[i * 4 + c] * 16, x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+        out[i * 3] += w * (boneMats[b] * x + boneMats[b + 4] * y + boneMats[b + 8] * z + boneMats[b + 12]);
+        out[i * 3 + 1] += w * (boneMats[b + 1] * x + boneMats[b + 5] * y + boneMats[b + 9] * z + boneMats[b + 13]);
+        out[i * 3 + 2] += w * (boneMats[b + 2] * x + boneMats[b + 6] * y + boneMats[b + 10] * z + boneMats[b + 14]); }
+      return { name: m.userData.part, rest: Array.from(pos), pos: Array.from(out), faces: Array.from(g.index.array) };
+    });
+  },
+  lod: () => S.charLod || { level: 0 },
+  kp: (n) => (held ? [0, 1, 2].map((c) => held[(n === 'pelvis' ? A.PELVIS : J[n]) * 3 + c]) : null),
+  facing: () => [0, 1],
+};
+try {
+  const r = await fetch(`/api/mocap3d/rig/${encodeURIComponent(charId)}`); if (!r.ok) throw new Error(`rig ${charId}: HTTP ${r.status}`);
+  const rig = A.prepareRig(await r.json());
+  build(rig);
+  window.__c3dTest.poseSynthetic([]);
+  document.getElementById('name').textContent = rig.json.name || charId;
+  document.getElementById('info').textContent = `${mhrRig.n} joints · ${charLods.length} LOD${charLods.length > 1 ? 's' : ''}`;
+  window.__rigReady = true;
+} catch (e) { document.getElementById('err').textContent = e.message; window.__rigError = e.message; }
+const look = new THREE.Vector3();
+function tick() {
+  if (S.camFixed) { camera.position.set(...S.camFixed.pos); look.set(...S.camFixed.look); }
+  else { const t = performance.now() / 6000; camera.position.set(Math.sin(t) * 3.2, 1.3, Math.cos(t) * 3.2); look.set(0, 0.95, 0); }
+  camera.lookAt(look); updateLod(); renderer.render(scene, camera); requestAnimationFrame(tick);
+}
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+tick();
+</script>
+</body>
+</html>
