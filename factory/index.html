@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#09090B">
+<title>Soul Jam · Sprite Factory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/factory/ui/tokens.css">
+<link rel="stylesheet" href="/factory/ui/factory.css">
+<link rel="modulepreload" href="/factory/ui/preact-htm.mjs">
+<link rel="modulepreload" href="/factory/ui/lib.mjs">
+<link rel="modulepreload" href="/factory/ui/ui.mjs">
+</head>
+<body>
+<div id="app"><div class="boot"><span class="u">Soul Jam</span><span class="d">Sprite Factory</span><span class="u mut" id="bootMsg">loading…</span></div></div>
+<noscript><p style="color:#EEE9D9;padding:20px;font-family:monospace">The Character Factory needs JavaScript.</p></noscript>
+<script type="module" src="/factory/ui/app.mjs"></script>
+<script>
+  // a module that fails to load must say so instead of leaving "loading…"
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t.tagName === 'SCRIPT' && !window.__cfBooted) { var m = document.getElementById('bootMsg'); if (m) m.textContent = 'could not load ' + (t.src || 'the app') + ' — reload to retry'; }
+  }, true);
+</script>
+</body>
+</html>

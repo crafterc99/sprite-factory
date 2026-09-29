@@ -36,3 +36,19 @@ data/mocap/
 # MHR model assets (download: scripts/mhr/README.md)
 scripts/mhr/assets/
 court3d-test/
+
+# ── Character factory: heavy / private working files (manifests + game rigs are committed) ──
+assets/characters/*/references/
+assets/characters/*/source/
+assets/characters/*/assembled/
+assets/characters/*/game/
+assets/characters/*/rigs/
+assets/characters/*/textures/
+assets/characters/*/previews/
+assets/characters/*/logs/
+*.blend1
+.tripo/
+.mac-dev-logs/
+assets/characters/*/versions/
+assets/characters/*/.lock
+assets/characters/_jobs/

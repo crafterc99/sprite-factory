@@ -221,6 +221,7 @@ require('./routes/quiz').register(router, ctx);
 require('./routes/movement-profiles').register(router);
 require('./routes/pose-import').register(router, ctx);
 require('./routes/mocap').register(router, ctx);
+require('./routes/character-factory').register(router, ctx);
 
 // Public health: no secrets — only whether storage is wired and, if not, why
 let _healthStorage = null;
@@ -783,6 +784,17 @@ async function handler(req, res) {
   if (pathname === '/' || pathname === '/index.html') {
     return serveStatic(res, path.join(__dirname, 'index-v2.html'), 'text/html');
   }
+  // Sprite Factory v2 / Character Factory (one page, History API routes under /factory)
+  if (pathname === '/factory' || pathname.startsWith('/factory/')) {
+    const asset = pathname.match(/^\/factory\/ui\/([a-z0-9_.-]+\.(js|mjs|css|svg))$/);
+    if (asset) {
+      const fp = path.join(__dirname, 'factory', asset[1]);
+      const type = { js: 'text/javascript', mjs: 'text/javascript', css: 'text/css', svg: 'image/svg+xml' }[asset[2]];
+      if (fs.existsSync(fp)) return serveStatic(res, fp, type, { revalidate: true });
+      res.writeHead(404); return res.end('Not found');
+    }
+    return serveStatic(res, path.join(__dirname, 'factory', 'index.html'), 'text/html', { revalidate: true });
+  }
   if (pathname === '/v2' || pathname === '/v2/') {
     return serveStatic(res, path.join(__dirname, 'index-v2.html'), 'text/html');
   }
@@ -820,7 +832,7 @@ async function handler(req, res) {
     // Rapier 3D physics (Apache-2.0), WASM inlined — the basketball's rigid-body engine
     return serveStatic(res, path.join(__dirname, 'node_modules', '@dimforge', 'rapier3d-compat', 'dist', 'rapier.mjs'), 'text/javascript');
   }
-  if (pathname === '/js/basketball-physics.mjs' || pathname === '/js/contact-ik.mjs' || pathname === '/js/ball-lab.mjs' || pathname === '/js/ball-setup.mjs' || pathname === '/js/court-vantheah.mjs') {
+  if (pathname === '/js/basketball-physics.mjs' || pathname === '/js/contact-ik.mjs' || pathname === '/js/ball-lab.mjs' || pathname === '/js/ball-setup.mjs' || pathname === '/js/court-vantheah.mjs' || pathname === '/js/souljam-material.mjs') {
     // the basketball physics system, its contact IK and the test scenes (engine3d/)
     return serveStatic(res, path.join(__dirname, 'engine3d', pathname.slice(4)), 'text/javascript', { revalidate: true });
   }
@@ -835,6 +847,10 @@ async function handler(req, res) {
   }
   if (pathname === '/recording' || pathname === '/recording/' || pathname === '/recording.html') {
     return serveStatic(res, path.join(__dirname, 'recording.html'), 'text/html');
+  }
+  if (pathname === '/rig-preview' || pathname === '/rig-preview.html') {
+    // a character on its game skeleton with the game's runtime, no court / clips (Character Factory checks)
+    return serveStatic(res, path.join(__dirname, 'rig-preview.html'), 'text/html');
   }
   if (pathname === '/court3d' || pathname === '/court3d/' || pathname === '/court3d.html') {
     return serveStatic(res, path.join(__dirname, 'court3d.html'), 'text/html');
