@@ -65,6 +65,8 @@ const SWITCHES_HAND = new Set(['move-crossover', 'move-spin', 'move-btl', 'move-
 const LEG = Object.fromEntries(SIDES.map((s) => [s, { hip: J[`${s}-hip`], knee: J[`${s}-knee`], ankle: J[`${s}-ankle`], heel: J[`${s}-heel`], big: J[`${s}-big-toe-tip`], small: J[`${s}-small-toe-tip`] }]));
 const FOOTPTS = Object.fromEntries(SIDES.map((s) => [s, [LEG[s].ankle, LEG[s].heel, LEG[s].big, LEG[s].small]]));
 const PALM = Object.fromEntries(SIDES.map((s) => [s, [J[`${s}-wrist`], J[`${s}-middle-first-joint`]]]));
+/** Shoulders, elbows, wrists and every hand keypoint (the dribble layer's joints). */
+const ARM_JOINTS = new Set(MHR70.map((n, i) => (/^(left|right)-(shoulder|elbow|wrist|thumb|index|middle|ring|pinky)/.test(n) ? i : -1)).filter((i) => i >= 0));
 
 /** Parents before children, from a parent array (70 entries, PELVIS = 70). */
 export function topoOrder(parent) {
@@ -1137,7 +1139,7 @@ export class Player {
 
   result() {
     const b = this.hasBall && !this.ballFree ? get3(this.world, BALL) : null;
-    return { pose: this.world, ball: b, events: this.events, mode: this.mode, source: this.source, action: this.action?.clip.role || null, rotSrc: this.rotSrc || null };
+    return { pose: this.world, ball: b, events: this.events, mode: this.mode, source: this.source, action: this.action?.clip.role || null, rotSrc: this.rotSrc || null, videoSrc: (this.mode === 'loco' && this.source === 'clip-loco' && this.videoSrc) || this.rotSrc || null };
   }
 
   // ── locomotion ──
@@ -1293,6 +1295,7 @@ export class Player {
     const tmp = new Float32Array(NJ * 3);
     const cw = { left: 0, right: 0 };
     this.rotSrc = items.map((q) => ({ clip: q.c, t: phaseToTime(q.c.phaseMap, (this.gaitCycle || 0) + this.gaitPhase), w: q.w }));
+    this.videoSrc = this.rotSrc;
     let dirS = 0, dirC = 0;
     const u = (this.gaitCycle || 0) + this.gaitPhase;
     for (const q of items) {
@@ -1311,9 +1314,54 @@ export class Player {
     const warp = clamp(wrapPi(blend.th - blendDir), -0.8, 0.8);
     if (Math.abs(warp) > 1e-3) this.rotateLegs(P, warp);
     this.contactW = cw;
-    const top = items.reduce((m, q) => (q.w > m.w ? q : m), items[0]); // the ball follows the clip that shows most
-    this.ballFromClip(P, top.c, phaseToTime(top.c.phaseMap, u));
+    // dribble layer: with the ball, both arms and the ball come from ONE dribble cycle (the idle
+    // dribble on the same clock as procedural locomotion), placed on this torso — the legs blend
+    // freely between loops (which put the bounce at different points of the stride) without the
+    // ball path ever jumping; a new locomotion clip needs no matching ball timing
+    if (this.hasBall && !this.ballFree && this.o.dribbleLayer !== false) this.dribbleLayer(P, dt, sp);
+    else {
+      const top = items.reduce((m, q) => (q.w > m.w ? q : m), items[0]);
+      this.ballFromClip(P, top.c, phaseToTime(top.c.phaseMap, u));
+    }
     this.baseVelFrom(P, dt);
+  }
+
+  /**
+   * Replace the arms (and the ball) of pose P (clip / capsule space) with the idle dribble at
+   * this.dribbleT, rigidly aligned to P's shoulders (position and facing). Upper-body captured
+   * rotations follow the same source (rotSrc), the legs keep P's.
+   */
+  dribbleLayer(P, dt, sp) {
+    const idle = this.idle(), ls = this.rig.ls;
+    if (!idle?.ball?.length) return;
+    const rate = 1 + 0.25 * clamp(sp / (3 * ls), 0, 1.4);
+    this.dribbleT = (this.dribbleT + dt * idle.fps * rate) % idle.F;
+    const ip = samplePose(idle, this.dribbleT, new Float32Array(NJ * 3));
+    const tr = sampleTraj(idle, this.dribbleT);
+    const I = new Float32Array(NJ * 3); placePose(ip, tr[0], tr[1], tr[2], I, NJ);
+    const sh = (Q) => { const l = get3(Q, J['left-shoulder']), r = get3(Q, J['right-shoulder']); return { mid: v3.lerp(l, r, 0.5), yaw: Math.atan2(l[2] - r[2], l[0] - r[0]) }; };
+    const a = sh(I), b = sh(P), dy = wrapPi(a.yaw - b.yaw), c = Math.cos(dy), sn = Math.sin(dy);
+    // push-ahead: at speed the dribble goes out in front (the arm swings forward about the shoulders)
+    const nose = get3(P, J.nose), fw0 = [nose[0] - b.mid[0], 0, nose[2] - b.mid[2]], fl = Math.hypot(fw0[0], fw0[2]) || 1, F = [fw0[0] / fl, 0, fw0[2] / fl];
+    const th = clamp((this.o.dribblePushAhead ?? 0.04) * sp / ls, 0, 0.4), ct = Math.cos(th), st = Math.sin(th);
+    const hs = get3(P, J[`${this.hand}-shoulder`]), od = [hs[0] - b.mid[0], 0, hs[2] - b.mid[2]], ol = Math.hypot(od[0], od[2]) || 1, O = [od[0] / ol, 0, od[2] / ol];
+    const ph = clamp((this.o.dribbleWiden ?? 0) * sp / ls, 0, 0.18), co = Math.cos(ph), so = -Math.sin(ph);
+    const place = (q) => { const x = q[0] - a.mid[0], z = q[2] - a.mid[2]; return [c * x + sn * z + b.mid[0], q[1] - a.mid[1] + b.mid[1], -sn * x + c * z + b.mid[2]]; };
+    const xf = (q) => {
+      const p = place(q), d = [p[0] - b.mid[0], p[1] - b.mid[1], p[2] - b.mid[2]];
+      const f = d[0] * F[0] + d[2] * F[2], u = d[1], l = [d[0] - f * F[0], 0, d[2] - f * F[2]];
+      const f2 = f * ct - u * st, u2 = f * st + u * ct;
+      // … and a little wider (away from the legs) on the ball's side
+      const lo = l[0] * O[0] + l[2] * O[2];
+      const lo2 = lo * co - u2 * so, u3 = lo * so + u2 * co, lr = [l[0] - lo * O[0], 0, l[2] - lo * O[2]];
+      return [b.mid[0] + lr[0] + lo2 * O[0] + f2 * F[0], b.mid[1] + u3, b.mid[2] + lr[2] + lo2 * O[2] + f2 * F[2]];
+    };
+    for (let k = 0; k < NJ; k++) {
+      if (!ARM_JOINTS.has(k)) continue;
+      const q = xf(get3(I, k)); set3(P, k, q[0], q[1], q[2]);
+    }
+    this.rotSrc = [{ clip: idle, t: this.dribbleT, w: 1 }];
+    this.ballFromClip(P, idle, this.dribbleT, xf);
   }
 
   proceduralLoco(dt, sp) {

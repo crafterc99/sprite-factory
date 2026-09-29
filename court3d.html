@@ -992,7 +992,8 @@ new ResizeObserver(() => saveVid()).observe($('vid'));
 window.addEventListener('keydown', (e) => { if (e.code === 'KeyV' && !e.repeat && !e.metaKey && !e.ctrlKey) { VID.on = !VID.on; saveVid(); if (!VID.on) $('vid').style.display = 'none'; } });
 function updateVideoBox(r) {
   const box = $('vid');
-  const top = r?.rotSrc?.length ? r.rotSrc.reduce((m, q) => (q.w > m.w ? q : m), r.rotSrc[0]) : null;
+  const vs = r?.videoSrc || r?.rotSrc;   // the clip shown most (the dribble layer's source is not the video)
+  const top = vs?.length ? vs.reduce((m, q) => (q.w > m.w ? q : m), vs[0]) : null;
   const c = top?.clip, id = c?.json?.id, sf = c?.json?.srcFrames;
   if (!VID.on || S.replay || !id || !sf) { box.style.display = 'none'; return; }
   box.style.display = 'block';

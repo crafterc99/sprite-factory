@@ -96,6 +96,13 @@ export const BALL_DEFAULTS = Object.freeze({
   contactMargin: 0.006,    // m, clearance the leg yield aims for
   penetrationTol: 0.006,   // m, deeper overlaps are logged
   lateCatchTime: 0.12,     // s a hand still takes (then pushes) a ball it reaches just after the video let go
+  possessionAssist: 1,     // 0…1: undefended, the ball is guided to the catching hand (0 = pure ballistics)
+  assistKp: 400,           // 1/s², tracking stiffness toward the animation's ball path (per kg)
+  assistKd: 36,            // 1/s, tracking damping
+  assistMaxAccel: 50,      // m/s², most the assist can bend the flight (5 g, only when the path diverges)
+  assistMaxLift: 0.5,      // × weight: the assist can never hold the ball up (it always falls ≥ 0.5 g)
+  assistLegAhead: 0.1,     // s: the assisted path also clears where the legs will be (a swinging foot)
+  assistRange: 1.0,        // m, farther from the path than this = not a dribble any more (no assist)
   regrabTime: 0.1,         // s after a release before a hand can take the ball again
   catchMatch: 1,           // 0..1: the release aims the bounce at where the catching hand will be
   catchMatchMax: 2.5,      // m/s, most horizontal change the catch aim adds to the recorded push
@@ -352,6 +359,7 @@ export class BasketballPhysicsSystem {
     this.acc = 0; this.time = 0; this.steps = 0;
     this.state = 'FREE'; this.hand = null; this.mode = 'none';
     this.touching = new Set(); this.forces = new Map();
+    this.defended = false;        // set by the game while a defender contests the ball (assist off)
     this.touchedSince = new Set(); // every collider touched since the caller last cleared it (contacts shorter than a frame)
     this.wasHeld = false; this.heldFor = 0; this.sinceRelease = 1e9; this.lostFor = 0; this.lost = false;
     this.lastFloorAt = -1e9; this.prevSample = null; this.palmPrev = {}; this.palmVel = { left: [0, 0, 0], right: [0, 0, 0] };
@@ -658,9 +666,12 @@ export class BasketballPhysicsSystem {
           this.state = 'HAND_APPROACH'; mode = 'transfer'; // the ball is on its way to this hand
         } else {
           this.state = 'LOOSE'; mode = 'loose';
+          const as = this.assistLevel();
+          const A = as > 0 && !onFloor ? this.assistForce(x, v, I) : null;
+          if (A) { F = A.F; limit = A.limit; mode = 'rescue'; this.stats.rescues = (this.stats.rescues || 0) + h; }
+          else { F = this.steer(x, v, I); limit = this.steerLimit(I); }
           this.lostFor += h;
-          if (gap > c.lostDist && this.lostFor > c.lostTime * grip) this.lost = true;
-          F = this.steer(x, v, I); limit = this.steerLimit(I);
+          if (gap > c.lostDist && this.lostFor > c.lostTime * grip * (as > 0 ? 3 : 1)) this.lost = true;
         }
         this.wasHeld = true;
       } else {
@@ -692,7 +703,11 @@ export class BasketballPhysicsSystem {
             const w = clamp(1 - (gap - c.contactDist) / (c.catchDist - c.contactDist), 0, 1) * clamp(1 - I.catchIn / c.approachTime, 0.25, 1);
             F = sc(add(pd(pt, vp, c.kp, c.kd), [0, m * g, 0]), w);
             this.state = 'HAND_APPROACH'; mode = 'catch';
-          } else if (!onFloor && !touchingBody) { F = this.steer(x, v, I); limit = this.steerLimit(I); mode = 'steer'; target = I.target; }
+          } else if (!onFloor && !touchingBody) {
+            const A = this.assistForce(x, v, I);
+            if (A) { F = A.F; limit = A.limit; mode = 'assist'; target = I.target; }
+            else { F = this.steer(x, v, I); limit = this.steerLimit(I); mode = 'steer'; target = I.target; }
+          }
         }
       }
     } else {
@@ -778,6 +793,40 @@ export class BasketballPhysicsSystem {
     if (len(e) > c.videoRange) return [0, 0, 0];
     return add(sc(e, c.videoKp), sc(sub(I.targetVel || [0, 0, 0], v), c.videoKd));
   }
+  /** Possession assist level (0…1): cfg.possessionAssist, off while the ball handler is being defended. */
+  assistLevel() { return this.defended ? 0 : clamp(this.cfg.possessionAssist ?? 0, 0, 1); }
+
+  /**
+   * Possession assist (undefended): the ball tracks the animation's own ball path — a
+   * physical dribble already (gravity arc, floor bounce, into the hand) — with a bounded
+   * PD force, so the corrections are small and any clip that carries a ball path works.
+   * Contacts stay Rapier's; the force never lifts more than `assistMaxLift` × weight (no
+   * floating ball) and is ≤ assistMaxAccel × level. Off while defended.
+   * @returns {{F, limit}|null}
+   */
+  assistForce(x, v, I) {
+    const c = this.cfg, lv = this.assistLevel();
+    if (!(lv > 0) || !I?.target) return null;
+    // the target clears the body now AND where the legs will be shortly (a swinging foot)
+    let tgt = this.projectOut(I.target, this.lastSample, c.contactMargin * 2);
+    const S = this.lastSample, pv = this.partVel;
+    if (S && pv) {
+      const ahead = { caps: {}, boxes: {} };
+      for (const [n, cp] of Object.entries(S.caps)) {
+        if (!/thigh|shin|foot/.test(n) || !pv[n]) continue;
+        ahead.caps[n] = { ...cp, a: add(cp.a, sc(pv[n].a, c.assistLegAhead)), b: add(cp.b, sc(pv[n].b, c.assistLegAhead)) };
+      }
+      tgt = this.projectOut(tgt, ahead, c.contactMargin * 3);
+    }
+    const e = sub(tgt, x);
+    if (len(e) > c.assistRange) return null;
+    const m = c.mass;
+    const F = add(sc(e, c.assistKp * m), sc(sub(I.targetVel || [0, 0, 0], v), c.assistKd * m));
+    const lim = m * c.assistMaxAccel * lv, Fc = clampLen(F, lim);
+    Fc[1] = Math.min(Fc[1], m * c.gravity * c.assistMaxLift);
+    return { F: Fc, limit: lim };
+  }
+
   /** Soft-steering limit: tight moves (through / around the body) get a little more guidance. */
   steerLimit(I) {
     const c = this.cfg;
@@ -949,7 +998,7 @@ export class BasketballPhysicsSystem {
     if (st === 'HAND_CONTACT' || st === 'POSSESSION_CONTROL') w = 1;
     else if (st === 'HAND_APPROACH') w = Math.max(0, 1 - d / c.catchDist);
     else if (st === 'HAND_RELEASE') w = 0.5;
-    if (this.ctl?.mode === 'loose' && d < c.ikCatchMax + c.catchDist) reach = true;
+    if ((this.ctl?.mode === 'loose' || this.ctl?.mode === 'rescue') && d < c.ikCatchMax + c.catchDist) reach = true;
     const now = this.time, dt = Math.min(0.1, now - (this._ikT ?? now)); this._ikT = now;
     this._reachW = clamp((this._reachW || 0) + (reach ? 1 : -1) * dt / 0.1, 0, 1);
     const out = { hand, weight: Math.max(w, this._reachW), grip: w > 0.5 };
