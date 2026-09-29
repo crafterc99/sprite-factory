@@ -115,8 +115,8 @@
 </div>
 
 <div id="help">
-  <b>Controller</b> left stick move · hold <b>R2</b> run-dribble (turns to run) · hold <b>□</b> shoot (moving = step-back) · <b>○</b> crossover · <b>△</b> spin · <b>✕</b> hesi · R1 between-legs · L1 switch hand · right stick camera<br>
-  <b>Keyboard</b> WASD move · hold Shift run · hold <b>I</b>/Space shoot · O cross · K spin · J hesi · U btl · H hand · C camera · F feet<br>
+  <b>Controller</b> left stick move · hold <b>R2</b> run-dribble (turns to run) · hold <b>□</b> shoot (moving = step-back) · <b>○</b> crossover · <b>△</b> spin · <b>✕</b> hesi (no ball: new ball) · R1 between-legs · L1 switch hand · right stick camera<br>
+  <b>Keyboard</b> WASD move · hold Shift run · hold <b>I</b>/Space shoot · O cross · K spin · J hesi · U btl · H hand · <b>X</b> new ball · C camera · F feet<br>
   Standing = idle dribble facing the basket. Let go at speed = slide-in stop. Moves pick the variant + frame nearest your pose.
 </div>
 <div id="dbg"><b>feet</b> · slide max <span id="dbgSlide"></span> <button id="dbgReset" type="button">reset</button><br><span id="dbgBody"></span></div>
@@ -424,7 +424,7 @@ for (const s of ['left', 'right']) {
 // ═══ Input: gamepad + keyboard + touch ═══
 const keys = new Set();
 const pressedSinceTick = new Set(); // a quick tap between two frames still counts
-const GAME_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'KeyV', 'KeyB', 'ShiftLeft', 'ShiftRight']);
+const GAME_KEYS = new Set(['KeyX', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'KeyV', 'KeyB', 'ShiftLeft', 'ShiftRight']);
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return; // browser shortcuts (Cmd+F, Ctrl+C) are not game input
   if (GAME_KEYS.has(e.code)) {
@@ -472,13 +472,13 @@ function readInput() {
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   const gp = pads[0];
   let mx = 0, my = 0, cx = 0, cy = 0, shoot = false, sprint = false;
-  const edge = { cross: false, spin: false, hesi: false, btl: false, hand: false };
+  const edge = { cross: false, spin: false, hesi: false, btl: false, hand: false, ball: false };
   if (gp) {
     mx = dz(gp.axes[0] || 0); my = dz(gp.axes[1] || 0);
     cx = dz(gp.axes[2] || 0); cy = dz(gp.axes[3] || 0);
     shoot = !!gp.buttons[2]?.pressed;                   // Square (PS) / X (Xbox)
     sprint = (gp.buttons[7]?.value || 0) > 0.3;         // R2
-    edge.cross = padEdge(gp, 1); edge.spin = padEdge(gp, 3); edge.hesi = padEdge(gp, 0);
+    edge.cross = padEdge(gp, 1); edge.spin = padEdge(gp, 3); edge.hesi = padEdge(gp, 0); edge.ball = edge.hesi; // ✕ without the ball = a new ball
     edge.btl = padEdge(gp, 5); edge.hand = padEdge(gp, 4);
   }
   if (keys.has('KeyA')) mx -= 1; if (keys.has('KeyD')) mx += 1; if (keys.has('KeyW')) my -= 1; if (keys.has('KeyS')) my += 1;
@@ -490,9 +490,10 @@ function readInput() {
   if (pressedSinceTick.has('KeyJ')) edge.hesi = true;
   if (pressedSinceTick.has('KeyU')) edge.btl = true;
   if (pressedSinceTick.has('KeyH')) edge.hand = true;
+  if (pressedSinceTick.has('KeyX')) edge.ball = true;
   pressedSinceTick.clear();
   if (touch.id != null) { mx = touch.x; my = touch.y; }
-  if (touch.shoot || touch.tap) shoot = true;
+  if (touch.shoot || touch.tap) { shoot = true; edge.ball = true; }
   if (touch.move) edge.cross = true;
   if (touch.run) sprint = true;
   touch.tap = false; touch.move = false;
@@ -616,7 +617,30 @@ function ballStep(dt, r, now) {
     }
     const settled = ph.state === 'FREE' || ph.stats.bounces - (f.bounces0 ?? 0) >= 3 || f.t > 4.5;
     if (f.kind === 'shot' && settled) passBack();
-    else if (f.kind === 'loose' && f.t > 0.6) passBack();
+    else if (f.kind === 'loose') {
+      // a lost ball stays on the court: walk to it and it is picked up (a hand close, the ball slow),
+      // or press X / ✕ for a new one
+      if (!S.lostToast && f.t > 0.4) { S.lostToast = true; toast('Ball lost — walk to it to pick it up, or press <b>X</b> / <b>✕</b> for a new ball.', 3500); }
+      if (body && f.t > 0.35 && Math.hypot(...ph.cur.v) < 3.5) {
+        for (const hs of ['left', 'right']) {
+          const pl = body.palms?.[hs];
+          if (!pl) continue;
+          if (Math.hypot(...ph.palmTarget(pl).map((v, k) => v - pNow[k])) < 0.28) {
+            if (P.hand !== hs && P.setHand(hs)) $('handBtn').textContent = hs === 'left' ? 'L' : 'R';
+            S.freeBall = null; ph.lost = false; ph.wasHeld = false; P.giveBall(); P.syncDribbleToCatch(); S.lostToast = false;
+            break;
+          }
+        }
+        // walking onto a ball that lies / rolls on the floor: it is popped up into the dribbling hand
+        // (a quick scoop — a short toss the hand then catches)
+        const dh = Math.hypot(pNow[0] - P.pos[0], pNow[2] - P.pos[1]), palm = body.palms?.[P.hand || 'right'];
+        if (S.freeBall?.kind === 'loose' && palm && dh < 0.6 && pNow[1] < 0.6) {
+          const to = ph.palmTarget(palm), T = 0.35;
+          ph.throwBall(ph.ballisticTo([to[0] + P.vel[0] * T, to[1], to[2] + P.vel[1] * T], T), 'none', 8);
+          ph.lost = false; S.freeBall = { kind: 'pass', t: 0, T };
+        }
+      }
+    }
     else if (f.kind === 'pass') {
       // the receiving hand takes over as the pass arrives
       // (closest approach over this frame's path — a slow frame moves a pass a metre)
@@ -890,6 +914,10 @@ function gameTick(dt, rdt, inp, now) {
   const moving = Math.hypot(inp.mx, inp.my) > 0.2;
   if (moving) S.lastMoveAt = now;
 
+  // no ball (lost, or after a shot): X / ✕ (or a tap) puts a new ball in the dribbling hand
+  const noBall = !P.hasBall || P.ballFree;
+  if (noBall && inp.edge.ball && P.mode === 'loco') { resetPossession(); S.lostToast = false; }
+  if (noBall) inp = { ...inp, shoot: false, edge: {} };
   // Square: tap or hold → shot; moving (or just moved) → step-back
   let trig = null;
   if (inp.shoot && S.sqAt == null) { S.sqAt = now; S.sqFired = false; }
@@ -957,6 +985,7 @@ function step(now) {
   const label = S.swishAt && now - S.swishAt < 1500 ? 'SWISH'
     : P.mode === 'action' ? (ROLE_NAMES[P.action?.role] || P.action?.role || 'MOVE').toUpperCase()
     : P.stopping ? (S.skidAt && now - S.skidAt < 500 ? 'SKID STOP' : 'STOP')
+    : (!P.hasBall || P.ballFree) && P.mode === 'loco' ? (Math.hypot(P.vel[0], P.vel[1]) > 0.3 ? (P.runFace > 0.5 ? 'RUN' : 'JOG') : 'NO BALL')
     : Math.hypot(P.vel[0], P.vel[1]) > 0.3 ? (P.runFace > 0.5 ? 'RUN DRIBBLE' : 'DRIBBLE') + (P.source === 'clip-loco' ? ' · clip' : '') : 'IDLE';
   setText($('state'), label);
   if (S.toastUntil && now > S.toastUntil) { $('toast').style.display = 'none'; S.toastUntil = 0; }

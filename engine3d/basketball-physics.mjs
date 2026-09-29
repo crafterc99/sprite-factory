@@ -103,6 +103,8 @@ export const BALL_DEFAULTS = Object.freeze({
   assistMaxLift: 0.5,      // × weight: the assist can never hold the ball up (it always falls ≥ 0.5 g)
   assistLegAhead: 0.1,     // s: the assisted path also clears where the legs will be (a swinging foot)
   assistRange: 1.0,        // m, farther from the path than this = not a dribble any more (no assist)
+  dribbleSpin: 12,         // rad/s of fingertip backspin on every dribble push (≈ 2 rev/s)
+  dribbleSpinJitter: 0.35, // ± share of it, and a tilted axis: the seams tumble, never the same way twice
   regrabTime: 0.1,         // s after a release before a hand can take the ball again
   catchMatch: 1,           // 0..1: the release aims the bounce at where the catching hand will be
   catchMatchMax: 2.5,      // m/s, most horizontal change the catch aim adds to the recorded push
@@ -359,7 +361,8 @@ export class BasketballPhysicsSystem {
     this.acc = 0; this.time = 0; this.steps = 0;
     this.state = 'FREE'; this.hand = null; this.mode = 'none';
     this.touching = new Set(); this.forces = new Map();
-    this.defended = false;        // set by the game while a defender contests the ball (assist off)
+    this.defended = false;
+    this._seed = 12345; this.rand = () => ((this._seed = (this._seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);        // set by the game while a defender contests the ball (assist off)
     this.touchedSince = new Set(); // every collider touched since the caller last cleared it (contacts shorter than a frame)
     this.wasHeld = false; this.heldFor = 0; this.sinceRelease = 1e9; this.lostFor = 0; this.lost = false;
     this.lastFloorAt = -1e9; this.prevSample = null; this.palmPrev = {}; this.palmVel = { left: [0, 0, 0], right: [0, 0, 0] };
@@ -415,7 +418,7 @@ export class BasketballPhysicsSystem {
     this.impartVelocity(v, maxDv);
     this.lastRelease = { t: this.time, v: this.vel, hand: hands };
     this.releasedBy = hands; this.sinceRelease = 0; this.wasHeld = false;
-    if (hands === 'both') { this.gateFingers('left', true); this.gateFingers('right', true); } else this.gateFingers(hands, true);
+    if (hands === 'both') { this.gateFingers('left', true); this.gateFingers('right', true); } else if (hands === 'left' || hands === 'right') this.gateFingers(hands, true);
   }
   impartVelocity(v, maxDv = Infinity) {
     const dv = clampLen(sub(v, this.vel), maxDv), m = this.cfg.mass;
@@ -851,6 +854,18 @@ export class BasketballPhysicsSystem {
       const rel = sub(vh, vb), vt = sub(rel, sc(n, dot(rel, n)));
       const Jn = Math.abs(dot(sc(sub(vDes, v0), m), n));
       Jt = clampLen(sc(vt, 0.4 * m * c.spinGain), c.handMu * Jn + 0.02);
+    }
+    // the fingertips: every push rolls the ball off the fingers — backspin (its bottom moving the
+    // way the ball travels, so it comes back up toward the hand), never twice on the same axis
+    let roll = [0, 0, 0];
+    if (c.dribbleSpin > 0 && palm && vDes[1] < -0.5) {
+      const vhh = [vDes[0], 0, vDes[2]], fdir = len(vhh) > 0.3 ? norm(vhh) : norm([palm.y?.[0] || 0, 0, palm.y?.[2] || 1]);
+      const r1 = this.rand() - 0.5, r2 = this.rand() - 0.5, r3 = this.rand() - 0.5;
+      let ax = norm(cross(fdir, [0, 1, 0]));
+      ax = norm(add(ax, [r1 * 0.5, r2 * 0.35, r3 * 0.5]));
+      const k = c.hollowInertia ? 2 / 3 : 2 / 5, Iner = k * m * R * R;
+      roll = sc(ax, c.dribbleSpin * (1 + c.dribbleSpinJitter * (this.rand() * 2 - 1)));
+      this.ball.applyTorqueImpulse(O(sc(roll, Iner)), true);
     }
     // energy: a recorded bounce that loses nothing would leave the real ball short of the catch —
     // push down as hard as it takes to come back up to the catching hand on time

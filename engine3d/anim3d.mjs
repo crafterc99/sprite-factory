@@ -1051,6 +1051,10 @@ export class Player {
 
     const prevSource = this.source;
     if (this.mode === 'loco') this.updateLoco(dt, inp); else this.updateAction(dt, inp);
+    // no ball in the hands: the arms swing with the legs instead of dribbling air
+    const empty = this.mode === 'loco' && (!this.hasBall || this.ballFree);
+    this.emptyW = clamp((this.emptyW || 0) + (empty ? 1 : -1) * dt / 0.2, 0, 1);
+    if (this.emptyW > 0 && this.mode === 'loco') this.emptyHands(this.base, this.emptyW);
     // ── inertialize on a source switch
     if (!this.firstFrame && (this.source !== prevSource || this.forceBlend) && !this.skipBlend) {
       const vel = this.baseVel || this.prevBaseVel;
@@ -1324,6 +1328,51 @@ export class Player {
       this.ballFromClip(P, top.c, phaseToTime(top.c.phaseMap, u));
     }
     this.baseVelFrom(P, dt);
+  }
+
+  /**
+   * Arms without a ball (pose P, capsule / clip space, blended in by w): each arm hangs from its
+   * shoulder and swings opposite to the same-side leg — driven by where the foot actually is, so
+   * it stays in step with any locomotion — the elbow bending more with speed; the hand keeps its
+   * shape, carried rigidly by the forearm. The upper body's captured rotations are left out.
+   */
+  emptyHands(P, w) {
+    const ls = this.rig.ls, sp = Math.hypot(this.vel[0], this.vel[1]);
+    const L = get3(P, J['left-shoulder']), Rr = get3(P, J['right-shoulder']), mid = v3.lerp(L, Rr, 0.5);
+    const nose = get3(P, J.nose), f0 = [nose[0] - mid[0], 0, nose[2] - mid[2]], fl = Math.hypot(f0[0], f0[2]) || 1, F = [f0[0] / fl, 0, f0[2] / fl];
+    const pel = v3.lerp(get3(P, J['left-hip']), get3(P, J['right-hip']), 0.5);
+    const flex = 0.25 + 1.0 * clamp(sp / (4 * ls), 0, 1);
+    const rotTo = (a, b) => { // rotation (axis-angle → function) taking unit a onto unit b
+      const ax = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], sn = Math.hypot(...ax), cs = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      if (sn < 1e-6) return (v) => v;
+      const k = ax.map((x) => x / sn), th = Math.atan2(sn, cs), c = Math.cos(th), s1 = Math.sin(th);
+      return (v) => { const kv = k[0] * v[0] + k[1] * v[1] + k[2] * v[2], x = [k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]]; return [0, 1, 2].map((i) => v[i] * c + x[i] * s1 + k[i] * kv * (1 - c)); };
+    };
+    for (const side of SIDES) {
+      const S0 = get3(P, J[`${side}-shoulder`]), E0 = get3(P, J[`${side}-elbow`]), W0 = get3(P, J[`${side}-wrist`]);
+      const lu = v3.dist(S0, E0), lf = v3.dist(E0, W0);
+      const o0 = [S0[0] - mid[0], 0, S0[2] - mid[2]], ol = Math.hypot(o0[0], o0[2]) || 1, O = [o0[0] / ol, 0, o0[2] / ol];
+      const an = get3(P, J[`${side}-ankle`]), legF = (an[0] - pel[0]) * F[0] + (an[2] - pel[2]) * F[2];
+      const th = clamp((-1.6 * legF) / ls, -0.7, 0.7), ab = 0.12;
+      // upper arm: down, a little out, swung forward by th; forearm: flexed further forward
+      const dir = (a) => [Math.cos(ab) * Math.sin(a) * F[0] + Math.sin(ab) * O[0], -Math.cos(ab) * Math.cos(a), Math.cos(ab) * Math.sin(a) * F[2] + Math.sin(ab) * O[2]];
+      const du = dir(th), df = dir(th + flex);
+      const E = [S0[0] + du[0] * lu, S0[1] + du[1] * lu, S0[2] + du[2] * lu];
+      const W = [E[0] + df[0] * lf, E[1] + df[1] * lf, E[2] + df[2] * lf];
+      const oldF = v3.norm(v3.sub(W0, E0)), R = rotTo(oldF, df);
+      for (let k = 0; k < NJ; k++) {
+        const n = MHR70[k];
+        if (!n || !n.startsWith(side + '-')) continue;   // (slots past the 70 named keypoints: the neck)
+        let q = null;
+        if (n === `${side}-elbow`) q = E;
+        else if (n === `${side}-wrist`) q = W;
+        else if (/-(thumb|index|middle|ring|pinky)-/.test(n)) { const d = R(v3.sub(get3(P, k), W0)); q = [W[0] + d[0], W[1] + d[1], W[2] + d[2]]; }
+        if (!q) continue;
+        const p0 = get3(P, k);
+        set3(P, k, p0[0] + (q[0] - p0[0]) * w, p0[1] + (q[1] - p0[1]) * w, p0[2] + (q[2] - p0[2]) * w);
+      }
+    }
+    if (w > 0.5) this.rotSrc = [];
   }
 
   /**
