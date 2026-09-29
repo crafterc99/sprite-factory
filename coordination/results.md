@@ -3003,3 +3003,20 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: npm test 53/53. Offline sim, idle dribble 100 % near, 0 lost (it was 16 %, lost). The shot releases at the same time and place as the old build. Clip-builder invalid set unchanged. Browser probe: sprint → teleport → reset keeps the ball (it was thrown). scripts/court3d-test.js --court classic: 0 errors, dribble, moves 0 cm slide, run 4.86 m/s, stop, shot SWISH. The standing crossover switches hands; the moving crossover did not fire because the ball went loose at the end of the standing one → pass=false on that one sub-check.
 - Limits: at ≤ 10 fps (the headless software-GL test runs at 11 fps) the physics drops possession more often. This is identical with the committed physics and the old clips (sim at DT 0.1: 44 % near), so it predates today's work. At 60 fps crossovers keep 87–99 % and nothing is lost.
 - Assumptions: rebuilding every clip on the server via the BUILDER_REV bump is acceptable (automatic, cached).
+
+## MOCAP-22 — Tripo athlete (Mixamo-rigged FBX) on the game skeleton, fingers re-rigged
+- Status: NEEDS_REVIEW (possession with this character is open, see limits)
+- Files changed: scripts/import-mixamo-character.mjs (new), lib/mocap/mhr-rigs/athlete.json.gz + custom.json (new character), court3d.html (flat per-part `color` for untextured parts), package.json / package-lock.json (dev dependency three@0.160.0), docs/HANDOFF-athlete-character.md (new)
+- What:
+  - Skeleton refitted to the model's proportions; pose fit onto the game skeleton; spine, neck and head pivots moved to the model's joints.
+  - Skin weights mapped to the game joints, twist joints included.
+  - Garments: own-bone cleanup, then nearest-body-point weights plus layering.
+  - Fingers: per-finger chains with knuckle blends.
+  - Parts per garment piece with flat colours.
+- Validation:
+  - Import report: 0 vertices on two fingers, 317 garment vertices cleaned of stray (e.g. hand) weights, 645 layered.
+  - Bind-pose renders: natural front and side posture, collar and waist clean.
+  - Court (after a server restart): dribble crouch with a clean waist; hand close-ups show the fingers spread over the ball.
+  - npm test 53/53.
+- Limits: the source FBX has 9,845 triangles and no UVs or texture (Tripo's rig export), so it renders as flat colours. The athlete lost the ball in the idle dribble at 11 fps (not yet checked at 60 fps). The importer has no texture / GLB support yet (handoff step 2).
+- Assumptions: default palette (skin, white tee, navy shorts, white shoes, black hair) until a textured export arrives.

@@ -365,7 +365,9 @@ function buildCharacter(rig) {
       geo.setIndex(new THREE.BufferAttribute(A.b64(p.faces, p.faces32 ? Uint32Array : Uint16Array), 1));
       geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Uint16Array.from(A.b64(p.skinIdx, Uint8Array)), 4));
       geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(A.b64(p.skinW, Float32Array), 4));
-      const mat = new THREE.MeshStandardMaterial({ map: tex(p.map, true), normalMap: tex(p.normalMap, false), roughness: /high-poly/.test(p.name) ? 0.25 : 0.78, metalness: 0,
+      // untextured parts (an imported model without a texture): a flat sRGB colour per part
+      const col = !p.map && Array.isArray(p.color) ? new THREE.Color().setRGB(p.color[0] / 255, p.color[1] / 255, p.color[2] / 255, THREE.SRGBColorSpace) : null;
+      const mat = new THREE.MeshStandardMaterial({ map: tex(p.map, true), normalMap: tex(p.normalMap, false), ...(col ? { color: col } : {}), roughness: /high-poly/.test(p.name) ? 0.25 : /eyes/.test(p.name) ? 0.3 : 0.78, metalness: 0,
         // garments are single sheets (open hoods, hems, cuffs): both sides drawn, like Blender
         side: p.name === 'body' || /high-poly/.test(p.name) ? THREE.FrontSide : THREE.DoubleSide, ...(p.alpha ? { alphaTest: 0.45 } : {}) });
       const m = addMesh(geo, mat);
