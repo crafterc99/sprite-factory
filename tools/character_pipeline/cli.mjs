@@ -12,6 +12,7 @@
  *   npm run character -- validate <id> [--refs <folder>]
  *   npm run character -- preview <id>
  *   npm run character -- court-test <id>
+ *   npm run character -- use-source <id> --part head --file ~/Downloads/head.glb   (a model made elsewhere, e.g. Tripo Studio, as that part's master)
  *
  * Stages: ingest → validate → generate → assemble → gamemesh → rig → import → lods → preview → courttest
  */
@@ -30,7 +31,7 @@ const opt = (k, d) => { const i = argv.indexOf('--' + k); return i < 0 ? d : arg
 const JOB = opt('job');
 
 if (!cmd || !id || !/^[a-z0-9_-]{2,40}$/.test(id)) {
-  console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(2, 17).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
+  console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(2, 18).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
   process.exit(cmd ? 2 : 0);
 }
 const m = loadManifest(id);
@@ -99,7 +100,22 @@ async function run(from, to = ORDER.at(-1), { force = false } = {}) {
 
 const firstOpen = () => { const s = computeState(m).stages; return ORDER.find((x) => s[x].status !== 'done') || null; };
 if (cmd === 'court-test') cmd = 'courttest';
-if (cmd === 'create') { m.createdAt ||= new Date().toISOString(); saveManifest(m); console.log(`[character] ${id} created: ${manifestPath(id)}`); }
+if (cmd === 'use-source') {
+  // a finished model from elsewhere becomes the part's SOURCE_HIGH (no Tripo task, no credits);
+  // the part is never regenerated until `generate --part` is run for it
+  const part = String(opt('part') || ''), file = String(opt('file') || '');
+  if (!/^(body|head|hand_left|hand_right|hair|shoes|clothing|accessory)$/.test(part) || !/\.(glb|fbx)$/i.test(file) || !fs.existsSync(file)) { console.error('use-source needs --part <body|head|hand_left|hand_right|…> and --file <model.glb|.fbx>'); process.exit(2); }
+  const { createHash } = await import('crypto');
+  const buf = fs.readFileSync(file), h = createHash('sha256').update(buf).digest('hex').slice(0, 12);
+  const dir = path.join(dirs(id).root, 'source', 'local', part); fs.mkdirSync(dir, { recursive: true });
+  const dest = path.join(dir, `${h}${path.extname(file).toLowerCase()}`); fs.copyFileSync(file, dest);
+  const g = (m.generation[part] ||= {});
+  if (g.task?.status === 'success' && g.sourceHigh) (g.history ||= []).push({ task: g.task.id, sourceHigh: g.sourceHigh, credits: g.task.credits, at: g.task.finishedAt });
+  Object.assign(g, { mode: 'local', local: { file: path.basename(file), sha: h }, sourceHigh: path.relative(dirs(id).root, dest), key: 'local-' + h,
+    task: { id: 'local-' + h, status: 'success', credits: 0, createdAt: new Date().toISOString(), finishedAt: new Date().toISOString() }, phase: 'completed' });
+  saveManifest(m); console.log(`[character] ${part}: ${path.basename(file)} is now the ${part} master (${g.sourceHigh}); assembly and later stages are stale — run: npm run character -- resume ${id}`);
+}
+else if (cmd === 'create') { m.createdAt ||= new Date().toISOString(); saveManifest(m); console.log(`[character] ${id} created: ${manifestPath(id)}`); }
 else if (cmd === 'build') await run('ingest', opt('to') || undefined);
 else if (cmd === 'resume') { const f = firstOpen(); if (f) await run(f, opt('to') || undefined); else console.log('[character] everything is up to date'); }
 else if (cmd === 'generate' || (cmd === 'rebuild' && opt('regenerate'))) {

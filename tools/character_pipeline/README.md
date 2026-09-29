@@ -31,6 +31,9 @@ npm run character -- rebuild my_guy_002 --stage rig --only            # just tha
 npm run character -- validate my_guy_002        # ingest + reference validation (no credits)
 npm run character -- preview my_guy_002         # deformation poses + screenshots in the real court
 npm run character -- court-test my_guy_002      # the game's court check with this character
+
+# a model made elsewhere (e.g. downloaded from Tripo Studio as GLB) as a part's master: no credits
+npm run character -- use-source my_guy_002 --part head --file ~/Downloads/head.glb
 ```
 
 The UI (`/factory` on the local server) starts the same commands as jobs.

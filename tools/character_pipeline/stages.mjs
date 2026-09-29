@@ -20,6 +20,8 @@ const ensure = (d) => (fs.mkdirSync(d, { recursive: true }), d);
 export async function ingest(m, { refsDir } = {}) {
   const D = dirs(m.id);
   const src = refsDir ? path.resolve(refsDir) : path.join(D.references, '_original');
+  const hasLocal = Object.values(m.generation || {}).some((g) => g.local);
+  if ((!fs.existsSync(src) || !listImages(src).length) && hasLocal) { m.stages.ingest = { key: 'local', at: new Date().toISOString(), images: 0, references: ['no reference images: local models are the masters'] }; saveManifest(m); say('ingest: no references — local models are the masters'); return; }
   if (!fs.existsSync(src)) throw new Error(`references not found: ${src}`);
   const overridesFile = [path.join(src, 'overrides.json'), path.join(D.references, 'overrides.json')].find((f) => fs.existsSync(f));
   const overrides = overridesFile ? JSON.parse(fs.readFileSync(overridesFile, 'utf8')) : {};
@@ -54,7 +56,8 @@ export async function ingest(m, { refsDir } = {}) {
 
 // ═══ 2. validate (before any credits) ═══
 export function validate(m) {
-  const v = validateRefs(m.references);
+  const local = Object.entries(m.generation || {}).filter(([, g]) => g.local).map(([p]) => p);
+  const v = validateRefs(m.references, { localParts: local });
   m.validation = { ...v, at: new Date().toISOString() };
   saveManifest(m);
   for (const w of v.warnings) say('warning:', w);
@@ -149,7 +152,7 @@ export function genPlan(m, part) {
   const key = hashOf('gen', TRIPO.sourceModel, mode, Object.fromEntries(Object.entries(views).map(([k, r]) => [k, r.cleanedSha256])), params);
   return { views, mode, params, key };
 }
-export const partsOf = (m) => [...new Set(m.references.map((r) => r.part))].filter((p) => p !== 'unknown');
+export const partsOf = (m) => [...new Set([...m.references.map((r) => r.part), ...Object.keys(m.generation || {}).filter((p) => m.generation[p]?.local)])].filter((p) => p !== 'unknown');
 
 /** Arms touching the body → a T-pose version of the body's front reference (Tripo image-to-image). */
 async function posePrep(m) {
@@ -172,6 +175,7 @@ async function posePrep(m) {
 async function generatePart(m, part) {
   const D = dirs(m.id);
   const g = (m.generation[part] ||= {});
+  if (g.local && g.task?.status === 'success') { say(`generate ${part}: local model ${g.local.file} (not regenerated)`); return; }
   g.seeds ||= { model_seed: seed(), texture_seed: seed() };
   if (part === 'body') await posePrep(m);
   for (let round = 0; round < 3; round++) {

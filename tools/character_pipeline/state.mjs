@@ -30,6 +30,7 @@ function finishedAt(m, st) {
 
 export function partStatus(m, part, job) {
   const g = m.generation[part] || {};
+  if (g.local && g.task?.status === 'success' && g.sourceHigh && exists(m, g.sourceHigh)) return { status: 'done', finishedAt: g.task.finishedAt, credits: 0, task: g.task.id, local: g.local.file };
   const refs = m.references.filter((r) => r.part === part);
   if (!refs.length) return { status: 'missing', reason: 'no references' };
   let plan; try { plan = genPlan(m, part); } catch { plan = null; }
@@ -87,7 +88,7 @@ export function computeState(m, { job } = {}) {
       else status = 'done';
     } else status = depsDone ? 'ready' : 'blocked';
     if (st === 'validate' && m.validation) { S[st] = { status: m.validation.ok ? (status === 'failed' ? 'failed' : 'done') : 'failed', reason: m.validation.ok ? (m.validation.warnings.length ? `${m.validation.warnings.length} warnings` : '') : m.validation.blocking.join('; '), finishedAt: m.validation.at, warnings: m.validation.warnings.length }; continue; }
-    if (st === 'ingest') { const n = m.references.length; S[st] = { status: n ? 'done' : 'ready', reason: n ? `${n} references` : 'add reference images', finishedAt: m.stages.ingest?.at || null }; continue; }
+    if (st === 'ingest') { const n = m.references.length, loc = Object.values(m.generation || {}).some((g) => g.local); S[st] = { status: n || loc ? 'done' : 'ready', reason: n ? `${n} references` : loc ? 'local models are the masters' : 'add reference images', finishedAt: m.stages.ingest?.at || null }; continue; }
     S[st] = { status, reason, finishedAt: rec.finishedAt || rec.at || null, seconds: rec.seconds ?? null, error: rec.error || null, action: rec.status === 'blocked' ? rec.action || null : null };
   }
   return { stages: S, parts: P, pipeline: pipelineStatus(m, S), next: STAGES.find((s) => !['done'].includes(S[s].status)) || null };
@@ -96,12 +97,13 @@ export function computeState(m, { job } = {}) {
 /** The persisted pipeline status (never from UI state). */
 export function pipelineStatus(m, S) {
   const st = (x) => S[x]?.status;
-  if (!m.references.length) return 'DRAFT';
+  const local = Object.values(m.generation || {}).some((g) => g.local);
+  if (!m.references.length && !local) return 'DRAFT';
   const running = STAGES.find((s) => st(s) === 'running');
   if (running) return { generate: 'GENERATING_SOURCE', assemble: 'ASSEMBLING', gamemesh: 'OPTIMIZING', rig: 'RIGGING', import: 'RIGGING', lods: 'OPTIMIZING', preview: 'ANIMATION_VALIDATION', courttest: 'COURT_VALIDATION', ingest: 'REFERENCES_INCOMPLETE', validate: 'REFERENCES_INCOMPLETE' }[running];
   const firstOpen = STAGES.find((s) => !['done'].includes(st(s)));
   if (firstOpen && st(firstOpen) === 'failed') return 'FAILED';
-  if (!m.references.some((r) => r.part === 'body')) return 'REFERENCES_INCOMPLETE';
+  if (!m.references.some((r) => r.part === 'body') && !m.generation?.body?.local) return 'REFERENCES_INCOMPLETE';
   if (!firstOpen) return 'GAME_READY';
   return { validate: 'REFERENCES_INCOMPLETE', generate: 'REFERENCES_READY', assemble: 'SOURCE_READY', gamemesh: 'ASSEMBLED', rig: 'GAME_MESH_READY', import: 'RIGGED', lods: 'RIGGED', preview: 'ANIMATION_VALIDATION', courttest: 'COURT_VALIDATION' }[firstOpen] || 'REFERENCES_READY';
 }

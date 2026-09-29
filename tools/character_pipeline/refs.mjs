@@ -175,11 +175,12 @@ export async function cleanCrop(file, cl, box, dest, { keepAll = false } = {}) {
 }
 
 /** Pre-spend checks. Warnings, not blocks, unless generation is clearly impossible. */
-export function validate(refs) {
+export function validate(refs, { localParts = [] } = {}) {
   const warn = [], block = [];
   const by = (p) => refs.filter((r) => r.part === p);
   const body = by('body'), head = by('head'), hl = by('hand_left'), hr = by('hand_right');
-  if (!body.length) block.push('no full-body reference: the body master cannot be generated');
+  if (!body.length && !localParts.includes('body')) block.push('no full-body reference: the body master cannot be generated');
+  for (const p of localParts) warn.push(`${p}: a local model is the master (made outside the pipeline; not regenerated)`);
   for (const r of refs) {
     const b = r.box || r.boxes?.[0];
     const minSide = Math.min(r.cropWidth ?? r.width, r.cropHeight ?? r.height);
@@ -199,7 +200,7 @@ export function validate(refs) {
     const views = new Set(list.map((r) => r.view));
     if (list.length && !views.has('front') && !p.startsWith('hand')) warn.push(`${p}: no front view (Tripo needs one)`);
     if (list.length === 1) warn.push(`${p}: one view only → single-image generation (the unseen sides are inferred; add left / back / right views for multiview)`);
-    if (!list.length && p !== 'body') warn.push(`${p}: no reference — the body master's own ${p.replace('_', ' ')} is used (no detail donor)`);
+    if (!list.length && p !== 'body' && !localParts.includes(p)) warn.push(`${p}: no reference — the body master's own ${p.replace('_', ' ')} is used (no detail donor)`);
   }
   // identity (weak proxy): the subjects' skin shares should agree
   const skins = refs.filter((r) => r.skinTone).map((r) => r.skinTone);
