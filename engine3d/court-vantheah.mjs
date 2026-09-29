@@ -95,6 +95,33 @@ export async function loadVantheahCourt({ scene, renderer, quality = 'desktop', 
       }
     }
   });
+  // the background city and the trees are not part of this practice court (and their fine detail shimmers)
+  const drop = [];
+  root.traverse((o) => { if (/^(Skyline_|Near_Apartment|Palm_|Ivy_)/.test(o.name)) drop.push(o); });
+  for (const o of drop) { o.parent?.remove(o); o.traverse?.((q) => { if (q.isMesh) { q.geometry.dispose(); } }); delete named[o.name]; }
+  // chain-link fence: the modelled wire is far thinner than a pixel and crawls / sparkles with any
+  // camera movement; the same fence as a mip-mapped texture on its three panels filters smoothly
+  const wire = named.Fence_Wire;
+  if (wire) {
+    wire.parent.remove(wire); wire.geometry.dispose(); delete named.Fence_Wire;
+    const tex = chainLinkTexture(renderer);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xb9bec6, map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, metalness: 0.55, roughness: 0.45 });
+    const cell = 0.055; // m per diamond
+    const panel = (w, h, pos, rotY) => {
+      const t = tex.clone(); t.needsUpdate = true; t.repeat.set(w / cell, h / cell);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat.clone()); m.material.map = t;
+      m.position.set(...pos); m.rotation.y = rotY; m.name = 'Fence_Wire_Panel'; m.renderOrder = 2;
+      root.add(m);
+    };
+    // pack (glb) coordinates: sides at x = ±16.6 (z −10.41…10.06, y 0.74…5.81), back at z = −10.4 (x ±16.29, y 2.89…5.81)
+    panel(20.47, 5.07, [-16.6, 3.275, -0.175], Math.PI / 2);
+    panel(20.47, 5.07, [16.6, 3.275, -0.175], Math.PI / 2);
+    panel(32.58, 2.92, [0, 4.35, -10.4], 0);
+  }
+  // painted markings: thin strips of geometry alias along their edges at a distance (crawling lines);
+  // baked into one mip-mapped decal texture over the court they filter cleanly at every distance
+  const decal = bakeFloorMarkings(root, renderer, quality, named);
+  if (decal) floorMeshes.push(decal);
   const fill = new THREE.HemisphereLight(0xa08ad3, 0x543138, 0.45);
   scene.add(fill);
   root.updateMatrixWorld(true);
@@ -141,6 +168,76 @@ export async function loadVantheahCourt({ scene, renderer, quality = 'desktop', 
     root, gltf, lights, fill, reflection, named, boundsOf,
     setWetness(v) { if (reflection) reflection.material.uniforms.reflectionAmount.value = THREE.MathUtils.clamp(v, 0, 1) * 0.42; },
   };
+}
+
+/** Markings (lines, baselines, wordmark, floor motifs) → one texture on a plane just above the court. */
+function bakeFloorMarkings(root, renderer, quality, named) {
+  const RE = /^(COURT_Painted_Lines|Court_Baseline|Court_Wordmark|Brand_Motifs_Floor)/;
+  const meshes = [];
+  root.traverse((o) => { if (o.isMesh && RE.test(o.name)) meshes.push(o); });
+  if (!meshes.length) return null;
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), M = new THREE.Matrix4(), v = new THREE.Vector3();
+  // triangles in pack (glb) coordinates, top view (x, z)
+  const tris = []; let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, topY = 0;
+  let color = new THREE.Color(0xf1e6cf), rough = 0.6;
+  for (const o of meshes) {
+    M.multiplyMatrices(inv, o.matrixWorld);
+    const g = o.geometry, pos = g.attributes.position, idx = g.index;
+    const m0 = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (m0?.color) color = m0.color.clone(); if (m0?.roughness != null) rough = m0.roughness;
+    const P = (i) => { v.fromBufferAttribute(pos, i).applyMatrix4(M); topY = Math.max(topY, v.y); return [v.x, v.z]; };
+    const n = idx ? idx.count : pos.count;
+    for (let k = 0; k < n; k += 3) {
+      const t = [P(idx ? idx.getX(k) : k), P(idx ? idx.getX(k + 1) : k + 1), P(idx ? idx.getX(k + 2) : k + 2)];
+      for (const [x, z] of t) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+      tris.push(t);
+    }
+  }
+  const pad = 0.1; minX -= pad; minZ -= pad; maxX += pad; maxZ += pad;
+  const W = maxX - minX, D = maxZ - minZ, cap = quality === 'mobile' ? 2048 : 4096;
+  const ppm = Math.min(128, cap / Math.max(W, D));
+  const cw = Math.ceil(W * ppm), ch = Math.ceil(D * ppm);
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.beginPath();
+  for (const t of tris) { g.moveTo((t[0][0] - minX) * ppm, (t[0][1] - minZ) * ppm); g.lineTo((t[1][0] - minX) * ppm, (t[1][1] - minZ) * ppm); g.lineTo((t[2][0] - minX) * ppm, (t[2][1] - minZ) * ppm); g.closePath(); }
+  g.fill();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+  tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter;
+  const mat = new THREE.MeshStandardMaterial({ color, alphaMap: tex, transparent: true, depthWrite: false, roughness: rough, metalness: 0,
+    polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
+  // the plane lies in the pack's x–z (rotated −90° about x: its v runs along +z)
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(W, D), mat);
+  plane.rotation.x = -Math.PI / 2;
+  plane.position.set(minX + W / 2, Math.max(0.006, topY), minZ + D / 2);
+  plane.name = 'COURT_Markings_Decal'; plane.receiveShadow = true; plane.renderOrder = 6;
+  // (the rotation turns the plane's +y edge — v = 1, the canvas's first row — to −z = minZ: rows already match)
+  root.add(plane);
+  for (const o of meshes) { o.parent.remove(o); o.geometry.dispose(); delete named[o.name]; }
+  return plane;
+}
+
+/** A tileable chain-link diamond (alpha), mip-mapped and anisotropic: no shimmer at a distance. */
+function chainLinkTexture(renderer) {
+  const N = 128, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, N, N);
+  g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = N * 0.07; g.lineCap = 'round';
+  // one diamond per tile: the two diagonals, wrapped so the tiles join
+  for (const [dx, dy] of [[0, 0], [N, 0], [0, N], [-N, 0], [0, -N]]) {
+    g.beginPath(); g.moveTo(dx, dy); g.lineTo(dx + N, dy + N); g.stroke();
+    g.beginPath(); g.moveTo(dx + N, dy); g.lineTo(dx, dy + N); g.stroke();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+  t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter;
+  return t;
 }
 
 /**
