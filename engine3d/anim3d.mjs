@@ -1891,9 +1891,10 @@ export class Player {
     // cancel window: a move's recovery gives way to the stick (responsive)
     const mv = inp.move || [0, 0];
     if (!clip.shot && a.t >= this.o.moveCancel * (clip.F - 1) && Math.hypot(mv[0], mv[1]) > 0.3) { this.endAction(); return; }
-    // end: back to the idle/locomotion layer (follow-through holds while a shot is in the air)
-    if (a.t >= clip.F - 1 && (!clip.shot || !this.ballFree || a.holdDone)) this.endAction();
-    else if (a.t >= clip.F - 1 && clip.shot) { a.hold = (a.hold || 0) + dt; if (a.hold > 2.5) a.holdDone = true; }
+    // end: back to the idle / locomotion layer as soon as the clip ends — a shot never freezes on its
+    // last frame; with the ball still in the air he stands in the empty-handed idle (arms relaxed)
+    // until the rebound comes back to him
+    if (a.t >= clip.F - 1) this.endAction();
   }
 
   /**

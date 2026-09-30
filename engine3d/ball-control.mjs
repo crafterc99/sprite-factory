@@ -517,7 +517,10 @@ export class BallController {
     if (bad) { this.stats.nan++; this.recover(t, f, 'NaN', null, true); return; }
     if (this.p[1] < cfg.floorY + cfg.R - cfg.floorTol) { this.stats.floorViolations++; this.logLine(`floor correction ${(100 * (cfg.floorY + cfg.R - this.p[1])).toFixed(1)} cm`, t); this.p[1] = cfg.floorY + cfg.R; if (this.v[1] < 0) this.v[1] = 0; }
     const pl = f.player;
-    if (pl && Math.hypot(this.p[0] - pl.pos[0], this.p[2] - pl.pos[1]) > cfg.maxDistFromPlayer) this.recover(t, f, 'too far from the player');
+    // (a pass or pick-up in flight starts wherever the ball was — under the hoop after a shot — and
+    // follows its own planned toss to the hands: it may be far from the player by design)
+    const passing = this.flight?.kind === 'pass';
+    if (pl && !passing && Math.hypot(this.p[0] - pl.pos[0], this.p[2] - pl.pos[1]) > cfg.maxDistFromPlayer) this.recover(t, f, 'too far from the player');
   }
   /** Hidden correction: blend from where the ball is into the expected hand's target, then hold. */
   recover(t, f, reason, hand = null, snap = false) {

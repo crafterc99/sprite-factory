@@ -179,9 +179,11 @@ for (const [name, sc] of Object.entries(SCEN)) {
 }
 
 test('game: the recorded between-the-legs → cross → shot move — two floor contacts, through the legs, never lost', { skip }, async () => {
-  const { makeGame } = await H;
-  const g = await makeGame({ rig: 'player', fps: 60 });
-  const m = g.run([[0, 1, {}], [1, 7, { trig: 'shot-jumper' }]]);
+  const { makeGame, courtClips } = await H;
+  // (the move is the moving shot — □ on the move; alone in that slot so it is the one that plays)
+  const clips = (await courtClips()).filter((c) => c.role !== 'shot-stepback' || /btl-cross/.test(c.name));
+  const g = await makeGame({ rig: 'player', fps: 60, clips });
+  const m = g.run([[0, 1, {}], [1, 7, { trig: 'shot-stepback' }]]);
   const move = m.actions.find((a) => /btl-cross/.test(a.clip));
   assert.ok(move, 'the move played');
   const inMove = m.bounces.filter((b) => b.t > move.t && b.t < move.t + 1.2);
@@ -190,6 +192,30 @@ test('game: the recorded between-the-legs → cross → shot move — two floor 
   assert.ok(m.leg.flight.min >= -0.005, `through the legs without touching them (${(m.leg.flight.min * 100).toFixed(1)} cm)`);
   assert.ok(m.sessionStats.shots === 1 && m.sessionStats.passes === 1, 'shot, then passed back');
   assertClean('btl-cross-shot', m, { catchErr: 0.06 });
+});
+
+test('game: the jump shot (□ standing, the user’s own video) — released on its frame, back to idle when it ends, passed back', { skip }, async () => {
+  const { makeGame, courtClips } = await H;
+  const clips = await courtClips();
+  const jumper = clips.find((c) => c.role === 'shot-jumper');
+  assert.ok(jumper && /IMG_5816/.test(jumper.name), `the jump shot is the user's video (${jumper?.name})`);
+  for (const rig of ['player', 'ac-001']) {
+    const g = await makeGame({ rig, fps: 60 });
+    let endAt = null, startAt = null, releaseAt = null;
+    const m = g.run([[0, 1, {}], [1, 6.5, { trig: 'shot-jumper' }]], {
+      onTick: ({ t, P, out }) => {
+        if (P.mode === 'action' && /IMG_5816/.test(P.action?.clip?.name || '') && startAt == null) startAt = t;
+        if (startAt != null && endAt == null && P.mode === 'loco') endAt = t;
+        if (releaseAt == null && out.state === 'SHOT_RELEASE') releaseAt = t;
+      },
+    });
+    assert.ok(startAt != null, `${rig}: the jump shot played`);
+    const clipLen = (jumper.frameCount - 1) / jumper.fps;
+    assert.ok(endAt != null && endAt - startAt < clipLen + 0.1, `${rig}: back to idle as the clip ends — no hold on the last frame (${(endAt - startAt).toFixed(2)} s for a ${clipLen.toFixed(2)} s clip)`);
+    assert.ok(releaseAt != null && releaseAt > startAt && releaseAt < endAt, `${rig}: released during the shot`);
+    assert.ok(m.sessionStats.shots === 1 && m.sessionStats.passes === 1, `${rig}: shot, then passed back`);
+    assert.strictEqual(m.recoveries.length, 0, `${rig}: no failsafe recovery`);
+  }
 });
 
 for (const fps of [30, 120]) {
