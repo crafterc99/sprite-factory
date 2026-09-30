@@ -393,6 +393,26 @@ export class BasketballPhysicsSystem {
     this.ballCol = this.world.createCollider(cd, this.ball);
     this.names.set(this.ballCol.handle, 'ball');
   }
+  /**
+   * While a hand controls the ball (engine3d/ball-control.mjs) the rigid body is switched off: no
+   * forces, no collisions with the player's own body, no cost. resume() hands the ball back to the
+   * physics (a shot, a loose ball) at the controller's position and velocity — no pop.
+   */
+  suspend() {
+    if (this.suspended) return;
+    this.suspended = true;
+    this.ball.setEnabled?.(false);
+    this.touching.clear(); this.lost = false; this.lostFor = 0;
+  }
+  resume(p, v = [0, 0, 0], w = [0, 0, 0], body = null) {
+    this.suspended = false;
+    this.ball.setEnabled?.(true);
+    if (body) this.snapBody(body);
+    this.placeBall(p, v, w);
+    this.wasHeld = false; this.lost = false; this.lostFor = 0; this.releasedBy = null;
+    this.lastRelease = { t: this.time, v: v.slice(), hand: 'none' };
+    this.sinceRelease = 1e9;   // no release guard (the controller released it, not a hand in this system)
+  }
   /** Explicit set-up / reset (tests, debug drop, a new possession) — not used by play. */
   placeBall(p, v = [0, 0, 0], w = [0, 0, 0]) {
     this.ball.setTranslation(O(p), true); this.ball.setLinvel(O(v), true); this.ball.setAngvel(O(w), true);
@@ -1112,6 +1132,7 @@ export class BasketballPhysicsSystem {
    */
   advance(dt, S0, S1, I0, I1) {
     const c = this.cfg;
+    if (this.suspended) { if (S1) this.lastSample = S1; this.acc = 0; return 1; }   // a hand controls the ball
     const acc0 = this.acc;
     this.acc += dt;
     let n = 0, done = 0, h = 1 / c.hz;

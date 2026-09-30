@@ -93,18 +93,23 @@ export function palmFrame(mats, rig, s) {
  * Reach: move the wrist by `delta` (world) with a two-bone solve — bend the
  * elbow for the new shoulder–wrist distance, then swing the arm onto it.
  */
-export function reachArm(mats, rig, s, delta) {
+export function reachArm(mats, rig, s, delta, lim = {}) {
   const iS = J(rig, `${s}_uparm`), iE = J(rig, `${s}_lowarm`), iW = J(rig, `${s}_wrist`);
   const S = jointPos(mats, rig, iS), E = jointPos(mats, rig, iE), W = jointPos(mats, rig, iW);
-  const Wt = add(W, delta);
+  let Wt = add(W, delta);
   const l1 = len(sub(E, S)), l2 = len(sub(W, E));
-  const d = clamp(len(sub(Wt, S)), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3);
-  // elbow: current vs wanted interior angle
+  // never stretch the arm straight: at most maxExtend of its length (0.97 → a soft elbow)
+  const maxD = (lim.maxExtend ?? 1) * (l1 + l2) - 1e-3;
+  const cur0 = len(sub(W, S));
+  const d = clamp(len(sub(Wt, S)), Math.abs(l1 - l2) + 1e-3, Math.max(Math.min(cur0, l1 + l2 - 1e-3), maxD));
+  if (len(sub(Wt, S)) > d) Wt = add(S, sc(norm(sub(Wt, S)), d));
+  // elbow: current vs wanted interior angle (the change bounded: maxElbow)
   let axis = cross(sub(E, S), sub(W, E));
   if (len(axis) < 1e-6) axis = cross(sub(E, S), [0, 1, 0]);
   axis = norm(axis);
   const cur = Math.acos(clamp(dot(norm(sub(S, E)), norm(sub(W, E))), -1, 1));
-  const want = Math.acos(clamp((l1 * l1 + l2 * l2 - d * d) / (2 * l1 * l2), -1, 1));
+  let want = Math.acos(clamp((l1 * l1 + l2 * l2 - d * d) / (2 * l1 * l2), -1, 1));
+  if (lim.maxElbow != null) want = cur + clamp(want - cur, -lim.maxElbow, lim.maxElbow);
   if (Math.abs(want - cur) > 1e-5) rotateSubtree(mats, rig, iE, axisAngle(axis, cur - want), E);
   // swing the whole arm about the shoulder onto the target
   const W2 = jointPos(mats, rig, iW);
@@ -202,7 +207,7 @@ export function contactPass(mats, rig, ball, ctl, cfg, legYield = null) {
     const dl = len(d);
     if (dl > (ctl.reachLimit ?? cfg.ikReach ?? 0.3)) continue;   // too far: this is not a contact
     d = sc(d, Math.min(1, ((ctl.reachMax ?? cfg.ikMax) * w) / (dl || 1)) * w);
-    reachArm(mats, rig, s, d); out.reach = Math.max(out.reach, len(d));
+    reachArm(mats, rig, s, d, { maxElbow: cfg.maxElbow, maxExtend: cfg.maxExtend }); out.reach = Math.max(out.reach, len(d));
     aimHand(mats, rig, s, toBall, cfg.ikAimMax * w); out.aim += 1;
     out.fingers += conformFingers(mats, rig, s, ball.p, ball.R, { grip: ctl.grip !== false && w > 0.5, rf: cfg.radii?.finger ?? 0.0095 });
   }
