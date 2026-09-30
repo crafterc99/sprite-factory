@@ -3003,3 +3003,10 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: npm test 53/53. Offline sim, idle dribble 100 % near, 0 lost (it was 16 %, lost). The shot releases at the same time and place as the old build. Clip-builder invalid set unchanged. Browser probe: sprint → teleport → reset keeps the ball (it was thrown). scripts/court3d-test.js --court classic: 0 errors, dribble, moves 0 cm slide, run 4.86 m/s, stop, shot SWISH. The standing crossover switches hands; the moving crossover did not fire because the ball went loose at the end of the standing one → pass=false on that one sub-check.
 - Limits: at ≤ 10 fps (the headless software-GL test runs at 11 fps) the physics drops possession more often. This is identical with the committed physics and the old clips (sim at DT 0.1: 44 % near), so it predates today's work. At 60 fps crossovers keep 87–99 % and nothing is lost.
 - Assumptions: rebuilding every clip on the server via the BUILDER_REV bump is acceptable (automatic, cached).
+
+## BLAIR-VISION-1 — New standalone Chrome MV3 extension (unrelated to the sprite pipeline)
+- Status: DONE
+- Files changed: blair-vision/ (new directory; nothing else in the repo touched except this entry)
+- What: DOM-first, event-driven quiz-perception HUD powered by Jev (TypeSafe / OpenRouter / Jev Browser Control providers, optional fallback LLM off by default, SHA-256 fingerprint + cache, per-tab opt-in, no auto-click). Load `blair-vision/dist` unpacked in Chrome. See blair-vision/README.md.
+- Validation: lint + tsc clean, 59 unit tests, esbuild build, manifest verification, and a Playwright e2e in real Chromium against the demo page with a mock Jev (all checks pass). Real Jev endpoints reached (401 on an invalid key, as expected); not exercised with a real key.
+- Assumptions: placed in this repo only because it is the designated branch for this session; it can be moved to its own repo. dist/ is committed on purpose so it loads right after cloning.

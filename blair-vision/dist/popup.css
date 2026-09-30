@@ -1,0 +1,18 @@
+:root { color-scheme: light dark; --bg: #fff; --fg: #1a1d24; --mut: #6b7385; --line: #d9dde6; --acc: #1f6feb; }
+@media (prefers-color-scheme: dark) { :root { --bg: #171a21; --fg: #e8ecf3; --mut: #9aa4b6; --line: #303541; --acc: #58a6ff; } }
+body { width: 300px; margin: 0; padding: 14px; font: 13px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+header { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
+.pill { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); }
+.pill.on { color: #2d7d46; border-color: #2d7d46; }
+.pill.paused { color: #b7791f; border-color: #b7791f; }
+.muted { color: var(--mut); margin: 6px 0; }
+.small { font-size: 12px; }
+.btns { display: flex; gap: 6px; margin: 10px 0 6px; }
+button { flex: 1; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; font: inherit; }
+button:hover { background: rgba(127, 127, 127, 0.14); }
+button.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
+button[hidden] { display: none; }
+#visual { width: 100%; margin-top: 4px; }
+.msg { min-height: 1.4em; color: #c0392b; margin: 8px 0 0; }
+footer { margin-top: 8px; }
+a { color: var(--acc); }

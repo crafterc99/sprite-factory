@@ -1,0 +1,9 @@
+node_modules/
+.npm-cache/
+e2e-shots/
+*.log
+.env
+.env.*
+config.local.*
+# dist/ is committed on purpose so the folder can be loaded unpacked right after cloning.
+# scripts/verify-manifest.mjs fails the build if anything key-like ends up in it.

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-blair-demo>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blair Vision demo: practice quiz</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font: 16px/1.5 system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 24px 16px 80px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: #6b7385; margin: 0 0 20px; }
+    .card { border: 1px solid #8884; border-radius: 12px; padding: 18px 20px; }
+    .qno { font-size: 13px; color: #6b7385; margin-bottom: 6px; }
+    fieldset { border: 0; padding: 0; margin: 0; }
+    legend, .qtitle { font-size: 19px; font-weight: 600; margin-bottom: 10px; padding: 0; }
+    label, .opt { display: block; padding: 8px 10px; border: 1px solid #8883; border-radius: 8px; margin: 6px 0; cursor: pointer; }
+    label:hover, .opt:hover { background: #8881; }
+    .opt.sel { border-color: #1f6feb; background: #1f6feb18; }
+    ol.opts { padding: 0; margin: 0; } ol.opts li { list-style: decimal inside; margin: 6px 0; }
+    ol.opts button { font: inherit; padding: 8px 10px; border: 1px solid #8883; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; width: 90%; text-align: left; }
+    button.option { display: block; width: 100%; text-align: left; font: inherit; padding: 8px 10px; border: 1px solid #8883; border-radius: 8px; background: transparent; color: inherit; margin: 6px 0; cursor: pointer; }
+    .nav { display: flex; gap: 10px; margin: 16px 0; }
+    .nav button { font: inherit; padding: 8px 18px; border-radius: 8px; border: 1px solid #8886; background: transparent; color: inherit; cursor: pointer; }
+    .nav button:disabled { opacity: .4; cursor: default; }
+    .stats { margin-top: 24px; border: 1px dashed #8886; border-radius: 12px; padding: 12px 16px; font-size: 14px; }
+    .stats b { font-variant-numeric: tabular-nums; }
+    .stats table { border-collapse: collapse; } .stats td { padding: 2px 14px 2px 0; }
+    .hint { color: #6b7385; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Practice quiz (Blair Vision demo)</h1>
+  <p class="sub">12 practice questions in different markup styles. Enable Blair Vision on this tab, then press Next / Previous.</p>
+
+  <div class="card" id="mount"></div>
+
+  <div class="nav">
+    <button id="prev">Previous</button>
+    <button id="next">Next</button>
+  </div>
+
+  <div class="stats" aria-live="off">
+    <strong>Live counters</strong> <span class="hint">(fed by the extension, demo page only)</span>
+    <table>
+      <tr><td>Question shown</td><td><b id="s-q">1</b> / 12 <span class="hint" id="s-mode"></span></td></tr>
+      <tr><td>HUD answers received</td><td><b id="s-ans">0</b></td></tr>
+      <tr><td>Model (API) calls</td><td><b id="s-api">0</b></td></tr>
+      <tr><td>Cache hits</td><td><b id="s-cache">0</b></td></tr>
+      <tr><td>Last answer</td><td><b id="s-last">–</b> <span class="hint" id="s-lat"></span></td></tr>
+      <tr><td>Change → answer</td><td><b id="s-delta">–</b></td></tr>
+    </table>
+    <p class="hint">Questions 3 and 9 are the same question (9 is reordered): question 9 should be served from the cache with zero API calls.</p>
+  </div>
+
+  <script src="questions.js"></script>
+  <script>
+    (function () {
+      const Q = window.QUESTIONS;
+      let i = 0, shownAt = 0, seed = 0;
+      const mount = document.getElementById('mount');
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+      const shuffle = (a) => { const b = a.slice(); for (let k = b.length - 1; k > 0; k--) { const j = (Math.imul(++seed, 2654435761) >>> 0) % (k + 1); [b[k], b[j]] = [b[j], b[k]]; } return b; };
+      const L = 'ABCD';
+
+      function render() {
+        const q = Q[i];
+        const order = q.mode === 'shuffle-react' ? shuffle(q.choices) : q.choices;
+        const numeric = q.mode === 'ol';
+        const pos = order.indexOf(q.choices[q.answer]);
+        window.__demoExpected = () => (numeric ? String(pos + 1) : L[pos]); // used by the e2e test
+        const head = `<div class="qno">Question ${q.id} of ${Q.length}</div>`;
+        let html = '';
+        const mark = (el) => el;
+        if (q.mode === 'radio') {
+          html = `${head}<fieldset><legend>${esc(q.q)}</legend>${q.choices.map((c, k) => `<label><input type="radio" name="q${q.id}"> ${esc(c)}</label>`).join('')}</fieldset>`;
+        } else if (q.mode === 'radio-prefix') {
+          html = `${head}<fieldset><legend>${esc(q.q)}</legend>${q.choices.map((c, k) => `<label><input type="radio" name="q${q.id}"> ${L[k]}. ${esc(c)}</label>`).join('')}</fieldset>`;
+        } else if (q.mode === 'buttons') {
+          html = `${head}<div class="qtitle">${esc(q.q)}</div><div>${q.choices.map((c) => `<button class="option" type="button">${esc(c)}</button>`).join('')}</div>`;
+        } else if (q.mode === 'ol') {
+          html = `${head}<div class="qtitle">${esc(q.q)}</div><ol class="opts">${q.choices.map((c) => `<li><button type="button">${esc(c)}</button></li>`).join('')}</ol>`;
+        } else if (q.mode === 'aria') {
+          html = `${head}<div role="radiogroup" aria-label="${esc(q.q)}">${q.choices.map((c) => `<div class="opt" role="radio" aria-checked="false" tabindex="0">${esc(c)}</div>`).join('')}</div>`;
+        } else { // react / shuffle-react: hashed class names, div role=button, whole subtree replaced
+          const cs = order;
+          const h = () => 'css-' + (Math.random() * 1e9 | 0).toString(36);
+          html = `<div class="${h()}">${head}<div class="${h()} qtitle">${esc(q.q)}</div>${cs.map((c) => `<div class="${h()} opt" role="button" tabindex="0">${esc(c)}</div>`).join('')}</div>`;
+        }
+        mount.innerHTML = html;
+        shownAt = performance.now();
+        $('s-q').textContent = q.id;
+        $('s-mode').textContent = '(' + q.mode + (q.repeatOf ? ', repeat of Q' + q.repeatOf : '') + ')';
+        $('prev').disabled = i === 0;
+        $('next').disabled = i === Q.length - 1;
+      }
+
+      mount.addEventListener('click', (e) => {
+        const t = e.target.closest('.opt, button.option, ol.opts button, label');
+        if (!t) return;
+        mount.querySelectorAll('.sel').forEach((n) => n.classList.remove('sel'));
+        t.classList.add('sel');
+        if (t.getAttribute('role') === 'radio') { mount.querySelectorAll('[role=radio]').forEach((n) => n.setAttribute('aria-checked', String(n === t))); }
+      });
+      $('next').onclick = () => { if (i < Q.length - 1) { i++; render(); } };
+      $('prev').onclick = () => { if (i > 0) { i--; render(); } };
+
+      let ans = 0, api = 0, hits = 0;
+      document.addEventListener('blair-vision', (e) => {
+        const d = JSON.parse(e.detail);
+        ans++; d.source === 'cache' ? hits++ : api++;
+        $('s-ans').textContent = ans; $('s-api').textContent = api; $('s-cache').textContent = hits;
+        $('s-last').textContent = d.answer;
+        $('s-lat').textContent = d.source === 'cache' ? '(cache)' : `(${d.source}, model ${Math.round(d.latencyMs)} ms)`;
+        $('s-delta').textContent = Math.round(performance.now() - shownAt) + ' ms';
+      });
+      render();
+    })();
+  </script>
+</body>
+</html>

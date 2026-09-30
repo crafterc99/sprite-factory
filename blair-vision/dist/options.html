@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blair Vision settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main>
+  <h1>Blair Vision <small>settings</small></h1>
+  <p class="note">For practice quizzes, studying, accessibility and your own test pages. Blair Vision only <em>displays</em> a suggested option; it never clicks or submits anything. Do not use it on proctored or graded exams.</p>
+
+  <section>
+    <h2>Provider</h2>
+    <label class="radio"><input type="radio" name="provider" value="typesafe"> Jev / TypeSafe (System One direct)</label>
+    <label class="radio"><input type="radio" name="provider" value="openrouter"> OpenRouter</label>
+    <label class="radio"><input type="radio" name="provider" value="jbc"> Jev Browser Control (credits)</label>
+
+    <div data-for="typesafe">
+      <label>TypeSafe API key <input type="password" id="typesafeKey" autocomplete="off" placeholder="stored only in this browser"></label>
+      <label>Endpoint <input type="text" id="typesafeEndpoint" placeholder="https://api.typesafe.ai/v1/systemone"></label>
+    </div>
+    <div data-for="openrouter" hidden>
+      <label>OpenRouter API key <input type="password" id="openrouterKey" autocomplete="off" placeholder="sk-or-v1-…"></label>
+    </div>
+    <div data-for="jbc" hidden>
+      <label>Jev Browser Control key <input type="password" id="jbcKey" autocomplete="off" placeholder="jbc_…"></label>
+      <label>Service URL <input type="text" id="jbcBase" placeholder="https://jevbrowsercontrol.com"></label>
+    </div>
+    <label>Jev model <input type="text" id="jevModel" placeholder="~typesafe/jev-latest"></label>
+    <div class="row"><button id="test" type="button">Test connection</button><span id="testResult" role="status"></span></div>
+    <p class="hint">Local testing without a key: run <code>npm run demo</code>, pick “TypeSafe”, set the endpoint to <code>http://localhost:8787/v1/systemone</code> and any key (e.g. <code>mock</code>).</p>
+  </section>
+
+  <section>
+    <h2>Behaviour</h2>
+    <label>Confidence threshold <input type="number" id="threshold" min="0" max="1" step="0.05"></label>
+    <label class="check"><input type="checkbox" id="autoDetect"> Auto detection</label>
+    <label>Heartbeat fallback (seconds) <input type="number" id="heartbeatSec" min="2" max="60" step="1"></label>
+    <label class="check"><input type="checkbox" id="runWhenHidden"> Also analyze when the tab is hidden (costs money; off recommended)</label>
+    <label class="check"><input type="checkbox" id="reasoningFallback"> Enable reasoning fallback (cheap chat model when Jev is unsure) — OFF = Jev only</label>
+    <div id="fallbackFields">
+      <label>Fallback model (OpenRouter id) <input type="text" id="fallbackModel"></label>
+      <label>Fallback key (blank = reuse OpenRouter key) <input type="password" id="fallbackKey" autocomplete="off"></label>
+    </div>
+    <label class="check"><input type="checkbox" id="visualFallback"> Visual fallback: show “Analyze visible content” (one screenshot, only when you click it; uses the fallback model)</label>
+    <label class="check"><input type="checkbox" id="debug"> Debug mode (console logs on the page)</label>
+  </section>
+
+  <section>
+    <h2>Blocked domains</h2>
+    <textarea id="blockedDomains" rows="4" placeholder="one domain per line"></textarea>
+    <p class="hint">Blair Vision refuses to run on these sites (and their subdomains).</p>
+  </section>
+
+  <section>
+    <h2>Cache &amp; session statistics</h2>
+    <table id="stats"></table>
+    <div class="row"><button id="clearCache" type="button">Clear cache</button><button id="resetStats" type="button">Reset statistics</button><span id="cacheInfo" class="hint"></span></div>
+  </section>
+
+  <p id="saved" class="hint" role="status"></p>
+</main>
+<script src="options.js"></script>
+</body>
+</html>
