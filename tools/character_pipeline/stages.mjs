@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { spawnSync } from 'child_process';
-import { ROOT, TRIPO, LIMITS, QUALITY, PARTS, VIEWS, BLENDER, PIPELINE_VERSION, RIGS_DIR } from './config.mjs';
+import { ROOT, TRIPO, LIMITS, QUALITY, PARTS, VIEWS, BLENDER, PIPELINE_VERSION, RIGS_DIR, RIG } from './config.mjs';
 import { dirs, saveManifest, hashOf, fileHash, rel, abs } from './manifest.mjs';
 import { classify, handSides, cleanCrop, validate as validateRefs, skinTone, listImages, sha256 } from './refs.mjs';
 import { TripoClient, TripoError } from './tripo-client.mjs';
@@ -270,8 +270,82 @@ export async function gamemesh(m, { force } = {}) {
   saveManifest(m);
 }
 
-// ═══ 6. rig: Tripo rig-check + rig (Mixamo spec) on the game mesh, merged back + LOD chain ═══
-export async function rig(m, { force } = {}) {
+// ═══ 6a. rig (MHR mode): the game's MHR body fitted to the mesh → skeleton + MHR weights ═══
+function py(script, args, log) {
+  if (!fs.existsSync(RIG.python)) throw new Blocked('the MHR rig needs its Python env and model files', 'run: bash tools/character_pipeline/mhr/setup.sh');
+  const r = spawnSync(RIG.python, [path.join(ROOT, 'tools', 'character_pipeline', 'mhr', script), ...args], { encoding: 'utf8', maxBuffer: 1 << 28 });
+  const out = (r.stdout || '') + (r.stderr || '');
+  if (log) fs.appendFileSync(log, `\n$ ${script} ${args.join(' ')}\n${out}`);
+  if (r.status !== 0) throw new Error(`${script} failed: ${out.split('\n').filter((l) => /Error|Traceback|assert/i.test(l)).slice(-6).join(' | ') || out.slice(-600)}`);
+  return out;
+}
+/** The mesh the rig is built on: a supplied finished model, or the pipeline's game mesh. */
+const rigInput = (m) => (m.mode === 'model' ? abs(m.id, m.model.file) : abs(m.id, m.stages.gamemesh?.outputs?.out_glb || 'game/lod0.glb'));
+
+async function rigMhr(m, { force } = {}) {
+  const D = dirs(m.id), rid = rigIdOf(m.id), q = Q(m);
+  const input = rigInput(m);
+  if (!fs.existsSync(input)) throw new Error(`no mesh to rig (${path.relative(D.root, input)})`);
+  const W = ensure(path.join(D.rigs, 'mhr')), log = path.join(ensure(path.join(D.root, 'logs')), 'rig-mhr.log');
+  const scripts = ['fit_mhr.py', 'build_rig.py', 'glb_load.py'].map((f) => fileHash(path.join(ROOT, 'tools', 'character_pipeline', 'mhr', f)));
+  // a finished model arrives at its tool's unit scale (Tripo: ~1 unit tall), so it is scaled to the
+  // character's height here; pipeline meshes were already scaled by the assemble stage
+  const height = m.mode === 'model' ? (m.heightMeters || 1.93) : null;
+  const key = stageKey(m, 'rig-mhr', statKey(input), scripts, RIG.fitArgs, RIG.bind, m.material || null, m.mode === 'model' ? 'model' : q.lods.map((l) => l.tris), height);
+  const r = (m.stages.rig ||= {});
+  if (!force && r.key === key && fs.existsSync(path.join(RIGS_DIR, `${rid}.json.gz`))) { say('rig (MHR): cached'); return; }
+  const exp = path.join(W, 'export'), fitDir = path.join(W, 'fit');
+  // 1. mesh → arrays + its own textures (nothing re-baked)
+  const expKey = hashOf(statKey(input), height);
+  if (r.exportKey !== expKey || !fs.existsSync(path.join(exp, 'mesh.npz'))) { fs.rmSync(exp, { recursive: true, force: true }); py('glb_load.py', [input, exp, ...(height ? ['--height', String(height)] : [])], log); r.exportKey = expKey; }
+  const scale = readJson(path.join(exp, 'mesh.json')).scale || 1;
+  // 2. fit MHR (shape + bone scales + pose incl. fingers) — cached per mesh
+  const fitKey = hashOf(expKey, scripts[0], RIG.fitArgs);
+  if (r.fitKey !== fitKey || !fs.existsSync(path.join(fitDir, 'fit.npz'))) {
+    say('rig (MHR): fitting the MHR body to the mesh (~6 min)');
+    py('fit_mhr.py', [exp, fitDir, ...RIG.fitArgs, '--no-plots'], log); r.fitKey = fitKey; saveManifest(m);
+  }
+  const fit = readJson(path.join(fitDir, 'fit.json'));
+  say(`rig (MHR): fit chamfer ${fit.chamferCm} cm (hands ${fit.meshToBodyCm?.hands} cm, head ${fit.meshToBodyCm?.head} cm)`);
+  // 3. the game rig: MHR skeleton + MHR weights, bound in MHR's rest pose; the model's textures as is
+  // a finished model keeps its own look (plain PBR, as in Tripo); pipeline characters get the
+  // illustrated Soul Jam material; either can be overridden per character (m.material)
+  const mat = m.material ? { preset: m.mode === 'model' ? 'pbr' : 'souljam-illustrated', ...m.material } : m.mode === 'model' ? { preset: 'pbr' } : null;
+  const common = ['--id', rid, '--name', m.name || m.id, '--bind', RIG.bind, ...(mat ? ['--material', JSON.stringify(mat)] : [])];
+  py('build_rig.py', [exp, fitDir, ...common, '--register'], log);
+  const build0 = readJson(path.join(fitDir, `build-${rid}.json`));
+  // 4. LODs from the same mesh (UVs + textures kept), bound to the same fit
+  const src = build0.triangles;
+  const ladder = m.mode === 'model'
+    ? [0.5, 0.25, 0.1].map((f, i) => ({ tris: Math.round(src * f), dist: [9, 18, 32][i] })).filter((l) => l.tris >= 2500)
+    : q.lods.slice(1).filter((l) => l.tris < src);
+  const lodsOut = [{ lod: 0, triangles: src, dist: 0 }];
+  if (ladder.length) {
+    const lodDir = path.join(W, 'lods'), rep = path.join(lodDir, 'lods.json');
+    blender('lods.py', { input, ratios: ladder.map((l) => l.tris / src), out_dir: lodDir, report: rep }, { log: path.join(D.root, 'logs', 'lods.log') });
+    for (const l of readJson(rep).lods) {
+      const le = path.join(lodDir, `export${l.lod}`);
+      fs.rmSync(le, { recursive: true, force: true });
+      py('glb_load.py', [l.file, le, '--scale', String(scale)], log);
+      py('build_rig.py', [le, fitDir, ...common, '--lod', String(l.lod), '--lod-dist', String(ladder[l.lod - 1].dist)], log);
+      lodsOut.push({ lod: l.lod, triangles: l.triangles, dist: ladder[l.lod - 1].dist });
+    }
+  }
+  Object.assign(r, { key, mode: 'mhr', at: new Date().toISOString(), report: { fit, build: build0, lods: lodsOut } });
+  m.lods = Object.fromEntries(lodsOut.map((l) => [`lod${l.lod}`, { triangles: l.triangles, dist: l.dist, file: null }]));
+  m.skeletonVersion = 'SOUL_JAM_MASTER_SKELETON (MHR 127 joints) — MHR body fitted to the mesh';
+  // the import stage's work (the game rig) is done here
+  m.stages.import = { key, status: 'done', mode: 'mhr', at: new Date().toISOString(), finishedAt: new Date().toISOString(), rigId: rid, output: path.relative(ROOT, path.join(RIGS_DIR, `${rid}.json.gz`)), reports: [build0], warnings: [] };
+  saveManifest(m);
+  say(`rig (MHR): ${rid} — ${src} tris, ${lodsOut.length} LOD${lodsOut.length > 1 ? 's' : ''}, weights from the fitted MHR body (${build0.verticesOnTwoFingersAfter} vertices on two fingers)`);
+}
+
+// ═══ 6b. rig (Tripo mode): Tripo rig-check + rig (Mixamo spec) on the game mesh, merged back + LOD chain ═══
+export async function rig(m, opts = {}) {
+  if (RIG.mode === 'mhr' || m.mode === 'model') return rigMhr(m, opts);
+  return rigTripo(m, opts);
+}
+async function rigTripo(m, { force } = {}) {
   const D = dirs(m.id), q = Q(m);
   const game = abs(m.id, m.stages.gamemesh?.outputs?.out_glb || 'game/lod0.glb');
   if (!fs.existsSync(game)) throw new Error('no game mesh yet (run gamemesh)');
@@ -313,6 +387,7 @@ export async function rig(m, { force } = {}) {
 
 // ═══ 7. import onto SOUL_JAM_MASTER_SKELETON (the game's 127-joint MHR skeleton) ═══
 export async function importRig(m, { force } = {}) {
+  if (m.stages.rig?.mode === 'mhr') { say('import: the MHR rig stage built the game rig'); return; }
   const q = Q(m), rid = rigIdOf(m.id);
   const lods = Object.values(m.lods || {});
   if (!lods.length) throw new Error('no rigged LODs yet (run rig)');

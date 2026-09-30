@@ -36,6 +36,19 @@ export const TRIPO = {
   rigOutFormat: 'glb',
 };
 
+/**
+ * Rig stage mode. 'mhr' (default): Meta's MHR body is fitted to the mesh (shape + bone scales + pose)
+ * and the character gets the game's own skeleton and MHR's skin weights — the same rig as the
+ * game's mannequin, no auto-rigger in between. 'tripo': Tripo auto-rig (v1.0 Mixamo body + v2.5
+ * fingers) mapped onto the skeleton by scripts/import-mixamo-character.mjs.
+ */
+export const RIG = {
+  mode: process.env.CF_RIG_MODE || 'mhr',
+  python: process.env.CF_PYTHON || path.join(ROOT, 'tools', 'character_pipeline', '.venv', 'bin', 'python'),
+  fitArgs: ['--iters-a', '250', '--iters-b', '250', '--iters-c', '150'],
+  bind: 'rest',
+};
+
 export const LIMITS = {
   maxCreditsPerCharacter: +(process.env.MAX_TRIPO_CREDITS_PER_CHARACTER || 600),
   maxRetriesPerStage: +(process.env.MAX_RETRIES_PER_STAGE || 2),

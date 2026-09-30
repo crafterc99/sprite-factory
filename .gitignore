@@ -52,3 +52,11 @@ assets/characters/*/logs/
 assets/characters/*/versions/
 assets/characters/*/.lock
 assets/characters/_jobs/
+
+# Character factory: MHR model files (download: tools/character_pipeline/mhr/setup.sh) and the Python env
+assets/_models/
+tools/character_pipeline/.venv/
+
+# Character factory: parked garment builds (generated meshes, renders, GPT artwork)
+assets/characters/*/outfits/
+__pycache__/

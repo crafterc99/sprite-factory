@@ -57,10 +57,17 @@ export function computeState(m, { job } = {}) {
   const locked = lockHolder(m.id);
   const parts = partsOf(m);
   const P = Object.fromEntries(parts.map((p) => [p, partStatus(m, p, job)]));
+  const supplied = m.mode === 'model' && m.model?.file && exists(m, m.model.file);
   for (const st of STAGES) {
     const rec = m.stages[st] || {};
     const deps = DEPS[st];
     let status, reason;
+    // a finished model supplied as is (e.g. exported from Tripo Studio): nothing to generate,
+    // assemble or re-mesh — the pipeline starts at the rig
+    if (supplied && ['ingest', 'validate', 'generate', 'assemble', 'gamemesh'].includes(st)) {
+      S[st] = { status: 'done', reason: st === 'ingest' ? `finished model: ${m.model.name}` : 'not needed: finished model used as is', finishedAt: m.model.at, parts: st === 'generate' ? {} : undefined };
+      continue;
+    }
     if (st === 'generate') {
       const vals = Object.values(P);
       const need = ['body'];
@@ -98,12 +105,12 @@ export function computeState(m, { job } = {}) {
 export function pipelineStatus(m, S) {
   const st = (x) => S[x]?.status;
   const local = Object.values(m.generation || {}).some((g) => g.local);
-  if (!m.references.length && !local) return 'DRAFT';
+  if (!m.references.length && !local && m.mode !== 'model') return 'DRAFT';
   const running = STAGES.find((s) => st(s) === 'running');
   if (running) return { generate: 'GENERATING_SOURCE', assemble: 'ASSEMBLING', gamemesh: 'OPTIMIZING', rig: 'RIGGING', import: 'RIGGING', lods: 'OPTIMIZING', preview: 'ANIMATION_VALIDATION', courttest: 'COURT_VALIDATION', ingest: 'REFERENCES_INCOMPLETE', validate: 'REFERENCES_INCOMPLETE' }[running];
   const firstOpen = STAGES.find((s) => !['done'].includes(st(s)));
   if (firstOpen && st(firstOpen) === 'failed') return 'FAILED';
-  if (!m.references.some((r) => r.part === 'body') && !m.generation?.body?.local) return 'REFERENCES_INCOMPLETE';
+  if (!m.references.some((r) => r.part === 'body') && !m.generation?.body?.local && m.mode !== 'model') return 'REFERENCES_INCOMPLETE';
   if (!firstOpen) return 'GAME_READY';
   return { validate: 'REFERENCES_INCOMPLETE', generate: 'REFERENCES_READY', assemble: 'SOURCE_READY', gamemesh: 'ASSEMBLED', rig: 'GAME_MESH_READY', import: 'RIGGED', lods: 'RIGGED', preview: 'ANIMATION_VALIDATION', courttest: 'COURT_VALIDATION' }[firstOpen] || 'REFERENCES_READY';
 }

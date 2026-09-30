@@ -6,5 +6,9 @@
  "main-guy-001": {
   "name": "main_guy_001",
   "heightM": 1.883
+ },
+ "ac-001": {
+  "name": "AC",
+  "heightM": 1.925
  }
 }

@@ -44,8 +44,13 @@ def import_model(path, name=None):
             if o.parent is None:
                 o.matrix_world = R @ o.matrix_world
         bpy.context.view_layer.update()
-    meshes = [o for o in new if o.type == 'MESH']
     arm = next((o for o in new if o.type == 'ARMATURE'), None)
+    # (the glTF importer adds bone display shapes as meshes: they are not part of the model)
+    shapes = {pb.custom_shape for pb in arm.pose.bones if pb.custom_shape} if arm else set()
+    meshes = [o for o in new if o.type == 'MESH' and o not in shapes and o.name in bpy.context.view_layer.objects]
+    for o in shapes:
+        if o and o.name in bpy.data.objects:
+            bpy.data.objects.remove(o, do_unlink=True)
     if name:
         for i, o in enumerate(meshes):
             o.name = f'{name}' if len(meshes) == 1 else f'{name}_{i}'

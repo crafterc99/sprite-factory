@@ -12,6 +12,7 @@
  *   npm run character -- validate <id> [--refs <folder>]
  *   npm run character -- preview <id>
  *   npm run character -- court-test <id>
+ *   npm run character -- import-model <id> --file ~/Downloads/model.glb [--name "Main Guy"]   (a finished model, rigged to the game as is)
  *   npm run character -- use-source <id> --part head --file ~/Downloads/head.glb   (a model made elsewhere, e.g. Tripo Studio, as that part's master)
  *
  * Stages: ingest → validate → generate → assemble → gamemesh → rig → import → lods → preview → courttest
@@ -31,7 +32,7 @@ const opt = (k, d) => { const i = argv.indexOf('--' + k); return i < 0 ? d : arg
 const JOB = opt('job');
 
 if (!cmd || !id || !/^[a-z0-9_-]{2,40}$/.test(id)) {
-  console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(2, 18).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
+  console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(2, 19).map((l) => l.replace(/^ \* ?/, '')).join('\n'));
   process.exit(cmd ? 2 : 0);
 }
 const m = loadManifest(id);
@@ -100,7 +101,23 @@ async function run(from, to = ORDER.at(-1), { force = false } = {}) {
 
 const firstOpen = () => { const s = computeState(m).stages; return ORDER.find((x) => s[x].status !== 'done') || null; };
 if (cmd === 'court-test') cmd = 'courttest';
-if (cmd === 'use-source') {
+if (cmd === 'import-model') {
+  // a finished, textured model (Tripo Studio export, Tripo API result, any GLB): kept exactly as is —
+  // no re-mesh, no re-bake — rigged onto the game skeleton (MHR fit), LODs, previews, court test
+  const file = String(opt('file') || '');
+  if (!/\.glb$/i.test(file) || !fs.existsSync(file)) { console.error('import-model needs --file <model.glb>'); process.exit(2); }
+  const { createHash } = await import('crypto');
+  const h = createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 12);
+  const dir = path.join(dirs(id).root, 'source', 'model'); fs.mkdirSync(dir, { recursive: true });
+  const dest = path.join(dir, `${h}.glb`); fs.copyFileSync(file, dest);
+  if (m.model?.file && m.model.sha !== h) (m.modelHistory ||= []).push(m.model);
+  m.mode = 'model'; m.model = { file: path.relative(dirs(id).root, dest), sha: h, name: path.basename(file), bytes: fs.statSync(dest).size, at: new Date().toISOString() };
+  m.createdAt ||= new Date().toISOString();
+  saveManifest(m);
+  console.log(`[character] ${id}: ${path.basename(file)} is the character's model (kept as is)`);
+  await run('rig', opt('to') || undefined, { force: !!opt('force') });
+}
+else if (cmd === 'use-source') {
   // a finished model from elsewhere becomes the part's SOURCE_HIGH (no Tripo task, no credits);
   // the part is never regenerated until `generate --part` is run for it
   const part = String(opt('part') || ''), file = String(opt('file') || '');

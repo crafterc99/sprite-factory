@@ -1,0 +1,1038 @@
+{
+ "id": "ac_001",
+ "style": "soul-jam-illustrated",
+ "pipelineVersion": "cf-2026-09-29a",
+ "createdAt": "2026-09-29T16:59:45.721Z",
+ "heightMeters": null,
+ "quality": "hero",
+ "references": [],
+ "validation": null,
+ "generation": {},
+ "credits": {
+  "spent": 0,
+  "log": []
+ },
+ "stages": {
+  "rig": {
+   "status": "done",
+   "startedAt": "2026-09-29T17:40:29.339Z",
+   "exportKey": "f30cf1663c3cc5f9",
+   "fitKey": "8e48309a6506210d",
+   "key": "73c3653f04028459",
+   "mode": "mhr",
+   "at": "2026-09-29T17:41:32.736Z",
+   "report": {
+    "fit": {
+     "meshToBodyCm": {
+      "mean": 1.41,
+      "median": 1.05,
+      "p95": 3.81,
+      "tight": 1.41,
+      "loose": null,
+      "hands": 0.37,
+      "head": 0.86,
+      "rest": 1.61
+     },
+     "segmentsCm": {
+      "thigh": [
+       41.3,
+       41.3
+      ],
+      "shin": [
+       52.7,
+       52.7
+      ],
+      "upperArm": [
+       30.7,
+       30.7
+      ],
+      "forearm": [
+       29.2,
+       29.2
+      ],
+      "hand": [
+       22.7,
+       22.6
+      ],
+      "hipJoints": 16.9,
+      "shoulderJoints": 37.2,
+      "kneeHeight": 62.8,
+      "hipHeight": 103.9,
+      "ankleHeight": 10.5,
+      "neckHeight": 160.5,
+      "heightCm": 193
+     },
+     "bodyToMeshCm": {
+      "mean": 1.03,
+      "median": 0.81,
+      "p95": 2.78,
+      "hands": 0.63,
+      "head": 0.68
+     },
+     "chamferCm": 1.22,
+     "globalScale": 1.1195,
+     "shapeNorm": 4.501,
+     "scales": {
+      "scale_eye_width": 0,
+      "scale_eye_height": 0,
+      "scale_eye_depth": 0,
+      "scale_spine_length": -0.3,
+      "scale_neck_length": 0.037,
+      "scale_shoulder_width": -0.201,
+      "scale_uparms": 0.171,
+      "scale_lowarms": -0.092,
+      "scale_r_hands": 0.206,
+      "scale_l_hands": 0.209,
+      "scale_hip_width": -0.065,
+      "scale_hip_height": 0,
+      "scale_hip_depth": 0,
+      "scale_uplegs": -0.505,
+      "scale_lowlegs": 0.505,
+      "scale_knee_knock": 0,
+      "scale_ankle_height": 0,
+      "scale_foot_length": -0.104
+     },
+     "pose": {
+      "root_ty": 0.136,
+      "root_tz": 0.17,
+      "root_rx": -0.072,
+      "spine_bend1": 0.051,
+      "r_clavicle_rz": 0.125,
+      "r_uparm_twist": -0.134,
+      "r_uparm_ry": 0.763,
+      "r_uparm_rz": 0.145,
+      "r_elbow_bend": -0.31,
+      "r_lowarm_twist": 0.231,
+      "r_wrist_ry": -0.15,
+      "r_wrist_rz": -0.04,
+      "l_clavicle_rz": 0.11,
+      "l_uparm_twist": -0.156,
+      "l_uparm_ry": 0.747,
+      "l_uparm_rz": 0.17,
+      "l_elbow_bend": -0.324,
+      "l_lowarm_twist": 0.253,
+      "l_wrist_ry": -0.146,
+      "l_wrist_rz": -0.049,
+      "r_upleg_twist": -0.157,
+      "r_upleg_ry": 0.034,
+      "r_knee_bend": 0.107,
+      "r_lowleg_twist": -0.061,
+      "r_foot_bend": 0.031,
+      "l_upleg_twist": -0.165,
+      "l_upleg_ry": 0.034,
+      "l_knee_bend": 0.1,
+      "l_lowleg_twist": -0.074,
+      "l_foot_bend": 0.029
+     },
+     "seconds": 50.6
+    },
+    "build": {
+     "id": "ac-001",
+     "bind": "rest",
+     "out": "/Users/crafterc/Claude Test/sprite-factory/lib/mocap/mhr-rigs/ac-001.json.gz",
+     "vertices": 20882,
+     "welded": 9201,
+     "triangles": 18376,
+     "heightM": 1.925,
+     "floorShift": -0.0106,
+     "legLen": 0.94221,
+     "soleOffset": 0.04496,
+     "unposeMoveCm": 9.41,
+     "meshToFittedBodyCm": {
+      "mean": 1.41,
+      "p95": 3.81
+     },
+     "weightMassDroppedByTop4": 0.0085,
+     "verticesOnTwoFingersBeforeClean": 240,
+     "verticesOnTwoFingersAfter": 92,
+     "keypoints": {
+      "nose": {
+       "mode": "surface",
+       "reproMm": 0.13,
+       "offCm": 6.65,
+       "refOffCm": 6.55
+      },
+      "left-eye": "joint",
+      "right-eye": "joint",
+      "left-ear": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 10.34,
+       "refOffCm": 10.09
+      },
+      "right-ear": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 10.25,
+       "refOffCm": 10.01
+      },
+      "left-shoulder": "joint",
+      "right-shoulder": "joint",
+      "left-elbow": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 1.71,
+       "refOffCm": 1.86
+      },
+      "right-elbow": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 2.1,
+       "refOffCm": 2.14
+      },
+      "left-hip": {
+       "mode": "surface",
+       "reproMm": 0.01,
+       "offCm": 7.11,
+       "refOffCm": 8.59
+      },
+      "right-hip": {
+       "mode": "surface",
+       "reproMm": 0.01,
+       "offCm": 7.11,
+       "refOffCm": 8.6
+      },
+      "left-knee": "joint",
+      "right-knee": "joint",
+      "left-ankle": "joint",
+      "right-ankle": "joint",
+      "left-big-toe-tip": {
+       "mode": "surface",
+       "reproMm": 0.01,
+       "offCm": 5.54,
+       "refOffCm": 5.41
+      },
+      "left-small-toe-tip": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 5.1,
+       "refOffCm": 5.06
+      },
+      "left-heel": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.15,
+       "refOffCm": 4.36
+      },
+      "right-big-toe-tip": {
+       "mode": "surface",
+       "reproMm": 0.02,
+       "offCm": 5.63,
+       "refOffCm": 5.5
+      },
+      "right-small-toe-tip": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 5.14,
+       "refOffCm": 5.12
+      },
+      "right-heel": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.1,
+       "refOffCm": 4.32
+      },
+      "right-thumb-tip": "joint",
+      "right-thumb-first-joint": "joint",
+      "right-thumb-second-joint": "joint",
+      "right-thumb-third-joint": "joint",
+      "right-index-tip": "joint",
+      "right-index-first-joint": "joint",
+      "right-index-second-joint": "joint",
+      "right-index-third-joint": "joint",
+      "right-middle-tip": "joint",
+      "right-middle-first-joint": "joint",
+      "right-middle-second-joint": "joint",
+      "right-middle-third-joint": "joint",
+      "right-ring-tip": "joint",
+      "right-ring-first-joint": "joint",
+      "right-ring-second-joint": "joint",
+      "right-ring-third-joint": "joint",
+      "right-pinky-tip": "joint",
+      "right-pinky-first-joint": "joint",
+      "right-pinky-second-joint": "joint",
+      "right-pinky-third-joint": "joint",
+      "right-wrist": "joint",
+      "left-thumb-tip": "joint",
+      "left-thumb-first-joint": "joint",
+      "left-thumb-second-joint": "joint",
+      "left-thumb-third-joint": "joint",
+      "left-index-tip": "joint",
+      "left-index-first-joint": "joint",
+      "left-index-second-joint": "joint",
+      "left-index-third-joint": "joint",
+      "left-middle-tip": "joint",
+      "left-middle-first-joint": "joint",
+      "left-middle-second-joint": "joint",
+      "left-middle-third-joint": "joint",
+      "left-ring-tip": "joint",
+      "left-ring-first-joint": "joint",
+      "left-ring-second-joint": "joint",
+      "left-ring-third-joint": "joint",
+      "left-pinky-tip": "joint",
+      "left-pinky-first-joint": "joint",
+      "left-pinky-second-joint": "joint",
+      "left-pinky-third-joint": "joint",
+      "left-wrist": "joint",
+      "left-olecranon": {
+       "mode": "surface",
+       "reproMm": 1.36,
+       "offCm": 6.15,
+       "refOffCm": 5.73
+      },
+      "right-olecranon": {
+       "mode": "surface",
+       "reproMm": 4.99,
+       "offCm": 6.45,
+       "refOffCm": 6.31
+      },
+      "left-cubital-fossa": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.56,
+       "refOffCm": 4.3
+      },
+      "right-cubital-fossa": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.07,
+       "refOffCm": 3.8
+      },
+      "left-acromion": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.63,
+       "refOffCm": 4.53
+      },
+      "right-acromion": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.47,
+       "refOffCm": 4.37
+      },
+      "neck": {
+       "mode": "scaled x0.902",
+       "reproMm": 28.53,
+       "offCm": 3,
+       "refOffCm": 3.32
+      }
+     },
+     "textures": {
+      "color": "/chars/ac-001/color.webp",
+      "normal": "/chars/ac-001/normal.webp",
+      "rough": "/chars/ac-001/rough.webp"
+     },
+     "seconds": 4.6
+    },
+    "lods": [
+     {
+      "lod": 0,
+      "triangles": 18376,
+      "dist": 0
+     },
+     {
+      "lod": 1,
+      "triangles": 9187,
+      "dist": 9
+     },
+     {
+      "lod": 2,
+      "triangles": 4593,
+      "dist": 18
+     }
+    ]
+   },
+   "error": null,
+   "finishedAt": "2026-09-29T17:41:32.739Z",
+   "seconds": 63
+  },
+  "import": {
+   "key": "73c3653f04028459",
+   "status": "done",
+   "mode": "mhr",
+   "at": "2026-09-29T17:41:32.736Z",
+   "finishedAt": "2026-09-29T17:41:32.736Z",
+   "rigId": "ac-001",
+   "output": "lib/mocap/mhr-rigs/ac-001.json.gz",
+   "reports": [
+    {
+     "id": "ac-001",
+     "bind": "rest",
+     "out": "/Users/crafterc/Claude Test/sprite-factory/lib/mocap/mhr-rigs/ac-001.json.gz",
+     "vertices": 20882,
+     "welded": 9201,
+     "triangles": 18376,
+     "heightM": 1.925,
+     "floorShift": -0.0106,
+     "legLen": 0.94221,
+     "soleOffset": 0.04496,
+     "unposeMoveCm": 9.41,
+     "meshToFittedBodyCm": {
+      "mean": 1.41,
+      "p95": 3.81
+     },
+     "weightMassDroppedByTop4": 0.0085,
+     "verticesOnTwoFingersBeforeClean": 240,
+     "verticesOnTwoFingersAfter": 92,
+     "keypoints": {
+      "nose": {
+       "mode": "surface",
+       "reproMm": 0.13,
+       "offCm": 6.65,
+       "refOffCm": 6.55
+      },
+      "left-eye": "joint",
+      "right-eye": "joint",
+      "left-ear": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 10.34,
+       "refOffCm": 10.09
+      },
+      "right-ear": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 10.25,
+       "refOffCm": 10.01
+      },
+      "left-shoulder": "joint",
+      "right-shoulder": "joint",
+      "left-elbow": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 1.71,
+       "refOffCm": 1.86
+      },
+      "right-elbow": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 2.1,
+       "refOffCm": 2.14
+      },
+      "left-hip": {
+       "mode": "surface",
+       "reproMm": 0.01,
+       "offCm": 7.11,
+       "refOffCm": 8.59
+      },
+      "right-hip": {
+       "mode": "surface",
+       "reproMm": 0.01,
+       "offCm": 7.11,
+       "refOffCm": 8.6
+      },
+      "left-knee": "joint",
+      "right-knee": "joint",
+      "left-ankle": "joint",
+      "right-ankle": "joint",
+      "left-big-toe-tip": {
+       "mode": "surface",
+       "reproMm": 0.01,
+       "offCm": 5.54,
+       "refOffCm": 5.41
+      },
+      "left-small-toe-tip": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 5.1,
+       "refOffCm": 5.06
+      },
+      "left-heel": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.15,
+       "refOffCm": 4.36
+      },
+      "right-big-toe-tip": {
+       "mode": "surface",
+       "reproMm": 0.02,
+       "offCm": 5.63,
+       "refOffCm": 5.5
+      },
+      "right-small-toe-tip": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 5.14,
+       "refOffCm": 5.12
+      },
+      "right-heel": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.1,
+       "refOffCm": 4.32
+      },
+      "right-thumb-tip": "joint",
+      "right-thumb-first-joint": "joint",
+      "right-thumb-second-joint": "joint",
+      "right-thumb-third-joint": "joint",
+      "right-index-tip": "joint",
+      "right-index-first-joint": "joint",
+      "right-index-second-joint": "joint",
+      "right-index-third-joint": "joint",
+      "right-middle-tip": "joint",
+      "right-middle-first-joint": "joint",
+      "right-middle-second-joint": "joint",
+      "right-middle-third-joint": "joint",
+      "right-ring-tip": "joint",
+      "right-ring-first-joint": "joint",
+      "right-ring-second-joint": "joint",
+      "right-ring-third-joint": "joint",
+      "right-pinky-tip": "joint",
+      "right-pinky-first-joint": "joint",
+      "right-pinky-second-joint": "joint",
+      "right-pinky-third-joint": "joint",
+      "right-wrist": "joint",
+      "left-thumb-tip": "joint",
+      "left-thumb-first-joint": "joint",
+      "left-thumb-second-joint": "joint",
+      "left-thumb-third-joint": "joint",
+      "left-index-tip": "joint",
+      "left-index-first-joint": "joint",
+      "left-index-second-joint": "joint",
+      "left-index-third-joint": "joint",
+      "left-middle-tip": "joint",
+      "left-middle-first-joint": "joint",
+      "left-middle-second-joint": "joint",
+      "left-middle-third-joint": "joint",
+      "left-ring-tip": "joint",
+      "left-ring-first-joint": "joint",
+      "left-ring-second-joint": "joint",
+      "left-ring-third-joint": "joint",
+      "left-pinky-tip": "joint",
+      "left-pinky-first-joint": "joint",
+      "left-pinky-second-joint": "joint",
+      "left-pinky-third-joint": "joint",
+      "left-wrist": "joint",
+      "left-olecranon": {
+       "mode": "surface",
+       "reproMm": 1.36,
+       "offCm": 6.15,
+       "refOffCm": 5.73
+      },
+      "right-olecranon": {
+       "mode": "surface",
+       "reproMm": 4.99,
+       "offCm": 6.45,
+       "refOffCm": 6.31
+      },
+      "left-cubital-fossa": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.56,
+       "refOffCm": 4.3
+      },
+      "right-cubital-fossa": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.07,
+       "refOffCm": 3.8
+      },
+      "left-acromion": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.63,
+       "refOffCm": 4.53
+      },
+      "right-acromion": {
+       "mode": "surface",
+       "reproMm": 0,
+       "offCm": 4.47,
+       "refOffCm": 4.37
+      },
+      "neck": {
+       "mode": "scaled x0.902",
+       "reproMm": 28.53,
+       "offCm": 3,
+       "refOffCm": 3.32
+      }
+     },
+     "textures": {
+      "color": "/chars/ac-001/color.webp",
+      "normal": "/chars/ac-001/normal.webp",
+      "rough": "/chars/ac-001/rough.webp"
+     },
+     "seconds": 4.6
+    }
+   ],
+   "warnings": []
+  },
+  "lods": {
+   "at": "2026-09-29T17:04:40.066Z",
+   "lods": [
+    {
+     "level": 0,
+     "dist": 0,
+     "tris": 18376
+    },
+    {
+     "level": 1,
+     "dist": 9,
+     "tris": 9187
+    },
+    {
+     "level": 2,
+     "dist": 18,
+     "tris": 4593
+    }
+   ],
+   "status": "done",
+   "error": null,
+   "finishedAt": "2026-09-29T17:04:40.067Z",
+   "seconds": 0
+  },
+  "preview": {
+   "at": "2026-09-29T17:01:40.133Z",
+   "report": {
+    "char": "ac-001",
+    "at": "2026-09-29T17:01:39.997Z",
+    "page": "court",
+    "clipLibrary": true,
+    "allPassed": false,
+    "results": [
+     {
+      "pose": "a_pose",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.018,
+      "squashedPct": 0.007,
+      "collapsedPct": 0,
+      "worstNear": {
+       "left-hip": 7,
+       "left-shoulder": 2,
+       "left-wrist": 5
+      },
+      "screenshot": "deformation/a_pose.png"
+     },
+     {
+      "pose": "deep_knee_bend",
+      "pass": false,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.268,
+      "squashedPct": 0.053,
+      "collapsedPct": 0,
+      "worstNear": {
+       "right-knee": 43,
+       "left-knee": 35,
+       "right-hip": 30,
+       "left-ankle": 37,
+       "right-ankle": 4,
+       "left-hip": 28
+      },
+      "screenshot": "deformation/deep_knee_bend.png"
+     },
+     {
+      "pose": "elbow_90",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0,
+      "squashedPct": 0,
+      "collapsedPct": 0,
+      "worstNear": {},
+      "screenshot": "deformation/elbow_90.png"
+     },
+     {
+      "pose": "arms_overhead",
+      "pass": false,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.247,
+      "squashedPct": 0.065,
+      "collapsedPct": 0,
+      "worstNear": {
+       "left-shoulder": 81,
+       "right-shoulder": 84,
+       "right-elbow": 4,
+       "left-elbow": 3
+      },
+      "screenshot": "deformation/arms_overhead.png"
+     },
+     {
+      "pose": "wrist_extension",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0,
+      "squashedPct": 0,
+      "collapsedPct": 0,
+      "worstNear": {},
+      "screenshot": "deformation/wrist_extension.png"
+     },
+     {
+      "pose": "hand_open",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0,
+      "squashedPct": 0,
+      "collapsedPct": 0,
+      "worstNear": {},
+      "screenshot": "deformation/hand_open.png"
+     },
+     {
+      "pose": "hand_closed",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.036,
+      "squashedPct": 0,
+      "collapsedPct": 0,
+      "worstNear": {
+       "left-middle-second-joint": 10,
+       "right-middle-second-joint": 10
+      },
+      "screenshot": "deformation/hand_closed.png"
+     },
+     {
+      "pose": "idle",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.051,
+      "squashedPct": 0.007,
+      "collapsedPct": 0,
+      "worstNear": {
+       "right-shoulder": 2,
+       "right-elbow": 6,
+       "right-knee": 10,
+       "left-knee": 10,
+       "right-hip": 2,
+       "left-hip": 2
+      },
+      "screenshot": "deformation/idle.png"
+     },
+     {
+      "pose": "run",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.047,
+      "squashedPct": 0.004,
+      "collapsedPct": 0.005,
+      "worstNear": {
+       "left-knee": 12,
+       "left-middle-second-joint": 2,
+       "left-shoulder": 12,
+       "right-knee": 2
+      },
+      "screenshot": "deformation/run.png"
+     },
+     {
+      "pose": "sprint",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.102,
+      "squashedPct": 0.025,
+      "collapsedPct": 0,
+      "worstNear": {
+       "left-ankle": 14,
+       "left-knee": 27,
+       "right-knee": 13,
+       "left-hip": 16
+      },
+      "screenshot": "deformation/sprint.png"
+     },
+     {
+      "pose": "dribble-a",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.047,
+      "squashedPct": 0.007,
+      "collapsedPct": 0.005,
+      "worstNear": {
+       "right-elbow": 4,
+       "right-shoulder": 2,
+       "right-knee": 10,
+       "left-knee": 10,
+       "right-hip": 2,
+       "left-hip": 2
+      },
+      "screenshot": "deformation/dribble-a.png"
+     },
+     {
+      "pose": "dribble-b",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.069,
+      "squashedPct": 0.004,
+      "collapsedPct": 0,
+      "worstNear": {
+       "right-shoulder": 2,
+       "right-knee": 14,
+       "left-knee": 12,
+       "right-hip": 2,
+       "left-hip": 4,
+       "right-elbow": 4,
+       "left-middle-second-joint": 2
+      },
+      "screenshot": "deformation/dribble-b.png"
+     },
+     {
+      "pose": "crossover",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.025,
+      "squashedPct": 0.029,
+      "collapsedPct": 0,
+      "worstNear": {
+       "left-ankle": 6,
+       "right-ankle": 8,
+       "right-knee": 12,
+       "left-elbow": 2,
+       "left-knee": 2
+      },
+      "screenshot": "deformation/crossover.png"
+     },
+     {
+      "pose": "jump-a",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.163,
+      "squashedPct": 0.051,
+      "collapsedPct": 0.005,
+      "worstNear": {
+       "right-hip": 33,
+       "left-hip": 38,
+       "right-shoulder": 8,
+       "right-knee": 16,
+       "left-shoulder": 2,
+       "left-knee": 16,
+       "right-elbow": 5
+      },
+      "screenshot": "deformation/jump-a.png"
+     },
+     {
+      "pose": "jump-b",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.152,
+      "squashedPct": 0.044,
+      "collapsedPct": 0,
+      "worstNear": {
+       "right-hip": 29,
+       "left-hip": 32,
+       "right-knee": 16,
+       "left-knee": 16,
+       "right-wrist": 3,
+       "right-elbow": 6,
+       "left-elbow": 4,
+       "left-wrist": 2
+      },
+      "screenshot": "deformation/jump-b.png"
+     },
+     {
+      "pose": "jump-c",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.174,
+      "squashedPct": 0.018,
+      "collapsedPct": 0,
+      "worstNear": {
+       "left-shoulder": 35,
+       "right-shoulder": 59,
+       "right-elbow": 3,
+       "right-knee": 2,
+       "left-ankle": 4,
+       "left-elbow": 1,
+       "right-ankle": 2
+      },
+      "screenshot": "deformation/jump-c.png"
+     },
+     {
+      "pose": "shooting_pose",
+      "pass": true,
+      "tris": 18376,
+      "edges": 55128,
+      "nan": 0,
+      "exploding": 0,
+      "stretchedPct": 0.12,
+      "squashedPct": 0.018,
+      "collapsedPct": 0.005,
+      "worstNear": {
+       "left-hip": 19,
+       "right-knee": 16,
+       "right-hip": 18,
+       "right-shoulder": 2,
+       "left-knee": 16,
+       "left-wrist": 5
+      },
+      "screenshot": "deformation/shooting_pose.png"
+     }
+    ],
+    "missingClips": [
+     "walk",
+     "defensive_stance",
+     "layup_dunk"
+    ],
+    "clipPosesSkipped": false,
+    "lods": [
+     {
+      "cameraDistance": 3,
+      "level": 0,
+      "triangles": 18376
+     },
+     {
+      "cameraDistance": 11,
+      "level": 1,
+      "triangles": 40
+     },
+     {
+      "cameraDistance": 20,
+      "level": 2,
+      "triangles": 20
+     },
+     {
+      "cameraDistance": 36,
+      "level": 2,
+      "triangles": 20
+     }
+    ],
+    "pageErrors": []
+   },
+   "status": "done",
+   "error": null,
+   "finishedAt": "2026-09-29T17:01:40.133Z",
+   "seconds": 29
+  },
+  "courttest": {
+   "at": "2026-09-29T17:02:18.037Z",
+   "passed": false,
+   "tail": [
+    "   ]",
+    "  },",
+    "  \"stop\": {",
+    "   \"labels\": [",
+    "    \"RUN DRIBBLE · clip\",",
+    "    \"STOP\",",
+    "    \"IDLE\"",
+    "   ],",
+    "   \"slideInM\": 1.16,",
+    "   \"stopped\": true,",
+    "   \"slideCm\": 0",
+    "  }",
+    " },",
+    " \"shot\": {",
+    "  \"started\": true,",
+    "  \"role\": \"shot-jumper\",",
+    "  \"released\": true,",
+    "  \"swish\": true,",
+    "  \"backToDribble\": true,",
+    "  \"slideCm\": 0",
+    " },",
+    " \"popMax\": 11464,",
+    " \"pass\": false",
+    "}",
+    ""
+   ],
+   "status": "failed",
+   "error": "court test failed — see logs/courttest.log",
+   "finishedAt": "2026-09-29T17:02:18.038Z",
+   "seconds": 38
+  }
+ },
+ "parts": {},
+ "skeletonVersion": "SOUL_JAM_MASTER_SKELETON (MHR 127 joints) — MHR body fitted to the mesh",
+ "textureVersion": "",
+ "lods": {
+  "lod0": {
+   "triangles": 18376,
+   "dist": 0,
+   "file": null
+  },
+  "lod1": {
+   "triangles": 9187,
+   "dist": 9,
+   "file": null
+  },
+  "lod2": {
+   "triangles": 4593,
+   "dist": 18,
+   "file": null
+  }
+ },
+ "sourceFiles": [],
+ "warnings": [],
+ "errors": [
+  {
+   "stage": "courttest",
+   "part": null,
+   "error": "court test failed — see logs/courttest.log",
+   "creditsSpentInJob": 0,
+   "at": "2026-09-29T17:02:18.038Z"
+  }
+ ],
+ "name": "AC",
+ "updatedAt": "2026-09-29T17:41:32.739Z",
+ "mode": "model",
+ "model": {
+  "file": "source/model/7827aecca37c.glb",
+  "sha": "7827aecca37c",
+  "name": "AC no clothe character.glb",
+  "bytes": 9877772,
+  "at": "2026-09-29T16:59:45.745Z"
+ },
+ "versions": [
+  {
+   "v": 1,
+   "at": "2026-09-29T17:01:10.868Z",
+   "note": "build",
+   "sources": {},
+   "triangles": 18376
+  },
+  {
+   "v": 2,
+   "at": "2026-09-29T17:03:32.676Z",
+   "note": "build",
+   "sources": {},
+   "triangles": 18376
+  },
+  {
+   "v": 3,
+   "at": "2026-09-29T17:04:40.051Z",
+   "note": "build",
+   "sources": {},
+   "triangles": 18376
+  }
+ ]
+}
