@@ -30,6 +30,8 @@
  * a clip's root space has the player at the origin facing +Z, left = +X.
  */
 
+import { detectContacts, mergeContacts } from './ball-contacts.mjs';
+
 // ── skeleton ────────────────────────────────────────────────────────────────
 export const MHR70 = [
   'nose', 'left-eye', 'right-eye', 'left-ear', 'right-ear',
@@ -335,7 +337,74 @@ export function prepareClip(json, rig, { mirror = false } = {}) {
     i = j;
   }
   clip.ballEvents = classifyBallEvents(clip);
+  // ball contacts (release / bounce / catch with windows + confidence): detected from the clip,
+  // then the Contact Editor's saved edits (json.ballContacts) on top — docs/ball-contact-system.md
+  try {
+    clip.contactInput = contactInput(clip, rig, json);
+    clip.ballContacts = mergeContacts(detectContacts(clip.contactInput), json.ballContacts && mirror ? mirrorEdits(json.ballContacts) : json.ballContacts);
+  } catch (e) {
+    clip.ballContacts = { version: 1, events: [], flights: [], holds: [], entryHand: hand, exitHand: endHand, log: ['detection failed: ' + e.message] };
+  }
+  if (clip.ballContacts.entryHand) clip.hand = clip.ballContacts.entryHand;
+  if (clip.ballContacts.exitHand) clip.endHand = clip.ballContacts.exitHand;
   return clip;
+}
+
+/** A point in the clip's root frame at trajectory tr → clip space (same as ball-contacts fromLocal). */
+function fromLocalClip(q, tr) { const c = Math.cos(tr[2]), s = Math.sin(tr[2]); return [c * q[0] + s * q[2] + tr[0], q[1], -s * q[0] + c * q[2] + tr[1]]; }
+
+/** Re-apply Contact Editor edits to a prepared clip (and its mirrored copy) without reloading it. */
+export function applyContactEdits(clip, edits) {
+  for (const c of [clip, clip.mirrored].filter(Boolean)) {
+    if (!c.contactInput) continue;
+    c.json.ballContacts = edits || undefined;
+    c.ballContacts = mergeContacts(detectContacts(c.contactInput), edits && c.mirror ? mirrorEdits(edits) : edits);
+    if (c.ballContacts.entryHand) c.hand = c.ballContacts.entryHand;
+    if (c.ballContacts.exitHand) c.endHand = c.ballContacts.exitHand;
+  }
+  return clip.ballContacts;
+}
+/** Edits saved on the filmed side, seen on the mirrored copy (hands swapped, local x flipped). */
+export function mirrorEdits(ed) {
+  const sw = (h) => (h === 'left' ? 'right' : h === 'right' ? 'left' : h);
+  return { ...ed, entryHand: sw(ed.entryHand), exitHand: sw(ed.exitHand), offsets: ed.offsets ? { left: ed.offsets.right, right: ed.offsets.left } : null,
+    events: (ed.events || []).map((e) => ({ ...e, hand: sw(e.hand), local: e.local ? [-e.local[0], e.local[1], e.local[2]] : e.local })) };
+}
+
+/**
+ * A clip sampled for the contact detector (engine3d/ball-contacts.mjs): per frame the ball and
+ * both palms in CLIP space (the root trajectory applied; loops are detrended so a loop is
+ * continuous across its wrap), the trajectory, leg capsules for the bounce clearance.
+ */
+export function contactInput(clip, rig, json = clip.json) {
+  const F = clip.F, P = new Float32Array(NJ * 3), W = new Float32Array(NJ * 3);
+  const palmOf = (Q, s) => { const [w, m] = PALM[s]; return [(gx(Q, w) + gx(Q, m)) / 2, (gy(Q, w) + gy(Q, m)) / 2, (gz(Q, w) + gz(Q, m)) / 2]; };
+  const toClip = (q, tr) => { const c = Math.cos(tr[2]), s = Math.sin(tr[2]); return [c * q[0] + s * q[2] + tr[0], q[1], -s * q[0] + c * q[2] + tr[1]]; };
+  const frames = [];
+  for (let i = 0; i < F; i++) {
+    samplePose(clip, i, P);
+    const tr = sampleTraj(clip, i);
+    placePose(P, tr[0], tr[1], tr[2], W, NJ);
+    const b = clip.ball[i];
+    frames.push({ ball: b?.p ? toClip(b.p, tr) : null, held: !!b?.held, hand: b?.hand || null, palmL: palmOf(W, 'left'), palmR: palmOf(W, 'right') });
+  }
+  const ls = rig.ls || 1, radii = rig.limbRadii || { thigh: 0.07 * ls, shin: 0.05 * ls, foot: 0.045 * ls };
+  const legsAt = (t) => {
+    samplePose(clip, t, P); const tr = sampleTraj(clip, t); placePose(P, tr[0], tr[1], tr[2], W, NJ);
+    const out = [];
+    for (const s of SIDES) {
+      const h = get3(W, LEG[s].hip), k = get3(W, LEG[s].knee), a = get3(W, LEG[s].ankle), hl = get3(W, LEG[s].heel), tb = get3(W, LEG[s].big);
+      out.push({ a: h, b: k, r: radii.thigh }, { a: k, b: a, r: radii.shin }, { a: hl, b: tb, r: radii.foot });
+    }
+    return out;
+  };
+  const video = json?.trackSource ? json.trackSource === 'video' : !!json?.viewDirRoot;
+  return {
+    id: json?.id || clip.name, F, fps: clip.fps, loop: clip.loop, R: 0.12, floorY: 0,
+    trackSource: json?.trackSource || (video ? 'video' : 'generated'),
+    frames, traj: (t) => sampleTraj(clip, t), shot: clip.shot ? { releaseFrame: clip.shot.releaseFrame, hand: clip.shot.hand } : null,
+    labels: clip.ballEvents?.frames || null, legsAt,
+  };
 }
 
 /**
@@ -1045,9 +1114,10 @@ export class Player {
     dt = clamp(dt, 0, 0.1);
     if (dt <= 0) return this.result();
     const trig = inp.trigger;
-    // combos: a new move may start in the current move's cancel window
-    if (trig && this.mode === 'action' && this.action && !this.action.clip.shot && this.action.t >= this.o.moveCancel * (this.action.clip.F - 1)) this.endAction();
-    if (trig && this.mode === 'loco' && this.hasBall && !this.ballFree) this.startAction(trig);
+    // combos: a new move may start inside the current move's interruption window (the ball held,
+    // not about to be released) — the caller checked the ball state and the entry hand
+    if (trig && this.mode === 'action' && this.action && this.canChain()) this.endAction({ chained: true, hand: inp.triggerHand });
+    if (trig && this.mode === 'loco' && this.hasBall && !this.ballFree) this.startAction(trig, inp.triggerHand);
 
     const prevSource = this.source;
     if (this.mode === 'loco') this.updateLoco(dt, inp); else this.updateAction(dt, inp);
@@ -1322,6 +1392,7 @@ export class Player {
     // dribble on the same clock as procedural locomotion), placed on this torso — the legs blend
     // freely between loops (which put the bounce at different points of the stride) without the
     // ball path ever jumping; a new locomotion clip needs no matching ball timing
+    this.locoState = { items, u, rate, cycle };
     if (this.hasBall && !this.ballFree && this.o.dribbleLayer !== false) this.dribbleLayer(P, dt, sp);
     else {
       const top = items.reduce((m, q) => (q.w > m.w ? q : m), items[0]);
@@ -1381,13 +1452,46 @@ export class Player {
    * rotations follow the same source (rotSrc), the legs keep P's.
    */
   dribbleLayer(P, dt, sp) {
-    const idle = this.idle(), ls = this.rig.ls;
-    if (!idle?.ball?.length) return;
+    const ls = this.rig.ls;
+    if (!this.idle()?.ball?.length) return;
     const rate = 1 + 0.25 * clamp(sp / (3 * ls), 0, 1.4);
-    this.dribbleT = (this.dribbleT + dt * idle.fps * rate) % idle.F;
-    const ip = samplePose(idle, this.dribbleT, new Float32Array(NJ * 3));
-    const tr = sampleTraj(idle, this.dribbleT);
+    this.advanceDribble(this.idle(), dt * this.idle().fps * rate);
+    const idle = this.idle();   // (a hand switch may have swapped it)
+    const I = this.idlePlaced(idle, this.dribbleT);
+    const xf = this.dribbleXf(I, P, sp);
+    for (let k = 0; k < NJ; k++) {
+      if (!ARM_JOINTS.has(k)) continue;
+      const q = xf(get3(I, k)); set3(P, k, q[0], q[1], q[2]);
+    }
+    this.rotSrc = [{ clip: idle, t: this.dribbleT, w: 1 }];
+    this.ballFromClip(P, idle, this.dribbleT, xf);
+    this.ballSrc.fpsNow = idle.fps * rate;
+    // look-ahead (the ball schedule): the torso of the locomotion blend and the idle at t + d
+    const L = this.locoState, t0 = this.dribbleT;
+    if (L) this.ballSrc.xfAt = (d) => {
+      const Pf = this.locoPoseAt(L.items, L.u + (d * L.rate) / L.cycle);
+      return this.dribbleXf(this.idlePlaced(idle, t0 + d * idle.fps * rate), Pf, sp);
+    };
+  }
+  /** The idle's pose at frame t, placed on its (detrended) trajectory. */
+  idlePlaced(idle, t) {
+    const ip = samplePose(idle, t, new Float32Array(NJ * 3)), tr = sampleTraj(idle, t);
     const I = new Float32Array(NJ * 3); placePose(ip, tr[0], tr[1], tr[2], I, NJ);
+    return I;
+  }
+  /** The locomotion blend's pose (capsule space, no leg warp) at gait phase u. */
+  locoPoseAt(items, u) {
+    const P = new Float32Array(NJ * 3), tmp = new Float32Array(NJ * 3), place = new Float32Array(NJ * 3);
+    for (const q of items) {
+      const t = phaseToTime(q.c.phaseMap, u);
+      samplePose(q.c, t, tmp); const tr = sampleTraj(q.c, t); placePose(tmp, tr[0], tr[1], tr[2], place, NJ);
+      for (let i = 0; i < NJ * 3; i++) P[i] += place[i] * q.w;
+    }
+    return P;
+  }
+  /** idle-clip space → the torso of pose P (shoulders aligned, pushed ahead / widened with speed). */
+  dribbleXf(I, P, sp) {
+    const ls = this.rig.ls;
     const sh = (Q) => { const l = get3(Q, J['left-shoulder']), r = get3(Q, J['right-shoulder']); return { mid: v3.lerp(l, r, 0.5), yaw: Math.atan2(l[2] - r[2], l[0] - r[0]) }; };
     const a = sh(I), b = sh(P), dy = wrapPi(a.yaw - b.yaw), c = Math.cos(dy), sn = Math.sin(dy);
     // push-ahead: at speed the dribble goes out in front (the arm swings forward about the shoulders)
@@ -1405,19 +1509,15 @@ export class Player {
       const lo2 = lo * co - u2 * so, u3 = lo * so + u2 * co, lr = [l[0] - lo * O[0], 0, l[2] - lo * O[2]];
       return [b.mid[0] + lr[0] + lo2 * O[0] + f2 * F[0], b.mid[1] + u3, b.mid[2] + lr[2] + lo2 * O[2] + f2 * F[2]];
     };
-    for (let k = 0; k < NJ; k++) {
-      if (!ARM_JOINTS.has(k)) continue;
-      const q = xf(get3(I, k)); set3(P, k, q[0], q[1], q[2]);
-    }
-    this.rotSrc = [{ clip: idle, t: this.dribbleT, w: 1 }];
-    this.ballFromClip(P, idle, this.dribbleT, xf);
+    return xf;
   }
 
   proceduralLoco(dt, sp) {
-    const idle = this.idle(), ls = this.rig.ls;
+    const ls = this.rig.ls;
     // dribble tempo rises a little with speed
     const rate = 1 + 0.25 * clamp(sp / (3 * ls), 0, 1.4);
-    this.dribbleT = (this.dribbleT + dt * idle.fps * rate) % idle.F;
+    this.advanceDribble(this.idle(), dt * this.idle().fps * rate);
+    const idle = this.idle();   // (a hand switch may have swapped it)
     const P = this.base;
     const tmp = samplePose(idle, this.dribbleT, new Float32Array(NJ * 3));
     this.rotSrc = [{ clip: idle, t: this.dribbleT, w: 1 }];
@@ -1445,6 +1545,7 @@ export class Player {
     this.ballFromClip(P, idle, this.dribbleT, (q) => this.leanPoint(q, this.lean, bob));
     // the lean `d` s ahead (same goal, from the predicted travel): the upper body — and the
     // dribbling hand — carries forward as the run builds, the ball intent must know where to
+    this.ballSrc.fpsNow = idle.fps * rate;
     this.ballSrc.xfAt = (d) => {
       const yw = this.ballYawAhead(d), v1 = [this.ahead(0, d)[1], this.ahead(1, d)[1]], v2 = [this.ahead(0, d + 0.02)[1], this.ahead(1, d + 0.02)[1]];
       const lvd = rotY(-yw, v1[0], v1[1]), lad = rotY(-yw, (v2[0] - v1[0]) / 0.02, (v2[1] - v1[1]) / 0.02);
@@ -1453,6 +1554,149 @@ export class Player {
       return (q) => this.leanPoint(q, ld, bob);
     };
     this.baseVelFrom(P, dt);
+  }
+
+  /**
+   * Advance the idle dribble clock by `df` frames. A requested hand switch is played as a real
+   * crossover dribble: armed at the next release, the idle swaps to its mirror at the bounce
+   * (both hands off the ball), so the other hand's catch frame meets the flight.
+   */
+  advanceDribble(idle, df) {
+    if (this.receiving) df = 0;   // ready hands: the catch pose waits for the ball
+    const F = idle.F, t0 = this.dribbleT, t1 = t0 + df;
+    const crossed = (f) => { const a = ((f - t0) % F + F) % F; return a > 0 && a <= df + 1e-9; };
+    const K = idle.ballContacts;
+    if (this.switchPending && K) {
+      const rel = K.events.find((e) => e.type === 'release' && crossed(e.frame));
+      if (rel && !this.switchArmed) this.switchArmed = { at: rel.frame };
+      const b = this.switchArmed && K.events.find((e) => e.type === 'bounce' && crossed(e.frame));
+      if (b) {
+        const to = this.hand === 'left' ? 'right' : 'left';
+        this.switchPending = false; this.switchArmed = null;
+        this.dribbleT = t1 % F;
+        if (this.setHand(to)) this.events.push({ type: 'handSwitch', hand: to, crossover: true });
+        return;
+      }
+    }
+    this.dribbleT = t1 % F;
+  }
+  /**
+   * A pass / pick-up is on its way to `hand`: end a shot's follow-through, show ready hands (the
+   * idle held at its catch frame) until the ball arrives, then dribble on from there.
+   */
+  receive(hand = this.hand) {
+    if (this.mode === 'action' && this.action) this.endAction({ hand });
+    if (hand && hand !== this.hand) this.setHand(hand);
+    this.hasBall = true; this.ballFree = false;
+    this.syncDribbleToCatch();
+    this.receiving = true;
+  }
+  caught() { this.receiving = false; }
+  /** Ask for the other hand: the next dribble crosses over (see advanceDribble). */
+  requestHandSwitch() {
+    const to = this.hand === 'left' ? 'right' : 'left';
+    if (!this.lib['idle:mirror'] && this.idleClip.hand !== to) return false;
+    if (this.mode !== 'loco') return false;
+    this.switchPending = true;
+    return true;
+  }
+
+  /**
+   * The animation's ball schedule — what the ball should do next, from the clip playing now
+   * (the idle / dribble layer, or a move): the hand holding it now, the next contacts (seconds
+   * from now, window, hand, confidence) with their predicted WORLD points (bounce: the floor spot,
+   * the body's motion predicted; catch / release: that hand's palm keypoint then, and now — the
+   * caller shifts the real palm target by the difference), the move and its normalized time.
+   * docs/ball-contact-system.md → ANIMATION INTEGRATION.
+   */
+  ballSchedule(horizon = 1.6) {
+    const src = this.ballSrc;
+    const none = { hand: null, events: [], moveId: null, u: null, inFlight: false, source: this.source };
+    if (!this.hasBall || this.ballFree || !src?.clip?.ballContacts) return none;
+    if (this.receiving) return { ...none, inFlight: true, receiving: true };
+    const { clip, t, xf, rootSpace } = src, K = clip.ballContacts, F = clip.F;
+    const fpsNow = src.fpsNow || clip.fps;
+    const P = new Float32Array(NJ * 3), W = new Float32Array(NJ * 3);
+    const trT = rootSpace ? sampleTraj(clip, t) : null;
+    // clip-space point at clip time tt, seen `d` s from now → world
+    const toWorld = (q, d) => {
+      if (rootSpace) { const l = rotY(-trT[2], q[0] - trT[0], q[2] - trT[1]); return this.toWorldPoint([l[0], q[1], l[1]], 0); }
+      const f = src.xfAt ? src.xfAt(d) : xf;
+      return this.toWorldPoint(f ? f(q) : q, d);
+    };
+    const palmClip = (tt, hand, c = clip) => {
+      samplePose(c, tt, P); const tr = sampleTraj(c, tt); placePose(P, tr[0], tr[1], tr[2], W, NJ);
+      const [w, m] = PALM[hand]; return [(gx(W, w) + gx(W, m)) / 2, (gy(W, w) + gy(W, m)) / 2, (gz(W, w) + gz(W, m)) / 2];
+    };
+    // the idle that dribbles with a hand (a hand switch catches with the mirrored idle's hand)
+    const idleFor = (h) => (this.idleClip.hand === h ? this.idleClip : this.lib['idle:mirror'] || this.idleClip);
+    const palmNow = Object.fromEntries(SIDES.map((s) => { const [w, m] = PALM[s]; return [s, [(gx(this.world, w) + gx(this.world, m)) / 2, (gy(this.world, w) + gy(this.world, m)) / 2, (gz(this.world, w) + gz(this.world, m)) / 2]]; }));
+    const out = [];
+    const cycles = clip.loop ? [0, F, 2 * F] : [0];
+    const other = (h) => (h === 'left' ? 'right' : h === 'right' ? 'left' : h);
+    let switchFlight = this.switchPending && this.mode === 'loco' && !rootSpace ? 'armed' : null;
+    let seenRelease = !!this.switchArmed;
+    for (const off of cycles) {
+      for (const e of K.events) {
+        const ahead = e.frame + off - t;
+        // just-passed events stay visible for 0.12 s (a slow tick may step over a release)
+        if (ahead < -0.12 * fpsNow || (!clip.loop && e.frame > F - 1 + 1e-6)) continue;
+        const inS = ahead / fpsNow;
+        if (inS > horizon) continue;
+        const ev = { id: e.id + (off ? '+' + off / F : ''), type: e.type, hand: e.hand, in: inS, tt: e.frame + off, window: [(e.window[0] - e.frame) / fpsNow + inS, (e.window[1] - e.frame) / fpsNow + inS], conf: e.conf, profile: e.profile || null, frame: e.frame };
+        const tt = e.frame + off;
+        if (e.type === 'bounce' && e.local) {
+          let local = e.local;
+          // the crossover dribble of a hand switch bounces on the midline
+          if (switchFlight && seenRelease) local = [0, local[1], local[2]];
+          ev.world = toWorld(fromLocalClip(local, sampleTraj(clip, tt)), inS);
+        } else if ((e.type === 'catch' || e.type === 'release') && e.hand && e.hand !== 'both') {
+          let hand = e.hand;
+          let pc = clip;
+          if (e.type === 'catch' && switchFlight && seenRelease) { hand = other(hand); ev.hand = hand; switchFlight = null; pc = idleFor(hand); }
+          ev.palmAt = toWorld(palmClip(tt, hand, pc), inS); ev.palmNow = palmNow[hand];
+          // the hand that catches after a switch is not the one dribbling now: its palm target now is
+          // not a reference for the shift — predict from the other idle's pose now instead
+          if (pc !== clip) ev.palmNow = toWorld(palmClip(t, hand, pc), 0);
+        } else if (e.type === 'catch' && e.hand === 'both') {
+          ev.palmAt = toWorld(palmClip(tt, 'left'), inS).map((x, k) => (x + toWorld(palmClip(tt, 'right'), inS)[k]) / 2); ev.palmNow = palmNow.left.map((x, k) => (x + palmNow.right[k]) / 2);
+        }
+        if (e.type === 'release' && switchFlight) seenRelease = true;
+        out.push(ev);
+      }
+    }
+    out.sort((a, b) => a.in - b.in);
+    const hand = this.heldHandNow();
+    // the captured hand–ball relation now (recorded clips): where the video had the ball on the hand
+    let heldOff = null;
+    const bi = clip.loop ? ((Math.round(t) % F) + F) % F : Math.max(0, Math.min(F - 1, Math.round(t)));
+    const hb = clip.ball[bi];
+    if (hb?.held && hb.off && K.trackSource === 'video') {
+      const pcl = palmClip(t, hb.hand);
+      const tr = sampleTraj(clip, t), c = Math.cos(tr[2]), sn = Math.sin(tr[2]);
+      const offClip = [c * hb.off[0] + sn * hb.off[2], hb.off[1], -sn * hb.off[0] + c * hb.off[2]];
+      const a = toWorld(pcl, 0), b = toWorld([pcl[0] + offClip[0], pcl[1] + offClip[1], pcl[2] + offClip[2]], 0);
+      heldOff = { hand: hb.hand, dir: [b[0] - a[0], b[1] - a[1], b[2] - a[2]] };
+    }
+    const span = clip.loop ? F : Math.max(1, F - 1);
+    return { hand, inFlight: !hand, events: out, heldOff, trackSource: K.trackSource, moveId: clip.json?.id || clip.name, role: clip.role, mirror: !!clip.mirror, u: clip.loop ? (t % F) / span : t / span, fpsNow, source: this.source, action: this.mode === 'action' };
+  }
+
+  /**
+   * The playing move's pose at clip time tt, in the WORLD as it will be then (the move's own root
+   * motion) — for predicting the skinned hand at a coming catch (ball-session solves it).
+   */
+  actionPoseWorld(tt) {
+    const src = this.ballSrc;
+    if (!src?.rootSpace || this.mode !== 'action') return null;
+    const clip = src.clip, trT = sampleTraj(clip, src.t), tr1 = sampleTraj(clip, tt);
+    const P = samplePose(clip, tt, new Float32Array(NJ * 3)), out = new Float32Array(NP * 3);
+    for (let k = 0; k < NJ; k++) {
+      const q = get3(P, k), cq = rotY(tr1[2], q[0], q[2]), l = rotY(-trT[2], cq[0] + tr1[0] - trT[0], cq[1] + tr1[1] - trT[1]);
+      const w = this.toWorldPoint([l[0], q[1], l[1]], 0);
+      set3(out, k, w[0], w[1] - (this.pelvisDrop || 0), w[2]);
+    }
+    return out;
   }
 
   /** Rotate the spine subtree about the pelvis (lean x = sideways, z = forward). */
@@ -1552,7 +1796,7 @@ export class Player {
 
   // ── actions ──
   /** All clips that can play a role now: variants (+ mirrors for moves), right hand first. */
-  candidatesFor(role) {
+  candidatesFor(role, hand = this.hand) {
     const vs = this.lib[role + ':variants'] || (this.lib[role] ? [this.lib[role]] : []);
     const out = [];
     for (const v of vs) {
@@ -1562,12 +1806,14 @@ export class Player {
     // a dribble move must start in the hand that has the ball (shots: any)
     // every move and shot starts in the hand that has the ball (the ball is physical: the other hand
     // cannot take it from across the body); the filmed side first, its mirror when that is the ball's hand
-    const inHand = out.filter((c) => c.hand === this.hand);
+    const inHand = out.filter((c) => c.hand === hand);
     return inHand.length ? inHand : out;
   }
+  /** Can a move with this role start from `hand` (a clip or a mirror whose entry hand is it)? */
+  hasMoveFor(role, hand = this.hand) { return this.candidatesFor(role, hand).some((c) => c.hand === hand); }
 
-  startAction(role) {
-    const cands = this.candidatesFor(role);
+  startAction(role, hand = this.hand) {
+    const cands = this.candidatesFor(role, hand);
     if (!cands.length) { this.events.push({ type: 'missing', role }); return false; }
     // nearest pose over every candidate's entry window: which variant, which frame
     const q = this.currentFeatures();
@@ -1633,7 +1879,7 @@ export class Player {
     samplePose(clip, a.t, this.base);
     this.rotSrc = [{ clip, t: a.t, w: 1 }];
     this.contactW = { left: contactAt(clip, 'left', a.t), right: contactAt(clip, 'right', a.t) };
-    if (!a.released && this.hasBall) this.ballFromClip(this.base, clip, a.t, null, true);
+    if (!a.released && this.hasBall) { this.ballFromClip(this.base, clip, a.t, null, true); this.ballSrc.fpsNow = clip.fps; }
     else set3(this.base, BALL, gx(this.out, BALL), gy(this.out, BALL), gz(this.out, BALL));
     this.baseVelFrom(this.base, dt);
     // shot release
@@ -1650,9 +1896,36 @@ export class Player {
     else if (a.t >= clip.F - 1 && clip.shot) { a.hold = (a.hold || 0) + dt; if (a.hold > 2.5) a.holdDone = true; }
   }
 
-  endAction() {
+  /**
+   * Interruption window of the playing move (from its ball contacts): the ball is held (pre-release
+   * or post-catch) and not about to leave the hand; never inside a flight, never in a shot.
+   */
+  canChain() {
     const a = this.action;
-    if (!a.clip.shot && a.clip.endHand !== this.hand) { this.hand = a.clip.endHand; this.stance = this.idle().feet; this.forceBlend = true; this.prevBaseSource = null; }
+    if (!a || a.clip.shot) return false;
+    const K = a.clip.ballContacts;
+    if (!K?.holds?.length) return a.t >= this.o.moveCancel * (a.clip.F - 1);
+    const h = K.holds.find((q) => a.t >= q.from && a.t <= q.to);
+    if (!h) return false;
+    const rel = K.events.find((e) => (e.type === 'release' || e.type === 'shot' || e.type === 'pass') && e.frame >= a.t);
+    return !rel || (rel.frame - a.t) / a.clip.fps > 0.06;
+  }
+  /** The hand holding the ball in the playing move / the idle now (null in flight). */
+  heldHandNow() {
+    const src = this.ballSrc, K = src?.clip?.ballContacts;
+    if (!K) return this.hand;
+    const F = src.clip.F, t = src.t;
+    for (const h of K.holds) {
+      if (src.clip.loop) { const a = h.from, b = h.to; const tt = t < a ? t + F : t; if (tt >= a && tt <= b) return h.hand; }
+      else if (t >= h.from && t <= h.to) return h.hand;
+    }
+    return null;
+  }
+
+  endAction(opts = {}) {
+    const a = this.action;
+    const endHand = opts.hand || (a.clip.shot ? this.hand : this.heldHandNow() || a.clip.endHand);
+    if (!a.clip.shot && endHand && endHand !== 'both' && endHand !== this.hand) { this.hand = endHand; this.stance = this.idle().feet; this.forceBlend = true; this.prevBaseSource = null; }
     this.mode = 'loco';
     this.action = null;
     // leave with the move's own speed (no dead stop at the end of a move)

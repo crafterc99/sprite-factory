@@ -25,6 +25,7 @@
  *   PUT  /api/mocap3d/clip/:id                   { role, type, trimStart, trimEnd, warp, entryMax, mirror, notes } → rebuilt
  *   POST /api/mocap3d/clip/:id/build             force a rebuild
  *   GET  /api/mocap3d/rig/:char                  character rig (gz JSON, ETag) ?motion&frame
+ *   GET|PUT|DELETE /api/mocap3d/contacts/:id     ball contact edits of a clip (Contact Editor; meta.ballContacts)
  *   POST /api/mocap3d/character/generate          character from video: A-pose views → Rodin 3D { motionId, frames, outfit }
  *   GET  /api/mocap3d/character/job/:id[/file/:n]  job status / its files (views, model.glb, textures)
  *   POST /api/mocap3d/generate                   { kind: run-dribble | crossover | crossover-moving, hand, speed } → new motion
@@ -380,6 +381,22 @@ function register(baseRouter, ctx) {
       const { json: j } = await GC.build(id, { force: true });
       json(res, { success: true, id, built: GC.summary(j) });
     } catch (err) { json(res, { error: err.message }, 400); }
+  });
+
+  // Ball contacts of a clip (Contact Editor): the saved edits (null = the automatic detection is used)
+  router.get('/api/mocap3d/contacts/:id', async (req, res, params) => {
+    try { json(res, { id: params.id, contacts: await GC.loadBallContacts(params.id) }); }
+    catch (err) { json(res, { error: err.message }, 404); }
+  });
+  router.put('/api/mocap3d/contacts/:id', async (req, res, params) => {
+    try {
+      const body = await parseBody(req);
+      json(res, { success: true, id: params.id, contacts: await GC.saveBallContacts(params.id, body?.contacts ?? null) });
+    } catch (err) { json(res, { error: err.message }, 400); }
+  });
+  router.delete('/api/mocap3d/contacts/:id', async (req, res, params) => {
+    try { await GC.saveBallContacts(params.id, null); json(res, { success: true, id: params.id, contacts: null }); }
+    catch (err) { json(res, { error: err.message }, 400); }
   });
 
   // Character rig (skinned mesh + skeleton), ?motion=&frame= to build from another scan

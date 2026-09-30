@@ -386,3 +386,68 @@ export function skinVerts(verts, skinIdx, skinW, mats, out = new Float32Array(ve
 }
 
 export const _internal = { quatToMat, matToQuat, frameRot, swing, twistAngle, slerpM };
+
+// ── skeleton crossfade (a source switch: no hand / finger pop) ─────────────────
+/** 4×4 column-major multiply: out = a · b. */
+function mul4(a, ao, b, bo, out, oo) {
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+    out[oo + c * 4 + r] = a[ao + r] * b[bo + c * 4] + a[ao + 4 + r] * b[bo + c * 4 + 1] + a[ao + 8 + r] * b[bo + c * 4 + 2] + a[ao + 12 + r] * b[bo + c * 4 + 3];
+  }
+}
+/** Inverse of a rigid-ish 4×4 (column-major) — general inverse. */
+function inv4(m, o = 0) {
+  const a = Array.from({ length: 16 }, (_, i) => m[o + i]), inv = new Float64Array(16);
+  inv[0] = a[5] * a[10] * a[15] - a[5] * a[11] * a[14] - a[9] * a[6] * a[15] + a[9] * a[7] * a[14] + a[13] * a[6] * a[11] - a[13] * a[7] * a[10];
+  inv[4] = -a[4] * a[10] * a[15] + a[4] * a[11] * a[14] + a[8] * a[6] * a[15] - a[8] * a[7] * a[14] - a[12] * a[6] * a[11] + a[12] * a[7] * a[10];
+  inv[8] = a[4] * a[9] * a[15] - a[4] * a[11] * a[13] - a[8] * a[5] * a[15] + a[8] * a[7] * a[13] + a[12] * a[5] * a[11] - a[12] * a[7] * a[9];
+  inv[12] = -a[4] * a[9] * a[14] + a[4] * a[10] * a[13] + a[8] * a[5] * a[14] - a[8] * a[6] * a[13] - a[12] * a[5] * a[10] + a[12] * a[6] * a[9];
+  inv[1] = -a[1] * a[10] * a[15] + a[1] * a[11] * a[14] + a[9] * a[2] * a[15] - a[9] * a[3] * a[14] - a[13] * a[2] * a[11] + a[13] * a[3] * a[10];
+  inv[5] = a[0] * a[10] * a[15] - a[0] * a[11] * a[14] - a[8] * a[2] * a[15] + a[8] * a[3] * a[14] + a[12] * a[2] * a[11] - a[12] * a[3] * a[10];
+  inv[9] = -a[0] * a[9] * a[15] + a[0] * a[11] * a[13] + a[8] * a[1] * a[15] - a[8] * a[3] * a[13] - a[12] * a[1] * a[11] + a[12] * a[3] * a[9];
+  inv[13] = a[0] * a[9] * a[14] - a[0] * a[10] * a[13] - a[8] * a[1] * a[14] + a[8] * a[2] * a[13] + a[12] * a[1] * a[10] - a[12] * a[2] * a[9];
+  inv[2] = a[1] * a[6] * a[15] - a[1] * a[7] * a[14] - a[5] * a[2] * a[15] + a[5] * a[3] * a[14] + a[13] * a[2] * a[7] - a[13] * a[3] * a[6];
+  inv[6] = -a[0] * a[6] * a[15] + a[0] * a[7] * a[14] + a[4] * a[2] * a[15] - a[4] * a[3] * a[14] - a[12] * a[2] * a[7] + a[12] * a[3] * a[6];
+  inv[10] = a[0] * a[5] * a[15] - a[0] * a[7] * a[13] - a[4] * a[1] * a[15] + a[4] * a[3] * a[13] + a[12] * a[1] * a[7] - a[12] * a[3] * a[5];
+  inv[14] = -a[0] * a[5] * a[14] + a[0] * a[6] * a[13] + a[4] * a[1] * a[14] - a[4] * a[2] * a[13] - a[12] * a[1] * a[6] + a[12] * a[2] * a[5];
+  inv[3] = -a[1] * a[6] * a[11] + a[1] * a[7] * a[10] + a[5] * a[2] * a[11] - a[5] * a[3] * a[10] - a[9] * a[2] * a[7] + a[9] * a[3] * a[6];
+  inv[7] = a[0] * a[6] * a[11] - a[0] * a[7] * a[10] - a[4] * a[2] * a[11] + a[4] * a[3] * a[10] + a[8] * a[2] * a[7] - a[8] * a[3] * a[6];
+  inv[11] = -a[0] * a[5] * a[11] + a[0] * a[7] * a[9] + a[4] * a[1] * a[11] - a[4] * a[3] * a[9] - a[8] * a[1] * a[7] + a[8] * a[3] * a[5];
+  inv[15] = a[0] * a[5] * a[10] - a[0] * a[6] * a[9] - a[4] * a[1] * a[10] + a[4] * a[2] * a[9] + a[8] * a[1] * a[6] - a[8] * a[2] * a[5];
+  const det = a[0] * inv[0] + a[1] * inv[4] + a[2] * inv[8] + a[3] * inv[12];
+  const d = Math.abs(det) > 1e-12 ? 1 / det : 0;
+  return Float64Array.from(inv, (x) => x * d);
+}
+/**
+ * Crossfade state for skinning matrices: when the animation source changes, the skeleton blends
+ * from the pose that was drawn (carried along with the root's rigid motion, so a moving character
+ * never smears) to the new one over `time` seconds.
+ *   const xf = createCrossfade(rig);  …  xf.start(mats);  …  xf.apply(mats, dt);
+ */
+export function createCrossfade(rig, time = 0.12) {
+  const root = rig.JI?.root ?? 0;
+  let from = null, rootInv = null, fade = 0;
+  const tmp = new Float64Array(16), frm = new Float64Array(16);
+  return {
+    get active() { return fade > 0; },
+    start(mats) {
+      // nothing drawn yet (all zero) → nothing to fade from
+      let any = false; for (let i = root * 16; i < root * 16 + 16; i++) if (mats[i]) { any = true; break; }
+      if (!any) return;
+      from = Float64Array.from(mats); rootInv = inv4(mats, root * 16); fade = 1;
+    },
+    cancel() { from = null; fade = 0; },
+    apply(mats, dt) {
+      if (!(fade > 0) || !from) return;
+      fade = Math.max(0, fade - dt / time);
+      const k = fade * fade * (3 - 2 * fade);
+      // Δ = root_now · root_then⁻¹ carries the old pose along with the body
+      mul4(mats, root * 16, rootInv, 0, tmp, 0);
+      for (let j = 0; j < mats.length / 16; j++) {
+        mul4(tmp, 0, from, j * 16, frm, 0);
+        const o = j * 16;
+        for (let i = 0; i < 16; i++) mats[o + i] += (frm[i] - mats[o + i]) * k;
+      }
+      if (!fade) from = null;
+    },
+  };
+}

@@ -121,7 +121,8 @@
 </div>
 <div id="dbg"><b>feet</b> · slide max <span id="dbgSlide"></span> <button id="dbgReset" type="button">reset</button><br><span id="dbgBody"></span></div>
 <div id="toast"></div>
-<div id="ballPanel"><div class="bh"><b>Basketball physics</b><span id="ballHz"></span><button id="ballClose" type="button">×</button></div>
+<div id="ballPanel"><div class="bh"><b>Ball debug</b><span id="ballHz"></span><button id="ballClose" type="button">×</button></div>
+  <canvas id="ballTimeline" width="330" height="58" style="width:100%;height:58px;display:block;background:#0b0d14;border-radius:6px"></canvas>
   <pre id="ballHud"></pre>
   <div id="ballBtns"><button id="bDrop" type="button">Drop ball</button><button id="bSpin" type="button">Drop + spin</button><button id="bGive" type="button">Give ball</button><button id="bReset" type="button">Defaults</button></div>
   <div id="ballScenes"></div>
@@ -134,9 +135,31 @@
   <input id="rpSlider" type="range" min="0" max="1" step="1" value="0" style="width:100%;margin-top:6px">
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
     <button id="rpPlay" type="button">Pause</button><button id="rpPrev" type="button">◀ frame</button><button id="rpNext" type="button">frame ▶</button>
-    <button id="rpSlow" type="button">¼ speed</button><button id="rpCap" type="button">capture: on</button>
+    <button id="rpSlow" type="button">¼ speed</button><button id="rpCap" type="button">capture: on</button><button id="rpContacts" type="button" title="Ball Contact Editor">Contacts</button>
   </div>
   <div style="color:var(--dim);font-size:12px;margin-top:4px">Left: the game clip, seen from the filming camera. Right: the frame it came from. Space play/pause · ←/→ step.</div>
+</div>
+
+<div id="ce" style="display:none;position:fixed;left:12px;bottom:12px;z-index:8;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px;width:min(96vw,760px);font:12px/1.4 ui-monospace,Menlo,monospace;color:var(--txt)">
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><b style="color:#fff;font-family:system-ui">Ball Contact Editor</b><span id="ceInfo" style="color:var(--dim)"></span><span style="flex:1"></span><span id="ceStatus" style="color:var(--dim)"></span></div>
+  <canvas id="ceTl" width="740" height="150" style="width:100%;height:150px;display:block;background:#0b0d14;border-radius:6px;cursor:crosshair"></canvas>
+  <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;align-items:center">
+    <button id="ceAddR" type="button">+ Release</button><button id="ceAddB" type="button">+ Bounce</button><button id="ceAddC" type="button">+ Catch</button><button id="ceAddG" type="button">+ Gather</button>
+    <button id="ceDel" type="button">Delete</button>
+    <span>hand <button id="ceHand" type="button">—</button></span>
+    <span>window <button id="ceWm" type="button">−</button><button id="ceWp" type="button">+</button></span>
+    <span>profile <select id="ceProf"><option value="">auto</option></select></span>
+    <button id="ceTrack" type="button">ball: cleaned</button>
+    <span style="flex:1"></span>
+    <button id="ceAuto" type="button" title="Back to the automatic detection">Auto</button><button id="ceRevert" type="button">Revert</button><button id="ceSave" type="button" style="color:#fff;background:var(--accent);border-color:var(--accent)">Save</button>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;align-items:center;color:var(--dim)">
+    palm offsets (cm):
+    <label>L normal <input id="ceLn" type="number" step="0.5" style="width:52px"></label><label>L along <input id="ceLa" type="number" step="0.5" style="width:52px"></label>
+    <label>R normal <input id="ceRn" type="number" step="0.5" style="width:52px"></label><label>R along <input id="ceRa" type="number" step="0.5" style="width:52px"></label>
+    <span>· click the timeline to scrub, drag a marker to move it (its window edges too) · select a bounce and drag its ring on the floor</span>
+  </div>
+  <div id="ceList" style="margin-top:4px;color:var(--dim);max-height:64px;overflow:auto"></div>
 </div>
 
 <div id="stickZone"></div>
@@ -158,6 +181,8 @@ import * as LAB from '/js/ball-lab.mjs';
 import * as SU from '/js/ball-setup.mjs';
 import * as VC from '/js/court-vantheah.mjs';
 import * as CM from '/js/souljam-material.mjs';
+import * as BS from '/js/ball-session.mjs';
+import * as BC from '/js/ball-contacts.mjs';
 window.__c3dBoot = true;
 { const e = document.getElementById('err'); if (e && e.getAttribute('data-src') === 'watchdog') e.innerHTML = ''; }
 if (window.__c3dPendingErr) window.__c3dFail(window.__c3dPendingErr);
@@ -180,6 +205,8 @@ const canvas = $('view');
 // Lite mode on phones/tablets (iPadOS reports a Mac UA but has touch points):
 // lower pixel ratio, cheaper shadows. ?hq=1 forces full quality, ?lite=1 lite.
 const QS = new URLSearchParams(location.search);
+// the ball: the contact system (docs/ball-contact-system.md) — ?ball=legacy runs the old physics-driven dribble
+const BALL_MODE = QS.get('ball') === 'legacy' ? 'legacy' : 'contact';
 const TOUCH = navigator.maxTouchPoints > 1 || COARSE;
 const LITE = QS.get('lite') === '1' || (TOUCH && QS.get('hq') !== '1');
 let renderer;
@@ -499,11 +526,14 @@ function poseCharacter(rig, pose, r = null, dt = 0) {
   if (!mhrRig) { A.boneMatrices(pose, rig.restInv, boneMats, boneTmp); return; }
   const srcs = CAPTURE && r?.rotSrc ? r.rotSrc.filter((q) => q.clip?.rots) : [];
   const key = r ? `${r.source}|${srcs.map((q) => q.clip.name + (q.clip.mirror ? '~' : '')).join(',')}` : '';
-  if (key !== capState.key) { capState.key = key; capState.w = 0; }
+  // a new source: the skeleton crossfades from where it was drawn (no hand / finger pop — the ball
+  // rides the hand, a popping hand would pop the ball)
+  if (key !== capState.key) { const had = capState.key !== ''; capState.key = key; capState.w = 0; if (had && dt > 0) (capState.xf ||= MS.createCrossfade(mhrRig)).start(boneMats); }
   const target = srcs.length ? srcs.reduce((a, q) => a + q.w, 0) : 0;
   capState.w += (Math.min(1, target) - capState.w) * (1 - Math.exp(-dt / 0.05));
   if (capState.w > 0.002) MS.mhrBoneMatricesCaptured(pose, mhrRig, srcs, capState.w, boneMats);
   else MS.mhrBoneMatrices(pose, mhrRig, boneMats);
+  capState.xf?.apply(boneMats, dt);
 }
 
 // foot-plant debug markers
@@ -617,7 +647,8 @@ function toast(html, ms = 2600) { const t = $('toast'); t.innerHTML = html; t.st
 const ROLE_NAMES = { 'move-crossover': 'crossover', 'move-spin': 'spin move', 'move-hesi': 'hesitation', 'move-btl': 'between-the-legs', 'shot-jumper': 'jump shot', 'shot-stepback': 'step-back jumper' };
 function trigger(role) {
   const p = S.player;
-  if (!p || p.mode !== 'loco' || !p.hasBall || p.ballFree) return null;
+  // (the contact system buffers a request and fires it in a valid window — a move may chain)
+  if (!p || (!S.ball && p.mode !== 'loco') || !p.hasBall || p.ballFree) return null;
   if (!p.lib[role]) { toast(`No ${ROLE_NAMES[role] || role} recorded yet — <a href="/recording">record one</a> and give it the role on /mocap.`); return null; }
   return role;
 }
@@ -661,6 +692,14 @@ function looseBall() {
 function resetPossession() {
   const ph = S.phys, P = S.player;
   if (!ph || !P) return;
+  if (S.ball) {
+    S.ball.log(`new possession (was ${S.ball.state})`);
+    P.giveBall(); P.syncDribbleToCatch();
+    poseCharacter(S.rig, P.update(1 / 120, { face: HOOP }).pose);
+    S.ball.reset(boneMats, S.gameT || 0);
+    S.freeBall = null; S.lostToast = false;
+    return;
+  }
   S.ballLog?.push(`${(performance.now() / 1000).toFixed(2)} resetPossession (was ${ph.state}${S.freeBall ? ' ' + S.freeBall.kind : ''})`);
   P.giveBall(); P.syncDribbleToCatch();
   // pose the body at that catch frame BEFORE placing the ball on its palm (else the ball appears
@@ -762,6 +801,31 @@ function ballStep(dt, r, now) {
   if (mhrRig) for (const s of ['l', 'r']) IK.conformFingers(boneMats, mhrRig, s, rs.p, ph.cfg.radius, { grip: !!ctl?.grip && ctl.hand?.[0] === s, rf: ph.cfg.radii.finger });
   window.__ballState = ph.state;
 }
+/** One tick of the ball in the contact system (engine3d/ball-session.mjs). */
+function ballStepContact(dt, r, now) {
+  const ph = S.phys, P = S.player;
+  const body = mhrRig ? BP.bodySampleFromJoints(IK.jointAccessor(boneMats, mhrRig), ph.cfg, null) : null;
+  const before = S.ball.ctl.p.slice();
+  const out = S.ball.step(S.gameT || 0, dt, r, boneMats, body);
+  // a shot through the net: the ball crosses the rim plane downward inside the ring
+  if (out.state === 'SHOT_RELEASE' && before[1] > RIM_Y && out.p[1] <= RIM_Y && Math.hypot(out.p[0], out.p[2]) < RIM_R - 0.03 && !S.ball.free?.through) {
+    if (S.ball.free) S.ball.free.through = true;
+    net.scale.set(0.9, 1.15, 0.9); S.swishAt = now; S.swishes = (S.swishes || 0) + 1;
+  }
+  if (out.state === 'LOOSE' && !S.lostToast && (S.ball.free?.t || 0) > 0.4) { S.lostToast = true; toast('Ball loose — walk to it to pick it up, or press <b>X</b> / <b>✕</b> for a new ball.', 3500); }
+  ball.position.set(out.p[0], out.p[1], out.p[2]);
+  ball.quaternion.set(out.q[0], out.q[1], out.q[2], out.q[3]);
+  ball.scale.setScalar(S.ball.ctl.cfg.R);
+  ball.visible = true;
+  S.lastBall.set(out.p[0], out.p[1], out.p[2]);
+  // fingers: out of the ball, and the holding hand's curled onto it (finger contact: its own pass)
+  if (mhrRig) { const h = S.ball.ctl.heldHand; for (const s of ['l', 'r']) IK.conformFingers(boneMats, mhrRig, s, out.p, S.ball.ctl.cfg.R, { grip: !!h && (h === 'both' || h[0] === s), rf: ph.cfg.radii.finger }); }
+  window.__ballState = out.state;
+}
+function ballEvent(e) {
+  if (e.type === 'recovery') { S.ballLog?.push(`${(S.gameT || 0).toFixed(2)} recovery: ${e.reason}`); if (S.dbgBall) console.warn('[ball] recovery', e.reason); }
+  if (e.type === 'catch') S.lostToast = false;
+}
 /** How much each hand should reach for the ball, from the controller state. */
 function ikControl(ph, body) { return ph.ikControl(body); }
 
@@ -816,7 +880,7 @@ const BALL_CFG_KEY = 'court3d_ballcfg';
 // the recorded ball tracks are made to fit THIS body (single-camera depth repair) and
 // clips whose ball would have to pass through a leg are left out when a valid variant exists
 function fitBallPaths(lib) {
-  if (!mhrRig) return;
+  if (!mhrRig || BALL_MODE === 'contact') return;   // the contact system clears the legs itself (constraint correction)
   try {
     for (const r of SU.repairLibrary(lib, mhrRig, S.phys ? S.phys.cfg : { ...BP.BALL_DEFAULTS, ...loadBallCfg() })) {
       if (r.dropped) console.info(`[ball] ${r.clip}: its ball path does not fit this body, left out of ${r.role}`);
@@ -859,10 +923,11 @@ function toggleBallDbg(on = !S.dbgBall) {
   S.dbgBall = on; $('ballBtn').classList.toggle('on', on); $('ballPanel').style.display = on ? 'block' : 'none';
   if (on && S.phys) buildBallPanel();
   dbg.group.visible = on;
+  cdbg.group.visible = on && !!S.ball;
 }
-$('bDrop').onclick = () => { const P = S.player, ph = S.phys; looseBall(); S.freeBall.t = -3; const f = [Math.sin(P.yaw), Math.cos(P.yaw)]; ph.placeBall([P.pos[0] + f[0] * 0.8, 1.8, P.pos[1] + f[1] * 0.8]); };
-$('bSpin').onclick = () => { const P = S.player, ph = S.phys; looseBall(); S.freeBall.t = -3; const f = [Math.sin(P.yaw), Math.cos(P.yaw)]; ph.placeBall([P.pos[0] + f[0] * 0.8, 1.6, P.pos[1] + f[1] * 0.8], [f[0] * 0.8, 0, f[1] * 0.8], [-f[1] * 20, 0, f[0] * 20]); };
-$('bGive').onclick = () => { if (S.lab) return; passBack(); };
+$('bDrop').onclick = () => { const P = S.player, ph = S.phys; if (S.ball) { const f = [Math.sin(P.yaw), Math.cos(P.yaw)]; S.ball.drop([P.pos[0] + f[0] * 0.8, 1.8, P.pos[1] + f[1] * 0.8]); return; } looseBall(); S.freeBall.t = -3; const f = [Math.sin(P.yaw), Math.cos(P.yaw)]; ph.placeBall([P.pos[0] + f[0] * 0.8, 1.8, P.pos[1] + f[1] * 0.8]); };
+$('bSpin').onclick = () => { const P = S.player, ph = S.phys; if (S.ball) { const f = [Math.sin(P.yaw), Math.cos(P.yaw)]; S.ball.drop([P.pos[0] + f[0] * 0.8, 1.6, P.pos[1] + f[1] * 0.8], [f[0] * 0.8, 0, f[1] * 0.8], [-f[1] * 20, 0, f[0] * 20]); return; } looseBall(); S.freeBall.t = -3; const f = [Math.sin(P.yaw), Math.cos(P.yaw)]; ph.placeBall([P.pos[0] + f[0] * 0.8, 1.6, P.pos[1] + f[1] * 0.8], [f[0] * 0.8, 0, f[1] * 0.8], [-f[1] * 20, 0, f[0] * 20]); };
+$('bGive').onclick = () => { if (S.lab) return; if (S.ball) { S.ball.passBack(S.gameT || 0, S.ball.lastTargets); return; } passBack(); };
 $('bReset').onclick = () => { S.phys.setConfig({ ...BP.BALL_DEFAULTS }); try { localStorage.removeItem(BALL_CFG_KEY); } catch {} buildBallPanel(); };
 
 const dbg = { group: new THREE.Group(), parts: new Map(), contacts: [] };
@@ -890,8 +955,74 @@ function partMesh(name, kind, dims) {
   dbg.group.add(m); dbg.parts.set(name, m);
   return m;
 }
+// ── Ball Debug Mode for the contact system: palm targets, contacts, the trajectory, windows ──
+const cdbg = { group: new THREE.Group(), pts: 60 };
+cdbg.group.visible = false; scene.add(cdbg.group);
+const dot = (c, r = 0.028) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 8), new THREE.MeshBasicMaterial({ color: c, depthTest: false, transparent: true, opacity: 0.9 })); m.renderOrder = 9; cdbg.group.add(m); return m; };
+cdbg.tL = dot(0x3a7bff); cdbg.tR = dot(0xff3b4e);
+cdbg.rel = dot(0xffd21a, 0.022); cdbg.cat = dot(0x19d27a, 0.03);
+cdbg.bnc = new THREE.Mesh(new THREE.RingGeometry(0.09, 0.13, 28), new THREE.MeshBasicMaterial({ color: 0x37d7ff, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.9 }));
+cdbg.bnc.rotation.x = -Math.PI / 2; cdbg.bnc.renderOrder = 9; cdbg.group.add(cdbg.bnc);
+cdbg.pred = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.115, 28), new THREE.MeshBasicMaterial({ color: 0x37d7ff, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.45 }));
+cdbg.pred.rotation.x = -Math.PI / 2; cdbg.pred.renderOrder = 9; cdbg.group.add(cdbg.pred);
+const lineOf = (color, opacity) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cdbg.pts * 3), 3)); const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false })); l.renderOrder = 9; l.frustumCulled = false; cdbg.group.add(l); return l; };
+cdbg.future = lineOf(0xffffff, 0.95); cdbg.past = lineOf(0xffffff, 0.3);
+cdbg.vel = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.3, 0x19d27a); cdbg.group.add(cdbg.vel);
+function setLine(l, pts) {
+  const a = l.geometry.attributes.position.array; const n = Math.min(pts.length, cdbg.pts);
+  for (let i = 0; i < cdbg.pts; i++) { const q = pts[Math.min(i, n - 1)] || [0, -10, 0]; a[i * 3] = q[0]; a[i * 3 + 1] = q[1]; a[i * 3 + 2] = q[2]; }
+  l.geometry.attributes.position.needsUpdate = true; l.geometry.setDrawRange(0, Math.max(0, n)); l.visible = n > 1;
+}
+function drawBallContactDbg() {
+  const B = S.ball, C = B.ctl, T = B.lastTargets, Sch = B.lastSchedule || { events: [] };
+  cdbg.group.visible = true;
+  if (T) { cdbg.tL.position.set(...T.left.p); cdbg.tR.position.set(...T.right.p); }
+  const plan = C.plannedPath(50);
+  cdbg.rel.visible = cdbg.cat.visible = cdbg.bnc.visible = !!plan;
+  if (plan) {
+    cdbg.rel.position.set(...plan.release); cdbg.cat.position.set(...plan.catch);
+    if (plan.bounce) cdbg.bnc.position.set(plan.bounce[0], 0.004, plan.bounce[2]); else cdbg.bnc.visible = false;
+    setLine(cdbg.future, plan.pts.filter((q) => !q.past).map((q) => q.p)); setLine(cdbg.past, plan.pts.filter((q) => q.past).map((q) => q.p));
+  } else { setLine(cdbg.future, []); setLine(cdbg.past, []); }
+  const nb = Sch.events.find((e) => e.type === 'bounce' && e.in >= 0 && e.world);
+  cdbg.pred.visible = !!nb; if (nb) cdbg.pred.position.set(nb.world[0], 0.003, nb.world[2]);
+  const v = C.v, sp = Math.hypot(...v);
+  cdbg.vel.visible = sp > 0.05; if (cdbg.vel.visible) { cdbg.vel.position.set(...C.p); cdbg.vel.setDirection(vA.set(...v).normalize()); cdbg.vel.setLength(Math.min(1.2, sp * 0.15), 0.05, 0.03); }
+  // HUD
+  const f2 = (x) => (x == null ? '—' : (x * 100).toFixed(1) + ' cm');
+  const dL = T ? Math.hypot(...T.left.p.map((x, i) => x - C.p[i])) : null, dR = T ? Math.hypot(...T.right.p.map((x, i) => x - C.p[i])) : null;
+  const nx = Sch.events.filter((e) => e.in >= -0.02).slice(0, 3).map((e) => `${e.type}${e.hand ? ' ' + e.hand[0].toUpperCase() : ''} ${e.in >= 0 ? '+' : ''}${e.in.toFixed(2)}s (${e.conf})`).join(' · ');
+  const P = S.player, act = P.action;
+  $('ballHud').textContent = [
+    `state     ${C.state}${C.recovery ? ' · RECOVERING (' + C.recovery.reason + ')' : ''}`,
+    `move      ${act ? (act.clip.name + (act.clip.mirror ? ' (mirror)' : '')) : P.source === 'clip-loco' ? 'locomotion + dribble layer' : 'idle dribble'} · u ${Sch.u != null ? Sch.u.toFixed(2) : '—'}`,
+    `hand      animation ${Sch.hand || 'in flight'} · ball ${C.heldHand || C.flight?.toHand || '—'}${P.switchPending ? ' · switching' : ''}`,
+    `distance  L ${f2(dL)} · R ${f2(dR)} · speed ${sp.toFixed(2)} m/s`,
+    `IK        L ${(C.ik.left * 100).toFixed(0)}% · R ${(C.ik.right * 100).toFixed(0)}%${B.lastIk ? ` · reach ${f2(B.lastIk.reach)}` : ''}`,
+    `next      ${nx || '—'}`,
+    plan ? `flight    ${plan.kind} ${plan.fromHand}→${plan.toHand} · bounce ${plan.tb != null ? (plan.tb - B.t).toFixed(2) + 's' : '—'} · catch ${(plan.tc - B.t).toFixed(2)}s` : 'flight    —',
+    `stats     ${C.stats.releases} releases · ${C.stats.bounces} bounces · ${C.stats.catches} catches · catch err ${f2(C.stats.maxCatchErr)} · leg slides ${C.stats.legSlides || 0}`,
+    `safety    recoveries ${C.recoveries} · rejected ${C.rejected} · floor fixes ${C.stats.floorViolations} · buffer ${B.buffer.map((b) => b.role).join(', ') || '—'}`,
+    ...C.log.slice(-5),
+  ].join('\n');
+  setText($('ballHz'), C.physics ? 'physics' : 'controlled');
+  // timeline: -0.5 s … +1.5 s, contact windows as bands
+  const cv = $('ballTimeline'), g = cv.getContext('2d'), W = cv.width, H = cv.height, t0 = -0.5, t1 = 1.5, X = (t) => ((t - t0) / (t1 - t0)) * W;
+  g.clearRect(0, 0, W, H);
+  const col = { release: '#ffd21a', bounce: '#37d7ff', catch: '#19d27a', shot: '#ff3b4e', gather: '#c07bff', pass: '#ff8a1a' };
+  const rows = { release: 0, bounce: 1, catch: 2, shot: 0, gather: 2, pass: 0 };
+  for (const e of Sch.events) {
+    const y = 6 + rows[e.type] * 15;
+    g.globalAlpha = 0.35 + 0.65 * (e.conf ?? 1); g.fillStyle = col[e.type] || '#fff';
+    g.fillRect(X(e.window[0]), y, Math.max(2, X(e.window[1]) - X(e.window[0])), 11);
+    g.globalAlpha = 1; g.fillStyle = '#000'; g.font = '9px ui-monospace, Menlo'; g.fillText((e.type[0] + (e.hand ? e.hand[0] : '')).toUpperCase(), X(e.in) - 4, y + 9);
+  }
+  g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(X(0), 0); g.lineTo(X(0), H); g.stroke();
+  g.fillStyle = '#8a93a8'; g.font = '9px ui-monospace, Menlo'; g.fillText('now', X(0) + 3, H - 3); g.fillText('+1 s', X(1) - 10, H - 3);
+}
 function drawBallDbg() {
   const ph = S.phys; if (!ph) return;
+  if (S.ball) drawBallContactDbg();
   const S0 = ph.lastSample, seen = new Set();
   if (S0) {
     for (const [n, c] of Object.entries(S0.caps)) {
@@ -946,8 +1077,8 @@ function drawBallDbg() {
     last ? `⚠ ${last.invalidPath ? `path invalid (${last.event || 'move'}): needs ${last.needCm} cm more room` : `${last.collider} overlap ${(last.depth * 1000).toFixed(1)} mm`}` : '',
     S.lab ? `test ${S.lab.name} · t ${S.lab.t.toFixed(2)} / ${S.lab.sc.duration.toFixed(2)} s · run ${S.lab.runs + 1}` : '',
   ];
-  $('ballHud').textContent = lines.filter(Boolean).join('\n');
-  setText($('ballHz'), `${st.stepHz} Hz physics`);
+  if (!S.ball) $('ballHud').textContent = lines.filter(Boolean).join('\n');
+  if (!S.ball) setText($('ballHz'), `${st.stepHz} Hz physics`);
   if (last && S.dbgBall && last !== dbg.lastWarn) { dbg.lastWarn = last; console.warn('[ball]', last); }
 }
 
@@ -1026,6 +1157,18 @@ function gameTick(dt, rdt, inp, now) {
   if (!trig && inp.edge.hesi) trig = trigger('move-hesi');
   if (!trig && inp.edge.btl) trig = trigger('move-btl');
   if (inp.edge.hand && P.mode === 'loco') switchHand();
+  // (game time: a slow frame is capped, the wait is measured in dribbles, not wall-clock)
+  if (S.ball) {
+    // the ball-aware input buffer (engine3d/ball-session.mjs): a request fires at the next valid
+    // window — the ball held by the move's entry hand, the playing move inside its interruption
+    // window — and a move for the other hand plays a crossover dribble first
+    S.gameT = (S.gameT || 0) + dt;
+    if (trig) S.ball.requestMove(trig, S.gameT);
+    const fire = S.ball.nextTrigger(S.gameT);
+    if (fire?.missing) toast(`No ${ROLE_NAMES[fire.missing] || fire.missing} for this hand.`);
+    const r = P.update(dt, { move: [mv.x, mv.z], sprint: inp.sprint, face: HOOP, trigger: fire?.role || null, triggerHand: fire?.hand });
+    return afterUpdate(r, dt, rdt, now);
+  }
   // input buffer: a move / shot starts when the ball is physically in the hand (never mid-dribble,
   // when it is on its way to the floor) — at most one dribble later
   const inHand = () => !S.freeBall && S.phys && (S.phys.state === 'HAND_CONTACT' || S.phys.state === 'POSSESSION_CONTROL'
@@ -1042,12 +1185,17 @@ function gameTick(dt, rdt, inp, now) {
   }
 
   const r = P.update(dt, { move: [mv.x, mv.z], sprint: inp.sprint, face: HOOP, trigger: trig });
+  return afterUpdate(r, dt, rdt, now);
+}
+/** After the animation update: court bounds, events, posing, the ball. */
+function afterUpdate(r, dt, rdt, now) {
+  const P = S.player;
   // court bounds + keep off the stanchion (the capsule only; planted feet stay put)
   P.pos[0] = Math.max(PLAY.minX + 0.4, Math.min(PLAY.maxX - 0.4, P.pos[0]));
   P.pos[1] = Math.max(PLAY.minZ + 0.4, Math.min(PLAY.maxZ - 0.4, P.pos[1]));
   const hd = Math.hypot(P.pos[0], P.pos[1]); if (hd < 0.9) { P.pos[0] *= 0.9 / hd; P.pos[1] *= 0.9 / hd; }
   for (const e of r.events) {
-    if (e.type === 'release') shootRelease();
+    if (e.type === 'release' && !S.ball) shootRelease();
     if (e.type === 'action') { S.lastAction = e.role; S.lastPick = e; }
     if (e.type === 'skid') S.skidAt = now;
   }
@@ -1055,8 +1203,9 @@ function gameTick(dt, rdt, inp, now) {
   updateCharLod();
   updateVideoBox(r);
 
-  // ── Ball (Rapier is authoritative: the animation gives intent, physics decides, IK adjusts the hands)
-  ballStep(dt, r, now);
+  // ── Ball: the contact system (controlled states: trajectories between contacts; physics only for
+  // shots in flight and loose balls) — or the legacy physics-driven dribble (?ball=legacy)
+  if (S.ball) ballStepContact(dt, r, now); else ballStep(dt, r, now);
   net.scale.lerp(new THREE.Vector3(1, 1, 1), 1 - Math.exp(-dt * 5));
   return r;
 }
@@ -1157,6 +1306,7 @@ function heldInMeshHand(r) {
 // ═══ Replay: a recorded clip exactly as the game plays it, next to its video ═══
 async function startReplay(id) {
   const json = await getJSON(`/api/mocap3d/clip/${encodeURIComponent(id)}`, { label: 'clip' });
+  S.clipMeta?.(json, id);
   const clip = A.prepareClip(json, S.rig);
   S.replay = { id, clip, json, t: 0, playing: true, speed: 1, lastImg: -1, cap: true, pos: [0, 6] };
   $('replay').style.display = 'block';
@@ -1169,6 +1319,8 @@ async function startReplay(id) {
   $('rpNext').onclick = () => { pause(); S.replay.t = Math.min(clip.F - 1, Math.round(S.replay.t) + 1); };
   $('rpSlow').onclick = () => { S.replay.speed = S.replay.speed === 1 ? 0.25 : 1; $('rpSlow').textContent = S.replay.speed === 1 ? '¼ speed' : 'full speed'; };
   $('rpCap').onclick = () => { S.replay.cap = !S.replay.cap; $('rpCap').textContent = 'capture: ' + (S.replay.cap ? 'on' : 'off'); };
+  $('rpContacts').onclick = () => (CE.on ? ceClose() : ceOpen());
+  if (QS.get('contacts') === '1') ceOpen();
   window.addEventListener('keydown', (e) => {
     if (!S.replay) return;
     if (e.code === 'Space') $('rpPlay').click();
@@ -1189,8 +1341,9 @@ function replayStep(rdt) {
   else poseCharacter(S.rig, rpPose);
   // ball from the clip (root space of the clip → court)
   const b = c.ball[Math.min(c.F - 1, fi)];
-  const hb = R.cap ? (capState.w = 1, heldInMeshHand({ rotSrc: [{ clip: c, t: R.t, w: 1 }] })) : null;
-  if (hb) { ball.position.copy(hb); ball.visible = true; }
+  const hb = R.cap && !CE.on ? (capState.w = 1, heldInMeshHand({ rotSrc: [{ clip: c, t: R.t, w: 1 }] })) : null;
+  if (CE.on) ceReplayFrame(R, tr);
+  else if (hb) { ball.position.copy(hb); ball.visible = true; }
   else if (b) { const cs = Math.cos(tr[2]), sn = Math.sin(tr[2]); ball.position.set(R.pos[0] + tr[0] + cs * b.p[0] + sn * b.p[2], b.p[1], R.pos[1] + tr[1] - sn * b.p[0] + cs * b.p[2]); ball.visible = true; }
   // the video frame this clip frame came from
   const src = R.json.srcFrames?.[fi];
@@ -1205,8 +1358,178 @@ function replayStep(rdt) {
   renderer.render(scene, camera);
 }
 
+// ═══ Ball Contact Editor (replay mode: ?replay=<id>&contacts=1, or the Contacts button) ═══
+// The clip's contacts (auto-detected, or the saved edits) on a timeline next to the ball height and
+// both palm distances; markers can be added, dragged, re-handed, their windows / profiles changed,
+// a bounce target dragged on the floor, palm offsets set — saved as the clip's metadata.
+const CE = { on: false, sel: null, drag: null, raw: false, rings: [] };
+{
+  const mk = (color) => { const m = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 8), new THREE.MeshBasicMaterial({ color, depthTest: false })); m.renderOrder = 10; m.visible = false; scene.add(m); return m; };
+  CE.pl = mk(0x3a7bff); CE.pr = mk(0xff3b4e);
+  $('ceProf').innerHTML += BC.PROFILES.map((p) => `<option value="${p}">${p}</option>`).join('');
+}
+const ceRing = (i) => {
+  while (CE.rings.length <= i) { const m = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.14, 32), new THREE.MeshBasicMaterial({ color: 0x37d7ff, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.4 })); m.rotation.x = -Math.PI / 2; m.renderOrder = 10; scene.add(m); CE.rings.push(m); }
+  return CE.rings[i];
+};
+const ceEv = () => CE.K?.events.find((e) => e.id === CE.sel) || null;
+const ceWorld = (q) => [q[0] + S.replay.pos[0], q[1], q[2] + S.replay.pos[1]];   // clip space → court (the replay's placement)
+function ceOpen() {
+  const R = S.replay; if (!R) return;
+  CE.id = R.id; CE.clip = R.clip; CE.input = R.clip.contactInput;
+  CE.auto = BC.detectContacts(CE.input);
+  CE.K = structuredClone(R.clip.ballContacts); CE.saved = R.json.ballContacts || null; CE.useAuto = false;
+  CE.dirty = false; CE.sel = null;
+  CE.on = true;
+  try { ceRecompute(); ceOffsetsToInputs(); } catch (e) { CE.on = false; throw e; }
+  $('ce').style.display = 'block';
+  $('ceInfo').textContent = `${R.json.name || R.id} · ${CE.clip.F} frames @ ${CE.clip.fps} fps · ${CE.input.trackSource} track`;
+  ceStatus();
+}
+function ceClose() { CE.on = false; $('ce').style.display = 'none'; CE.pl.visible = CE.pr.visible = false; CE.rings.forEach((m) => (m.visible = false)); }
+function ceRecompute() { CE.K.flights = []; BC.finalize(CE.K); CE.clean = BC.cleanBallTrack(CE.input, CE.K); ceDraw(); ceList(); }
+function ceStatus(msg) { $('ceStatus').textContent = msg || (CE.dirty ? 'unsaved changes' : CE.saved ? 'saved edits' : 'automatic detection'); }
+function ceChanged() { CE.dirty = true; CE.useAuto = false; ceRecompute(); ceStatus(); }
+function ceList() {
+  $('ceList').innerHTML = CE.K.events.map((e) => `<span data-id="${e.id}" style="cursor:pointer;margin-right:10px;${e.id === CE.sel ? 'color:#fff;font-weight:bold' : ''}${e.conf < 0.6 ? ';color:#ffb020' : ''}">${e.type}${e.hand ? ' ' + e.hand : ''} @${e.frame.toFixed(1)} (${e.conf})</span>`).join('') + ` · entry ${CE.K.entryHand || '—'} → exit ${CE.K.exitHand || '—'}`;
+  $('ceList').querySelectorAll('[data-id]').forEach((el) => (el.onclick = () => { CE.sel = el.dataset.id; S.replay.t = ceEv().frame; ceSelUi(); ceDraw(); ceList(); }));
+  ceSelUi();
+}
+function ceSelUi() { const e = ceEv(); $('ceHand').textContent = e?.hand || '—'; $('ceProf').value = e?.profile || ''; }
+function ceOffsetsToInputs() {
+  const o = CE.K.offsets || {}, cm = (x) => (x == null ? '' : +(x * 100).toFixed(1));
+  $('ceLn').value = cm(o.left?.normal ?? 0); $('ceLa').value = cm(o.left?.along ?? 0.012); $('ceRn').value = cm(o.right?.normal ?? 0); $('ceRa').value = cm(o.right?.along ?? 0.012);
+}
+for (const id of ['ceLn', 'ceLa', 'ceRn', 'ceRa']) $(id).onchange = () => {
+  const v = (k) => (+$(k).value || 0) / 100;
+  CE.K.offsets = { left: { normal: v('ceLn'), along: v('ceLa') }, right: { normal: v('ceRn'), along: v('ceRa') } };
+  ceChanged();
+};
+const CE_COL = { release: '#ffd21a', bounce: '#37d7ff', catch: '#19d27a', gather: '#c07bff', shot: '#ff3b4e', pass: '#ff8a1a' };
+const CE_ROW = { release: 0, bounce: 1, catch: 2, gather: 3, shot: 3, pass: 3 };
+function ceDraw() {
+  if (!CE.on) return;
+  const cv = $('ceTl'), g = cv.getContext('2d'), W = cv.width, H = cv.height, F = CE.clip.F, fr = CE.input.frames;
+  const X = (f) => 10 + (f / Math.max(1, F - 1)) * (W - 20);
+  g.clearRect(0, 0, W, H);
+  // held flags (the builder's), per hand
+  fr.forEach((f, i) => { if (f.held) { g.fillStyle = f.hand === 'left' ? '#3a7bff' : '#ff3b4e'; g.fillRect(X(i) - 1, H - 7, Math.max(2, X(i + 1) - X(i)), 5); } });
+  // curves: ball height (0–2.2 m), palm distances (0–1 m)
+  const plot = (vals, max, color) => { g.strokeStyle = color; g.lineWidth = 1.3; g.beginPath(); let on = false; vals.forEach((v, i) => { if (v == null) { on = false; return; } const y = H - 12 - (Math.min(v, max) / max) * (H - 70); on ? g.lineTo(X(i), y) : g.moveTo(X(i), y); on = true; }); g.stroke(); };
+  const dist = (a, b) => (a && b ? Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) : null);
+  plot(fr.map((f) => f.ball?.[1] ?? null), 2.2, 'rgba(255,255,255,0.35)');
+  plot(CE.clean.p.map((q) => q?.[1] ?? null), 2.2, '#ffffff');
+  plot(fr.map((f) => dist(f.ball, f.palmL)), 1, '#3a7bff');
+  plot(fr.map((f) => dist(f.ball, f.palmR)), 1, '#ff3b4e');
+  // events: window bands + marker lines, by type row
+  for (const e of CE.K.events) {
+    const y = 4 + CE_ROW[e.type] * 13;
+    g.globalAlpha = 0.3; g.fillStyle = CE_COL[e.type]; g.fillRect(X(e.window[0]), y, Math.max(2, X(e.window[1]) - X(e.window[0])), 11);
+    g.globalAlpha = 1; g.fillStyle = e.conf < 0.6 ? '#ffb020' : CE_COL[e.type]; g.fillRect(X(e.frame) - 1.5, y, 3, H - y - 8);
+    g.fillStyle = e.id === CE.sel ? '#fff' : CE_COL[e.type]; g.font = (e.id === CE.sel ? 'bold ' : '') + '10px ui-monospace, Menlo';
+    g.fillText(`${e.type[0].toUpperCase()}${e.hand ? e.hand[0].toUpperCase() : ''} ${e.conf}`, X(e.frame) + 3, y + 9);
+  }
+  const R = S.replay; g.strokeStyle = '#fff'; g.lineWidth = 1; g.beginPath(); g.moveTo(X(R.t), 0); g.lineTo(X(R.t), H); g.stroke();
+  g.fillStyle = '#8a93a8'; g.font = '10px ui-monospace, Menlo'; g.fillText(`frame ${R.t.toFixed(1)}  · white: ball height (faint = capture, bright = cleaned) · blue/red: distance to the L/R palm`, 12, H - 10);
+}
+{
+  const tl = $('ceTl');
+  const frameAt = (ev) => { const r = tl.getBoundingClientRect(), x = ((ev.clientX - r.left) / r.width) * tl.width; return Math.max(0, Math.min(CE.clip.F - 1, ((x - 10) / (tl.width - 20)) * (CE.clip.F - 1))); };
+  const xOf = (f) => 10 + (f / Math.max(1, CE.clip.F - 1)) * (tl.width - 20);
+  tl.addEventListener('pointerdown', (ev) => {
+    if (!CE.on) return;
+    const r = tl.getBoundingClientRect(), px = ((ev.clientX - r.left) / r.width) * tl.width, f = frameAt(ev);
+    const sel = ceEv();
+    if (sel && Math.abs(xOf(sel.window[0]) - px) < 5) CE.drag = { id: sel.id, mode: 'w0' };
+    else if (sel && Math.abs(xOf(sel.window[1]) - px) < 5) CE.drag = { id: sel.id, mode: 'w1' };
+    else {
+      const hit = CE.K.events.map((e) => ({ e, d: Math.abs(xOf(e.frame) - px) })).filter((q) => q.d < 6).sort((a, b) => a.d - b.d)[0];
+      if (hit) { CE.sel = hit.e.id; CE.drag = { id: hit.e.id, mode: 'move', from: f, f0: hit.e.frame, w0: hit.e.window.slice() }; }
+      else { CE.sel = null; CE.drag = { mode: 'scrub' }; }
+    }
+    S.replay.t = f; S.replay.playing = false; $('rpPlay').textContent = 'Play';
+    tl.setPointerCapture(ev.pointerId); ceDraw(); ceList();
+  });
+  tl.addEventListener('pointermove', (ev) => {
+    const d = CE.drag; if (!d) return;
+    const f = frameAt(ev), e = CE.K.events.find((x) => x.id === d.id);
+    if (d.mode === 'scrub' || !e) { S.replay.t = f; ceDraw(); return; }
+    if (d.mode === 'move') { const df = f - d.from; e.frame = +(d.f0 + df).toFixed(2); e.window = d.w0.map((w) => +(w + df).toFixed(2)); }
+    if (d.mode === 'w0') e.window[0] = +Math.min(f, e.frame).toFixed(2);
+    if (d.mode === 'w1') e.window[1] = +Math.max(f, e.frame).toFixed(2);
+    e.manual = true; e.conf = 1; S.replay.t = e.frame;
+    ceChanged();
+  });
+  tl.addEventListener('pointerup', () => { CE.drag = null; });
+}
+function ceAdd(type) {
+  const f = +S.replay.t.toFixed(2), fr = CE.input.frames[Math.round(f)] || CE.input.frames[0];
+  const b = CE.clean.p[Math.round(f)] || fr.ball || fr.palmR;
+  const near = fr.ball ? (Math.hypot(...fr.ball.map((x, k) => x - fr.palmL[k])) < Math.hypot(...fr.ball.map((x, k) => x - fr.palmR[k])) ? 'left' : 'right') : 'right';
+  const e = { id: `${type[0]}${Date.now().toString(36).slice(-4)}`, type, hand: type === 'bounce' ? null : type === 'gather' ? 'both' : near, frame: f, window: [f - 0.75, f + 0.75], conf: 1, manual: true };
+  if (type === 'bounce') e.local = BC.toLocal([b[0], 0.12, b[2]], CE.input.traj(f)).map((x) => +x.toFixed(4));
+  CE.K.events.push(e); CE.sel = e.id; ceChanged();
+}
+$('ceAddR').onclick = () => ceAdd('release'); $('ceAddB').onclick = () => ceAdd('bounce'); $('ceAddC').onclick = () => ceAdd('catch'); $('ceAddG').onclick = () => ceAdd('gather');
+$('ceDel').onclick = () => { if (!CE.sel) return; CE.K.events = CE.K.events.filter((e) => e.id !== CE.sel); CE.sel = null; ceChanged(); };
+$('ceHand').onclick = () => { const e = ceEv(); if (!e || e.type === 'bounce') return; e.hand = e.hand === 'left' ? 'right' : e.hand === 'right' ? 'both' : 'left'; e.manual = true; ceChanged(); };
+$('ceWm').onclick = () => { const e = ceEv(); if (!e) return; e.window = [Math.min(e.frame, e.window[0] + 0.5), Math.max(e.frame, e.window[1] - 0.5)]; ceChanged(); };
+$('ceWp').onclick = () => { const e = ceEv(); if (!e) return; e.window = [e.window[0] - 0.5, e.window[1] + 0.5]; ceChanged(); };
+$('ceProf').onchange = () => { const e = ceEv(); if (!e) return; e.profile = $('ceProf').value || undefined; ceChanged(); };
+$('ceTrack').onclick = () => { CE.raw = !CE.raw; $('ceTrack').textContent = 'ball: ' + (CE.raw ? 'capture' : 'cleaned'); };
+$('ceAuto').onclick = () => { CE.K = structuredClone(CE.auto); CE.sel = null; CE.dirty = true; CE.useAuto = true; ceRecompute(); ceOffsetsToInputs(); ceStatus('automatic detection (save to keep)'); };
+$('ceRevert').onclick = () => { CE.K = structuredClone(S.replay.clip.ballContacts); CE.sel = null; CE.dirty = false; ceRecompute(); ceOffsetsToInputs(); ceStatus(); };
+$('ceSave').onclick = async () => {
+  const body = CE.useAuto ? null : { version: BC.CONTACTS_VERSION, events: CE.K.events.map((e) => ({ id: e.id, type: e.type, hand: e.hand ?? null, frame: e.frame, window: e.window, conf: e.conf, ...(e.local ? { local: e.local } : {}), ...(e.profile ? { profile: e.profile } : {}) })), offsets: CE.K.offsets || null, entryHand: CE.K.entryHand, exitHand: CE.K.exitHand };
+  ceStatus('saving…');
+  try {
+    const r = await fetch(`/api/mocap3d/contacts/${encodeURIComponent(CE.id)}`, { method: body ? 'PUT' : 'DELETE', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify({ contacts: body }) : undefined, credentials: 'same-origin' });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || 'HTTP ' + r.status);
+    CE.saved = j.contacts; CE.dirty = false; CE.useAuto = false;
+    // the game uses them at once (replay clip + every loaded copy of this clip)
+    A.applyContactEdits(S.replay.clip, j.contacts); S.replay.json.ballContacts = j.contacts || undefined;
+    for (const [k, v] of Object.entries(S.player?.lib || {})) if (k.endsWith(':variants')) for (const c of v) if (c.json?.id === CE.id) A.applyContactEdits(c, j.contacts);
+    S.ball?.setGraph(S.player.lib);
+    CE.K = structuredClone(S.replay.clip.ballContacts); ceRecompute();
+    ceStatus(j.contacts ? 'saved' : 'saved (automatic detection)');
+  } catch (e) { ceStatus('save failed: ' + e.message); }
+};
+/** The replay frame while editing: the cleaned (or captured) ball, the palms, the bounce targets. */
+function ceReplayFrame(R, tr) {
+  void tr;
+  const t = R.t, i = Math.min(CE.clip.F - 1, Math.floor(t)), u = t - i, j = Math.min(CE.clip.F - 1, i + 1);
+  const src = CE.raw ? CE.input.frames.map((f) => f.ball) : CE.clean.p;
+  const a = src[i], b = src[j] || a;
+  if (a) { const q = a.map((x, k) => x + ((b || a)[k] - x) * u); ball.position.set(...ceWorld(q)); ball.visible = true; } else ball.visible = false;
+  const f = CE.input.frames[Math.round(t)] || CE.input.frames[i];
+  CE.pl.position.set(...ceWorld(f.palmL)); CE.pr.position.set(...ceWorld(f.palmR)); CE.pl.visible = CE.pr.visible = true;
+  const bs = CE.K.events.filter((e) => e.type === 'bounce' && e.local);
+  bs.forEach((e, k) => { const m = ceRing(k), w = ceWorld(BC.fromLocal(e.local, CE.input.traj(e.frame))); m.position.set(w[0], 0.004, w[2]); m.visible = true; m.material.opacity = e.id === CE.sel ? 1 : 0.35; m.userData.id = e.id; });
+  for (let k = bs.length; k < CE.rings.length; k++) CE.rings[k].visible = false;
+  if (Math.round(t * 10) !== CE.lastDrawT) { CE.lastDrawT = Math.round(t * 10); ceDraw(); }
+}
+// drag a (selected) bounce target on the floor
+{
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), floorPl = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
+  const floorAt = (ev) => { const r = canvas.getBoundingClientRect(); ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera); return ray.ray.intersectPlane(floorPl, hit) ? hit.clone() : null; };
+  canvas.addEventListener('pointerdown', (ev) => {
+    const e = CE.on ? ceEv() : null; if (!e || e.type !== 'bounce') return;
+    const p = floorAt(ev), w = ceWorld(BC.fromLocal(e.local, CE.input.traj(e.frame)));
+    if (p && Math.hypot(p.x - w[0], p.z - w[2]) < 0.3) { CE.bdrag = true; ev.stopPropagation(); }
+  }, true);
+  window.addEventListener('pointermove', (ev) => {
+    if (!CE.bdrag) return; const e = ceEv(), p = floorAt(ev); if (!e || !p) return;
+    const cs = [p.x - S.replay.pos[0], 0.12, p.z - S.replay.pos[1]];
+    e.local = BC.toLocal(cs, CE.input.traj(e.frame)).map((x) => +x.toFixed(4)); e.manual = true; e.conf = 1;
+    ceChanged();
+  });
+  window.addEventListener('pointerup', () => { CE.bdrag = false; });
+}
+
 function switchHand() {
   const p = S.player;
+  if (S.ball) { if (!S.ball.requestHandSwitch()) toast('This idle has no mirrored copy.'); return; }
   if (!p.setHand(p.hand === 'left' ? 'right' : 'left')) { toast('This idle has no mirrored copy.'); return; }
   $('handBtn').textContent = p.hand === 'left' ? 'L' : 'R';
 }
@@ -1293,6 +1616,12 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     const rig = A.prepareRig(rigJson);
     S.rig = rig;
     buildCharacter(rig);
+    // this character's own limb radii (bounce clearance, loose-ball collisions)
+    if (mhrRig) rig.limbRadii = BS.measureLimbRadii(rig.json, mhrRig, A.b64);
+    // each clip: where its ball track came from (a video or generated) + its edited ball contacts
+    const clipMeta = (j, id) => { const e = libInfo.clips.find((c) => c.id === id); if (e) { j.trackSource = e.source === 'video' ? 'video' : 'generated'; if (e.ballContacts) j.ballContacts = e.ballContacts; } return j; };
+    S.clipMeta = clipMeta;
+    clipMeta(idleJson, idleRef.id);
     idleJson.role = 'idle';
     S.clips = [idleJson];
     S.lib = A.buildLibrary(S.clips, rig);
@@ -1311,7 +1640,12 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     // the basketball: a Rapier rigid body (the court, rim, backboard and stands are its colliders)
     loadMsg('starting the ball physics…');
     await RAPIER.init();
-    S.phys = new BP.BasketballPhysicsSystem(RAPIER, loadBallCfg());
+    S.phys = new BP.BasketballPhysicsSystem(RAPIER, rig.limbRadii ? { ...loadBallCfg(), radii: { ...BP.BALL_DEFAULTS.radii, ...rig.limbRadii } } : loadBallCfg());
+    if (BALL_MODE === 'contact' && mhrRig) {
+      S.ball = new BS.BallSession({ player: S.player, mhrRig, IK, MS, phys: S.phys, limbRadii: rig.limbRadii, hoop: { center: [0, RIM_Y, 0], rimR: RIM_R }, onEvent: ballEvent });
+      S.ball.setGraph(S.player.lib);
+      window.__ball = { log: () => S.ball.ctl.log.slice(), snapshot: () => S.ball.snapshot(), state: () => S.ball.state, session: S.ball };
+    }
     if (S.court) {
       S.courtColliders = VC.addVantheahColliders(S.phys, S.court);
       const bd = VC.boxToGame([-12.8, 3.425, 0], [0.025, 0.525, 0.9]);
@@ -1352,7 +1686,9 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     for (const c of rest) {
       getJSON(`/api/mocap3d/clip/${encodeURIComponent(c.id)}`, { label: c.name }).then((j) => {
         j.role = c.role;
+        clipMeta(j, c.id);
         A.buildLibrary([j], rig, S.player.lib);
+        S.ball?.setGraph(S.player.lib);
         fitBallPaths(S.player.lib);
         S.clips.push(j);
         showLib();
