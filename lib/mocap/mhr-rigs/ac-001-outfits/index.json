@@ -69,6 +69,34 @@
     }
    ],
    "bytes": 307629
+  },
+  {
+   "id": "croptop",
+   "name": "Crop top",
+   "slot": "top",
+   "palette": [
+    {
+     "name": "Original",
+     "base": "#141416",
+     "accent": "#920002"
+    },
+    {
+     "name": "White",
+     "base": "#ebeae6",
+     "accent": "#920002"
+    },
+    {
+     "name": "Heather",
+     "base": "#7d8087",
+     "accent": "#920002"
+    },
+    {
+     "name": "Navy",
+     "base": "#1b2440",
+     "accent": "#920002"
+    }
+   ],
+   "bytes": 838837
   }
  ]
 }

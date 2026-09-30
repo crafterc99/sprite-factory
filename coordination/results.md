@@ -3032,3 +3032,18 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Files changed: tools/ball/build_ball.py, assets/models/basketball.glb, court3d.html (swaps the sphere once loaded), server.js (gzip GLB route).
 - What: the Spalding OBJ, with its raised seam ribs found on the mesh and baked as black vertex colours on orange. It is centred and scaled to the physics radius. The physics are unchanged.
 - Validation: ball court 9/9 on AC; outfit court 6/6; close-up checked.
+
+## OUTFIT-CROPTOP — the user's Marvelous Designer crop top in AC's outfit picker
+- Status: DONE (live).
+- Files changed:
+  - lib/mocap/mhr-rigs/ac-001-outfits/{croptop.json.gz, index.json}
+  - lib/mocap/mhr-rigs/ac-001-tex/outfit-ac-001-croptop-print.webp
+  - docs/garments.md
+  - The importer (clo_pac.py, import_md_garment.py, source .zprj) stays on the branch claude/sprite-factory-motion-capture-ohky3g (9a66fed).
+- What: the user's exact MD garment, read from the .zprj:
+  - 8 pattern pieces, seams welded as sewn;
+  - one uniform scale of 1.21 (AC's chest girth over the MD avatar's);
+  - a short settle on AC (20 mm mean from the MD shape);
+  - MD's UVs and graphic placement.
+- Colourways: Original (black with the red graphic), White, Heather, Navy.
+- Validation: branch npm test 107/107. On the main build: outfit court 6/6 with croptop + shorts, no page errors; screenshots checked.
