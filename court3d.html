@@ -368,6 +368,17 @@ function ballTexture() {
 const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 20), new THREE.MeshStandardMaterial({ map: ballTexture(), roughness: 0.62 }));
 ball.castShadow = true; ball.scale.setScalar(BALL_R);
 scene.add(ball);
+// the Spalding ball (radius 1, seams as vertex colours: tools/ball/build_ball.py) replaces the plain
+// sphere once it has loaded; the physics ball is unchanged (BALL_R)
+import('/vendor/three-addons/GLTFLoader.js').then(({ GLTFLoader }) => new GLTFLoader().loadAsync('/models/basketball.glb')).then((g) => {
+  let mesh = null; g.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
+  if (!mesh) return;
+  const old = ball.geometry, oldMat = ball.material;
+  ball.geometry = mesh.geometry;
+  ball.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62 });
+  old.dispose(); oldMat.map?.dispose(); oldMat.dispose();
+  window.__ballModel = 'spalding';
+}).catch((e) => console.warn('ball model', e));
 
 // ═══ Character: skinned rig ═══
 // MHR rigs (v4): the body model's own mesh, 127-joint skeleton and skin
