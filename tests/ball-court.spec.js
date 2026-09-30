@@ -43,7 +43,8 @@ fs.mkdirSync(OUT, { recursive: true });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 300)); });
-  await page.goto(`${BASE}/court3d.html?char=${CHAR}&balldbg=1`, { waitUntil: 'load', timeout: 90000 });
+  // (the between-the-legs → cross → shot move is the moving shot: focused so it is the only one there)
+  await page.goto(`${BASE}/court3d.html?char=${CHAR}&balldbg=1&focus=mo-mulp87wqvabn`, { waitUntil: 'load', timeout: 90000 });
   await page.waitForFunction(() => window.__c3dReady || window.__c3dFailed, null, { timeout: 240000 });
   const ready = await page.evaluate(() => !!window.__c3dReady && !!window.__ball);
   if (!ready) { console.error('court did not start', await page.evaluate(() => document.getElementById('err')?.textContent), errors); process.exit(1); }
@@ -89,10 +90,27 @@ fs.mkdirSync(OUT, { recursive: true });
   m = await mark(); await key('KeyA', 0.9); await key('KeyD', 0.9); await shot('4-change-direction'); await check('change of direction', m);
   m = await mark(); await sec(0.6); await page.keyboard.press('KeyO'); await sec(2.6); await shot('5-crossover'); await check('crossover', m);
   m = await mark(); await page.keyboard.press('KeyO'); await sec(0.3); await page.keyboard.press('KeyK'); await sec(3.2); await check('combo: crossover → spin', m);
-  // the recorded move, filmed from the side
+  // the jump shot (□ standing: the user's own video) — released on its frame, straight back to idle
+  // when the clip ends (no hold on the last frame), then the rebound is passed back and caught
+  await sec(1.0); await camFree();
+  m = await mark();
+  const js = { start: null, end: null, name: null };
+  await page.keyboard.press('KeyI');
+  for (let i = 0; i < Math.round(6 * FPS); i++) {
+    await frames(1);
+    const st = await page.evaluate(() => ({ mode: window.__court3d.player.mode, a: window.__court3d.player.action?.clip?.name || '', t: window.__court3d.gameT }));
+    if (st.mode === 'action' && /shot-jumper/.test(st.a) && js.start == null) { js.start = st.t; js.name = st.a; }
+    if (js.start != null && js.end == null && st.mode === 'loco') js.end = st.t;
+    if (i === Math.round(0.7 * FPS)) await shot('6-jump-shot');
+  }
+  const jr = await check('jump shot (□ standing)', m);
+  const clipDur = await page.evaluate((n) => { const c = (window.__court3d.player.lib['shot-jumper:variants'] || [window.__court3d.player.lib['shot-jumper']]).find((x) => x && x.name === n); return c ? (c.F - 1) / c.fps : null; }, js.name);
+  results[results.length - 1].jumpShot = { clip: js.name, seconds: js.end != null && js.start != null ? +(js.end - js.start).toFixed(2) : null, clipSeconds: clipDur && +clipDur.toFixed(2) };
+  results[results.length - 1].ok &&= !!js.name && js.end != null && clipDur != null && js.end - js.start < clipDur + 0.15 && jr.catches.length >= 1;
+  // the recorded move (□ on the move), filmed from the side
   await sec(1.0); await camSide();
   m = await mark();
-  await page.keyboard.press('KeyI');
+  await page.keyboard.down('KeyW'); await sec(0.25); await page.keyboard.press('KeyI'); await sec(0.1); await page.keyboard.up('KeyW');
   const sheet = [];
   for (let i = 0; i < Math.round(4.2 * FPS); i++) {
     await frames(1);
@@ -110,7 +128,7 @@ fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, 'sheet.json'), JSON.stringify(sheet, null, 1));
   const report = { fps: FPS, char: CHAR, errors, results, at: new Date().toISOString() };
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify(report, null, 1));
-  for (const r of results) console.log(`${r.ok ? '✔' : '✖'} ${r.name.padEnd(42)} frames ${String(r.frames).padStart(4)} · bounces ${r.bounces}${r.moveBounces != null ? ` (in the move ${r.moveBounces})` : ''} · catches ${r.catches} (max err ${r.maxCatchErrCm} cm) · min y ${r.minY} · lost ${r.lost} · recoveries ${r.recoveries.length} · rejected ${r.rejected}`);
+  for (const r of results) console.log(`${r.ok ? '✔' : '✖'} ${r.name.padEnd(42)}${r.jumpShot ? ` [${r.jumpShot.clip}: back to idle after ${r.jumpShot.seconds} s of a ${r.jumpShot.clipSeconds} s clip]` : ''} frames ${String(r.frames).padStart(4)} · bounces ${r.bounces}${r.moveBounces != null ? ` (in the move ${r.moveBounces})` : ''} · catches ${r.catches} (max err ${r.maxCatchErrCm} cm) · min y ${r.minY} · lost ${r.lost} · recoveries ${r.recoveries.length} · rejected ${r.rejected}`);
   console.log(errors.length ? 'page errors:\n' + errors.join('\n') : 'no page errors');
   console.log('report + screenshots:', OUT);
   await browser.close();
