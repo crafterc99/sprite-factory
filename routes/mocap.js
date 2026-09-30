@@ -26,6 +26,8 @@
  *   POST /api/mocap3d/clip/:id/build             force a rebuild
  *   GET  /api/mocap3d/rig/:char                  character rig (gz JSON, ETag) ?motion&frame
  *   GET|PUT|DELETE /api/mocap3d/contacts/:id     ball contact edits of a clip (Contact Editor; meta.ballContacts)
+ *   GET  /api/mocap3d/outfits/:char              the character's garments (outfit picker)
+ *   GET  /api/mocap3d/outfit/:char/:gid          one garment (gz JSON, ETag)
  *   POST /api/mocap3d/character/generate          character from video: A-pose views → Rodin 3D { motionId, frames, outfit }
  *   GET  /api/mocap3d/character/job/:id[/file/:n]  job status / its files (views, model.glb, textures)
  *   POST /api/mocap3d/generate                   { kind: run-dribble | crossover | crossover-moving, hand, speed } → new motion
@@ -400,6 +402,15 @@ function register(baseRouter, ctx) {
   });
 
   // Character rig (skinned mesh + skeleton), ?motion=&frame= to build from another scan
+  // outfits of a character (the court's outfit picker): the list, then one garment (gz JSON, ETag)
+  router.get('/api/mocap3d/outfits/:char', async (req, res, params) => {
+    json(res, RIG.outfitIndex(params.char) || { rig: params.char, garments: [] });
+  });
+  router.get('/api/mocap3d/outfit/:char/:gid', async (req, res, params) => {
+    const f = RIG.outfitFile(params.char, params.gid);
+    if (!f) return json(res, { error: 'no such garment' }, 404);
+    sendGz(req, res, f);
+  });
   router.get('/api/mocap3d/rig/:char', async (req, res, params, query) => {
     try { sendGz(req, res, await RIG.buildRig(params.char, { motionId: query.motion || undefined, frame: query.frame || undefined, legacy: query.legacy === '1' })); }
     catch (err) { json(res, { error: err.message }, 400); }

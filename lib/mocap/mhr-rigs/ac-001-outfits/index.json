@@ -1,0 +1,74 @@
+{
+ "rig": "ac-001",
+ "body": {
+  "spheres": 208
+ },
+ "garments": [
+  {
+   "id": "tee",
+   "name": "Baggy tee",
+   "slot": "top",
+   "palette": [
+    {
+     "name": "White",
+     "base": "#eeeeea",
+     "accent": "#b8232a"
+    },
+    {
+     "name": "Black",
+     "base": "#1c1c20",
+     "accent": "#f2f2f2"
+    },
+    {
+     "name": "Heather",
+     "base": "#8d9097",
+     "accent": "#1c1c20"
+    },
+    {
+     "name": "Red",
+     "base": "#a3222a",
+     "accent": "#f4f1e8"
+    },
+    {
+     "name": "Royal",
+     "base": "#23449b",
+     "accent": "#f4f1e8"
+    }
+   ],
+   "bytes": 516567
+  },
+  {
+   "id": "shorts",
+   "name": "Mesh shorts",
+   "slot": "bottom",
+   "palette": [
+    {
+     "name": "Black",
+     "base": "#18181c",
+     "accent": "#f2f2f2"
+    },
+    {
+     "name": "Red",
+     "base": "#a3222a",
+     "accent": "#f4f1e8"
+    },
+    {
+     "name": "White",
+     "base": "#ecece8",
+     "accent": "#18181c"
+    },
+    {
+     "name": "Navy",
+     "base": "#1b2440",
+     "accent": "#f4f1e8"
+    },
+    {
+     "name": "Grey",
+     "base": "#6e7179",
+     "accent": "#f4f1e8"
+    }
+   ],
+   "bytes": 307629
+  }
+ ]
+}

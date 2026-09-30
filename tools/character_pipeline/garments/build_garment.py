@@ -3,7 +3,7 @@ Build a loose garment for a game rig (MHR kind): a separate skinned part that fi
 body, with real openings, UVs, skin weights from the body, a hidden-body face list and a coarse
 grid for the in-game cloth motion.
 
-  python build_garment.py <rig.json.gz> --garment shorts|jersey --out <dir> [--params '{...}']
+  python build_garment.py <rig.json.gz> --garment shorts|jersey|tee --out <dir> [--params '{...}']
 
 The garment is lofted from the body's own cross-sections (so it fits any character built on the
 game skeleton), eased out by a looseness profile and hung straight below its widest point, as
@@ -16,10 +16,13 @@ from scipy.spatial import cKDTree, ConvexHull
 
 sys.path.insert(0, os.path.dirname(__file__))
 from rigio import load_rig, part_arrays, joints
+import tee_shape
 
 ap = argparse.ArgumentParser()
 ap.add_argument('rig')
-ap.add_argument('--garment', required=True, choices=['shorts', 'jersey'])
+ap.add_argument('--garment', required=True, choices=['shorts', 'jersey', 'tee'])
+ap.add_argument('--pose', default=None, help='a game pose (export_pose.mjs): drape in it, not in the A-pose')
+ap.add_argument('--blender', default=os.environ.get('BLENDER_BIN', '/Applications/Blender.app/Contents/MacOS/Blender'))
 ap.add_argument('--out', required=True)
 ap.add_argument('--params', default='{}')
 ap.add_argument('--over', default=None, help='npz of a garment this one is worn over')
@@ -447,6 +450,27 @@ def jersey_holes(G):
 
 def build():
     P = PRM
+    if a.garment == 'tee':
+        TV0, TF0, info = tee_shape.build_tee_surface(V, F, NB, DN, J, P, a.blender, log=lambda m: print(m, file=sys.stderr))
+        # the side seam follows the body's mid-plane: the torso's (per height) or the arm's axis
+        tz = VREG == 'torso'
+        ybins = np.linspace(V[:, 1].min(), V[:, 1].max(), 120)
+        zmid = np.array([np.median(V[tz & (np.abs(V[:, 1] - yb) < 0.02), 2]) if (tz & (np.abs(V[:, 1] - yb) < 0.02)).any() else np.nan for yb in ybins])
+        ok = np.isfinite(zmid)
+        zmid = np.interp(ybins, ybins[ok], zmid[ok])
+        lab = tee_shape.labels_of(DN)
+        def zref(X):
+            _, i = BODY_TREE.query(X)
+            z = np.interp(X[:, 1], ybins, zmid)
+            for sd in 'lr':
+                m = lab[i] == 'uparm_' + sd
+                A_ = info['arms'][sd]
+                s = (X[m] - A_['S']) @ np.array(A_['a'])
+                z[m] = A_['S'][2] + s * A_['a'][2]
+            return z
+        Vt, UV, Ft, uvinfo = tee_shape.tee_uv(TV0, TF0, info, zref)
+        info['uv'] = uvinfo
+        return Vt, UV, Ft, None, None, info, {}
     if a.garment == 'shorts':
         pieces, iu, M, info = build_shorts(P)
         # faces per piece: drop the inner half above the crotch
@@ -520,7 +544,8 @@ area = np.linalg.norm(np.cross(e1, e2), axis=1) / 2
 Ft = Ft[area > 1e-9]
 used = np.unique(Ft)
 remap = -np.ones(len(Vt), np.int64); remap[used] = np.arange(len(used))
-Vt, UV, GID, Ft = Vt[used], UV[used], GID[used], remap[Ft]
+Vt, UV, Ft = Vt[used], UV[used], remap[Ft]
+if GID is not None: GID = GID[used]
 
 key = np.round(Vt / 1e-6).astype(np.int64)
 _, topo, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
@@ -603,6 +628,124 @@ if a.over:
     n = UN_[ii].mean(1); n /= np.maximum(1e-12, np.linalg.norm(n, axis=1, keepdims=True))
     sgn = np.einsum('ij,ij->i', TV - UT[ii[:, 0]], n)
     LAYER_VIOL = int(((dd[:, 0] < 0.08) & (sgn < 0)).sum())
+# ── skin weights from the body: nearest body vertices (normal-aware), restricted to the bones
+# this garment may follow, then smoothed over the garment so loose cloth does not crease
+ALLOWED = {
+    'shorts': lambda n: bool(re.match(r'^(root|c_spine0|[lr]_upleg(_twist[0-4]_proc)?)$', n)),
+    'jersey': lambda n: bool(re.match(r'^(root|c_spine[0-3]|[lr]_clavicle)$', n)),
+    'tee': lambda n: bool(re.match(r'^(root|c_spine[0-3]|[lr]_clavicle|[lr]_uparm(_twist[0-4]_proc)?)$', n)),
+}[a.garment]
+def remap_bone(bi):
+    n = NAMES[bi]
+    while not ALLOWED(n):
+        bi = PARENTS[bi]
+        if bi < 0: return NAMES.index('root')
+        n = NAMES[bi]
+    return bi
+BONE_MAP = np.array([remap_bone(i) for i in range(len(NAMES))])
+if a.garment == 'shorts':
+    # the lower leg must not steer the shorts' hem: map knee bones to the upper-leg twist nearest the knee
+    for sd in 'lr':
+        for i, n in enumerate(NAMES):
+            if re.match(rf'^{sd}_(lowleg|foot|talocrural|subtalar|transversetarsal|ball)', n): BONE_MAP[i] = NAMES.index(f'{sd}_upleg_twist4_proc') if f'{sd}_upleg_twist4_proc' in NAMES else NAMES.index(f'{sd}_upleg')
+def skin_weights(TVx, TNx):
+    """Skin weights of a garment surface from the body (normal-aware nearest body vertices,
+    restricted to the bones this garment follows, smoothed over the garment)."""
+    import scipy.sparse as sp
+    K = 12
+    d, idx = BODY_TREE.query(TVx, k=K)
+    cosn = np.einsum('ijk,ik->ij', NB[idx], TNx)
+    w = np.exp(-(d / (d[:, :1] + 0.02)) ** 2) * np.clip(0.3 + 0.7 * cosn, 0.05, 1)
+    Wd = np.zeros((len(TVx), len(NAMES)))
+    SI, SW = BODY['SI'], BODY['SW']
+    for k in range(K):
+        for c in range(4):
+            np.add.at(Wd, (np.arange(len(TVx)), BONE_MAP[SI[idx[:, k], c]]), w[:, k] * SW[idx[:, k], c])
+    Wd /= np.maximum(1e-12, Wd.sum(1, keepdims=True))
+    _A = sp.coo_matrix((np.ones(2 * len(ue)), (np.concatenate([ue[:, 0], ue[:, 1]]), np.concatenate([ue[:, 1], ue[:, 0]]))), shape=(len(TVx), len(TVx))).tocsr()
+    _A.data[:] = 1
+    ADJN = sp.diags(1 / np.maximum(1, np.asarray(_A.sum(1)).ravel())) @ _A          # neighbour mean
+    for _ in range(PRM.get('weightSmooth', 25)):
+        Wd = 0.5 * Wd + 0.5 * (ADJN @ Wd)
+    top4 = np.argsort(-Wd, 1)[:, :4]
+    tw = np.take_along_axis(Wd, top4, 1)
+    tw /= np.maximum(1e-12, tw.sum(1, keepdims=True))
+    return top4, tw
+
+
+# ── drape: the cut shape falls onto the body as limp cloth (Blender's cloth simulation, gravity -y,
+# the body and any garment worn under it as colliders). Shorts keep their waistband (elastic).
+DRAPE_INFO = None
+if PRM.get('drape', True):
+    import subprocess, tempfile
+    import scipy.sparse as sp
+    from scipy.sparse.csgraph import dijkstra as _dij, connected_components as _cc
+    pin_reach = PRM.get('pinTop', 0.03 if a.garment == 'shorts' else 0.0)
+    pinw = np.zeros(len(TV))
+    if pin_reach > 0:
+        _Ab = sp.coo_matrix((np.ones(len(bnd)), (bnd[:, 0], bnd[:, 1])), shape=(len(TV), len(TV)))
+        _, _lab = _cc(_Ab, directed=False)
+        _bv = np.unique(bnd)
+        top_l = max(np.unique(_lab[_bv]), key=lambda l: TV[_bv[_lab[_bv] == l], 1].mean())
+        _L = np.linalg.norm(TV[ue[:, 0]] - TV[ue[:, 1]], axis=1)
+        _G = sp.coo_matrix((np.concatenate([_L, _L]), (np.concatenate([ue[:, 0], ue[:, 1]]), np.concatenate([ue[:, 1], ue[:, 0]]))), shape=(len(TV), len(TV))).tocsr()
+        _d = _dij(_G, directed=False, indices=_bv[_lab[_bv] == top_l], min_only=True)
+        pinw = 1 - smoothstep(pin_reach, pin_reach + 0.03, _d)
+    # the pose it hangs in: the game's (arms down, the dribble stance) — the garment is posed with
+    # provisional weights, draped on the posed body, then un-posed back to the bind pose; the fabric
+    # then rests on the body the way the game shows it, not the way the A-pose would
+    POSE = None
+    if a.pose:
+        POSE = np.array(json.load(open(a.pose))['mats'], np.float64).reshape(-1, 4, 4).transpose(0, 2, 1)
+    def lbs_mats(SIx, SWx):
+        return np.einsum('nk,nkij->nij', SWx, POSE[SIx])
+    def apply(Mv, P_):
+        return np.einsum('nij,nj->ni', Mv[:, :3, :3], P_) + Mv[:, :3, 3]
+    Vp, Gp, Mg = V, TV, None
+    if POSE is not None:
+        Vp = apply(lbs_mats(BODY['SI'], BODY['SW']), V)
+        p4, pw = skin_weights(TV, vnormals(TV, TF))
+        POSE_WEIGHTS = (p4, pw)
+        Mg = lbs_mats(p4, pw)
+        Gp = apply(Mg, TV)
+        # clear of the posed body before the cloth starts (skinning can fold it into an armpit)
+        NBp = vnormals(Vp, F)
+        pt = cKDTree(Vp[NOHEAD])
+        for _ in range(3):
+            dd_, ii_ = pt.query(Gp, k=4); ii_ = NOHEAD[ii_]
+            nn_ = NBp[ii_].mean(1); nn_ /= np.maximum(1e-12, np.linalg.norm(nn_, axis=1, keepdims=True))
+            sd_ = np.einsum('ij,ij->i', Gp - Vp[ii_[:, 0]], nn_)
+            m_ = sd_ < 0.006
+            Gp[m_] += (0.006 - sd_[m_])[:, None] * nn_[m_]
+    with tempfile.TemporaryDirectory() as td:
+        # the head and its hair are not colliders (dreads lie over a collar; a collar inside them explodes)
+        # nor are the hands and forearms (a hand resting at the hem in the pose would crease it for good)
+        _fl = tee_shape.labels_of(DN)[F]
+        _skipf = (TREG == 'head') | ((_fl == 'forearm').sum(1) >= 2)
+        np.savez(os.path.join(td, 'body.npz'), V=Vp, F=F[~_skipf])
+        np.savez(os.path.join(td, 'g.npz'), V=Gp, F=TF, pin=pinw)
+        under = []
+        if a.over:
+            U_ = np.load(a.over)
+            UV_ = U_['V'].astype(np.float64)
+            if POSE is not None: UV_ = apply(lbs_mats(U_['skinIdx'], U_['skinW']), UV_)
+            np.savez(os.path.join(td, 'u.npz'), V=UV_, F=U_['F']); under.append(os.path.join(td, 'u.npz'))
+        args = {'body': os.path.join(td, 'body.npz'), 'garment': os.path.join(td, 'g.npz'), 'out': os.path.join(td, 'out.npz'), 'under': under,
+                'frames': PRM.get('drapeFrames', 150), 'bending': PRM.get('bending', 0.05), 'compression': PRM.get('compression', 0.5), 'shear': PRM.get('shear', 1.0), 'mass': PRM.get('mass', 0.15), 'airDamping': PRM.get('airDamping', 4.0), 'quality': PRM.get('drapeQuality', 10), 'selfCollision': PRM.get('selfCollision', True)}
+        r = subprocess.run([a.blender, '-b', '--factory-startup', '-P', os.path.join(os.path.dirname(__file__), 'drape_blender.py'), '--', json.dumps(args)], capture_output=True, text=True)
+        if not os.path.exists(os.path.join(td, 'out.npz')):
+            raise RuntimeError('drape failed: ' + (r.stderr or r.stdout)[-1500:])
+        D_ = np.load(os.path.join(td, 'out.npz'))
+        Dv = D_['V'].astype(np.float64)
+        moved = np.linalg.norm(Dv - Gp, axis=1)
+        DRAPE_INFO = {'settleMotion': round(float(D_['motion'][0]), 4), 'meanMove': round(float(moved.mean()), 4), 'maxMove': round(float(moved.max()), 4), 'pinned': int((pinw > 0.5).sum()), 'pose': os.path.basename(a.pose) if a.pose else 'bind'}
+        if Mg is not None:
+            Dv = apply(np.linalg.inv(Mg), Dv)            # back to the bind pose
+            dbg = os.environ.get('GARMENT_DEBUG_DIR')
+            if dbg: np.savez(os.path.join(dbg, f'{a.garment}_posed.npz'), V=D_['V'], F=TF, body=Vp, bodyF=F)
+        TV = Dv
+    TV = push_out(TV, PRM.get('clearance', 0.007) * 0.5, 2)
+    print('drape', json.dumps(DRAPE_INFO), file=sys.stderr)
 TN = vnormals(TV, TF)
 Vt = TV[inv]                                    # render vertices follow the welded surface
 
@@ -619,47 +762,55 @@ while hq:
         nd = d0 + np.linalg.norm(TV[w] - TV[vtx])
         if nd < dist[w]: dist[w] = nd; heapq.heappush(hq, (nd, w))
 
-# ── skin weights from the body: nearest body vertices (normal-aware), restricted to the bones
-# this garment may follow, then smoothed over the garment so loose cloth does not crease
-ALLOWED = {
-    'shorts': lambda n: bool(re.match(r'^(root|c_spine0|[lr]_upleg(_twist[0-4]_proc)?)$', n)),
-    'jersey': lambda n: bool(re.match(r'^(root|c_spine[0-3]|[lr]_clavicle)$', n)),
-}[a.garment]
-def remap_bone(bi):
-    n = NAMES[bi]
-    while not ALLOWED(n):
-        bi = PARENTS[bi]
-        if bi < 0: return NAMES.index('root')
-        n = NAMES[bi]
-    return bi
-BONE_MAP = np.array([remap_bone(i) for i in range(len(NAMES))])
-if a.garment == 'shorts':
-    # the lower leg must not steer the shorts' hem: map knee bones to the upper-leg twist nearest the knee
-    for sd in 'lr':
-        for i, n in enumerate(NAMES):
-            if re.match(rf'^{sd}_(lowleg|foot|talocrural|subtalar|transversetarsal|ball)', n): BONE_MAP[i] = NAMES.index(f'{sd}_upleg_twist4_proc') if f'{sd}_upleg_twist4_proc' in NAMES else NAMES.index(f'{sd}_upleg')
-K = 12
-d, idx = BODY_TREE.query(TV, k=K)
-cosn = np.einsum('ijk,ik->ij', NB[idx], TN)
-w = np.exp(-(d / (d[:, :1] + 0.02)) ** 2) * np.clip(0.3 + 0.7 * cosn, 0.05, 1)
-Wd = np.zeros((len(TV), len(NAMES)))
-SI, SW = BODY['SI'], BODY['SW']
-for k in range(K):
-    for c in range(4):
-        np.add.at(Wd, (np.arange(len(TV)), BONE_MAP[SI[idx[:, k], c]]), w[:, k] * SW[idx[:, k], c])
-Wd /= np.maximum(1e-12, Wd.sum(1, keepdims=True))
-for _ in range(PRM.get('weightSmooth', 25)):
-    Wn = Wd.copy()
-    for vtx in range(len(TV)):
-        Wn[vtx] = 0.5 * Wd[vtx] + 0.5 * Wd[adj[vtx]].mean(0)
-    Wd = Wn
-top4 = np.argsort(-Wd, 1)[:, :4]
-tw = np.take_along_axis(Wd, top4, 1)
-tw /= np.maximum(1e-12, tw.sum(1, keepdims=True))
+# (draped in a game pose: the weights it was un-posed with, so the game's pose puts it back exactly
+# where it hung — recomputing them from the un-posed shape would move a hanging hem by its new
+# nearest bones)
+if DRAPE_INFO is not None and DRAPE_INFO.get('pose') not in (None, 'bind'):
+    top4, tw = POSE_WEIGHTS
+else:
+    top4, tw = skin_weights(TV, TN)
+
+
+def generic_proxy(spacing):
+    """A coarse cloth graph on any surface: nodes Poisson-sampled over the welded vertices (the
+    openings' edges first, so hems and cuffs carry nodes), cells by multi-source graph distance,
+    edges between touching cells; every render vertex blends its cell's node and the neighbours'."""
+    from scipy.sparse.csgraph import dijkstra
+    tree = cKDTree(TV)
+    blocked = np.zeros(len(TV), bool)
+    order = np.concatenate([np.where(isb)[0], np.random.RandomState(7).permutation(np.where(~isb)[0])])
+    nodes = []
+    for v in order:
+        if blocked[v]: continue
+        # a node on an opening blocks along the edge at the full spacing, inside at 0.8
+        nodes.append(v)
+        blocked[tree.query_ball_point(TV[v], spacing * (1.0 if isb[v] else 0.9))] = True
+    nodes = np.array(nodes)
+    L = np.linalg.norm(TV[ue[:, 0]] - TV[ue[:, 1]], axis=1)
+    Gw = sp.coo_matrix((np.concatenate([L, L]), (np.concatenate([ue[:, 0], ue[:, 1]]), np.concatenate([ue[:, 1], ue[:, 0]]))), shape=(len(TV), len(TV))).tocsr()
+    dist_, _, src = dijkstra(Gw, directed=False, indices=nodes, min_only=True, return_predecessors=True)
+    pos_of = {int(n): i for i, n in enumerate(nodes)}
+    if (src < 0).any(): raise RuntimeError('cloth graph: unreachable vertices')
+    cell = np.array([pos_of[int(s)] for s in src])
+    ca, cb = cell[ue[:, 0]], cell[ue[:, 1]]
+    m = ca != cb
+    E_ = np.unique(np.sort(np.stack([ca[m], cb[m]], 1), 1), axis=0)
+    nbrs = [[i] for i in range(len(nodes))]
+    for p_, q_ in E_: nbrs[p_].append(q_); nbrs[q_].append(p_)
+    idx4 = np.zeros((len(TV), 4), np.int64); w4 = np.zeros((len(TV), 4))
+    for v in range(len(TV)):
+        cand = np.array(nbrs[cell[v]])
+        d_ = np.linalg.norm(TV[nodes[cand]] - TV[v], axis=1)
+        w_ = np.exp(-2.0 * (d_ / spacing) ** 2)
+        o = np.argsort(-w_)[:4]
+        idx4[v, :len(o)] = cand[o]; w4[v, :len(o)] = w_[o]
+        w4[v] /= max(1e-12, w4[v].sum())
+    return nodes, E_, idx4, w4
+
 
 # ── cloth grid (coarse proxy): every PROXY_STEP-th row / column of each piece's grid
 s_ = PROXY_STEP
-gkey = {tuple(g): t for g, t in zip(map(tuple, GID), inv)}          # (piece, row, col) → topology vertex
+gkey = {tuple(g): t for g, t in zip(map(tuple, GID), inv)} if GID is not None else {}          # (piece, row, col) → topology vertex
 proxy_of = {}
 proxy_nodes = []
 def node(pc, i, j, register=False):
@@ -673,12 +824,17 @@ def rl(rows):
     return np.array(list(range(0, rows, s_)) + ([rows - 1] if (rows - 1) % s_ else []))
 def cl(C):
     return np.arange(0, C, s_)            # C is a multiple of the proxy step (wraps)
-for pc, g in enumerate(GRIDS):
+if GRIDS is not None:
+  for pc, g in enumerate(GRIDS):
     for i in rl(g['rows']):
         for j in cl(g['C']): node(pc, i, j, register=True)
 # every render vertex: bilinear weights to the 4 surrounding proxy nodes of its grid cell
 cloth_idx = np.zeros((len(Vt), 4), np.int64); cloth_w = np.zeros((len(Vt), 4))
-for vi, (pc, i, j) in enumerate(GID):
+if GRIDS is None:
+    _nodes, _E, _i4, _w4 = generic_proxy(PRM.get('proxySpacing', 0.045))
+    proxy_nodes = list(_nodes)
+    cloth_idx[:], cloth_w[:] = _i4[inv], _w4[inv]
+for vi, (pc, i, j) in enumerate(GID if GRIDS is not None else []):
     g = GRIDS[pc]
     RL, CL = rl(g['rows']), cl(g['C'])
     a_ = max(0, np.searchsorted(RL, i, 'right') - 1); b_ = min(len(RL) - 1, a_ + 1)
@@ -701,8 +857,8 @@ if len(lost):
     _, nn = cKDTree(PN).query(TV[inv[lost]])
     cloth_idx[lost] = nn[:, None]; cloth_w[lost] = [1, 0, 0, 0]
 # proxy edges: grid neighbours (structure) + diagonals (shear)
-pedges = set()
-for pc, g in enumerate(GRIDS):
+pedges = set() if GRIDS is not None else set(map(tuple, _E.tolist()))
+for pc, g in enumerate(GRIDS or []):
     RL, CL = rl(g['rows']), cl(g['C'])
     for a_ in range(len(RL)):
         for c_ in range(len(CL)):
@@ -724,12 +880,61 @@ yN = PN[:, 1]
 if a.garment == 'shorts':
     y_w, y_h, y_c = INFO['y_waist'], INFO['y_hem'], INFO['y_crotch']
     pin = np.where(yN > y_c, 0.35 + 0.65 * smoothstep(y_c + 0.06, y_w - 0.02, yN), 0.35 * (1 - smoothstep(y_c, y_h, yN)) + 0.06)
+elif a.garment == 'tee':
+    # torso: held on the shoulders, free toward the hem; sleeves: held at the shoulder, free at the cuff
+    y_top, y_hem, y_ch = INFO['y_top'], INFO['y_hem'], INFO['y_chest']
+    pin = np.where(yN > y_ch, 0.5 + 0.5 * smoothstep(y_ch, y_top - 0.06, yN), 0.06 + 0.44 * smoothstep(y_hem, y_ch, yN))
+    _, bi_ = BODY_TREE.query(PN)
+    labN = tee_shape.labels_of(DN[bi_])
+    for sd in 'lr':
+        A_ = INFO['arms'][sd]
+        m = (labN == 'uparm_' + sd) | ((PN - A_['S']) @ np.array(A_['a']) > 0.04) & (PN[:, 0] * (1 if sd == 'l' else -1) > 0.12)
+        s = (PN[m] - A_['S']) @ np.array(A_['a'])
+        pin[m] = np.minimum(pin[m], 0.1 + 0.5 * (1 - smoothstep(0.0, A_['cuff'], s)))
+    # smooth over the cloth graph (no seam in stiffness where the sleeve meets the body)
+    for _ in range(3):
+        acc = pin.copy(); cnt_ = np.ones(len(pin))
+        np.add.at(acc, pedges[:, 0], pin[pedges[:, 1]]); np.add.at(cnt_, pedges[:, 0], 1)
+        np.add.at(acc, pedges[:, 1], pin[pedges[:, 0]]); np.add.at(cnt_, pedges[:, 1], 1)
+        pin = acc / cnt_
 else:
     y_top, y_hem = INFO['y_top'], INFO['y_hem']
     y_ch = (J['c_spine2'][1] + J['c_spine3'][1]) / 2
     pin = np.where(yN > y_ch, 0.55 + 0.45 * smoothstep(y_ch, y_top - 0.08, yN), 0.08 + 0.47 * smoothstep(y_hem, y_ch, yN))
-# proxy skinning: the topology vertex's weights
+# limp fabric (a draped garment): nothing holds it but where it rests, except an elastic waistband
+# (the drape's pinned ring) and, lightly, a collar; the rest hangs and sways
+if DRAPE_INFO is not None:
+    from scipy.sparse.csgraph import dijkstra as _dij2, connected_components as _cc2
+    _pn = np.array(proxy_nodes)
+    if a.garment == 'shorts':
+        pin = np.clip(pinw[_pn], 0, 1)
+    else:
+        _Ab = sp.coo_matrix((np.ones(len(bnd)), (bnd[:, 0], bnd[:, 1])), shape=(len(TV), len(TV)))
+        _, _lab = _cc2(_Ab, directed=False)
+        _bv = np.unique(bnd)
+        top_l = max(np.unique(_lab[_bv]), key=lambda l: TV[_bv[_lab[_bv] == l], 1].mean())
+        _L = np.linalg.norm(TV[ue[:, 0]] - TV[ue[:, 1]], axis=1)
+        _G = sp.coo_matrix((np.concatenate([_L, _L]), (np.concatenate([ue[:, 0], ue[:, 1]]), np.concatenate([ue[:, 1], ue[:, 0]]))), shape=(len(TV), len(TV))).tocsr()
+        _dn = _dij2(_G, directed=False, indices=_bv[_lab[_bv] == top_l], min_only=True)
+        pin = PRM.get('collarHold', 0.75) * (1 - smoothstep(0.025, 0.07, _dn[_pn]))
+# tethers (long-range attachments): each node may not get further from its nearest held node than
+# along the cloth — hanging fabric does not stretch however few solver iterations run
+from scipy.sparse.csgraph import dijkstra as _dij3
+_sup = np.where(pin >= 0.3)[0]
+if not len(_sup): _sup = np.array([int(np.argmax(PN[:, 1]))])
+_Lp = np.linalg.norm(PN[pedges[:, 0]] - PN[pedges[:, 1]], axis=1)
+_Gp = sp.coo_matrix((np.concatenate([_Lp, _Lp]), (np.concatenate([pedges[:, 0], pedges[:, 1]]), np.concatenate([pedges[:, 1], pedges[:, 0]]))), shape=(len(PN), len(PN))).tocsr()
+_td, _, _ts = _dij3(_Gp, directed=False, indices=_sup, min_only=True, return_predecessors=True)
+tether_idx = np.where(np.isfinite(_td) & (_ts >= 0), _ts, np.arange(len(PN)))
+tether_len = np.where(np.isfinite(_td), _td, 0.0)
+
+# proxy skinning: the topology vertex's weights; its normal; its gap to the body (the backstop:
+# how far in the cloth may move before it would touch the skin)
 pw_idx, pw_w = top4[np.array(proxy_nodes)], tw[np.array(proxy_nodes)]
+PNN = TN[np.array(proxy_nodes)]
+_gd, _gi = COLL_TREE.query(PN, k=4); _gi = NOHEAD[_gi]
+_gn = NB[_gi].mean(1); _gn /= np.maximum(1e-12, np.linalg.norm(_gn, axis=1, keepdims=True))
+proxy_gap = np.maximum(0.0, np.einsum('ij,ij->i', PN - V[_gi[:, 0]], _gn))
 
 # ── hidden body faces: covered by the garment along the body normal and away from its openings
 def hidden_faces(Vb, Fb, Nb_face):
@@ -740,7 +945,7 @@ def hidden_faces(Vb, Fb, Nb_face):
         dd, ii = gt.query(cen + Nb_face * t, k=1)
         hit |= dd < 0.011
     d_open, ii = gt.query(cen, k=1)
-    far = dist[ii] > PRM.get('hideMargin', 0.06)
+    far = dist[ii] > PRM.get('hideMargin', 0.04 if a.garment == 'tee' else 0.06)
     return np.where(hit & far)[0]
 
 def body_face_normals(Vb, Fb):
@@ -757,13 +962,15 @@ np.savez(os.path.join(a.out, f'{a.garment}.npz'),
          skinIdx=top4[inv].astype(np.int32), skinW=tw[inv].astype(np.float32), edgeDist=dist[inv].astype(np.float32),
          clothIdx=cloth_idx.astype(np.int32), clothW=cloth_w.astype(np.float32),
          proxyPos=PN.astype(np.float32), proxyEdges=pedges.astype(np.int32), proxyPin=pin.astype(np.float32),
-         proxySkinIdx=pw_idx.astype(np.int32), proxySkinW=pw_w.astype(np.float32), gid=GID.astype(np.int32),
+         proxySkinIdx=pw_idx.astype(np.int32), proxySkinW=pw_w.astype(np.float32), proxyNormal=PNN.astype(np.float32), proxyGap=proxy_gap.astype(np.float32),
+         proxyTether=tether_idx.astype(np.int32), proxyTetherLen=tether_len.astype(np.float32),
+         **({'gid': GID.astype(np.int32)} if GID is not None else {}),
          **{f'hide{k}': v.astype(np.int32) for k, v in hide.items()})
 _, _bi = BODY_TREE.query(TV)
 _o = TV - V[_bi]; _o /= np.maximum(1e-12, np.linalg.norm(_o, axis=1, keepdims=True))
 OUTWARD = float((np.einsum('ij,ij->i', _o, TN) > 0).mean())
 rep = {'garment': a.garment, 'normalsOutward': round(OUTWARD, 3), 'rig': os.path.basename(a.rig), 'renderVertices': int(len(Vt)), 'topoVertices': int(len(TV)), 'triangles': int(len(Ft)),
-       'proxyNodes': int(len(PN)), 'layerViolations': (LAYER_VIOL if a.over else None), 'resolveMaxMove': round(RESOLVE_MAX, 4), 'proxyEdges': int(len(pedges)), 'openings': int(isb.sum()), 'hiddenBodyFaces': {int(k): int(len(v)) for k, v in hide.items()},
+       'drape': DRAPE_INFO, 'proxyNodes': int(len(PN)), 'proxyGapMean': round(float(proxy_gap.mean()), 4), 'layerViolations': (LAYER_VIOL if a.over else None), 'resolveMaxMove': round(RESOLVE_MAX, 4), 'proxyEdges': int(len(pedges)), 'openings': int(isb.sum()), 'hiddenBodyFaces': {int(k): int(len(v)) for k, v in hide.items()},
        'bones': sorted({NAMES[b] for b in np.unique(top4[tw > 0.01])}), **{k: (round(float(v), 4) if isinstance(v, (float, np.floating)) else v) for k, v in INFO.items()}}
 json.dump(rep, open(os.path.join(a.out, f'{a.garment}.json'), 'w'), indent=1)
 print(json.dumps(rep))

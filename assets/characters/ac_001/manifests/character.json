@@ -15,12 +15,12 @@
  "stages": {
   "rig": {
    "status": "done",
-   "startedAt": "2026-09-29T17:40:29.339Z",
+   "startedAt": "2026-09-30T02:30:05.074Z",
    "exportKey": "f30cf1663c3cc5f9",
    "fitKey": "8e48309a6506210d",
-   "key": "73c3653f04028459",
+   "key": "92f60f25a46c4172",
    "mode": "mhr",
-   "at": "2026-09-29T17:41:32.736Z",
+   "at": "2026-09-30T02:30:12.559Z",
    "report": {
     "fit": {
      "meshToBodyCm": {
@@ -343,15 +343,15 @@
     ]
    },
    "error": null,
-   "finishedAt": "2026-09-29T17:41:32.739Z",
-   "seconds": 63
+   "finishedAt": "2026-09-30T02:30:12.560Z",
+   "seconds": 7
   },
   "import": {
-   "key": "73c3653f04028459",
+   "key": "92f60f25a46c4172",
    "status": "done",
    "mode": "mhr",
-   "at": "2026-09-29T17:41:32.736Z",
-   "finishedAt": "2026-09-29T17:41:32.736Z",
+   "at": "2026-09-30T02:30:12.559Z",
+   "finishedAt": "2026-09-30T02:30:12.559Z",
    "rigId": "ac-001",
    "output": "lib/mocap/mhr-rigs/ac-001.json.gz",
    "reports": [
@@ -1000,10 +1000,17 @@
    "error": "court test failed — see logs/courttest.log",
    "creditsSpentInJob": 0,
    "at": "2026-09-29T17:02:18.038Z"
+  },
+  {
+   "stage": "rig",
+   "part": null,
+   "error": "LOD 1 does not line up with LOD 0 (bounds differ by 113.4 cm)",
+   "creditsSpentInJob": 0,
+   "at": "2026-09-30T02:29:43.214Z"
   }
  ],
  "name": "AC",
- "updatedAt": "2026-09-29T17:41:32.739Z",
+ "updatedAt": "2026-09-30T02:30:12.560Z",
  "mode": "model",
  "model": {
   "file": "source/model/7827aecca37c.glb",

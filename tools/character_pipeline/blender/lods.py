@@ -21,6 +21,11 @@ if arm:
         if o.parent is arm:
             mw = o.matrix_world.copy(); o.parent = None; o.matrix_world = mw
     bpy.data.objects.remove(arm, do_unlink=True)
+# every parent (the armature, a GLB's scene-root empty) is cleared keeping the world transform:
+# the LOD must sit exactly where LOD 0 sits (a lost root offset put AC's LODs 1.13 m under the floor)
+for o in ms:
+    if o.parent is not None:
+        mw = o.matrix_world.copy(); o.parent = None; o.matrix_world = mw
 src = join(ms, 'SRC') if len(ms) > 1 else ms[0]
 apply_transforms([src])
 # weld the UV-seam splits (UVs live on the face corners, so they survive): decimation can't open cracks

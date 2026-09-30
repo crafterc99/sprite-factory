@@ -130,6 +130,9 @@ if __name__ == '__main__':
     # python glb_load.py <model.glb> <out_dir> [--height H | --scale S]
     #   --height: uniform scale so the model is H metres tall (a Tripo export is ~1 unit tall);
     #   --scale: an explicit factor (LODs reuse LOD 0's factor so every LOD lines up)
+    #   --align <LOD 0's mesh.json>: translate so the bounding box centre matches LOD 0's (a
+    #     decimated copy exported by Blender can come back shifted: a skinned GLB's mesh-node offset
+    #     is applied differently by Blender's importer than by this loader)
     src, out = sys.argv[1], sys.argv[2]
     rest = sys.argv[3:]
     opt = {rest[i]: rest[i + 1] for i in range(0, len(rest) - 1, 2)}
@@ -138,9 +141,15 @@ if __name__ == '__main__':
     src_h = float(P[:, 1].max() - P[:, 1].min())
     s = float(opt['--scale']) if '--scale' in opt else (float(opt['--height']) / src_h if '--height' in opt else 1.0)
     P = P * s
+    shift = [0.0, 0.0, 0.0]
+    if '--align' in opt:
+        b0 = np.array(json.load(open(opt['--align']))['bbox'], np.float64)
+        d = (b0[0] + b0[1]) / 2 - (P.min(0) + P.max(0)) / 2
+        P = P + d
+        shift = d.round(5).tolist()
     tex = save_textures(J, BIN, mats[0], os.path.join(out, 'tex'))
     np.savez(os.path.join(out, 'mesh.npz'), pos=P.astype(np.float32), nrm=N.astype(np.float32), uv=U.astype(np.float32), tri=T.astype(np.int32))
-    info = {'source': src, 'vertices': int(len(P)), 'triangles': int(len(T)), 'textures': tex, 'scale': s, 'sourceHeight': round(src_h, 4),
+    info = {'source': src, 'vertices': int(len(P)), 'triangles': int(len(T)), 'textures': tex, 'scale': s, 'sourceHeight': round(src_h, 4), 'alignShift': shift,
             'bbox': [P.min(0).round(4).tolist(), P.max(0).round(4).tolist()], 'materials': mats}
     json.dump(info, open(os.path.join(out, 'mesh.json'), 'w'), indent=1)
     print(json.dumps(info))

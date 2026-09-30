@@ -20,6 +20,15 @@
   button.on { border-color:var(--accent); color:#fff; }
   input[type=range] { accent-color:var(--accent); width:100px; }
   #state { color:var(--ok); }
+  #outfitPanel { position:fixed; left:12px; top:104px; z-index:7; display:none; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; width:min(92vw,360px); }
+  #outfitPanel .oh { display:flex; align-items:center; gap:8px; margin-bottom:6px; } #outfitPanel .oh b { color:#fff; flex:1; }
+  #outfitPanel .orow { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:6px 0 2px; }
+  #outfitPanel .olbl { width:54px; color:var(--dim); }
+  #outfitPanel .sw { display:flex; gap:6px; margin:4px 0 6px 60px; }
+  #outfitPanel .sw button { width:24px; height:24px; padding:0; border-radius:50%; border:2px solid var(--line); position:relative; overflow:hidden; }
+  #outfitPanel .sw button i { position:absolute; right:-2px; bottom:-2px; width:11px; height:11px; border-radius:50%; border:1px solid #0008; }
+  #outfitPanel .sw button.on { border-color:#fff; }
+  #outfitPanel .onote { color:var(--dim); font-size:12px; margin-top:6px; }
   #help { position:fixed; left:12px; bottom:12px; z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--dim); max-width:420px; }
   #help b { color:var(--txt); }
   #vid { position:fixed; right:12px; top:110px; z-index:5; width:240px; min-width:140px; max-width:92vw; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:6px; resize:both; overflow:hidden; display:none; }
@@ -109,6 +118,7 @@
   <span class="pill" title="Game speed (1.00× = real time). Saved on this device.">Speed <input type="range" id="speed" min="0.25" max="1.5" step="0.05"><b id="speedLbl">1.00×</b></span>
   <span class="pill">Cam <button id="camChase" class="on">2K</button><button id="camSide">Side</button><button id="camFree">Orbit</button></span>
   <span class="pill" title="Clips the game has, by role — record the rest (see the recording guide)"><span id="libInfo">clips…</span> <a href="/recording" style="color:var(--accent)">guide</a></span>
+  <span class="pill" id="outfitPill" style="display:none" title="Clothes: a loose tee or tank and shorts that move like fabric"><button id="outfitBtn" type="button">Outfit</button></span>
   <span class="pill"><button id="dbgBtn" title="Foot plants + slide meter (F)">Feet</button><button id="ballBtn" title="Basketball physics: colliders, contacts, forces + live tuning (B)">Ball</button></span>
   <span class="pill" id="pad">no controller</span>
   <span class="pill" id="fps">—</span>
@@ -118,6 +128,11 @@
   <b>Controller</b> left stick move · hold <b>R2</b> run-dribble (turns to run) · hold <b>□</b> shoot (moving = step-back) · <b>○</b> crossover · <b>△</b> spin · <b>✕</b> hesi (no ball: new ball) · R1 between-legs · L1 switch hand · right stick camera<br>
   <b>Keyboard</b> WASD move · hold Shift run · hold <b>I</b>/Space shoot · O cross · K spin · J hesi · U btl · H hand · <b>X</b> new ball · C camera · F feet<br>
   Standing = idle dribble facing the basket. Let go at speed = slide-in stop. Moves pick the variant + frame nearest your pose.
+</div>
+<div id="outfitPanel"><div class="oh"><b>Outfit</b><span id="outfitInfo" style="color:var(--dim);font-size:12px"></span><button id="outfitClose" type="button">×</button></div>
+  <div id="outfitRows"></div>
+  <div class="orow"><span class="olbl">fabric</span><button id="outfitSim" type="button" class="on" title="The cloth simulation (off: the clothes ride the body rigidly)">moves</button><button id="outfitReset" type="button">settle</button></div>
+  <div class="onote">Saved on this device for this character.</div>
 </div>
 <div id="dbg"><b>feet</b> · slide max <span id="dbgSlide"></span> <button id="dbgReset" type="button">reset</button><br><span id="dbgBody"></span></div>
 <div id="toast"></div>
@@ -183,6 +198,7 @@ import * as VC from '/js/court-vantheah.mjs';
 import * as CM from '/js/souljam-material.mjs';
 import * as BS from '/js/ball-session.mjs';
 import * as BC from '/js/ball-contacts.mjs';
+import * as GA from '/js/garments.mjs';
 window.__c3dBoot = true;
 { const e = document.getElementById('err'); if (e && e.getAttribute('data-src') === 'watchdog') e.innerHTML = ''; }
 if (window.__c3dPendingErr) window.__c3dFail(window.__c3dPendingErr);
@@ -454,7 +470,7 @@ function c3dTestHooks() {
     return [v[0] * c + (k[1] * v[2] - k[2] * v[1]) * s + k[0] * d * (1 - c), v[1] * c + (k[2] * v[0] - k[0] * v[2]) * s + k[1] * d * (1 - c), v[2] * c + (k[0] * v[1] - k[1] * v[0]) * s + k[2] * d * (1 - c)]; };
   const place = (P) => { const out = new Float32Array(A.NP * 3); const pp = S.player.pos; A.placePose(P, pp[0], pp[1], S.player.yaw, out, A.NJ); return out; };
   let held = null;
-  const hold = (P) => { held = P; S.freezePose = true; poseCharacter(S.rig, P); updateCharLod(); return true; };
+  const hold = (P) => { held = P; S.freezePose = true; poseCharacter(S.rig, P); updateCharLod(); S.outfit?.pose(boneMats); return true; };
   return {
     release() { S.freezePose = false; },
     clips: () => Object.keys(S.player.lib).filter((k) => !k.includes(':')),
@@ -515,6 +531,100 @@ function updateCharLod() {
   charLodLevel = want;
   charLods.forEach((l, i) => l.meshes.forEach((m) => { m.visible = i === want; }));
   S.charLod = { level: want, triangles: charLods[want].meshes.reduce((a, m) => a + m.geometry.index.count / 3, 0) };
+}
+// ═══ Outfit: loose garments that move like fabric (engine3d/garments.mjs; built by
+// tools/character_pipeline/garments for this character's rig) ═══
+const OUTFIT = { index: null, cache: new Map(), sel: {}, sim: true, charId: null };
+const gTexLoader = new THREE.TextureLoader(), gTexCache = new Map();
+function garmentTexture(url, srgb, repeat) {
+  const k = url + (repeat ? '#r' : ''); if (gTexCache.has(k)) return gTexCache.get(k);
+  const t = gTexLoader.load(url); t.flipY = false;               // garment UVs: v runs down the image
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = Math.min(LITE ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
+  gTexCache.set(k, t); return t;
+}
+/** Body faces under the garments are not drawn (per LOD): no skin pokes through the cloth. */
+function hideBodyFaces(by) {
+  const lods = charLods.length ? charLods : [{ level: 0, meshes: charMeshes }];
+  for (const L of lods) {
+    const m = L.meshes.find((x) => x.userData.part === 'body') || L.meshes[0]; if (!m) continue;
+    const g = m.geometry, full = (m.userData.fullIndex ||= g.index.array.slice());
+    const hid = by[L.level];
+    if (!hid || !hid.size) { if (g.index.count !== full.length) g.setIndex(new THREE.BufferAttribute(full, 1)); continue; }
+    const keep = new full.constructor(full.length);
+    let n = 0;
+    for (let f = 0, nf = full.length / 3; f < nf; f++) if (!hid.has(f)) { keep[n++] = full[f * 3]; keep[n++] = full[f * 3 + 1]; keep[n++] = full[f * 3 + 2]; }
+    g.setIndex(new THREE.BufferAttribute(keep.slice(0, n), 1));
+  }
+}
+async function loadGarment(id) {
+  if (!OUTFIT.cache.has(id)) {
+    const p = getJSON(`/api/mocap3d/outfit/${encodeURIComponent(OUTFIT.charId)}/${encodeURIComponent(id)}`, { label: 'outfit' }).then((j) => GA.decodeGarment(j, A.b64));
+    p.catch(() => OUTFIT.cache.delete(id));
+    OUTFIT.cache.set(id, p);
+  }
+  return OUTFIT.cache.get(id);
+}
+async function wearGarment(slot, id, color = 0) {
+  if (!S.outfit) return false;
+  if (!id) { S.outfit.remove(slot); delete OUTFIT.sel[slot]; return true; }
+  try {
+    setText($('outfitInfo'), 'loading…');
+    const g = await loadGarment(id);
+    S.outfit.wear(g, color);
+    OUTFIT.sel[slot] = { id, color };
+    return true;
+  } catch (e) { toast(`Could not load that garment: ${esc(e.message)}`); delete OUTFIT.sel[slot]; return false; }
+  finally { setText($('outfitInfo'), ''); }
+}
+function saveOutfit() { try { localStorage.setItem('court3d_outfit_' + OUTFIT.charId, JSON.stringify(OUTFIT.sel)); } catch {} }
+function renderOutfitPanel() {
+  const idx = OUTFIT.index; if (!idx) return;
+  let h = '';
+  for (const [slot, lbl] of [['top', 'Top'], ['bottom', 'Bottom']]) {
+    const gs = idx.garments.filter((g) => g.slot === slot); if (!gs.length) continue;
+    const cur = OUTFIT.sel[slot];
+    h += `<div class="orow"><span class="olbl">${lbl}</span><button type="button" data-slot="${slot}" data-g="" class="${!cur ? 'on' : ''}">none</button>`
+      + gs.map((g) => `<button type="button" data-slot="${slot}" data-g="${esc(g.id)}" class="${cur?.id === g.id ? 'on' : ''}">${esc(g.name)}</button>`).join('') + '</div>';
+    const g = cur && gs.find((x) => x.id === cur.id);
+    if (g) h += '<div class="sw">' + (g.palette || []).map((p, i) => `<button type="button" title="${esc(p.name)}" data-slot="${slot}" data-c="${i}" class="${(cur.color || 0) === i ? 'on' : ''}" style="background:${esc(p.base)}"><i style="background:${esc(p.accent)}"></i></button>`).join('') + '</div>';
+  }
+  $('outfitRows').innerHTML = h;
+  const n = Object.keys(OUTFIT.sel).length;
+  setText($('outfitBtn'), n ? `Outfit · ${n}` : 'Outfit');
+}
+$('outfitRows').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b || !S.outfit) return;
+  const slot = b.dataset.slot;
+  if (b.dataset.c != null) { const c = +b.dataset.c; if (OUTFIT.sel[slot]) { OUTFIT.sel[slot].color = c; S.outfit.setColor(slot, c); } }
+  else await wearGarment(slot, b.dataset.g || null, 0);
+  b.blur();
+  saveOutfit(); renderOutfitPanel();
+});
+$('outfitBtn').onclick = (e) => { const p = $('outfitPanel'); p.style.display = p.style.display === 'block' ? 'none' : 'block'; e.currentTarget.blur(); };
+$('outfitClose').onclick = () => { $('outfitPanel').style.display = 'none'; };
+$('outfitSim').onclick = (e) => { OUTFIT.sim = !OUTFIT.sim; if (S.outfit) S.outfit.sim = OUTFIT.sim; e.currentTarget.classList.toggle('on', OUTFIT.sim); setText(e.currentTarget, OUTFIT.sim ? 'moves' : 'rigid'); S.outfit?.resetCloth(); e.currentTarget.blur(); };
+$('outfitReset').onclick = (e) => { S.outfit?.resetCloth(); e.currentTarget.blur(); };
+/** The character's garments (if it has any) + what this device last put on it (or ?outfit=tee:1,shorts). */
+async function setupOutfit(charId) {
+  OUTFIT.charId = charId;
+  if (!mhrRig) return;
+  let idx = null;
+  try { idx = await getJSON(`/api/mocap3d/outfits/${encodeURIComponent(charId)}`, { label: 'outfits', tries: 2 }); } catch { return; }
+  if (!idx?.garments?.length) return;
+  OUTFIT.index = idx;
+  S.outfit = new GA.Outfit({ THREE, scene, mrig: mhrRig, radii: S.rig.limbRadii, loadTexture: garmentTexture, onHide: hideBodyFaces });
+  // the body the fabric rests on (collision spheres riding the skeleton)
+  if (idx.body) { try { S.outfit.setBody(await getJSON(`/api/mocap3d/outfit/${encodeURIComponent(charId)}/body`, { label: 'outfit body', tries: 2 })); } catch (e) { console.warn('outfit body', e); } }
+  $('outfitPill').style.display = '';
+  let sel = {};
+  try { sel = JSON.parse(localStorage.getItem('court3d_outfit_' + charId) || '{}') || {}; } catch {}
+  const q = QS.get('outfit');
+  if (q != null) { sel = {}; for (const tok of q.split(',')) { const [id, c] = tok.split(':'); const e = idx.garments.find((x) => x.id === id); if (e) sel[e.slot] = { id, color: +c || 0 }; } }
+  OUTFIT.sel = {};
+  for (const [slot, v] of Object.entries(sel)) if (v?.id && idx.garments.some((g) => g.id === v.id && g.slot === slot)) await wearGarment(slot, v.id, v.color || 0);
+  renderOutfitPanel();
 }
 const boneTmp = new Float32Array(A.NSEG * 16);
 // Recorded clips carry the capture's own joint rotations: arms, hands, fingers
@@ -1206,6 +1316,8 @@ function afterUpdate(r, dt, rdt, now) {
   // ── Ball: the contact system (controlled states: trajectories between contacts; physics only for
   // shots in flight and loose balls) — or the legacy physics-driven dribble (?ball=legacy)
   if (S.ball) ballStepContact(dt, r, now); else ballStep(dt, r, now);
+  // the garments' fabric: after IK and finger contact (the pose the frame will draw)
+  if (S.outfit && !S.freezePose) S.outfit.step(dt, boneMats);
   net.scale.lerp(new THREE.Vector3(1, 1, 1), 1 - Math.exp(-dt * 5));
   return r;
 }
@@ -1256,6 +1368,7 @@ function step(now) {
 
   if (S.dbgBall) drawBallDbg();
   updateCamera(rdt, inp);
+  S.outfit?.draw(boneMats);
   renderer.render(scene, camera);
 }
 
@@ -1355,6 +1468,7 @@ function replayStep(rdt) {
   const dist = R.dist || 4.2;
   camera.position.set(pel[0] - d[0] * dist, pel[1] + 0.2, pel[2] - d[2] * dist);
   camera.lookAt(pel[0], pel[1] - 0.05, pel[2]);
+  if (S.outfit) { S.outfit.step(R.playing === false ? 0 : rdt, boneMats); S.outfit.draw(boneMats); }
   renderer.render(scene, camera);
 }
 
@@ -1671,6 +1785,8 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     if (QS.get('balltest')) labStart(QS.get('balltest'));
     if (QS.get('balldbg') === '1' || QS.get('balltest')) toggleBallDbg(true);
     window.__court3d = S; // for automated checks
+    window.__outfitReady = setupOutfit(charId).catch((e) => console.warn('outfit', e));
+    window.__outfit = { state: () => S.outfit?.state() || [], sel: () => ({ ...OUTFIT.sel }), wear: (slot, id, c) => wearGarment(slot, id, c).then((ok) => { saveOutfit(); renderOutfitPanel(); return ok; }), color: (slot, c) => { if (OUTFIT.sel[slot]) { OUTFIT.sel[slot].color = c; S.outfit?.setColor(slot, c); renderOutfitPanel(); } }, sim: (on) => { OUTFIT.sim = !!on; if (S.outfit) S.outfit.sim = !!on; }, index: () => OUTFIT.index };
     window.__c3dTest = c3dTestHooks();
     window.__ballProbe = () => ball.position.y;
     const showLib = () => {

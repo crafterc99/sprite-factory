@@ -834,7 +834,7 @@ async function handler(req, res) {
   }
   if (pathname === '/js/basketball-physics.mjs' || pathname === '/js/contact-ik.mjs' || pathname === '/js/ball-lab.mjs' || pathname === '/js/ball-setup.mjs' || pathname === '/js/court-vantheah.mjs' || pathname === '/js/souljam-material.mjs'
     // the ball contact system (docs/ball-contact-system.md)
-    || pathname === '/js/ball-contacts.mjs' || pathname === '/js/ball-trajectory.mjs' || pathname === '/js/ball-control.mjs' || pathname === '/js/ball-session.mjs') {
+    || pathname === '/js/ball-contacts.mjs' || pathname === '/js/ball-trajectory.mjs' || pathname === '/js/ball-control.mjs' || pathname === '/js/ball-session.mjs' || pathname === '/js/garments.mjs') {
     // the basketball physics system, its contact IK and the test scenes (engine3d/)
     return serveStatic(res, path.join(__dirname, 'engine3d', pathname.slice(4)), 'text/javascript', { revalidate: true });
   }

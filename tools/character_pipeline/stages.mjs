@@ -326,7 +326,11 @@ async function rigMhr(m, { force } = {}) {
     for (const l of readJson(rep).lods) {
       const le = path.join(lodDir, `export${l.lod}`);
       fs.rmSync(le, { recursive: true, force: true });
-      py('glb_load.py', [l.file, le, '--scale', String(scale)], log);
+      py('glb_load.py', [l.file, le, '--scale', String(scale), '--align', path.join(exp, 'mesh.json')], log);
+      // a LOD must line up with LOD 0 (same space, same pose) or it is skinned into the wrong place
+      const b0 = readJson(path.join(exp, 'mesh.json')).bbox, bl = readJson(path.join(le, 'mesh.json')).bbox;
+      const off = Math.max(...[0, 1].flatMap((k) => [0, 1, 2].map((c) => Math.abs(bl[k][c] - b0[k][c]))));
+      if (off > 0.02) throw new Error(`LOD ${l.lod} does not line up with LOD 0 (bounds differ by ${(off * 100).toFixed(1)} cm)`);
       py('build_rig.py', [le, fitDir, ...common, '--lod', String(l.lod), '--lod-dist', String(ladder[l.lod - 1].dist)], log);
       lodsOut.push({ lod: l.lod, triangles: l.triangles, dist: ladder[l.lod - 1].dist });
     }
