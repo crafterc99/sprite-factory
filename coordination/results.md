@@ -3003,3 +3003,32 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: npm test 53/53. Offline sim, idle dribble 100 % near, 0 lost (it was 16 %, lost). The shot releases at the same time and place as the old build. Clip-builder invalid set unchanged. Browser probe: sprint → teleport → reset keeps the ball (it was thrown). scripts/court3d-test.js --court classic: 0 errors, dribble, moves 0 cm slide, run 4.86 m/s, stop, shot SWISH. The standing crossover switches hands; the moving crossover did not fire because the ball went loose at the end of the standing one → pass=false on that one sub-check.
 - Limits: at ≤ 10 fps (the headless software-GL test runs at 11 fps) the physics drops possession more often. This is identical with the committed physics and the old clips (sim at DT 0.1: 44 % near), so it predates today's work. At 60 fps crossovers keep 87–99 % and nothing is lost.
 - Assumptions: rebuilding every clip on the server via the BUILDER_REV bump is acceptable (automatic, cached).
+
+## CAPTURE-01 — Soul Jam Capture live (two-phone capture for the SAM 3D pipeline)
+- Status: DONE. On main; Railway deploys it.
+- Files changed:
+  - capture/, lib/capture/, routes/capture.js
+  - server.js: routes, WebSocket hub, `/capture`, a request crash guard, the `/models/basketball.glb` route
+  - middleware/auth.js: capture paths; login rate limit on the right-most X-Forwarded-For hop
+  - lib/firebase-storage.js, lib/r2-storage.js: handle exports
+  - package.json: ws, qrcode
+  - tests/capture.test.js, tests/capture-server.test.js, tests/capture-e2e.spec.js
+  - tests/anim3d.test.js: synced with the shipped motion-builder rule
+  - docs/capture.md
+- What: the capture system. After a multi-agent production review (41 findings + 7, then 2 more rounds), it was made safe for Railway's wiped-on-deploy disk:
+  - every record is mirrored as it changes;
+  - uploads are confirmed only once they are in the bucket, and the phone keeps its copy until then;
+  - takes, stills and the export are restored after a redeploy.
+- Hardening:
+  - crash guards (WebSocket errors, `GET //` on the whole server);
+  - a camera token can never act as director;
+  - pairing codes expire; rate limits; body and upload caps.
+- Workflow fixes: STOP is resent, a refreshed director resumes STOP, and reloaded cameras finish their recording.
+- Validation: npm test 85/85 (incl. 20 server tests in production shape: redeploys, security, crash resistance); e2e 41/41 (restart with the disk wiped, mid-upload, reloads, role conflicts).
+- Assumption: Railway appends the client IP as the right-most X-Forwarded-For hop (used by the pairing and login limits).
+
+## BALL-01 — the user's Spalding basketball in the game
+- Status: DONE.
+- Files changed: tools/ball/build_ball.py, assets/models/basketball.glb, court3d.html (swaps the sphere once loaded), server.js (gzip GLB route).
+- What: the Spalding OBJ, with its raised seam ribs found on the mesh and baked as black vertex colours on orange. It is centred and scaled to the physics radius. The physics are unchanged.
+- Validation: ball court 9/9 on AC; outfit court 6/6; close-up checked.

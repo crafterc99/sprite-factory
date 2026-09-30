@@ -221,6 +221,9 @@ require('./routes/quiz').register(router, ctx);
 require('./routes/movement-profiles').register(router);
 require('./routes/pose-import').register(router, ctx);
 require('./routes/mocap').register(router, ctx);
+// Soul Jam Capture (two-camera recording, docs/capture.md): REST here, real time on the hub
+const captureHub = { hub: null };
+require('./routes/capture').register(router, ctx, captureHub);
 
 // Public health: no secrets — only whether storage is wired and, if not, why
 let _healthStorage = null;
@@ -705,7 +708,9 @@ router.post('/api/deploy', async (req, res) => {
 // ─── Request Handler ────────────────────────────────────────────────────
 
 async function handler(req, res) {
-  const url = new URL(req.url, `http://localhost:${PORT}`);
+  let url;
+  try { url = new URL(req.url, `http://localhost:${PORT}`); }
+  catch { res.writeHead(400, { 'Content-Type': 'text/plain' }); return res.end('Bad request'); }   // e.g. "GET //" — never a crash
   const pathname = url.pathname;
 
   // CORS
@@ -804,16 +809,19 @@ async function handler(req, res) {
     if (fp && fs.existsSync(fp)) return serveStatic(res, fp, 'text/javascript');
     res.writeHead(404); return res.end('Not found');
   }
-  if (pathname === '/courts/vantheah.glb') {
-    // the VANTHEAH practice court (textures as WebP: scripts/court-webp.js); geometry gzips 6.5 → 2.4 MB
-    const fp = path.join(__dirname, 'assets', 'courts', 'vantheah.glb');
+  // the VANTHEAH practice court (textures as WebP: scripts/court-webp.js; geometry gzips 6.5 → 2.4 MB)
+  // and the game ball (the Spalding model, tools/ball/build_ball.py; 0.9 → 0.6 MB)
+  const GLB = { '/courts/vantheah.glb': ['courts', 'vantheah.glb'], '/models/basketball.glb': ['models', 'basketball.glb'] }[pathname];
+  if (GLB) {
+    const fp = path.join(__dirname, 'assets', ...GLB);
     if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return serveStatic(res, fp, 'model/gltf-binary');
     try {
       const st = fs.statSync(fp), etag = `"gz-${st.mtimeMs.toString(36)}-${st.size.toString(36)}"`;
       if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).map((t) => t.replace(/^W\//, '')).includes(etag)) { res.writeHead(304, { ETag: etag }); return res.end(); }
-      if (!global.__courtGz || global.__courtGz.etag !== etag) global.__courtGz = { etag, body: require('zlib').gzipSync(fs.readFileSync(fp), { level: 6 }) };
-      res.writeHead(200, { 'Content-Type': 'model/gltf-binary', 'Content-Encoding': 'gzip', 'Content-Length': global.__courtGz.body.length, 'Cache-Control': 'public, max-age=300, stale-while-revalidate=86400', ETag: etag, Vary: 'Accept-Encoding' });
-      return res.end(global.__courtGz.body);
+      const gz = (global.__glbGz ||= {});
+      if (!gz[pathname] || gz[pathname].etag !== etag) gz[pathname] = { etag, body: require('zlib').gzipSync(fs.readFileSync(fp), { level: 6 }) };
+      res.writeHead(200, { 'Content-Type': 'model/gltf-binary', 'Content-Encoding': 'gzip', 'Content-Length': gz[pathname].body.length, 'Cache-Control': 'public, max-age=300, stale-while-revalidate=86400', ETag: etag, Vary: 'Accept-Encoding' });
+      return res.end(gz[pathname].body);
     } catch { res.writeHead(404); return res.end('Not found'); }
   }
   if (pathname === '/vendor/rapier.mjs') {
@@ -838,6 +846,16 @@ async function handler(req, res) {
   if (pathname === '/recording' || pathname === '/recording/' || pathname === '/recording.html') {
     return serveStatic(res, path.join(__dirname, 'recording.html'), 'text/html');
   }
+  if (pathname === '/capture' || pathname === '/capture/') {
+    // Soul Jam Capture: director + camera app (open page; camera API calls carry the pairing token)
+    return serveStatic(res, path.join(__dirname, 'capture', 'capture.html'), 'text/html', { revalidate: true });
+  }
+  if (pathname.startsWith('/capture/js/')) {
+    const m = pathname.match(/^\/capture\/js\/([a-z0-9_.-]+\.mjs)$/);
+    const fp = m && path.join(__dirname, 'capture', m[1]);
+    if (fp && fs.existsSync(fp)) return serveStatic(res, fp, 'text/javascript', { revalidate: true });
+    res.writeHead(404); return res.end('Not found');
+  }
   if (pathname === '/court3d' || pathname === '/court3d/' || pathname === '/court3d.html') {
     return serveStatic(res, path.join(__dirname, 'court3d.html'), 'text/html');
   }
@@ -859,7 +877,17 @@ if (require.main === module) {
 
     // Bind PORT immediately so Railway's health check passes within the startup window.
     // All restore/seed work runs in the background after the server is already listening.
-    const server = http.createServer(handler);
+    // a request that throws answers 500 — it never takes the process (and every open socket) down
+    const safeHandler = (req, res) => handler(req, res).catch((e) => {
+      console.error('[request]', req.method, String(req.url).slice(0, 200), e && e.stack || e);
+      try { if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain' }); res.end('Server error'); } catch {}
+    });
+    const server = http.createServer(safeHandler);
+    // Soul Jam Capture: the WebSocket hub on this server, and a LAN HTTPS listener for phones
+    const { Hub } = require('./lib/capture/hub');
+    captureHub.hub = new Hub({ isAuthed: (req) => !require('./middleware/auth').enabled() || require('./middleware/auth').isAuthed(req), onStop: (sid, rid) => captureHub.onStop?.(sid, rid) });
+    captureHub.hub.attach(server);
+    require('./lib/capture/lan').start(safeHandler, { hub: captureHub.hub, dir: path.join(__dirname, 'data', 'capture', 'certs') });
     server.listen(PORT, () => {
       const { CHARACTERS } = require('./lib/sprite-generator/prompts');
       console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);

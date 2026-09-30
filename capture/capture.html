@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0d14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Soul Jam Capture</title>
+<style>
+  :root { --bg:#0d0d14; --panel:#171724; --line:#2b2b40; --txt:#e8e8f2; --dim:#9a9ab2; --ok:#3ddc84; --warn:#ffb020; --bad:#ff4d4f; --rec:#ff2d3d; --acc:#ff6a1a; --a:#3d7bff; --b:#b04dff; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-text-size-adjust:100%; }
+  body { min-height:100vh; padding: env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 16px); }
+  button { font:inherit; color:var(--txt); background:#22223a; border:1px solid var(--line); border-radius:12px; padding:10px 14px; cursor:pointer; }
+  button:disabled { opacity:0.4; cursor:not-allowed; }
+  button.pri { background:var(--acc); border-color:var(--acc); color:#140a02; font-weight:800; }
+  button.ok { background:var(--ok); border-color:var(--ok); color:#06210f; font-weight:800; }
+  button.bad { background:#3a1418; border-color:var(--bad); color:#ffd6d8; font-weight:700; }
+  button.ghost { background:transparent; }
+  input, select { font:inherit; color:var(--txt); background:#12121e; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  a { color:#7fb6ff; }
+  header { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 0 8px; }
+  header h1 { font-size:15px; letter-spacing:2px; margin:0; flex:1; font-weight:900; }
+  .pill { display:inline-flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 10px; font-size:13px; font-weight:700; white-space:nowrap; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#555; }
+  .dot.ok { background:var(--ok); box-shadow:0 0 8px var(--ok); } .dot.warn { background:var(--warn); } .dot.bad { background:var(--bad); } .dot.rec { background:var(--rec); box-shadow:0 0 10px var(--rec); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; margin:10px 0; }
+  .dim { color:var(--dim); } .small { font-size:12.5px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .grow { flex:1; }
+  .setup { font-weight:900; letter-spacing:1px; }
+  .bar { height:8px; background:#23233a; border-radius:8px; overflow:hidden; } .bar > i { display:block; height:100%; background:var(--ok); }
+  .anim-title { font-size:34px; line-height:1.02; font-weight:900; letter-spacing:0.5px; margin:6px 0 0; }
+  .anim-sub { font-size:22px; font-weight:800; color:#ffd166; margin:2px 0 8px; }
+  .facts { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:6px 12px; font-size:14px; }
+  .facts b { font-weight:800; }
+  .state { display:inline-block; padding:2px 8px; border-radius:8px; background:#2a2a44; font-weight:900; letter-spacing:0.5px; }
+  .big { width:100%; font-size:24px; padding:22px; border-radius:18px; letter-spacing:1px; }
+  .timer { font-size:72px; font-weight:900; text-align:center; font-variant-numeric:tabular-nums; }
+  .recframe { border:3px solid var(--rec); border-radius:18px; }
+  .checks div { padding:2px 0; font-size:14px; } .checks .ok::before { content:'✓ '; color:var(--ok); } .checks .warn::before { content:'! '; color:var(--warn); font-weight:900; } .checks .fail::before { content:'✗ '; color:var(--bad); font-weight:900; }
+  .saved { font-size:40px; font-weight:900; color:var(--ok); text-align:center; padding:18px; }
+  .vids { display:grid; grid-template-columns:1fr 1fr; gap:6px; } .vids video { width:100%; border-radius:10px; background:#000; }
+  .pv { position:relative; margin-top:8px; } .pv video { width:100%; border-radius:12px; background:#000; display:block; max-height:22vh; object-fit:contain; }
+  /* the action the operator needs next is always on screen */
+  .sticky { position:sticky; bottom: calc(env(safe-area-inset-bottom) + 8px); z-index:4; }
+  #recordBox.sticky { padding-top:8px; background:linear-gradient(to top, var(--bg) 70%, transparent); }
+  .actions { position:sticky; bottom: calc(env(safe-area-inset-bottom) + 8px); background:var(--panel); padding-top:8px; }
+  .pv .tag { position:absolute; left:8px; top:8px; }
+  .court svg { border-radius:12px; }
+  .cues li { margin:2px 0; }
+  details > summary { cursor:pointer; font-weight:700; padding:4px 0; }
+  .qr svg { width:220px; height:220px; background:#fff; border-radius:12px; padding:6px; }
+  .code { font-size:34px; font-weight:900; letter-spacing:6px; font-variant-numeric:tabular-nums; }
+  .list > div { display:flex; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
+  .banner { background:#3a2a05; border:1px solid var(--warn); color:#ffe2a8; border-radius:12px; padding:10px 12px; margin:8px 0; font-weight:700; }
+  .banner.bad { background:#3a1418; border-color:var(--bad); color:#ffd6d8; }
+  /* camera mode */
+  #camera .full { position:fixed; inset:0; background:#000; }
+  #camera .full video { width:100%; height:100%; object-fit:contain; }
+  #camera .hud { position:fixed; left:10px; right:10px; top: calc(env(safe-area-inset-top) + 10px); display:flex; gap:8px; flex-wrap:wrap; }
+  #camera .foot { position:fixed; left:10px; right:10px; bottom: calc(env(safe-area-inset-bottom) + 10px); }
+  #camera.recording .full { box-shadow: inset 0 0 0 8px var(--rec); }
+  .tap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); z-index:5; }
+  .lm-img { position:relative; } .lm-img img { width:100%; display:block; border-radius:10px; } .lm-img i { position:absolute; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; border:2px solid #fff; background:var(--acc); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SOUL JAM CAPTURE</h1>
+  <span class="pill" id="pillA"><i class="dot"></i>CAM A <span id="pillAtxt">—</span></span>
+  <span class="pill" id="pillB"><i class="dot"></i>CAM B <span id="pillBtxt">—</span></span>
+</header>
+
+<!-- sessions / join -->
+<section id="home" class="hidden">
+  <div class="card">
+    <div class="row"><b class="grow">Capture sessions</b><button class="pri" id="newSession">New BASIC-01 session</button></div>
+    <div id="sessions" class="list" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <b>Join as a camera</b>
+    <p class="dim small">On the second phone: scan the QR code on the director's phone — or type the 6-digit code.</p>
+    <div class="row"><input id="joinCode" inputmode="numeric" maxlength="6" placeholder="123456" style="width:9em;font-size:22px;letter-spacing:4px"><select id="joinRole"><option value="camB">Camera B</option><option value="camA">Camera A</option></select><button id="joinBtn">Join</button></div>
+    <div id="joinErr" class="dim small"></div>
+  </div>
+  <p class="dim small" id="homeNote"></p>
+</section>
+
+<!-- director -->
+<section id="director" class="hidden">
+  <div id="banners"></div>
+  <div class="card">
+    <div class="row"><span class="setup grow" id="setupLine">—</span><span class="dim small" id="totals"></span></div>
+    <div class="bar" style="margin-top:8px"><i id="setupBar" style="width:0%"></i></div>
+  </div>
+
+  <!-- move cameras / calibrate for a setup -->
+  <div class="card hidden" id="setupCard">
+    <div class="anim-title" id="setupTitle">SETUP</div>
+    <div class="anim-sub" id="setupSub"></div>
+    <div class="court" id="setupCourt"></div>
+    <div class="facts" style="margin-top:8px"><div><b style="color:var(--a)">CAM A</b> <span id="setupCamA"></span></div><div><b style="color:var(--b)">CAM B</b> <span id="setupCamB"></span></div></div>
+    <ul class="cues small" id="setupFraming"></ul>
+    <div class="row" style="margin-top:8px"><button class="pri grow" id="calibrateBtn">CALIBRATE</button><button id="skipCalBtn">Cameras are placed — skip</button></div>
+  </div>
+
+  <!-- the animation to record -->
+  <div class="card" id="animCard">
+    <div class="row"><span class="dim small" id="animMeta"></span><span class="grow"></span><button class="ghost small" id="prevAnim">◀</button><button class="ghost small" id="nextAnim">▶</button></div>
+    <div class="anim-title" id="animTitle">—</div>
+    <div class="anim-sub" id="animSub"></div>
+    <div class="facts">
+      <div>START: <span class="state" id="fStart"></span></div><div>END: <span class="state" id="fEnd"></span></div>
+      <div>DURATION: <b id="fDur"></b></div><div>CAPTURE: <b id="fFps"></b></div>
+      <div>BALL: <b id="fHand"></b></div><div>MOVE: <b id="fDir"></b></div>
+    </div>
+    <div class="dim small" id="fProtocol" style="margin:6px 0"></div>
+    <ul class="cues" id="fCues"></ul>
+    <details><summary>Court setup + camera positions</summary><div class="court" id="animCourt"></div><div class="small dim" id="animCams"></div><ul class="small dim" id="animFraming"></ul></details>
+    <div class="pv" id="selfPv"><video id="selfVideo" playsinline muted></video><span class="pill tag" style="color:var(--a)">CAM A · this phone</span></div>
+  </div>
+
+  <!-- record / stop -->
+  <div id="recordBox" class="sticky">
+    <button class="pri big" id="recordBtn" disabled>RECORD BOTH</button>
+    <div class="dim small" id="recordWhy" style="text-align:center;margin-top:6px"></div>
+  </div>
+  <div id="recordingBox" class="card recframe hidden sticky" style="text-align:center">
+    <div class="row" style="justify-content:center"><i class="dot rec"></i><b>RECORDING</b></div>
+    <div class="timer" id="timer">0.0</div>
+    <div class="dim" id="recName"></div>
+    <div class="bar" style="margin:6px 0 12px"><i id="recBar" style="width:0%;background:var(--rec)"></i></div>
+    <button class="bad big" id="stopBtn">STOP</button>
+  </div>
+  <div id="reviewBox" class="card hidden">
+    <div class="row"><b class="grow" id="reviewTitle">Take</b><span class="pill" id="reviewState">uploading</span></div>
+    <div class="small dim" id="uploadLine" style="margin:6px 0"></div>
+    <div class="vids" id="reviewVids"></div>
+    <div class="row" style="margin:6px 0"><button id="playBoth" disabled>▶ Play both</button><span class="grow"></span></div>
+    <div class="row hidden" id="finishRow" style="margin:6px 0"><span class="small dim grow" id="finishWhy"></span><button id="finishBtn">REVIEW WITHOUT CAM B</button></div>
+    <div class="checks" id="checks"></div>
+    <div class="row actions" style="margin-top:10px"><button class="bad grow" id="retakeBtn">RETAKE</button><button class="ok grow" id="acceptBtn" disabled>ACCEPT + NEXT</button></div>
+  </div>
+  <div id="savedBox" class="saved hidden">SAVED ✓</div>
+
+  <!-- landmarks (after a calibration) -->
+  <div id="landmarkBox" class="card hidden">
+    <b>Calibration landmarks — <span id="lmCam"></span></b>
+    <p class="dim small">Tap a landmark name, then tap it in the picture. Skip any you can't see. Save when done.</p>
+    <div class="row" id="lmNames"></div>
+    <div class="lm-img" id="lmImg"></div>
+    <div class="row" style="margin-top:8px"><button id="lmSkip">Skip</button><span class="grow"></span><button class="pri" id="lmSave">Save</button></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><button id="pairBtn">Pair camera</button><button id="takesBtn">Takes</button><button id="exportBtn">Export</button><button id="sessionsBtn">Sessions</button><button id="missingBtn" class="pri">CONTINUE MISSING</button></div>
+    <div id="pairBox" class="hidden" style="margin-top:10px">
+      <div class="row" style="align-items:flex-start"><div class="qr" id="qr"></div><div class="grow"><div class="dim small">Code</div><div class="code" id="pairCode">—</div><div class="small dim" id="pairExpiry"></div><div class="small" id="pairUrls"></div><p class="dim small">Camera B: scan the QR (or open the link, or type the code on the capture home page).</p><p class="dim small hidden" id="pairLanHint">On the Mac's own network the address is https with a self-signed certificate — accept the warning once on each phone.</p></div></div>
+    </div>
+    <div id="takesBox" class="hidden" style="margin-top:10px"></div>
+    <div id="exportBox" class="hidden" style="margin-top:10px">
+      <p class="small dim">The organised dataset: session.json · calibration/setup_X/… · setup_X/&lt;animation&gt;/takeNN/{camA, camB, metadata.json, frame times}.</p>
+      <div class="row"><a id="exportLink" href="#"><button class="pri">Download accepted takes (.tar)</button></a><a id="exportAll" href="#"><button>Every take</button></a></div>
+    </div>
+    <div class="small dim" style="margin-top:8px" id="deviceLine"></div>
+  </div>
+</section>
+
+<!-- camera (B, or A on its own phone) -->
+<section id="camera" class="hidden">
+  <div class="full"><video id="camVideo" playsinline muted></video></div>
+  <div class="hud"><span class="pill" id="camRole">CAMERA B</span><span class="pill" id="camStatus"><i class="dot"></i><span>connecting</span></span><span class="pill" id="camFormat">—</span><span class="pill" id="camUpload">uploads ✓</span></div>
+  <div class="foot"><div id="camBanner"></div><div class="card small" id="camInfo" style="opacity:0.92">Paired. Leave this phone on its tripod — the director starts and stops recording.</div></div>
+  <div class="tap" id="camTap"><button class="pri big" id="camStart" style="max-width:420px">TAP TO START CAMERA</button></div>
+</section>
+
+<script type="module" src="/capture/js/app.mjs"></script>
+</body>
+</html>

@@ -159,14 +159,19 @@ test('warp: travel the camera cannot measure is set to the intended displacement
   assert.strictEqual(dw[0].from, 5); assert.strictEqual(dw[0].to, 11); assert.ok(dw[0].dz < -0.8);
 });
 
-test('bad frames: a body cut off by the frame edge is re-made, not trusted', () => {
+test('bad frames: a body cut off by the frame edge is re-made, not trusted (only the head out: kept)', () => {
   const fr = (i, cut) => {
     const kp2d = Array.from({ length: 70 }, () => [300, 250]);
     if (cut) kp2d[J.nose] = [300, -40];
+    if (cut === 'shoulders') { kp2d[J['left-shoulder']] = [260, -10]; kp2d[J['right-shoulder']] = [340, -10]; }
     return { kp2d, kp3d: Array.from({ length: 70 }, () => [0, 0, 5]), camT: [0, 0, 5], imgW: 640, imgH: 480, bbox: [200, cut ? 0 : 40, 400, 470] };
   };
-  const src = Array.from({ length: 10 }, (_, i) => fr(i, i === 6));
+  // head and shoulders past the edge: SAM guesses the whole body → dropped
+  const src = Array.from({ length: 10 }, (_, i) => fr(i, i === 6 ? 'shoulders' : false));
   assert.deepStrictEqual(MB.badFrames(src).map((b) => b.i), [6]);
+  // only the head past the top edge (a jump shot filmed close): the body is in view → kept
+  const srcHead = Array.from({ length: 10 }, (_, i) => fr(i, i === 6 ? 'head' : false));
+  assert.deepStrictEqual(MB.badFrames(srcHead).map((b) => b.i), []);
   // a depth spike too
   const src2 = Array.from({ length: 10 }, (_, i) => ({ ...fr(i, false), camT: [0, 0, i === 4 ? 6.2 : 5] }));
   assert.deepStrictEqual(MB.badFrames(src2).map((b) => b.i), [4]);

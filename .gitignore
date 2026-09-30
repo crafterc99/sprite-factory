@@ -36,3 +36,6 @@ data/mocap/
 # MHR model assets (download: scripts/mhr/README.md)
 scripts/mhr/assets/
 court3d-test/
+
+# Soul Jam Capture: local takes + the LAN https key (never commit)
+data/capture/

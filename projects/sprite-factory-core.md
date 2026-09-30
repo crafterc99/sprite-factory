@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | IN_PROGRESS |
-| **Last Updated** | 2026-09-29 |
+| **Last Updated** | 2026-09-30 |
 | **Owner** | Claude Code |
 
 ## Goal
@@ -85,3 +85,4 @@ None currently — pending Railway stability.
 - 2026-09-28: Realistic player character generated from the performer's own video (A-pose views → Hyper3D Rodin → rigged on their MHR body), replacing the MakeHuman figure; server job POST /api/mocap3d/character/generate. $0.52. Tests 28/28, court PASS 3/3.
 - 2026-09-29: Physical basketball — Rapier rigid body (1 m units, 0.62 kg, CCD, 120/240 Hz fixed step) driven by impulses and a clamped PD hand; articulated kinematic body + finger colliders; release/catch planning (bounce + catch match, limb-aware clearance), contact IK, event classifier, debug view + live tuning, 13 lab scenes, two-camera triangulation. Tests 51/51; headless court: dribble, moves, standing crossover, run, stop, shot SWISH (moving crossover still misses the buffer).
 - 2026-09-29: Audit of the 3D court requests. Fixed the boot-dribble loss from the new ball coupling (calibrated hold rule restored; SAM 2D contact closes gaps inside holds) and the ball being thrown after a teleport / reset (snapBody). Added the freelancer brief + reference rig (docs/character-brief/) and the import-rigged-character importer. npm test 53/53; court test: shot SWISH.
+- 2026-09-30: Soul Jam Capture live at /capture: two-phone synchronised capture for the SAM 3D pipeline, with production durability on Railway (bucket mirror, redeploy-safe) and hardening. The user's Spalding basketball model replaces the procedural ball in the 3D court. docs/capture.md.

@@ -55,9 +55,12 @@ function cookieHeader(req) {
   return `${COOKIE}=${token()}; Path=/; Max-Age=${MAX_AGE}; HttpOnly; SameSite=Lax${secure}`;
 }
 
+// password attempts per client: the right-most X-Forwarded-For hop (the one Railway's proxy appends;
+// the left ones are the client's to write). No global cap: that would let anyone lock the owner out.
 function rateLimited(req) {
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const ip = String((req.headers['x-forwarded-for'] || '').split(',').pop() || req.socket.remoteAddress || '').trim();
   const now = Date.now();
+  if (attempts.size > 5000) for (const [k, v] of attempts) if (now - v.t > 60000) attempts.delete(k);
   const a = attempts.get(ip) || { n: 0, t: now };
   if (now - a.t > 60000) { a.n = 0; a.t = now; }
   a.n++;
@@ -143,6 +146,10 @@ async function gate(req, res, url) {
   }
 
   if (OPEN_PATHS.has(pathname) || isAuthed(req)) return false;
+  // Soul Jam Capture: the capture page is open (a camera phone is never signed in); its camera
+  // API calls carry the session's pairing token (checked by routes/capture.js → allowCapture)
+  if (pathname === '/capture' || pathname === '/capture/' || /^\/capture\/js\/[a-z0-9_.-]+\.mjs$/.test(pathname) || pathname === '/api/capture/pair') return false;
+  if (pathname.startsWith('/api/capture/') && captureCheck && await captureCheck(req, pathname).catch(() => false)) return false;
 
   if (pathname.startsWith('/api/')) {
     res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -154,4 +161,8 @@ async function gate(req, res, url) {
   return true;
 }
 
-module.exports = { gate, enabled, isAuthed };
+let captureCheck = null;
+/** routes/capture.js registers the pairing-token check for camera API calls. */
+function allowCapture(fn) { captureCheck = fn; }
+
+module.exports = { gate, enabled, isAuthed, allowCapture };
