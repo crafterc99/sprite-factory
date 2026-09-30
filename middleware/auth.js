@@ -143,6 +143,10 @@ async function gate(req, res, url) {
   }
 
   if (OPEN_PATHS.has(pathname) || isAuthed(req)) return false;
+  // Soul Jam Capture: the capture page is open (a camera phone is never signed in); its camera
+  // API calls carry the session's pairing token (checked by routes/capture.js → allowCapture)
+  if (pathname === '/capture' || /^\/capture\/js\/[a-z0-9_.-]+\.mjs$/.test(pathname) || pathname === '/api/capture/pair') return false;
+  if (pathname.startsWith('/api/capture/') && captureCheck && captureCheck(req, pathname)) return false;
 
   if (pathname.startsWith('/api/')) {
     res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -154,4 +158,8 @@ async function gate(req, res, url) {
   return true;
 }
 
-module.exports = { gate, enabled, isAuthed };
+let captureCheck = null;
+/** routes/capture.js registers the pairing-token check for camera API calls. */
+function allowCapture(fn) { captureCheck = fn; }
+
+module.exports = { gate, enabled, isAuthed, allowCapture };

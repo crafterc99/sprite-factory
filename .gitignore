@@ -60,3 +60,6 @@ tools/character_pipeline/.venv/
 # Character factory: parked garment builds (generated meshes, renders, GPT artwork)
 assets/characters/*/outfits/
 __pycache__/
+
+# Soul Jam Capture: local takes + the LAN https key (never commit)
+data/capture/

@@ -101,7 +101,9 @@ fs.mkdirSync(OUT, { recursive: true });
   await page.keyboard.press('KeyI'); await sec(0.55); await shot('5-shot-rise', CLIP); await sec(0.35); await shot('5-shot-release', CLIP); await sec(2.0);
   await check('shot');
   // 5. the outfit picker (colours) — a black tee, red shorts
-  await page.click('#outfitBtn'); await sec(0.1);
+  // (clicked in the page: Playwright's "stable" wait needs animation frames, which the virtual clock holds)
+  await page.evaluate(() => document.getElementById('outfitBtn').click()); await sec(0.1);
+  if (!(await page.evaluate(() => getComputedStyle(document.getElementById('outfitPanel')).display === 'block'))) results.push({ name: 'picker opens', ok: false, state: [] });
   await page.evaluate(() => { window.__outfit.color('top', 1); window.__outfit.color('bottom', 1); });
   await cam('34', 2.6); await sec(0.8);
   await shot('6-picker');

@@ -3039,3 +3039,32 @@ None. All terminals are clear. Human decision required to begin next phase.
 - Validation: npm test 61/61; UI smoke 163/163; deformation (rig preview, the game's runtime) 5/7 poses pass: deep knee bend 0.33 % and closed fist 0.30 % stretched edges (limit 0.2 %). LODs switch at 9 / 18 / 32 m. Tripo balance 2000 → 1540 = 460 credits, matching the manifest.
 - Limits: game-clip poses and the court test not run (no clips locally). Neck segment ratio 0.80 (auto-rig neck short). In-game skin reads darker than the Tripo render (court light + material defaults). Wrist seams show a faint ring close up.
 - Assumptions: T-pose conversion is acceptable for the body (identity and outfit checked visually); both Tripo rig tasks (50 credits) per character.
+
+## CAPTURE-01 — Soul Jam two-device capture system for the SAM 3D pipeline
+- Status: NEEDS_REVIEW. Committed to branch claude/sprite-factory-motion-capture-ohky3g, not main; not deployed to Railway.
+- Files changed:
+  - capture/: schema, basic01, court-layout, protocol, camera-sync, camera, uploader, app.mjs, capture.html
+  - lib/capture/: store, hub, cloud, media, validators, sync-audio, processing, lan
+  - routes/capture.js
+  - server.js: routes, hub, /capture static, LAN https
+  - middleware/auth.js: capture open paths + camera-token hook
+  - lib/firebase-storage.js, lib/r2-storage.js: export the bucket and client handles
+  - package.json: ws, qrcode
+  - tests/capture.test.js, tests/capture-e2e.spec.js
+  - docs/capture.md
+- What changed:
+  - Pairing, READY presence, the shared clock, and synchronised start/stop with a sync chirp.
+  - The BASIC-01 dataset (82 animations with start/end states), the setup-ordered session, and progress / CONTINUE MISSING.
+  - Calibration per setup with landmarks and moved-camera detection.
+  - Record / review / retake / accept, with SAVED ✓ only after persistence.
+  - Resumable IndexedDB uploads.
+  - Validators, the tar export and the native high-fps import.
+  - The SAM 3D Body processor adapter.
+- Validation:
+  - npm test 104/104 (12 of them capture).
+  - node tests/capture-e2e.spec.js: 26/26 checks, 3 runs in a row. Two browsers with fake cameras cover pairing, calibration, retake/accept, refresh-resume, camera B offline mid-take then reconnect, B reload, continue-missing and export.
+  - LAN https smoke from a browser: secure context, camA READY.
+- Assumptions:
+  - Web capture reports the real negotiated fps, and phones usually give 30/60. True 120/240 fps comes through the native-file path until a native camera app exists.
+  - The calibration pose solve belongs to processing; capture stores the recordings, landmarks and priors.
+- Follow-up: deploy to Railway (needs approval to merge); a real two-phone session on a court.

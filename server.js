@@ -222,6 +222,9 @@ require('./routes/movement-profiles').register(router);
 require('./routes/pose-import').register(router, ctx);
 require('./routes/mocap').register(router, ctx);
 require('./routes/character-factory').register(router, ctx);
+// Soul Jam Capture (two-camera recording, docs/capture.md): REST here, real time on the hub
+const captureHub = { hub: null };
+require('./routes/capture').register(router, ctx, captureHub);
 
 // Public health: no secrets — only whether storage is wired and, if not, why
 let _healthStorage = null;
@@ -854,6 +857,16 @@ async function handler(req, res) {
     // a character on its game skeleton with the game's runtime, no court / clips (Character Factory checks)
     return serveStatic(res, path.join(__dirname, 'rig-preview.html'), 'text/html');
   }
+  if (pathname === '/capture' || pathname === '/capture/') {
+    // Soul Jam Capture: director + camera app (open page; camera API calls carry the pairing token)
+    return serveStatic(res, path.join(__dirname, 'capture', 'capture.html'), 'text/html', { revalidate: true });
+  }
+  if (pathname.startsWith('/capture/js/')) {
+    const m = pathname.match(/^\/capture\/js\/([a-z0-9_.-]+\.mjs)$/);
+    const fp = m && path.join(__dirname, 'capture', m[1]);
+    if (fp && fs.existsSync(fp)) return serveStatic(res, fp, 'text/javascript', { revalidate: true });
+    res.writeHead(404); return res.end('Not found');
+  }
   if (pathname === '/court3d' || pathname === '/court3d/' || pathname === '/court3d.html') {
     return serveStatic(res, path.join(__dirname, 'court3d.html'), 'text/html');
   }
@@ -876,6 +889,11 @@ if (require.main === module) {
     // Bind PORT immediately so Railway's health check passes within the startup window.
     // All restore/seed work runs in the background after the server is already listening.
     const server = http.createServer(handler);
+    // Soul Jam Capture: the WebSocket hub on this server, and a LAN HTTPS listener for phones
+    const { Hub } = require('./lib/capture/hub');
+    captureHub.hub = new Hub({ isAuthed: (req) => !require('./middleware/auth').enabled() || require('./middleware/auth').isAuthed(req) });
+    captureHub.hub.attach(server);
+    require('./lib/capture/lan').start(handler, { hub: captureHub.hub, dir: path.join(__dirname, 'data', 'capture', 'certs') });
     server.listen(PORT, () => {
       const { CHARACTERS } = require('./lib/sprite-generator/prompts');
       console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
