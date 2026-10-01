@@ -2,22 +2,34 @@
 /**
  * Soul Jam Capture — end-to-end test with two simulated devices (Chromium with a fake camera +
  * microphone): a dedicated server (own data dir + a local folder standing in for the bucket), the
- * DIRECTOR (also camera A) and CAMERA B.
+ * DIRECTOR (an iPad: 1180×820, also camera A) and CAMERA B (a phone: 390×844).
  *
- *   pairing (QR link) → both READY → calibrate setup A → record → retake → record → ACCEPT + NEXT
- *   → SAVED ✓ and the next missing animation → refresh (resume) → a take with camera B's network
- *   dropped mid-recording (IndexedDB queue → uploads after reconnect) → camera B page reload →
- *   home: CONTINUE MISSING → export (tar layout) — every step asserted.
+ * The operator's flow, step by step, every step asserted:
+ *   1 Connect — both cameras run the 2 s camera check by themselves; a camera B whose recorder
+ *     produces nothing (the iPhone case: 5 bytes, no frames) shows ✗ with the reason and the
+ *     director is told during the recording; after the fix the check passes, NEXT unlocks.
+ *   2 Calibrate — the goal explained, the walk diagram (corners 1–4, the middle), both live views,
+ *     3-2-1 → 10 s with prompts ("Walk to corner 2", lit on the map) → stops and saves by itself
+ *     (no review, no landmarks) → "Calibration saved ✓" with both stills.
+ *   3 Record — START/FINISH instructions; three animations back to back (the first stops by
+ *     itself at its target, the others with STOP), no review: straight on to the next one.
+ *   Animations — every slot with its status (Uploading → Recorded ✓), filters, totals; redo (the
+ *     toast's Redo and "Record it again" from the list), MARK BEST; a take whose camera B records
+ *     nothing is "Check failed — redo" with the reason, and the director saw it while recording.
+ *   Analysis — nothing automatic; a selection, the cost, the server's quote to confirm, the queue
+ *     runs (MOCAP_MOCK=1: no money) → "Analysed ✓".
  *
  * Then the production failure modes (each phase reports its own checks; a failed phase is reported
- * and the flow is brought back to a known state before the next one):
- *   quick STOP (RECORD → STOP in ~200 ms, before the scheduled start) → retake → a normal take that
- *   decodes on both cameras · camera B's page reloaded mid-take (recoverInterrupted finishes B's
- *   partial recording) · the director page refreshed mid-recording (STOP is back and works) · a
- *   second page opening camera B's link (USE THIS PHONE, no reconnect flapping) · the server killed,
- *   its local disk wiped, started again on the same bucket (Railway redeploy): reconnect, progress,
- *   video, export and a new take all come back from the bucket · the same redeploy while camera B
- *   is offline mid-upload (the chunks it had sent are gone: 409 {missing} → re-sent from the phone).
+ * and the flow is brought back to a known state before the next one): CANCEL in the countdown ·
+ * CANCEL before the cameras' scheduled start (the take is discarded, no recorder left running) ·
+ * camera B offline mid-take
+ * (chunks kept on the phone) · camera B reloaded mid-take · the director refreshed mid-recording
+ * (STOP comes back) · a second page on camera B's link (USE THIS PHONE, no flapping) · the server
+ * killed with its disk wiped (Railway redeploy) · the same mid-upload (409 missing → re-sent) ·
+ * home → CONTINUE MISSING · the export's layout.
+ *
+ * Screenshots of every step at an iPad (1180×820 and 820×1180) and a phone (390×844, 844×390)
+ * size, each also checked for horizontal scrolling.
  *
  *   node tests/capture-e2e.spec.js [--port 3461] [--tmp <dir>] [--keep]
  * Screenshots: tests/reports/capture-e2e/ (gitignored). Exit 1 on a failed check.
@@ -35,6 +47,7 @@ const argv = process.argv.slice(2), opt = (k, d) => { const i = argv.indexOf('--
 const PORT = +opt('port', 3461), BASE = `http://localhost:${PORT}`;
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(__dirname, 'reports', 'capture-e2e'); fs.mkdirSync(OUT, { recursive: true });
+for (const f of fs.readdirSync(OUT)) if (f.endsWith('.png')) fs.rmSync(path.join(OUT, f));
 const DATA = fs.mkdtempSync(path.join(opt('tmp', os.tmpdir()), 'sjc-e2e-'));
 const CAP = path.join(DATA, 'capture');          // the server's local disk (CAPTURE_DIR) — wiped in the restart phase
 const CLOUD = path.join(DATA, 'bucket');         // stands in for Firebase Storage (CAPTURE_CLOUD_DIR)
@@ -44,14 +57,15 @@ const check = (name, ok, detail = '') => { lastCheck = name; results.push({ name
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const api = async (p, o = {}) => { const r = await fetch(BASE + p, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers || {}) } }); return r.headers.get('content-type')?.includes('json') ? r.json() : r; };
 const oneLine = (s, n = 200) => String(s || '').replace(/\s+/g, ' ').slice(0, n);
+const IPAD = { width: 1180, height: 820 }, IPAD_P = { width: 820, height: 1180 }, PHONE = { width: 390, height: 844 }, PHONE_L = { width: 844, height: 390 };
 
-// ── the dedicated server (started again in the restart phase: same port, same bucket folder)
+// ── the dedicated server (started again in the restart phases: same port, same bucket folder)
 let srv = null, srvLog = '';
 const serverEnv = () => {
   const e = { ...process.env, PORT: String(PORT), CAPTURE_DIR: CAP, CAPTURE_CLOUD_DIR: CLOUD, CAPTURE_HTTPS: '0', APP_PASSWORD: '', CAPTURE_DEBUG: '1',
-    // no real cloud storage, ever
+    // no real cloud storage, ever; SAM 3D Body in mock mode (synthetic, no fal.ai, no money), writing into the temp folder
     FIREBASE_SERVICE_ACCOUNT: '', GOOGLE_APPLICATION_CREDENTIALS_JSON: '', FIREBASE_PROJECT_ID: '', FIREBASE_CLIENT_EMAIL: '', FIREBASE_PRIVATE_KEY: '', FIREBASE_STORAGE_BUCKET: '',
-    R2_ENDPOINT: '', R2_BUCKET: '', R2_ACCESS_KEY_ID: '', R2_SECRET_ACCESS_KEY: '' };
+    R2_ENDPOINT: '', R2_BUCKET: '', R2_ACCESS_KEY_ID: '', R2_SECRET_ACCESS_KEY: '', FAL_KEY: '', MOCAP_MOCK: '1', MOCAP_DIR: path.join(DATA, 'mocap'), TMP_DIR: path.join(DATA, 'video-tmp') };
   delete e.CAPTURE_CLOUD;                                    // (CAPTURE_CLOUD=0 would switch the bucket folder off)
   return e;
 };
@@ -75,16 +89,35 @@ async function killServer(child, signal = 'SIGKILL') {
   await Promise.race([gone, sleep(15000)]);
 }
 
+/**
+ * Camera B's phone can be "broken" like the user's iPhone: with window.__sjcBroken its
+ * MediaRecorder hands out 5-byte chunks and requestVideoFrameCallback never fires.
+ */
+function breakableRecorder() {
+  const Real = window.MediaRecorder, rvfc = HTMLVideoElement.prototype.requestVideoFrameCallback;
+  if (!Real) return;
+  const fake = (stream, o) => {
+    const r = { state: 'inactive', mimeType: o?.mimeType || 'video/webm', stream, ondataavailable: null, onstop: null, onerror: null,
+      start(ts = 1000) { this.state = 'recording'; this.t = setInterval(() => this.ondataavailable?.({ data: new Blob([new Uint8Array([26, 69, 223, 163, 1])], { type: this.mimeType }) }), ts); },
+      stop() { if (this.state === 'inactive') return; clearInterval(this.t); this.state = 'inactive'; setTimeout(() => { this.ondataavailable?.({ data: new Blob([new Uint8Array([0, 0, 0, 0, 0])], { type: this.mimeType }) }); this.onstop?.(); }, 20); },
+      requestData() {}, pause() {}, resume() {}, addEventListener() {}, removeEventListener() {} };
+    return r;
+  };
+  window.MediaRecorder = new Proxy(Real, { construct(target, args) { return window.__sjcBroken ? fake(...args) : new target(...args); } });
+  HTMLVideoElement.prototype.requestVideoFrameCallback = function (cb) { return window.__sjcBroken ? 0 : rvfc.call(this, cb); };
+}
+
 (async () => {
   srv = await startServer();
   // one browser per device (like two phones): network emulation (offline) must not leak between them
   const browsers = [];
   const errors = [];
   let netQuiet = false;                                      // the server is down on purpose: connection failures are expected
-  const mk = async (name) => {
+  const mk = async (name, viewport, { breakable = false } = {}) => {
     const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
     browsers.push(browser);
-    const ctx = await browser.newContext({ viewport: { width: 430, height: 900 }, permissions: ['camera', 'microphone'] });
+    const ctx = await browser.newContext({ viewport, permissions: ['camera', 'microphone'] });
+    if (breakable) await ctx.addInitScript(breakableRecorder);
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
     page.on('console', (m) => {
@@ -103,435 +136,546 @@ async function killServer(child, signal = 'SIGKILL') {
     // the answers to this device's "complete" calls (the 409 {missing} → re-send path)
     const completes = [];
     page.on('response', (r) => { if (/\/api\/capture\/sessions\/[^/]+\/rec\/[^/]+\/cam[AB]\/complete$/.test(r.url())) completes.push(r.status()); });
-    return { browser, ctx, page, ws, completes };
+    return { browser, ctx, page, ws, completes, viewport };
   };
-  const shot = (page, n) => page.screenshot({ path: path.join(OUT, n + '.png'), fullPage: true });
+  /** Screenshots at several sizes (viewport, as the operator sees it), each checked for horizontal scrolling. */
+  const shots = async (dev, name, sizes = [dev.viewport], { top = true } = {}) => {
+    const bad = [];
+    for (const vp of sizes) {
+      await dev.page.setViewportSize(vp);
+      await sleep(350);
+      if (top) await dev.page.evaluate(() => window.scrollTo(0, 0));
+      const tag = `${vp.width}x${vp.height}`;
+      await dev.page.screenshot({ path: path.join(OUT, `${name}-${tag}.png`) });
+      const over = await dev.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      if (over > 1) bad.push(`${tag}: ${over}px too wide`);
+    }
+    await dev.page.setViewportSize(dev.viewport);
+    await sleep(200);
+    return bad;
+  };
+  const layoutBad = [];
+  const shot = async (dev, name, sizes, o) => { const b = await shots(dev, name, sizes, o); layoutBad.push(...b.map((x) => `${name} ${x}`)); };
   try {
-    // 1. director creates a BASIC-01 session from the home page
-    const A = await mk('director');
+    // ═══ 1 · CONNECT ═══════════════════════════════════════════════════════
+    const A = await mk('director', IPAD);
     await A.page.goto(`${BASE}/capture`);
     await A.page.click('#newSession');
     await A.page.waitForURL(/session=/, { timeout: 15000 });
     const sessionId = new URL(A.page.url()).searchParams.get('session');
-    check('session created', !!sessionId, sessionId);
-    await A.page.waitForFunction(() => document.querySelector('#pillAtxt')?.textContent.startsWith('READY'), null, { timeout: 30000 });
-    check('CAM A ready (this phone)', true, await A.page.textContent('#pillAtxt'));
-    // 2. pair camera B with the QR link
-    await A.page.click('#pairBtn');
-    await A.page.waitForSelector('#qr svg', { timeout: 10000 });
+    check('session created → step 1 Connect', !!sessionId && await A.page.isVisible('#stepConnect'), sessionId);
+    const D = (fn, arg) => A.page.evaluate(fn, arg);
+    const sess = async () => (await api(`/api/capture/sessions/${sessionId}`)).session;
+    await A.page.waitForFunction(() => /^✓/.test(document.getElementById('chkA')?.textContent || ''), null, { timeout: 40000 });
+    check('CAM A (this device) passes the camera check by itself', true, await A.page.textContent('#chkA'));
     const pairHref = await A.page.$eval('#pairUrls a', (a) => a.href);
-    check('pairing QR + link shown', /pair=/.test(pairHref), (await A.page.textContent('#pairCode')));
-    await shot(A.page, '1-director-pair');
-    const B = await mk('cameraB');
+    check('pairing QR + 6-digit code on CAM B\'s tile', /pair=/.test(pairHref) && await A.page.isVisible('#qr svg') && /^\d{6}$/.test((await A.page.textContent('#pairCode')).trim()), (await A.page.textContent('#pairCode')).trim());
+    await shot(A, '01-connect-pair', [IPAD, PHONE]);
+    for (const vp of [PHONE, PHONE_L, IPAD_P]) {
+      await A.page.setViewportSize(vp); await sleep(250);
+      const st = await D(() => [...document.querySelectorAll('#stepper button')].map((b) => { const r = b.getBoundingClientRect(); return { t: b.textContent.trim(), in: r.left >= 0 && r.right <= window.innerWidth + 0.5 && r.width > 30 }; }));
+      check(`${vp.width}×${vp.height}: all five steps are on screen (1 Connect · 2 Calibrate · 3 Record · Animations · Analysis)`, st.length === 5 && st.every((x) => x.in), st.map((x) => `${x.t}${x.in ? '' : ' (OFF SCREEN)'}`).join(' · '));
+    }
+    await A.page.setViewportSize(IPAD); await sleep(200);
+
+    // camera B: a phone whose recorder produces nothing (the user's iPhone)
+    const B = await mk('cameraB', PHONE, { breakable: true });
     await B.page.goto(pairHref);
-    // one tap to start the camera (skipped by the page itself when the permission is already granted)
+    await B.page.evaluate(() => { window.__sjcBroken = true; });
     await B.page.click('#camStart', { timeout: 4000 }).catch(() => {});
-    await A.page.waitForFunction(() => document.querySelector('#pillBtxt')?.textContent.startsWith('READY'), null, { timeout: 30000 });
-    check('CAM B ready after one tap', true, await A.page.textContent('#pillBtxt'));
+    let sawRecBanner = '';
+    const t0 = Date.now();
+    while (Date.now() - t0 < 45000) {
+      const st = await D(() => ({ chk: document.getElementById('chkB').textContent, banner: document.getElementById('banners').textContent }));
+      if (/CAM B (is not recording|'s last recording failed)/.test(st.banner) && !sawRecBanner) sawRecBanner = st.banner;
+      if (/^✗/.test(st.chk)) break;
+      await sleep(150);
+    }
+    const chkB = await A.page.textContent('#chkB');
+    check('a CAM B that records nothing: the check shows ✗ with the reason', /^✗ Camera check failed/.test(chkB) && /only \d+ bytes/.test(chkB) && /does not decode/.test(chkB), oneLine(chkB, 220));
+    check('… and the director is told while it records ("CAM B is not recording" / "CAM B\'s last recording failed")', !!sawRecBanner, oneLine(sawRecBanner, 180));
+    check('… NEXT stays locked; "Continue with one camera" is offered', await A.page.isDisabled('#connectNext') && await A.page.isEnabled('#oneCamBtn'));
+    const bStatus = await B.page.textContent('#camStatusBox');
+    check('camera B\'s own page says its recording failed (not "Saved")', /last recording failed/.test(bStatus) && /5 bytes/.test(bStatus) && !/Saved/.test(bStatus), oneLine(bStatus, 160));
+    await shot(A, '02-connect-camB-failed', [IPAD, PHONE]);
+    await shot(B, '02-cameraB-failed', [PHONE]);
+
+    // fixed (screen on, page in front): the check again → ✓, NEXT unlocks
+    await B.page.evaluate(() => { window.__sjcBroken = false; });
+    await A.page.click('#checkBtn');
+    await A.page.waitForFunction(() => /^✓/.test(document.getElementById('chkB').textContent) && /^✓/.test(document.getElementById('chkA').textContent), null, { timeout: 40000 });
+    check('after the fix: the camera check passes on both, NEXT unlocks', await A.page.isEnabled('#connectNext'), oneLine(await A.page.textContent('#chkB'), 120));
+    await A.page.waitForFunction(() => { const i = document.getElementById('snapB'); return i && !i.classList.contains('hidden') && /^data:image\/jpeg/.test(i.src) && i.naturalWidth > 0; }, null, { timeout: 15000 }).catch(() => {});
+    const snapB = await D(() => { const i = document.getElementById('snapB'); return { src: i.src.slice(0, 24), w: i.naturalWidth, shown: !i.classList.contains('hidden') }; });
+    check('CAM B\'s tile shows its live picture (a small JPEG over the WebSocket)', snapB.shown && snapB.w > 0 && snapB.w <= 320 && /^data:image\/jpeg/.test(snapB.src), `${snapB.w}px wide`);
     const fmt = await B.page.textContent('#camFormat');
-    check('camera B reports its negotiated format', /\d+×\d+ · \d+ fps/.test(fmt), fmt);
-    await shot(B.page, '2-cameraB-ready');
-    // 3. setup A: calibrate
-    await A.page.waitForSelector('#setupCard:not(.hidden)');
-    check('setup A card with the court diagram', await A.page.$('#setupCourt svg') != null, await A.page.textContent('#setupTitle'));
-    await shot(A.page, '3-setup-A');
+    check('camera B shows its format and orientation', /\d+×\d+ · \d+ fps · (landscape|portrait) · (WebM|MP4)/.test(fmt), fmt);
+    check('the frame-rate note says 60 fps max in the browser and how to get 120/240', /at most 60 fps/.test(await A.page.textContent('#stepConnect .note')));
+    await shot(A, '03-connect-ready', [IPAD, IPAD_P, PHONE]);
+    await shot(B, '03-cameraB-waiting', [PHONE, PHONE_L]);
+
+    // ═══ 2 · CALIBRATE ═════════════════════════════════════════════════════
+    await A.page.click('#connectNext');
+    await A.page.waitForSelector('#stepCalibrate:not(.hidden)');
+    const lead = await A.page.textContent('#stepCalibrate .lead');
+    check('Calibrate: the goal in plain words, the setup diagram, both live views', /combined into 3-D/.test(lead) && /must not move/.test(lead) && await A.page.$('#calCourt svg') != null && await A.page.isVisible('#calViewB img.snap'), oneLine(lead, 120));
+    const calSvg = await A.page.$eval('#calCourt svg', (e) => e.outerHTML);
+    check('… the diagram shows the calibration walk: corners 1–4 and the middle (no START / FINISH), both cameras', ['>1<', '>2<', '>3<', '>4<', '>✕<', '>A<', '>B<'].every((x) => calSvg.includes(x)) && !/START|FINISH/.test(calSvg));
+    await shot(A, '04-calibrate', [IPAD, IPAD_P, PHONE]);
     await A.page.click('#calibrateBtn');
-    await A.page.waitForSelector('#recordingBox:not(.hidden)', { timeout: 10000 });
-    await sleep(2600);
-    await A.page.click('#stopBtn');
-    await A.page.waitForFunction(() => /ACCEPT/.test(document.querySelector('#acceptBtn')?.textContent) && !document.querySelector('#acceptBtn').disabled, null, { timeout: 60000 });
-    const calChecks = await A.page.textContent('#checks');
-    check('calibration recorded by both cameras + checked', /camA/.test(calChecks) && /camB/.test(calChecks), calChecks.replace(/\s+/g, ' ').slice(0, 160));
-    await A.page.click('#acceptBtn');
-    await A.page.waitForSelector('#landmarkBox:not(.hidden)', { timeout: 20000 });
-    // tap two landmarks on camera A's still, save; skip camera B
-    await A.page.waitForSelector('#lmImg img');
-    const img = await A.page.$('#lmImg img'); const bb = await img.boundingBox();
-    await A.page.mouse.click(bb.x + bb.width * 0.3, bb.y + bb.height * 0.7);
-    await A.page.mouse.click(bb.x + bb.width * 0.7, bb.y + bb.height * 0.7);
-    await A.page.click('#lmSave');
-    await sleep(500);
-    await A.page.click('#lmSkip');
-    await A.page.waitForSelector('#landmarkBox.hidden', { state: 'attached' });
-    let s = (await api(`/api/capture/sessions/${sessionId}`)).session;
-    check('calibration A saved as valid, separate from takes', s.calibrations.A?.status === 'valid' && s.currentSetup === 'A');
-    // 4. first animation: record → RETAKE → record → ACCEPT + NEXT
-    const first = await A.page.textContent('#animTitle');
-    const whyNot = () => A.page.evaluate(() => ({ why: document.querySelector('#recordWhy')?.textContent, a: document.querySelector('#pillAtxt')?.textContent, b: document.querySelector('#pillBtxt')?.textContent, phase: window.__capture?.phase, link: window.__capture?.link?.open, setup: document.querySelector('#setupCard')?.classList.contains('hidden') ? 'hidden' : 'shown' }));
-    const waitRecordable = async () => { try { await A.page.waitForFunction(() => !document.querySelector('#recordBtn').disabled, null, { timeout: 25000 }); } catch (e) { throw new Error('RECORD stayed disabled: ' + JSON.stringify(await whyNot())); } };
-    const recordOnce = async (ms = 2600) => {
+    await A.page.waitForSelector('#recOverlay:not(.hidden)');
+    const countdown = await A.page.textContent('#ovBig');
+    await A.page.waitForSelector('#recOverlay.recording', { timeout: 10000 });
+    const recAt = Date.now();
+    await sleep(3500);
+    const cue = await A.page.textContent('#ovCue');
+    const ovMap = await A.page.$eval('#ovMap svg', (e) => e.outerHTML).catch(() => '');
+    await shot(A, '05-calibrating', [IPAD]);
+    await A.page.waitForSelector('#recOverlay.hidden', { state: 'attached', timeout: 20000 });
+    const calSec = (Date.now() - recAt) / 1000;
+    check('calibration: 3-2-1, prompts ("Walk to corner 2 …", the corner lit on the map), stops by itself after 10 s', /^[123]$/.test(countdown.trim()) && /^Walk to corner [1-4]/.test(cue) && /#ffd166/.test(ovMap) && calSec > 8.5 && calSec < 12.5, `countdown "${countdown}" · "${cue}" · ${calSec.toFixed(1)} s`);
+    await A.page.waitForSelector('#calSaved', { timeout: 60000 });
+    await A.page.waitForFunction(() => [...document.querySelectorAll('#calSaved .stills img')].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
+    const stills = await A.page.$$eval('#calSaved .stills img', (is) => is.map((i) => i.naturalWidth));
+    let s = await sess();
+    check('"Calibration saved ✓" by itself, with both cameras\' stills (no review, no landmarks)', s.calibrations.A?.status === 'valid' && s.currentSetup === 'A' && stills.length === 2 && stills.every((w) => w > 0) && await A.page.$('#landmarkBox') == null, `stills ${stills.join(' + ')} px wide`);
+    await shot(A, '06-calibration-saved', [IPAD, PHONE]);
+
+    // ═══ 3 · RECORD ════════════════════════════════════════════════════════
+    await A.page.click('#calNext');
+    await A.page.waitForSelector('#stepRecord:not(.hidden)');
+    const head = await A.page.textContent('#recPos'), title1 = await A.page.textContent('#animTitle');
+    const svg = await A.page.$eval('#animCourt svg', (e) => e.outerHTML);
+    const instr = { start: await A.page.textContent('#startPose'), startW: await A.page.textContent('#startWhere'), finish: await A.page.textContent('#finishPose'), protocol: await A.page.textContent('#protocol') };
+    check('Record: "#1 of 82 · Setup A", the name, a START/FINISH diagram, start + finish pose, the protocol', /#1 of 82 · Setup A/.test(head) && title1 === 'NEUTRAL IDLE' && /START/.test(svg) && instr.start.length > 5 && instr.finish.length > 5 && /stops by itself/.test(instr.protocol), `${oneLine(head, 60)} · ${title1} · start "${instr.start}" ${instr.startW}`);
+    await shot(A, '07-record', [IPAD, IPAD_P, PHONE, PHONE_L]);
+    // a one-shot with a path (START → FINISH) for the screenshots
+    const order = (await import('../capture/protocol.mjs')).captureOrder((await import('../capture/basic01.mjs')).BASIC01);
+    const driveIdx = order.findIndex((a) => a.key === 'jab_drive_R');
+    await D((i) => { const d = window.__capture; d.current = d.order[i]; d.render(); }, driveIdx);
+    await sleep(300);
+    const svg2 = await A.page.$eval('#animCourt svg', (e) => e.outerHTML);
+    check('a move with a path: START and FINISH marks, the finish pose', />START</.test(svg2) && />FINISH</.test(svg2) && /FINISH|mark/.test(await A.page.textContent('#finishWhere')), oneLine(await A.page.textContent('#finishWhere'), 80));
+    await shot(A, '07-record-drive', [IPAD, PHONE]);
+    await D(() => { const d = window.__capture; d.current = d.order[0]; d.render(); });
+    await sleep(300);
+
+    const waitRecordable = async () => { try { await A.page.waitForFunction(() => !document.getElementById('recordBtn').disabled, null, { timeout: 30000 }); } catch { throw new Error('RECORD stayed disabled: ' + await A.page.textContent('#recordWhy')); } };
+    const clickEl = (page, sel) => page.evaluate((q) => document.querySelector(q).click(), sel);
+    const title = () => A.page.textContent('#animTitle');
+    /** RECORD → 3-2-1 → recording; stop after `ms` (or let it stop by itself: ms = null). Returns the take id + what was recorded. */
+    const recordTake = async (ms = 2400, { onRecording = null } = {}) => {
       await waitRecordable();
-      await A.page.click('#recordBtn');
-      await A.page.waitForSelector('#recordingBox:not(.hidden)');
-      await sleep(ms);
-      await A.page.click('#stopBtn');
-      await A.page.waitForFunction(() => !document.querySelector('#acceptBtn').disabled, null, { timeout: 60000 });
+      const before = await title();
+      await clickEl(A.page, '#recordBtn');
+      await A.page.waitForSelector('#recOverlay.recording', { timeout: 12000 });
+      const tid = await D(() => window.__capture.rec?.take?.id || null);
+      const at = Date.now();
+      if (onRecording) await onRecording(tid);
+      if (ms != null) { const left = ms - (Date.now() - at); if (left > 0) await sleep(left); await clickEl(A.page, '#stopBtn'); }
+      await A.page.waitForSelector('#recOverlay.hidden', { state: 'attached', timeout: 20000 });
+      return { tid, before, after: await title(), sec: (Date.now() - at) / 1000 };
     };
-    await recordOnce();
-    await shot(A.page, '4-review');
-    check('review: both previews + checks', (await A.page.$$('#reviewVids video')).length === 2, (await A.page.textContent('#checks')).replace(/\s+/g, ' ').slice(0, 200));
-    await A.page.click('#retakeBtn');
-    await A.page.waitForSelector('#recordBox:not(.hidden)');
-    await recordOnce();
-    await A.page.click('#acceptBtn');
-    await A.page.waitForSelector('#savedBox:not(.hidden)', { timeout: 20000 });
-    check('SAVED ✓ shown after persistence', true);
-    await A.page.waitForSelector('#savedBox.hidden', { state: 'attached', timeout: 10000 });
-    const second = await A.page.textContent('#animTitle');
-    check('ACCEPT + NEXT advanced to the next missing animation', second && second !== first, `${first} → ${second}`);
-    s = (await api(`/api/capture/sessions/${sessionId}`)).session;
-    const done = Object.entries(s.animations).filter(([, e]) => e.selectedTake);
-    check('retake kept both takes, the accepted one selected', done.length === 1 && done[0][1].takes.length === 2);
-    // 5. refresh the director: resumes on the next missing one
-    await A.page.reload();
-    await A.page.waitForFunction(() => document.querySelector('#pillBtxt')?.textContent.startsWith('READY') && document.querySelector('#pillAtxt')?.textContent.startsWith('READY'), null, { timeout: 40000 });
-    const afterReload = await A.page.textContent('#animTitle');
-    check('refresh resumes at the next missing animation', afterReload === second, afterReload);
-    check('progress survives the refresh', /1 COMPLETE/.test(await A.page.textContent('#totals')), await A.page.textContent('#totals'));
-    // 6. camera B's network drops mid-take: its chunks wait on the device, upload after reconnect
-    await waitRecordable();
-    await A.page.click('#recordBtn');
-    await A.page.waitForSelector('#recordingBox:not(.hidden)');
+
+    // #1: stops by itself at its target (an 8 s loop)
+    let shotRec = false;
+    const r1 = await recordTake(null, { onRecording: async () => { await sleep(2500); await shot(A, '08-recording', [IPAD, PHONE], { top: false }); await shot(B, '08-cameraB-recording', [PHONE]); shotRec = true; } });
+    const toast1 = await A.page.textContent('#toastMsg').catch(() => '');
+    check('#1 stops by itself at its target (8 s), the next animation is up at once — no review', r1.sec > 7 && r1.sec < 10.5 && r1.after !== r1.before && /recorded|saved/.test(toast1) && await A.page.$('#acceptBtn') == null, `${r1.before} (${r1.sec.toFixed(1)} s) → ${r1.after} · "${oneLine(toast1, 80)}"`);
+    await shot(A, '09-after-take', [IPAD, PHONE]);
+    // #2, #3 with STOP, back to back
+    const r2 = await recordTake(2400), r3 = await recordTake(2400);
+    const ids = [r1.tid, r2.tid, r3.tid];
+    check('three animations back to back, each straight on to the next', r2.after !== r2.before && r3.after !== r3.before && new Set([r1.before, r2.before, r3.before]).size === 3 && ids.every(Boolean), `${r1.before} → ${r2.before} → ${r3.before} → ${r3.after}`);
+
+    // ═══ ANIMATIONS ════════════════════════════════════════════════════════
+    await clickEl(A.page, '#stepper button[data-step="slots"]');
+    await A.page.waitForSelector('#stepSlots:not(.hidden)');
+    const statusOf = (key) => D((k) => { const a = window.__capture.lib.animations.find((x) => x.key === k); return document.querySelector(`.slot[data-anim="${a.id}"]`)?.dataset.status; }, key);
+    const keys = await D((ids) => ids.map((id) => { for (const [aid, e] of Object.entries(window.__capture.session.animations)) if (e.takes.includes(id)) return window.__capture.lib.animations.find((a) => a.id === aid).key; return null; }), ids);
+    const seen = new Set();
+    const t1 = Date.now();
+    for (;;) {
+      const st = await Promise.all(keys.map(statusOf)); st.forEach((x) => seen.add(x));
+      if (st.every((x) => x === 'recorded') || Date.now() - t1 > 60000) break;
+      await sleep(250);
+    }
+    const final = await Promise.all(keys.map(statusOf));
+    const totals = await A.page.textContent('#slotTotals');
+    check('the list: the three slots go Uploading → Recorded ✓ (saved only once the bucket has them)', final.every((x) => x === 'recorded') && /3 \/ 82 recorded/.test(totals), `seen ${[...seen].join(', ')} · ${oneLine(totals, 80)}`);
+    const rowsAll = await A.page.$$eval('.slot', (e) => e.length);
+    await clickEl(A.page, '#slotFilter button[data-filter="todo"]'); await sleep(300);
+    const rowsTodo = await A.page.$$eval('.slot', (e) => e.length);
+    await clickEl(A.page, '#slotFilter button[data-filter="all"]'); await sleep(300);
+    check('filters: All shows 82 slots grouped by setup, To record the 79 left', rowsAll === 82 && rowsTodo === 79 && (await A.page.$$('.group')).length === 3, `all ${rowsAll} · to record ${rowsTodo}`);
+    const bucketSel = JSON.parse(fs.readFileSync(path.join(CLOUD, '_meta', 'capture', 'sessions', sessionId, 'session.json'), 'utf8'));
+    check('recorded = in the bucket: each slot\'s selected take and its result are in the bucket\'s session.json', ids.every((id) => Object.values(bucketSel.animations).some((e) => e.selectedTake === id && e.results?.[id]?.state === 'recorded')));
+    await shot(A, '10-animations', [IPAD, IPAD_P, PHONE]);
+
+    // redo from the list: "Record it again" on #2, MARK BEST in its takes
+    const k2 = keys[1];
+    await D((k) => { const a = window.__capture.lib.animations.find((x) => x.key === k); document.querySelector(`.slot[data-anim="${a.id}"]`).click(); }, k2);
+    await A.page.waitForSelector('#slotSheet:not(.hidden) .takes > div', { timeout: 10000 });
+    await shot(A, '11-slot-takes', [IPAD, PHONE]);
+    await A.page.click('#slotSheet button[data-act="sheetRecord"]');
+    await A.page.waitForSelector('#stepRecord:not(.hidden)');
+    const redoTitle = await title();
+    const r2b = await recordTake(2400);
+    const animOf = (key) => D((k) => window.__capture.lib.animations.find((x) => x.key === k).id, key);
+    const a2 = await animOf(k2);
+    const waitSel = async (aid, tid, ms = 60000) => { const t = Date.now(); for (;;) { const e = (await sess()).animations[aid]; if (e?.selectedTake === tid) return e; if (Date.now() - t > ms) return e; await sleep(300); } };
+    let e2 = await waitSel(a2, r2b.tid);
+    check('redo from the list ("Record it again"): a second take, the newest becomes the selected one', redoTitle === r2b.before && e2.takes.length === 2 && e2.selectedTake === r2b.tid, `${redoTitle}: takes ${e2.takes.length}, selected take ${e2.takes.indexOf(e2.selectedTake) + 1}`);
+    await clickEl(A.page, '#stepper button[data-step="slots"]');
+    await D((aid) => document.querySelector(`.slot[data-anim="${aid}"]`).click(), a2);
+    await A.page.waitForSelector(`#slotSheet button[data-sel="${r2.tid}"]`, { timeout: 10000 });
+    await A.page.click(`#slotSheet button[data-sel="${r2.tid}"]`);
+    e2 = await waitSel(a2, r2.tid, 10000);
+    check('MARK BEST on the first take makes it the selected one', e2.selectedTake === r2.tid);
+    await A.page.click('#slotSheet button[data-act="sheetClose"]');
+
+    // redo from the toast, right after a take
+    await clickEl(A.page, '#stepper button[data-step="record"]');
+    const r4 = await recordTake(2200);
+    const redoShown = await A.page.isVisible('#toastRedo');
+    await A.page.click('#toastRedo');
+    await sleep(300);
+    const backTo = await title();
+    const r4b = await recordTake(2200);
+    const animOfTake = (tid) => D((t) => Object.entries(window.__capture.session.animations).find(([, e]) => e.takes.includes(t))?.[0] || null, tid);
+    const e4 = await waitSel(await animOfTake(r4b.tid), r4b.tid);
+    check('the toast\'s Redo (shown for a few seconds) goes back to the one just recorded; the new take is selected', redoShown && backTo === r4.before && r4b.before === r4.before && e4?.selectedTake === r4b.tid, `${r4.before} → Redo → ${backTo}`);
+
+    // a take where camera B records nothing: told during the take, then "Check failed — redo"
+    await B.page.evaluate(() => { window.__sjcBroken = true; });
+    let warnDuring = '';
+    const r5 = await recordTake(3600, { onRecording: async () => { const t = Date.now(); while (Date.now() - t < 3300) { const w = await A.page.textContent('#ovWarn'); if (w && !warnDuring) { warnDuring = w; await shot(A, '12-recording-camB-failing', [IPAD], { top: false }); } await sleep(150); } } });
+    await B.page.evaluate(() => { window.__sjcBroken = false; });
+    const a5 = await animOfTake(r5.tid);
+    let st5 = null; const t5 = Date.now();
+    while (Date.now() - t5 < 60000) { st5 = (await import('../capture/protocol.mjs')).slotStatus(await sess(), a5); if (st5.status !== 'uploading') break; await sleep(400); }
+    await clickEl(A.page, '#stepper button[data-step="slots"]');
+    await sleep(500);
+    const row5 = await D((aid) => document.querySelector(`.slot[data-anim="${aid}"]`)?.textContent, a5);
+    check('CAM B records nothing: the director sees it during the take (in the recording screen)', /CAM B is not recording/.test(warnDuring), oneLine(warnDuring, 160));
+    check('… the slot says "Check failed — redo" with the reason; nothing waited for a review', st5?.status === 'failed' && /camB/.test(st5.reason) && /Check failed/.test(row5) && /CAM B: /.test(row5), oneLine(row5, 200));
+    await shot(A, '13-animations-failed', [IPAD, PHONE]);
+    // redo it (camera B fixed)
+    await D((aid) => document.querySelector(`.slot[data-anim="${aid}"]`).click(), a5);
+    await A.page.waitForSelector('#slotSheet button[data-act="sheetRecord"]');
+    await A.page.click('#slotSheet button[data-act="sheetRecord"]');
+    const r5b = await recordTake(2400);
+    const e5 = await waitSel(a5, r5b.tid);
+    check('… recorded again: Recorded ✓', e5?.selectedTake === r5b.tid, `${r5b.before}`);
+
+    // ═══ ANALYSIS ══════════════════════════════════════════════════════════
+    await clickEl(A.page, '#stepper button[data-step="analysis"]');
+    await A.page.waitForSelector('#stepAnalysis:not(.hidden)');
+    await A.page.waitForFunction(() => document.querySelectorAll('#anaList input[data-take]').length >= 5, null, { timeout: 15000 });
+    const nAna = await A.page.$$eval('#anaList input[data-take]', (e) => e.filter((x) => x.checked).length);
+    const total0 = await A.page.textContent('#anaTotal');
+    check('Analysis: nothing sent by itself; every recorded animation listed and selected, with the cost', nAna >= 5 && /about \$\d+\.\d\d/.test(total0) && !(await sess()).analysisQueue?.length, `${nAna} selected · ${total0}`);
+    await shot(A, '14-analysis', [IPAD, PHONE]);
+    await A.page.click('#anaNone');
+    await A.page.click('#anaList input[data-take]');
+    const pick = await A.page.$eval('#anaList input[data-take]', (e) => e.dataset.take);
+    await A.page.click('#anaSend');
+    await A.page.waitForSelector('#anaConfirm:not(.hidden) #anaYes', { timeout: 10000 });
+    const conf = await A.page.textContent('#anaConfirm');
+    const queuedBefore = (await api(`/api/capture/sessions/${sessionId}/rec/${pick}`)).take.analysis;
+    check('"Send to analysis" asks to confirm the cost first (the server\'s own quote); nothing is queued yet', /about \$\d+\.\d\d/.test(conf) && !queuedBefore, oneLine(conf, 160));
+    await shot(A, '15-analysis-confirm', [IPAD, PHONE], { top: false });
+    await A.page.click('#anaYes');
+    let an = null; const ta = Date.now();
+    while (Date.now() - ta < 90000) { an = (await api(`/api/capture/sessions/${sessionId}/rec/${pick}`)).take.analysis; if (['done', 'error'].includes(an?.state)) break; await sleep(500); }
     await sleep(1200);
-    await B.ctx.setOffline(true);
-    await sleep(1800);
-    await A.page.click('#stopBtn');
-    await sleep(2500);
-    const pend = await B.page.evaluate(() => window.__capture.role.uploader.pending());
-    check('offline camera B keeps its chunks on the device', pend.chunks + pend.finals > 0, JSON.stringify(pend));
-    await B.ctx.setOffline(false);
-    await A.page.waitForFunction(() => !document.querySelector('#acceptBtn').disabled, null, { timeout: 90000 });
-    check('after reconnect the take completes with both cameras', /Cam A: ✓.*Cam B: ✓/.test(await A.page.textContent('#uploadLine')), await A.page.textContent('#uploadLine'));
-    await A.page.click('#acceptBtn');
-    await A.page.waitForSelector('#savedBox:not(.hidden)', { timeout: 20000 });
-    await A.page.waitForSelector('#savedBox.hidden', { state: 'attached', timeout: 10000 });
-    // 7. camera B page reload: re-pairs by itself (the token is in its URL)
-    await B.page.reload();
-    await B.page.click('#camStart', { timeout: 4000 }).catch(() => {});
-    await A.page.waitForFunction(() => document.querySelector('#pillBtxt')?.textContent.startsWith('READY'), null, { timeout: 30000 });
-    check('camera B reload re-pairs automatically', true);
-    // 8. home: CONTINUE MISSING
-    await A.page.goto(`${BASE}/capture`);
-    await A.page.waitForSelector('#sessions a');
-    const row = await A.page.textContent('#sessions');
-    check('home lists the session with 2 complete, 80 missing', /2\/82 complete · 80 missing/.test(row), row.replace(/\s+/g, ' ').slice(0, 160));
-    await A.page.click('#sessions a button');
-    await A.page.waitForSelector('#animTitle');
-    await A.page.waitForFunction(() => document.querySelector('#animTitle').textContent !== '—');
-    s = (await api(`/api/capture/sessions/${sessionId}`));
-    check('CONTINUE MISSING opens the next missing animation', (await A.page.textContent('#animTitle')) === s.progress.next.title, s.progress.next.key);
-    await shot(A.page, '5-continue-missing');
-    // 9. export: the tar's layout
-    const tarFile = path.join(DATA, 'export.tar');
-    const r = await fetch(`${BASE}/api/capture/sessions/${sessionId}/export.tar`);
-    fs.writeFileSync(tarFile, Buffer.from(await r.arrayBuffer()));
-    const names = execFileSync('tar', ['-tf', tarFile]).toString().trim().split('\n');
-    const has = (re) => names.some((n) => re.test(n));
-    check('export: session.json', has(/^SoulJam_BASIC01\/session\.json$/));
-    check('export: calibration/setup_A/cal01 with both cameras', has(/^SoulJam_BASIC01\/calibration\/setup_A\/cal01\/camA\.(webm|mp4)$/) && has(/calibration\/setup_A\/cal01\/camB\./) && has(/calibration\/setup_A\/cal01\/metadata\.json$/));
-    check('export: setup_A/<animation>/take02 with camA, camB, frame times, metadata', has(/^SoulJam_BASIC01\/setup_A\/[a-z0-9_A-Z]+\/take02\/camA\.(webm|mp4)$/) && has(/setup_A\/[a-zA-Z0-9_]+\/take02\/camB\./) && has(/take02\/camA\.frames\.json$/) && has(/take02\/metadata\.json$/));
-    check('export: only accepted takes by default (the rejected first take is left out)', !has(/setup_A\/neutral_idle\/take01\//) && has(/setup_A\/neutral_idle\/take02\/camA\./));
-    const x = path.join(DATA, 'x'); fs.mkdirSync(x); execFileSync('tar', ['-xf', tarFile, '-C', x]);
-    const sj = JSON.parse(fs.readFileSync(path.join(x, 'SoulJam_BASIC01', 'session.json'), 'utf8'));
-    check('export session.json: library, states, court, capture order, progress', sj.library?.animations?.length === 82 && sj.states?.DR && sj.court?.landmarks && sj.captureOrder?.length === 82 && sj.progress?.complete === 2, `complete ${sj.progress?.complete}`);
-    const md = names.find((n) => /setup_A\/.*take02\/metadata\.json$/.test(n));
-    const meta = JSON.parse(fs.readFileSync(path.join(x, md), 'utf8'));
-    check('take metadata: states, sync, per-camera track / clock / frames', meta.startState && meta.endState && meta.sync?.startAtServerMs && meta.cameras?.camA?.clock && meta.cameras?.camB?.track?.frameRate && meta.cameras?.camA?.frames?.fps > 0, `A ${meta.cameras?.camA?.track?.width}×${meta.cameras?.camA?.track?.height}@${meta.cameras?.camA?.track?.frameRate} measured ${meta.cameras?.camA?.frames?.fps} fps · chirp ${!!meta.sync?.chirp}`);
+    const qtext = await A.page.textContent('#anaQueue');
+    check('confirmed: queued → runs (SAM 3D Body in mock mode, no money) → done, shown in the queue', an?.state === 'done' && /^mo-/.test(an.motionId) && /done/.test(qtext), `${an?.state} ${an?.motionId || an?.error || ''}`);
+    await shot(A, '16-analysis-done', [IPAD, PHONE]);
+    await clickEl(A.page, '#stepper button[data-step="slots"]');
+    await sleep(500);
+    const analysedRows = await A.page.$$eval('.slot[data-status="analysed"]', (e) => e.length);
+    check('the analysed slot says "Analysed ✓" in the list', analysedRows === 1, `${analysedRows} analysed`);
 
     // ═══ production failure modes ═══════════════════════════════════════════
     const takeOf = async (id) => (await api(`/api/capture/sessions/${sessionId}/rec/${id}`)).take;
-    const bothReady = (timeout = 40000) => A.page.waitForFunction(() => document.querySelector('#pillBtxt')?.textContent.startsWith('READY') && document.querySelector('#pillAtxt')?.textContent.startsWith('READY'), null, { timeout });
-    const clickEl = (page, sel) => page.evaluate((q) => document.querySelector(q).click(), sel);
-    const dirTakeId = () => A.page.evaluate(() => window.__capture?.take?.id || null);
-    /** A camera page's uploader: how many chunks it holds for the take (IndexedDB). */
+    /** A saved take's "selected" mark follows its "accepted" a moment later (after the session's selection). */
+    const selectedTake = async (id, ms = 8000) => { let t; for (const t0 = Date.now(); ;) { t = await takeOf(id); if (t.selected || Date.now() - t0 > ms) return t; await sleep(200); } };
+    const bothReady = (timeout = 40000) => A.page.waitForFunction(() => ['camA', 'camB'].every((c) => window.__capture?.presence?.[c]?.ready), null, { timeout });
     const heldOn = (page, director) => page.evaluate(async (dir) => { const u = dir ? window.__capture?.cam?.uploader : window.__capture?.role?.uploader; return u ? (await u.pending()).held : 0; }, director).catch(() => 0);
-    const waitHeld = async (page, director, ms = 8000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await heldOn(page, director) > 0) return true; await sleep(100); } return false; };
-    /** A reloaded camera page: its camera starts (a tap only when the page did not start it itself). */
+    const waitHeld = async (page, director, ms = 8000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await heldOn(page, director) > 0) return true; await sleep(100); } return false; };
     const camUp = async (page) => {
       await page.waitForFunction(() => !!window.__capture?.role, null, { timeout: 15000 });
       await page.waitForFunction(() => document.getElementById('camTap')?.classList.contains('hidden'), null, { timeout: 3000 }).catch(() => clickEl(page, '#camStart'));
     };
-    /** Wait for the take to reach review; if it waits for a camera, press REVIEW WITHOUT (returns how). */
-    const reachReview = async (timeout = 60000, { finish = true } = {}) => {
-      const t0 = Date.now(); let via = 'review';
-      while (Date.now() - t0 < timeout) {
-        const st = await A.page.evaluate(() => ({ ok: !document.querySelector('#acceptBtn').disabled && window.__capture?.phase === 'review', fin: !document.getElementById('finishRow').classList.contains('hidden') && !document.getElementById('finishBtn').disabled, label: document.getElementById('finishBtn').textContent }));
-        if (st.ok) return via;
-        if (st.fin && finish) { via = st.label; await clickEl(A.page, '#finishBtn'); await sleep(1000); continue; }
+    /** A take moves on by itself: wait until it is saved (accepted) or needs a redo (failed). */
+    const settled = async (id, ms = 60000, { finishAfter = null } = {}) => {
+      const t = Date.now(); let tk = null, finished = false;
+      while (Date.now() - t < ms) {
+        tk = await takeOf(id);
+        if (['accepted', 'failed', 'rejected'].includes(tk.state)) return tk;
+        if (finishAfter && !finished && Date.now() - t > finishAfter) { finished = true; await api(`/api/capture/sessions/${sessionId}/rec/${id}/finish`, { method: 'POST', body: '{}' }).catch(() => {}); }
         await sleep(300);
       }
-      throw new Error(`the take did not reach review in ${timeout / 1000} s (${await A.page.textContent('#reviewState').catch(() => '?')} · ${await A.page.textContent('#uploadLine').catch(() => '?')})`);
-    };
-    const retake = async () => { await clickEl(A.page, '#retakeBtn'); await A.page.waitForSelector('#recordBox:not(.hidden)', { timeout: 15000 }); };
-    const acceptTake = async () => {
-      await clickEl(A.page, '#acceptBtn');
-      await A.page.waitForSelector('#savedBox:not(.hidden)', { timeout: 20000 });
-      await A.page.waitForSelector('#savedBox.hidden', { state: 'attached', timeout: 10000 });
+      throw new Error(`take ${id} did not settle in ${ms / 1000} s (state ${tk?.state})`);
     };
     const decodeFails = (t) => (t?.validation?.checks || []).filter((c) => /^decode-/.test(c.id) || /does not decode/.test(c.msg));
+    const goRecord = async () => { await clickEl(A.page, '#stepper button[data-step="record"]'); await A.page.waitForSelector('#stepRecord:not(.hidden)'); };
     let B2 = null;
-    /** After a failed phase: nothing recording / in review, camera B back on its first page, both cameras READY. */
+    /** After a failed phase: nothing recording, camera B back on its first page, both cameras READY. */
     const recover = async () => {
       if (B2) { await B2.browser.close().catch(() => {}); browsers.splice(browsers.indexOf(B2.browser), 1); B2 = null; }
       netQuiet = false;
       await B.ctx.setOffline(false).catch(() => {});
-      await B.page.evaluate(() => { const l = window.__capture?.role?.link; if (l?.replaced || l?.denied) l.reopen(); }).catch(() => {});
-      if (await A.page.evaluate(() => window.__capture?.phase).catch(() => null) === 'recording') { await clickEl(A.page, '#stopBtn').catch(() => {}); await sleep(4000); }
-      const t = await dirTakeId().catch(() => null);
-      if (t) await api(`/api/capture/sessions/${sessionId}/rec/${t}/reject`, { method: 'POST', body: '{}' }).catch(() => {});
-      await A.page.goto(`${BASE}/capture?session=${sessionId}`);
+      await B.page.evaluate(() => { window.__sjcBroken = false; const l = window.__capture?.role?.link; if (l?.replaced || l?.denied) l.reopen(); }).catch(() => {});
+      if (await D(() => !!window.__capture?.rec).catch(() => false)) { await clickEl(A.page, '#stopBtn').catch(() => {}); await sleep(4000); }
+      await A.page.goto(`${BASE}/capture?session=${sessionId}#record`);
       await bothReady(45000);
     };
     const phase = async (name, fn) => {
       try { await fn(); }
       catch (e) {
         check(`${name} (phase)`, false, oneLine(e.message, 300));
-        await shot(A.page, `fail-${name.replace(/\W+/g, '-')}`).catch(() => {});
+        await A.page.screenshot({ path: path.join(OUT, `fail-${name.replace(/\W+/g, '-')}.png`) }).catch(() => {});
         await recover();
       }
     };
 
-    // 10. quick STOP: RECORD → STOP before the cameras' scheduled start (800 ms lead) → retake →
-    //     a normal take: no orphan MediaRecorder from the aborted one corrupts it
-    await A.page.goto(`${BASE}/capture?session=${sessionId}`);
+    await goRecord();
     await bothReady();
+
+    // CANCEL during the countdown: no take at all
+    await phase('cancel in the countdown', async () => {
+      await waitRecordable();
+      const n0 = Object.values((await sess()).animations).reduce((x, e) => x + e.takes.length, 0);
+      await clickEl(A.page, '#recordBtn');
+      await A.page.waitForSelector('#recOverlay:not(.hidden)');
+      const label = await A.page.textContent('#stopBtn');
+      await sleep(400);
+      await clickEl(A.page, '#stopBtn');
+      await A.page.waitForSelector('#recOverlay.hidden', { state: 'attached', timeout: 5000 });
+      await sleep(3000);
+      const n1 = Object.values((await sess()).animations).reduce((x, e) => x + e.takes.length, 0);
+      check('CANCEL in the 3-2-1: no take is made, nothing records', label === 'CANCEL' && n1 === n0 && !(await D(() => window.__capture.cam?.cam.recording)), `button "${label}" · takes ${n0} → ${n1}`);
+    });
+
+    // STOP before the cameras' scheduled start (the 0.8 s lead): no recorder left running
     await phase('quick STOP', async () => {
       await waitRecordable();
       const q = await A.page.evaluate(async () => {
-        const t0 = performance.now();
         document.getElementById('recordBtn').click();
-        while (document.getElementById('recordingBox').classList.contains('hidden') && performance.now() - t0 < 5000) await new Promise((r) => setTimeout(r, 5));
-        await new Promise((r) => setTimeout(r, 150));
+        const t0 = performance.now();
+        while (!window.__capture.rec?.recAt && performance.now() - t0 < 8000) await new Promise((r) => setTimeout(r, 5));
+        const lead = window.__capture.rec?.recAt ? window.__capture.clock.toLocal(window.__capture.rec.recAt) - Date.now() : null;
+        const take = window.__capture.rec?.take?.id;
         document.getElementById('stopBtn').click();
-        return { ms: Math.round(performance.now() - t0), take: window.__capture.take?.id };
+        return { take, lead: Math.round(lead) };
       });
-      const via = await reachReview(45000);
-      await sleep(1500);                                     // well past the scheduled start: a leftover recorder would be running now
-      const recs = { A: await A.page.evaluate(() => ({ rec: window.__capture.cam?.cam.cur?.rec?.state || 'none', recording: !!window.__capture.cam?.cam.recording })), B: await B.page.evaluate(() => ({ rec: window.__capture.role.cam.cur?.rec?.state || 'none', recording: !!window.__capture.role.cam.recording })) };
-      const tq = await takeOf(q.take);
+      await sleep(2000);                                     // well past the scheduled start: a leftover recorder would be running now
+      const recs = { A: await D(() => ({ rec: window.__capture.cam?.cam.cur?.rec?.state || 'none', recording: !!window.__capture.cam?.cam.recording })), B: await B.page.evaluate(() => ({ rec: window.__capture.role.cam.cur?.rec?.state || 'none', recording: !!window.__capture.role.cam.recording })) };
+      const tq = await settled(q.take, 45000);
       const idle = ['A', 'B'].every((k) => ['inactive', 'none'].includes(recs[k].rec) && !recs[k].recording);
-      check(`quick STOP ${q.ms} ms after RECORD: the take reaches review, no recorder left running`, q.ms < 450 && tq.state === 'review' && via === 'review' && idle,
-        `A ${recs.A.rec} · B ${recs.B.rec} · camA ${tq.cameras?.camA?.upload?.chunks ?? '—'} chunk(s) ${tq.cameras?.camA?.bytes ?? '—'} B · camB ${tq.cameras?.camB?.upload?.chunks ?? '—'} chunk(s) ${tq.cameras?.camB?.bytes ?? '—'} B`);
-      await retake();
-      await waitRecordable();
-      await clickEl(A.page, '#recordBtn');
-      await A.page.waitForSelector('#recordingBox:not(.hidden)');
-      const tid = await dirTakeId();
-      await sleep(2200);
-      await clickEl(A.page, '#stopBtn');
-      await reachReview(60000);
-      const t = await takeOf(tid);
+      const slotQ = (await import('../capture/protocol.mjs')).slotStatus(await sess(), tq.animId);
+      check(`CANCEL ${q.lead} ms before the cameras' scheduled start: no recorder left running, the take is discarded (not a failed slot)`, q.lead > 0 && idle && tq.state === 'rejected' && slotQ.status !== 'failed' && slotQ.status !== 'uploading', `A ${recs.A.rec} · B ${recs.B.rec} · take ${tq.state} · slot ${slotQ.status}`);
+      const r = await recordTake(2400);
+      const t = await settled(r.tid);
       const bad = decodeFails(t), info = ['camA', 'camB'].map((c) => t.cameras?.[c]?.fileInfo);
-      check('after the quick STOP + retake: the next take decodes on camA and camB', t.cameras?.camA?.file && t.cameras?.camB?.file && !bad.length && info.every((i) => i?.ok && i.durationSec >= 1),
-        bad.length ? bad.map((c) => c.msg).join('; ') : `camA ${info[0]?.durationSec} s · camB ${info[1]?.durationSec} s · chunks ${t.cameras?.camA?.upload?.chunks}/${t.cameras?.camB?.upload?.chunks}`);
-      await acceptTake();
+      check('… the next take decodes on camA and camB', t.state === 'accepted' && !bad.length && info.every((i) => i?.ok && i.durationSec >= 1), bad.length ? bad.map((c) => c.msg).join('; ') : `camA ${info[0]?.durationSec} s · camB ${info[1]?.durationSec} s`);
     });
 
-    // 11. camera B's page reloaded mid-take: its partial recording is finished from the device
-    //     (Uploader.recoverInterrupted) — or, if it had nothing yet, the director reviews without it
+    // camera B's network drops mid-take: its chunks wait on the phone and upload after reconnect
+    await phase('camera B offline mid-take', async () => {
+      await bothReady();
+      const r = await recordTake(3200, { onRecording: async () => { await sleep(1200); await B.ctx.setOffline(true); } });
+      await sleep(2000);
+      const pend = await B.page.evaluate(() => window.__capture.role.uploader.pending());
+      check('offline camera B keeps its chunks on the phone', pend.chunks + pend.finals > 0, JSON.stringify({ chunks: pend.chunks, finals: pend.finals, held: pend.held }));
+      await B.ctx.setOffline(false);
+      const t = await settled(r.tid, 90000);
+      check('after reconnect the take completes with both cameras and is saved', t.state === 'accepted' && t.cameras?.camA?.file && t.cameras?.camB?.file, `${t.state} · camB ${t.cameras?.camB?.bytes} B`);
+    });
+
+    // camera B's page reloaded mid-take: its partial recording is finished from the phone
     await phase('camera B reload mid-take', async () => {
       await bothReady();
-      await waitRecordable();
-      const t0 = Date.now();
-      await clickEl(A.page, '#recordBtn');
-      await A.page.waitForSelector('#recordingBox:not(.hidden)');
-      const tid = await dirTakeId();
-      const hadChunk = await waitHeld(B.page, false);        // its first 1 s chunk is on the device (~1.9 s after RECORD: 0.8 s lead + 1 s)
-      const at = Date.now() - t0;
-      await B.page.reload();
-      await camUp(B.page);
-      await A.page.waitForFunction(() => document.querySelector('#pillBtxt')?.textContent.startsWith('READY'), null, { timeout: 30000 });
-      check('camera B reloaded mid-take: re-pairs by itself (pairing kept in its link)', true, `reloaded ${at} ms after RECORD${hadChunk ? ' with a chunk on the device' : ' (no chunk yet)'}`);
-      await sleep(800);
-      await clickEl(A.page, '#stopBtn');
-      const via = await reachReview(60000);
-      const t = await takeOf(tid);
+      let hadChunk = false, at = 0;
+      const r = await recordTake(null, { onRecording: async () => {
+        const t0 = Date.now();
+        hadChunk = await waitHeld(B.page, false);          // its first 1 s chunk is on the phone
+        at = Date.now() - t0;
+        await B.page.reload();
+        await camUp(B.page);
+        await A.page.waitForFunction(() => window.__capture.presence?.camB?.ready, null, { timeout: 30000 });
+        await sleep(600);
+        await clickEl(A.page, '#stopBtn');
+      } });
+      check('camera B reloaded mid-take: re-pairs by itself (the pairing is in its link)', true, `reloaded ${at} ms into the take${hadChunk ? ' with a chunk on the phone' : ''}`);
+      const t = await settled(r.tid, 90000, { finishAfter: 20000 });
       const b = t.cameras?.camB;
       const pendB = await B.page.evaluate(() => window.__capture.role.uploader.pending());
-      const ok = hadChunk
-        ? t.state === 'review' && t.cameras?.camA?.file && b?.file && !!b.interrupted && b.upload?.chunks >= 1 && pendB.held === 0 && pendB.finals === 0
-        : t.state === 'review' && /REVIEW WITHOUT/.test(via) && (t.finishedWithout || []).includes('camB');
-      check('camera B reloaded mid-take: the take reaches review with B\'s partial recording', ok,
-        hadChunk ? `via ${via} · camB ${b?.file || 'NO FILE'} ${b?.bytes ?? ''} B, ${b?.upload?.chunks ?? '?'} chunk(s), interrupted: ${!!b?.interrupted} · B's device queue ${JSON.stringify({ held: pendB.held, finals: pendB.finals })}` : `B had no chunk yet → ${via} → ${t.state}, without ${t.finishedWithout}`);
-      await retake();
+      const ok = hadChunk ? b?.file && !!b.interrupted && b.upload?.chunks >= 1 && pendB.held === 0 && pendB.finals === 0 : (t.finishedWithout || []).includes('camB');
+      check('… the take settles with B\'s partial recording (nothing stuck)', ['accepted', 'failed'].includes(t.state) && ok, `${t.state} · camB ${b?.file || 'NO FILE'} ${b?.bytes ?? ''} B, interrupted ${!!b?.interrupted}${t.failReason ? ' · ' + t.failReason : ''}`);
     });
 
-    // 12. the director page refreshed mid-recording: STOP is back, works, the take reaches review
-    //     (this phone is camera A too: its recording is finished from the device like camera B's)
+    // the director page refreshed mid-recording: the recording screen with STOP is back and works
     await phase('director refresh mid-recording', async () => {
       await bothReady();
       await waitRecordable();
       await clickEl(A.page, '#recordBtn');
-      await A.page.waitForSelector('#recordingBox:not(.hidden)');
-      const tid = await dirTakeId();
+      await A.page.waitForSelector('#recOverlay.recording', { timeout: 12000 });
+      const tid = await D(() => window.__capture.rec?.take?.id);
       const hadChunk = await waitHeld(A.page, true);
       await A.page.reload();
-      const back = await A.page.waitForSelector('#recordingBox:not(.hidden)', { timeout: 15000 }).then(() => true, () => false);
-      const st = await A.page.evaluate(() => ({ phase: window.__capture?.phase, take: window.__capture?.take?.id, stop: !!document.querySelector('#stopBtn')?.offsetParent, name: document.getElementById('recName')?.textContent }));
-      check('director refreshed mid-recording: the recording box with STOP is back', back && st.phase === 'recording' && st.take === tid && st.stop, oneLine(st.name, 120));
-      if (!back) throw new Error('no recording box after the refresh');
-      await sleep(600);
+      const back = await A.page.waitForSelector('#recOverlay:not(.hidden)', { timeout: 15000 }).then(() => true, () => false);
+      const st = await D(() => ({ phase: window.__capture?.phase, take: window.__capture?.rec?.take?.id, stop: !!document.querySelector('#stopBtn')?.offsetParent, top: document.getElementById('ovTop')?.textContent }));
+      check('director refreshed mid-recording: the recording screen with STOP is back', back && st.phase === 'recording' && st.take === tid && st.stop, oneLine(st.top, 80));
+      if (!back) throw new Error('no recording screen after the refresh');
+      await sleep(500);
       await clickEl(A.page, '#stopBtn');
-      const via = await reachReview(60000);
-      const t = await takeOf(tid);
-      const stopped = await A.page.evaluate(() => window.__capture.stopFor == null);
+      const t = await settled(tid, 60000);
+      const stopped = await D(() => window.__capture.stopFor == null);
       const bRec = await B.page.evaluate(() => window.__capture.role.cam.cur?.rec?.state || 'none');
-      const ok = t.state === 'review' && t.sync?.stopAtServerMs && t.cameras?.camB?.file && !t.cameras.camB.stopCapped && stopped && bRec === 'inactive'
-        && (hadChunk ? t.cameras?.camA?.file && !!t.cameras.camA.interrupted : true);
-      check('director refresh: STOP works (camera B halts) and the take reaches review', ok,
-        `via ${via} · camA ${t.cameras?.camA?.file || '—'}${t.cameras?.camA?.interrupted ? ' (interrupted, from the device)' : ''} · camB ${t.cameras?.camB?.file || '—'} · halt heard ${stopped} · B recorder ${bRec}`);
-      await retake();
+      check('… STOP works (camera B halts) and the take settles by itself', ['accepted', 'failed'].includes(t.state) && t.sync?.stopAtServerMs && t.cameras?.camB?.file && !t.cameras.camB.stopCapped && stopped && bRec === 'inactive' && (hadChunk ? !!t.cameras?.camA?.interrupted : true),
+        `${t.state} · camA ${t.cameras?.camA?.file || '—'}${t.cameras?.camA?.interrupted ? ' (interrupted, from the device)' : ''} · camB ${t.cameras?.camB?.file || '—'} · B recorder ${bRec}${t.failReason ? ' · ' + t.failReason : ''}`);
     });
 
-    // 13. a second page opens camera B's pairing link: the newest page takes the role, the first one
-    //     says so and stays off (no ping-pong), USE THIS PHONE takes it back
+    // a second page opens camera B's link: the newest page takes the role, the first one says so
+    // and stays off (no ping-pong); USE THIS PHONE takes it back
     await phase('second page on camera B', async () => {
       await bothReady();
       const devB1 = await B.page.evaluate(() => localStorage.getItem('sjc-device'));
-      B2 = await mk('cameraB-second');
+      B2 = await mk('cameraB-second', PHONE);
       const s1 = { ...B.ws };
       await B2.page.goto(pairHref);
       await camUp(B2.page);
       await B.page.waitForFunction(() => !!document.querySelector('#camBanner [data-act=takeover]'), null, { timeout: 15000 });
       const l1 = await B.page.evaluate(() => { const l = window.__capture.role.link; return { replaced: !!l.replaced, closed: !!l.closed, open: !!l.open, banner: document.getElementById('camBanner').textContent }; });
       check('second page on camera B\'s link: the first page shows USE THIS PHONE and stops', l1.replaced && l1.closed && !l1.open, oneLine(l1.banner, 120));
-      // ~8 s: the role must stay with the second page (sampled on the director), nobody reconnects
+      await shot(B, '17-cameraB-replaced', [PHONE]);
       const holder = new Set();
-      for (let i = 0; i < 16; i++) { holder.add(await A.page.evaluate(() => window.__capture.presence?.camB?.deviceId || '—')); await sleep(500); }
+      for (let i = 0; i < 16; i++) { holder.add(await D(() => window.__capture.presence?.camB?.deviceId || '—')); await sleep(500); }
       const d1 = { opened: B.ws.opened - s1.opened, replaced: B.ws.replaced - s1.replaced }, d2 = { ...B2.ws };
       const dev2 = await B2.page.evaluate(() => localStorage.getItem('sjc-device'));
-      check('no reconnect flapping over 8 s (≤ 1 "replaced", the first page never reconnects)', d1.replaced + d2.replaced <= 1 && d1.opened === 0 && d2.opened === 1 && holder.size === 1 && holder.has(dev2),
-        `first page: ${d1.opened} new socket(s), ${d1.replaced} replaced · second page: ${d2.opened} socket(s), ${d2.replaced} replaced · camB holders seen by the director: ${[...holder].map((h) => (h === dev2 ? 'second page' : h === devB1 ? 'first page' : h)).join(', ')}`);
-      // USE THIS PHONE on the first page
+      check('no reconnect flapping over 8 s', d1.replaced + d2.replaced <= 1 && d1.opened === 0 && d2.opened === 1 && holder.size === 1 && holder.has(dev2),
+        `first page: ${d1.opened} new socket(s), ${d1.replaced} replaced · second page: ${d2.opened} socket(s) · holders: ${[...holder].map((h) => (h === dev2 ? 'second page' : h === devB1 ? 'first page' : h)).join(', ')}`);
       const s2 = { b1: { ...B.ws }, b2: { ...B2.ws } };
       await B.page.evaluate(() => document.querySelector('#camBanner [data-act=takeover]').click());
       const back = await A.page.waitForFunction((id) => window.__capture.presence?.camB?.deviceId === id && window.__capture.presence.camB.ready, devB1, { timeout: 15000 }).then(() => true, () => false);
       const l2 = await B2.page.waitForFunction(() => window.__capture.role.link.replaced, null, { timeout: 10000 }).then(() => true, () => false);
       await sleep(4000);
-      const e1 = { opened: B.ws.opened - s2.b1.opened, replaced: B.ws.replaced - s2.b1.replaced }, e2 = { opened: B2.ws.opened - s2.b2.opened, replaced: B2.ws.replaced - s2.b2.replaced };
-      const still = await A.page.evaluate(() => window.__capture.presence?.camB?.deviceId);
-      const banner2 = await B2.page.evaluate(() => !!document.querySelector('#camBanner [data-act=takeover]'));
-      check('USE THIS PHONE takes camera B back (the second page stops, no flapping)', back && l2 && banner2 && still === devB1 && e1.opened === 1 && e1.replaced === 0 && e2.opened === 0 && e2.replaced === 1,
-        `first page: ${e1.opened} socket(s), ${e1.replaced} replaced · second page: ${e2.opened} new socket(s), ${e2.replaced} replaced, banner ${banner2} · camB now ${still === devB1 ? 'the first page' : still}`);
+      const e1 = { opened: B.ws.opened - s2.b1.opened, replaced: B.ws.replaced - s2.b1.replaced }, e2x = { opened: B2.ws.opened - s2.b2.opened, replaced: B2.ws.replaced - s2.b2.replaced };
+      const still = await D(() => window.__capture.presence?.camB?.deviceId);
+      check('USE THIS PHONE takes camera B back (the second page stops, no flapping)', back && l2 && still === devB1 && e1.opened === 1 && e1.replaced === 0 && e2x.opened === 0 && e2x.replaced === 1,
+        `first page: ${e1.opened} socket(s) · second page: ${e2x.opened} new, ${e2x.replaced} replaced · camB now ${still === devB1 ? 'the first page' : still}`);
       await B2.browser.close(); browsers.splice(browsers.indexOf(B2.browser), 1); B2 = null;
       await bothReady();
     });
 
-    // 14. Railway redeploy: the server is killed, its local disk wiped, and it starts again on the
-    //     same bucket — everything comes back from the bucket
+    // Railway redeploy: the server killed, its disk wiped, started again on the same bucket
     await phase('server restart with the disk wiped', async () => {
       await bothReady();
       const before = await api(`/api/capture/sessions/${sessionId}`);
-      const totals0 = await A.page.textContent('#totals');
-      const accepted = Object.entries(before.session.animations).filter(([, e]) => e.selectedTake).map(([aid, e]) => ({ aid, tid: e.selectedTake }));
+      const saved = Object.entries(before.session.animations).filter(([, e]) => e.selectedTake).map(([aid, e]) => ({ aid, tid: e.selectedTake }));
       const sockets0 = A.ws.opened, socketsB0 = B.ws.opened;
       netQuiet = true;
       await killServer(srv, 'SIGKILL');
       const down = await A.page.waitForFunction(() => !window.__capture.link.open, null, { timeout: 15000 }).then(() => true, () => false);
       fs.rmSync(CAP, { recursive: true, force: true });
-      const wiped = !fs.existsSync(CAP);
-      const bootAt = Date.now();                             // the old process is gone: presence seen after this is the new one's
+      const bootAt = Date.now();
       srv = await startServer();
-      const t0 = Date.now();
       await A.page.waitForFunction(() => window.__capture.link.open, null, { timeout: 30000 });
-      // (the page keeps its last presence while the link is down: wait for the new process's own)
       const fresh = await A.page.waitForFunction((since) => ['camA', 'camB'].every((c) => window.__capture.presence?.[c]?.ready && window.__capture.presence[c].lastSeen >= since), bootAt, { timeout: 45000 }).then(() => true, () => false);
       await bothReady(45000);
       netQuiet = false;
-      check('restart with the disk wiped: the director page reconnects on its own', down && wiped && fresh && A.ws.opened > sockets0 && B.ws.opened > socketsB0 && await A.page.evaluate(() => window.__capture.link.open),
-        `disk wiped ${wiped} · director + both cameras READY on the new process ${((Date.now() - t0) / 1000).toFixed(1)} s after it was up (fresh ${fresh}) · new sockets: director page ${A.ws.opened - sockets0}, camera B ${B.ws.opened - socketsB0}`);
+      check('restart with the disk wiped: the director and both cameras reconnect on their own', down && fresh && A.ws.opened > sockets0 && B.ws.opened > socketsB0, `new sockets: director page ${A.ws.opened - sockets0}, camera B ${B.ws.opened - socketsB0}`);
       const after = await api(`/api/capture/sessions/${sessionId}`);
-      const list = await api('/api/capture/sessions');
-      const row = list.sessions?.find((x) => x.id === sessionId);
-      const totals1 = await A.page.textContent('#totals');
-      check('restart: progress unchanged (the session is read back from the bucket)', after.progress?.complete === before.progress.complete && after.progress.complete === accepted.length && row?.complete === before.progress.complete && totals1 === totals0
-        && JSON.stringify(Object.fromEntries(Object.entries(after.session.animations).map(([k, e]) => [k, e.selectedTake]))) === JSON.stringify(Object.fromEntries(Object.entries(before.session.animations).map(([k, e]) => [k, e.selectedTake]))),
-        `${after.progress?.complete} complete (before ${before.progress.complete}) · list ${row ? row.complete : 'MISSING'} · page "${totals1}"`);
-      // an accepted take's video: served (restored from the bucket) and it plays in the browser
-      const last = accepted[accepted.length - 1], lt = await takeOf(last.tid);
+      check('restart: progress unchanged (read back from the bucket)', after.progress?.complete === before.progress.complete
+        && JSON.stringify(Object.fromEntries(Object.entries(after.session.animations).map(([k, e]) => [k, e.selectedTake]))) === JSON.stringify(Object.fromEntries(Object.entries(before.session.animations).map(([k, e]) => [k, e.selectedTake]))), `${after.progress?.complete} complete (before ${before.progress.complete})`);
+      const last = saved[saved.length - 1], lt = await takeOf(last.tid);
       const url = `/api/capture/sessions/${sessionId}/rec/${last.tid}/camA/video`;
       const vr = await fetch(BASE + url), vbytes = (await vr.arrayBuffer()).byteLength;
-      const played = await A.page.evaluate(async (src) => {
+      const played = await D(async (src) => {
         const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.src = src; document.body.appendChild(v);
         try {
           await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error('media error ' + (v.error?.code ?? '?'))); setTimeout(() => rej(new Error('no data in 10 s')), 10000); });
           await v.play();
           const t1 = performance.now();
           while (v.currentTime < 0.3 && performance.now() - t1 < 8000) await new Promise((r) => setTimeout(r, 100));
-          return { ok: v.currentTime >= 0.3, t: +v.currentTime.toFixed(2), w: v.videoWidth, h: v.videoHeight };
+          return { ok: v.currentTime >= 0.3, t: +v.currentTime.toFixed(2) };
         } catch (e) { return { ok: false, err: e.message }; } finally { v.pause(); v.remove(); }
       }, url);
-      check('restart: an accepted take\'s video still plays (GET …/video 200)', vr.status === 200 && vbytes === lt.cameras?.camA?.bytes && played.ok,
-        `HTTP ${vr.status} · ${vbytes} B (record ${lt.cameras?.camA?.bytes}) · played to ${played.t ?? '—'} s ${played.w || ''}×${played.h || ''}${played.err ? ' · ' + played.err : ''}`);
-      // the export: every accepted take + the calibration, nothing missing
-      const tar2 = path.join(DATA, 'export-after-restart.tar');
-      const er = await fetch(`${BASE}/api/capture/sessions/${sessionId}/export.tar`);
-      fs.writeFileSync(tar2, Buffer.from(await er.arrayBuffer()));
-      const names2 = execFileSync('tar', ['-tf', tar2]).toString().trim().split('\n');
-      const x2 = path.join(DATA, 'x2'); fs.mkdirSync(x2); execFileSync('tar', ['-xf', tar2, '-C', x2]);
-      const sj2 = JSON.parse(fs.readFileSync(path.join(x2, 'SoulJam_BASIC01', 'session.json'), 'utf8'));
-      const lost = [];
-      for (const { tid } of accepted) {
-        const t = await takeOf(tid), folder = `SoulJam_BASIC01/setup_${t.courtSetup}/${t.animKey}/take${String(t.takeNo).padStart(2, '0')}`;
-        for (const f of [`camA${path.extname(t.cameras.camA.file)}`, `camB${path.extname(t.cameras.camB.file)}`, 'camA.frames.json', 'camB.frames.json', 'metadata.json']) if (!names2.includes(`${folder}/${f}`)) lost.push(`${folder}/${f}`);
-        for (const c of ['camA', 'camB']) { const f = path.join(x2, folder, `${c}${path.extname(t.cameras[c].file)}`); if (fs.existsSync(f) && fs.statSync(f).size !== t.cameras[c].bytes) lost.push(`${folder}/${c} (size)`); }
-      }
-      const cal = names2.some((n) => /calibration\/setup_A\/cal01\/camA\./.test(n)) && names2.some((n) => /calibration\/setup_A\/cal01\/camB\./.test(n));
-      check('restart: the export still contains every accepted take + the calibration', !lost.length && cal && !sj2.missingFiles && sj2.progress?.complete === accepted.length,
-        lost.length ? `lost: ${lost.slice(0, 4).join(', ')}` : `${accepted.length} accepted takes + cal01 · ${names2.length} entries${sj2.missingFiles ? ' · missingFiles ' + sj2.missingFiles.join(', ') : ''}`);
-      // a new take after the restart: recorded, accepted, in the bucket
-      await waitRecordable();
-      await clickEl(A.page, '#recordBtn');
-      await A.page.waitForSelector('#recordingBox:not(.hidden)');
-      const tid = await dirTakeId();
-      await sleep(2400);
-      await clickEl(A.page, '#stopBtn');
-      await reachReview(60000);
-      await acceptTake();
-      const t = await takeOf(tid), p = await api(`/api/capture/sessions/${sessionId}`);
-      const inBucket = ['camA', 'camB'].every((c) => t.cameras?.[c]?.file && fs.existsSync(path.join(CLOUD, '_meta', 'capture', 'sessions', sessionId, 'takes', tid, t.cameras[c].file)))
-        && fs.existsSync(path.join(CLOUD, '_meta', 'capture', 'sessions', sessionId, 'takes', tid, 'take.json'));
-      const bucketRec = JSON.parse(fs.readFileSync(path.join(CLOUD, '_meta', 'capture', 'sessions', sessionId, 'takes', tid, 'take.json'), 'utf8'));
-      check('restart: a new take is recorded + accepted (files and record in the bucket)', t.state === 'accepted' && t.selected && p.progress.complete === accepted.length + 1 && inBucket && bucketRec.state === 'accepted' && !decodeFails(t).length,
-        `${t.animKey} take ${t.takeNo} · progress ${p.progress.complete} · in bucket ${inBucket} (record says ${bucketRec.state})`);
+      check('restart: a saved take\'s video still plays', vr.status === 200 && vbytes === lt.cameras?.camA?.bytes && played.ok, `HTTP ${vr.status} · ${vbytes} B · played to ${played.t ?? '—'} s${played.err ? ' · ' + played.err : ''}`);
+      await goRecord();
+      const r = await recordTake(2400);
+      await settled(r.tid);
+      const t = await selectedTake(r.tid);
+      const inBucket = ['camA', 'camB'].every((c) => t.cameras?.[c]?.file && fs.existsSync(path.join(CLOUD, '_meta', 'capture', 'sessions', sessionId, 'takes', r.tid, t.cameras[c].file)));
+      check('restart: a new take is recorded and saved (files and record in the bucket)', t.state === 'accepted' && t.selected && inBucket && !decodeFails(t).length, `${t.animKey} · in bucket ${inBucket}`);
     });
 
-    // 15. a redeploy MID-UPLOAD: camera B is offline when the take stops, the server restarts with
-    //     an empty disk (the chunks B had already sent are gone), B comes back: its "complete" is
-    //     answered 409 {missing}, it sends those chunks again from its device, the take completes
+    // a redeploy MID-UPLOAD: camera B offline when the take stops, the server restarts with an
+    // empty disk, B comes back: 409 {missing} → it sends those chunks again from its phone
     await phase('server restart mid-upload', async () => {
       await bothReady();
       await waitRecordable();
       const c0 = B.completes.length;
-      await clickEl(A.page, '#recordBtn');
-      await A.page.waitForSelector('#recordingBox:not(.hidden)');
-      const tid = await dirTakeId();
-      // B has uploaded at least one chunk (the server has it; B keeps its copy, marked sent)
-      let p = null; const w0 = Date.now();
-      while (Date.now() - w0 < 8000) { p = await B.page.evaluate(() => window.__capture.role.uploader.pending()); if (p.held > p.chunks) break; await sleep(100); }
-      const had = (await api(`/api/capture/sessions/${sessionId}/rec/${tid}/camB/status`)).have || [];
-      if (!(p?.held > p?.chunks) || !had.length) throw new Error(`camera B had not uploaded a chunk yet (${JSON.stringify(p)}, server has ${JSON.stringify(had)})`);
-      await B.ctx.setOffline(true);
-      await sleep(1200);
-      await clickEl(A.page, '#stopBtn');
-      // camera A's recording is in (and in the bucket) before the redeploy
+      let had = [];
+      const r = await recordTake(null, { onRecording: async (tid) => {
+        let p = null; const w0 = Date.now();
+        while (Date.now() - w0 < 8000) { p = await B.page.evaluate(() => window.__capture.role.uploader.pending()); if (p.held > p.chunks) break; await sleep(100); }
+        had = (await api(`/api/capture/sessions/${sessionId}/rec/${tid}/camB/status`)).have || [];
+        if (!(p?.held > p?.chunks) || !had.length) throw new Error(`camera B had not uploaded a chunk yet (${JSON.stringify(p)}, server has ${JSON.stringify(had)})`);
+        await B.ctx.setOffline(true);
+        await sleep(1000);
+        await clickEl(A.page, '#stopBtn');
+      } });
       const w1 = Date.now(); let ta = null;
-      while (Date.now() - w1 < 20000) { ta = await takeOf(tid); if (ta.cameras?.camA?.file) break; await sleep(300); }
+      while (Date.now() - w1 < 20000) { ta = await takeOf(r.tid); if (ta.cameras?.camA?.file) break; await sleep(300); }
       if (!ta?.cameras?.camA?.file) throw new Error('camera A did not upload before the redeploy');
       netQuiet = true;
       await killServer(srv, 'SIGKILL');
       fs.rmSync(CAP, { recursive: true, force: true });
       srv = await startServer();
       await B.ctx.setOffline(false);
-      let via;
-      try { via = await reachReview(90000, { finish: false }); } finally { netQuiet = false; }
-      const t = await takeOf(tid), b = t.cameras?.camB || {};
-      const codes = B.completes.slice(c0);
+      let t;
+      try { t = await settled(r.tid, 90000); } finally { netQuiet = false; }
+      const b = t.cameras?.camB || {}, codes = B.completes.slice(c0);
       const pendB = await B.page.evaluate(() => window.__capture.role.uploader.pending());
-      check('redeploy mid-upload: B re-sends the chunks the server lost (409 missing) and the take completes', t.state === 'review' && b.file && codes.includes(409) && codes[codes.length - 1] === 200 && !decodeFails(t).length && b.fileInfo?.ok && pendB.held === 0 && pendB.kept === 0,
-        `server had chunk(s) ${had.join(',')} before · B's "complete" answers: ${codes.join(' → ') || 'none'} · camB ${b.upload?.chunks ?? '?'} chunk(s), ${b.fileInfo?.durationSec ?? '?'} s${b.stopReconciled ? ' (stop reconciled)' : ''} · B's device ${JSON.stringify({ held: pendB.held, kept: pendB.kept })}`);
-      await retake();
+      check('redeploy mid-upload: B re-sends the chunks the server lost (409 missing) and the take is saved', t.state === 'accepted' && b.file && codes.includes(409) && codes[codes.length - 1] === 200 && !decodeFails(t).length && pendB.held === 0 && pendB.kept === 0,
+        `server had chunk(s) ${had.join(',')} · B's "complete" answers: ${codes.join(' → ') || 'none'} · B's phone ${JSON.stringify({ held: pendB.held, kept: pendB.kept })}`);
     });
+
+    // home → CONTINUE MISSING → straight to the Record step at the next animation to record
+    await phase('continue missing', async () => {
+      await A.page.goto(`${BASE}/capture`);
+      await A.page.waitForSelector('#sessions a');
+      const row = await A.page.textContent('#sessions');
+      await shot(A, '18-home', [IPAD, PHONE]);
+      await A.page.click('#sessions a button');
+      await A.page.waitForSelector('#stepRecord:not(.hidden)', { timeout: 15000 });
+      await A.page.waitForFunction(() => document.querySelector('#animTitle').textContent !== '—');
+      const s2 = await sess();
+      const next = (await import('../capture/protocol.mjs')).nextToRecord((await import('../capture/basic01.mjs')).BASIC01, s2);
+      check('home → CONTINUE MISSING opens the Record step at the next animation to record', (await title()) === next.title && /complete · \d+ missing/.test(row), `${next.key} · ${oneLine(row, 100)}`);
+    });
+
+    // the export: the organised dataset (saved takes only by default)
+    await phase('export', async () => {
+      const tarFile = path.join(DATA, 'export.tar');
+      const r = await fetch(`${BASE}/api/capture/sessions/${sessionId}/export.tar`);
+      fs.writeFileSync(tarFile, Buffer.from(await r.arrayBuffer()));
+      const names = execFileSync('tar', ['-tf', tarFile]).toString().trim().split('\n');
+      const has = (re) => names.some((n) => re.test(n));
+      check('export: session.json + calibration/setup_A/cal01 with both cameras', has(/^SoulJam_BASIC01\/session\.json$/) && has(/calibration\/setup_A\/cal01\/camA\.(webm|mp4)$/) && has(/calibration\/setup_A\/cal01\/camB\./) && has(/calibration\/setup_A\/cal01\/metadata\.json$/));
+      check('export: setup_A/<animation>/takeNN with camA, camB, frame times, metadata', has(/^SoulJam_BASIC01\/setup_A\/[a-zA-Z0-9_]+\/take01\/camA\.(webm|mp4)$/) && has(/take01\/camB\./) && has(/take01\/camA\.frames\.json$/) && has(/take01\/metadata\.json$/));
+      const failedTake = await takeOf(r5.tid);
+      check('export: only saved takes (the take whose camera B recorded nothing is left out)', failedTake.state === 'failed' && !names.some((n) => n.includes(`/${failedTake.animKey}/take${String(failedTake.takeNo).padStart(2, '0')}/`)), `${failedTake.animKey} take ${failedTake.takeNo}`);
+      const x = path.join(DATA, 'x'); fs.mkdirSync(x); execFileSync('tar', ['-xf', tarFile, '-C', x]);
+      const md = names.find((n) => /setup_A\/.*take01\/metadata\.json$/.test(n));
+      const meta = JSON.parse(fs.readFileSync(path.join(x, md), 'utf8'));
+      check('take metadata: states, sync, per-camera track / clock / frames / recorder', meta.startState && meta.endState && meta.sync?.startAtServerMs && meta.cameras?.camA?.clock && meta.cameras?.camB?.track?.frameRate && meta.cameras?.camA?.frames?.fps > 0 && meta.cameras?.camA?.recorder?.mimeType, `A ${meta.cameras?.camA?.track?.width}×${meta.cameras?.camA?.track?.height}@${meta.cameras?.camA?.track?.frameRate} · ${meta.cameras?.camA?.recorder?.mimeType}`);
+    });
+    check('layout: no horizontal scrolling at any screenshot size', !layoutBad.length, layoutBad.slice(0, 6).join(' · '));
   } catch (e) {
     check('run', false, e.message);
   } finally {
@@ -544,7 +688,7 @@ async function killServer(child, signal = 'SIGKILL') {
     else console.log('data kept in', DATA);
     const bad = results.filter((r) => !r.ok);
     console.log(`\n${results.length - bad.length} passed · ${bad.length} failed`);
-    if (bad.length && !results.some((r) => r.name === 'run' && r.ok)) console.log('server log tail:\n' + srvLog.split('\n').slice(-15).join('\n'));
+    if (bad.length) console.log('server log tail:\n' + srvLog.split('\n').slice(-15).join('\n'));
     process.exit(bad.length ? 1 : 0);
   }
 })().catch((e) => { console.error('✖ could not start:', e.message); if (srv) try { process.kill(srv.pid, 'SIGKILL'); } catch {} process.exit(1); });

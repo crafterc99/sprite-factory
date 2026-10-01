@@ -10,15 +10,17 @@
  *   POST /api/capture/sessions/:sid/setup {setup}       the cameras are placed for this setup
  *   POST /api/capture/sessions/:sid/takes {animId}      arm a take of an animation
  *   POST /api/capture/sessions/:sid/calibrations {setup} arm a calibration recording
+ *   POST /api/capture/sessions/:sid/checks              arm a camera check (2 s test recording, never a take)
  *   PUT  /api/capture/sessions/:sid/rec/:rid/:cam/chunk/:seq   upload one chunk (camera; idempotent)
  *   GET  /api/capture/sessions/:sid/rec/:rid/:cam/status       chunks the server has (resume)
  *   POST /api/capture/sessions/:sid/rec/:rid/:cam/complete     all chunks sent + the camera's metadata
  *   GET  /api/capture/sessions/:sid/rec/:rid                   the take / calibration record
  *   GET  /api/capture/sessions/:sid/rec/:rid/:cam/video        the recording (Range)
  *   GET  /api/capture/sessions/:sid/rec/:rid/:cam/still.jpg    a still (calibration landmarks)
- *   POST /api/capture/sessions/:sid/rec/:rid/finish {cams}     review with the cameras that uploaded (one stayed away)
- *   POST /api/capture/sessions/:sid/rec/:rid/accept {force}    accept (+ select) → SAVED
- *   POST /api/capture/sessions/:sid/rec/:rid/reject            retake (footage kept)
+ *   POST /api/capture/sessions/:sid/rec/:rid/finish {cams}     go on with the cameras that uploaded (one stayed away)
+ *   POST /api/capture/sessions/:sid/rec/:rid/accept {force}    accept (+ select) → SAVED (the server does this by itself
+ *                                                              once a take's uploads are in and no camera failed)
+ *   POST /api/capture/sessions/:sid/rec/:rid/reject            discard a take (footage kept)
  *   POST /api/capture/sessions/:sid/rec/:rid/select            mark best
  *   POST /api/capture/sessions/:sid/rec/:rid/landmarks {cam, points}   calibration landmarks
  *   PUT|GET /api/capture/sessions/:sid/calref/:setup/:cam      a camera's calibration reference view (moved-camera check)
@@ -26,6 +28,14 @@
  *   GET  /api/capture/sessions/:sid/export.tar                 the organised dataset
  *   GET  /api/capture/processors                               processing back-ends (SAM 3D Body …)
  *   POST /api/capture/sessions/:sid/rec/:rid/process {processor, cam, fps, maxFrames, confirmCostUsd}
+ *   POST /api/capture/sessions/:sid/process-batch {takes, cam, fps, confirmCostUsd}   queue takes for analysis
+ *                                                              (no confirmCostUsd → 402 with the quote, nothing queued)
+ *   GET  /api/capture/sessions/:sid/analysis                   the analysis queue + live progress
+ *
+ * A take moves on by itself (nobody reviews it): RECORD → the cameras upload → the checks run →
+ * SAVED and selected (the newest recorded take of its animation), or "needs redo" when a camera
+ * produced no decodable video. A calibration the same (saved → the cameras keep their reference
+ * view). A camera check never becomes a take: its verdict goes to session.cameraChecks.
  *
  * Camera devices only hold the session's pairing token (X-Capture-Token): they may upload chunks,
  * complete their upload, keep their calibration reference and read the session — nothing else.
@@ -44,6 +54,7 @@ const cloud = require('../lib/capture/cloud');
 const media = require('../lib/capture/media');
 const validators = require('../lib/capture/validators');
 const processing = require('../lib/capture/processing');
+const analysis = require('../lib/capture/analysis');
 const auth = require('../middleware/auth');
 
 let libs = null;
@@ -67,7 +78,7 @@ function body(req, max = 256 << 10) {
 /** A file name inside a take's folder (never a path). */
 const plainName = (f) => typeof f === 'string' && /^[A-Za-z0-9_.-]{1,80}$/.test(f) && !f.startsWith('.');
 /** What a camera may say about its recording (anything else, e.g. file names, is the server's). */
-const CAMERA_META = ['deviceId', 'device', 'track', 'capabilities', 'recorder', 'source', 'clock', 'startedAtServerMs', 'stoppedAtServerMs', 'commandAtServerMs', 'frames', 'streamedChunks', 'stopReconciled', 'stopCapped', 'interrupted', 'recoveredAt', 'storageError'];
+const CAMERA_META = ['deviceId', 'device', 'track', 'capabilities', 'recorder', 'source', 'clock', 'startedAtServerMs', 'stoppedAtServerMs', 'commandAtServerMs', 'frames', 'streamedChunks', 'stopReconciled', 'stopCapped', 'interrupted', 'recoveredAt', 'storageError', 'recError', 'recWarn'];
 function cameraMeta(m) {
   const out = {};
   if (m && typeof m === 'object') for (const k of CAMERA_META) if (m[k] !== undefined) out[k] = m[k];
@@ -95,6 +106,9 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
   const forCameras = (s) => ({ ...s, pair: { code: s.pair?.code } });
   /** A file the record points at, on this disk (fetched from the bucket after a redeploy). */
   const local = async (abs) => { if (!fs.existsSync(abs)) await cloud.ensureLocal(abs, store.cloudKey(abs)).catch(() => null); return fs.existsSync(abs) ? abs : null; };
+  // analysis (SAM 3D Body) runs only when the director sends takes, one at a time, surviving restarts
+  const queue = analysis.createQueue({ hub, local, TMP_DIR, anim: async (s, id) => (await libraries()).LIBRARIES[s?.libraryId]?.animations.find((a) => a.id === id) || null });
+  hubRef.onBoot = () => { const t = setTimeout(() => queue.resumeAll().catch((e) => console.error('[capture] analysis resume', e.message)), 3000); t.unref?.(); };
 
   // ── libraries + sessions
   router.get('/api/capture/libraries', async (req, res) => {
@@ -132,6 +146,8 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       const { P } = await libraries(), L = await libOf(s);
       const director = isDirector(req);
       json(res, { session: director ? s : forCameras(s), progress: P.progress(L, s), director });
+      // takes a restart (or a refused bucket write) left half-way are moved on; queued analysis resumes
+      if (director) { settle(s.id); queue.touch(s.id, s); }
     } catch (e) { err(res, e); }
   });
   router.get('/api/capture/sessions/:sid/pair', async (req, res, p) => {
@@ -212,6 +228,19 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       json(res, { calibration: rec });
     } catch (e) { err(res, e); }
   });
+  // a camera check: 2 s through the whole path (record → upload → decode here), never a take
+  router.post('/api/capture/sessions/:sid/checks', async (req, res, p) => {
+    if (needDirector(req, res)) return;
+    try {
+      await body(req, 4096);
+      const s = await store.loadSession(p.sid);
+      if (!s) return json(res, { error: 'session not found' }, 404);
+      const L = await libOf(s);
+      const rec = await store.createCheck(s.id, { library: { id: L.id, version: L.version } });
+      armBroadcast(s.id, { ...rec, title: 'CAMERA CHECK', subtitle: '2 s test recording' });
+      json(res, { check: rec });
+    } catch (e) { err(res, e); }
+  });
   function armBroadcast(sid, rec) {
     const h = hub(); if (!h) return;
     const r = h.room(sid);
@@ -270,7 +299,7 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       if (!out) return json(res, { error: 'take not found' }, 404);
       if (out.fresh) hub()?.takeUpdate(p.sid, out.rec, { event: 'uploaded', cam: p.cam });
       json(res, { ok: true, take: out.rec });
-      // every camera the take waits for is in → validate → review
+      // every camera the take waits for is in → the checks → saved (or needs redo)
       maybeFinish(p.sid, p.rid).catch((e) => console.error('[capture] finish', e.message));
     } catch (e) { err(res, e); }
   });
@@ -291,9 +320,11 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       const cams = expectedCams(rec);
       if (!cams.every((c) => rec.cameras?.[c]?.file)) return;
       checking.add(`${sid}:${rid}`);
-      try { await validateTake(sid, rid, rec, cams); } finally { checking.delete(`${sid}:${rid}`); }
+      try { await (rec.kind === 'check' ? finishCheck(sid, rid, rec, cams) : validateTake(sid, rid, rec, cams)); }
+      finally { checking.delete(`${sid}:${rid}`); }
     });
   }
+  /** The checks, then — nobody reviews — saved (and selected if newest), or "needs redo" when a camera produced no usable video. */
   async function validateTake(sid, rid, rec, cams) {
       const v = await store.updateRecording(sid, rid, (r) => { r.state = 'validating'; r.validatingAt = new Date().toISOString(); });
       hub()?.takeUpdate(sid, v);
@@ -302,17 +333,110 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       // (outside the record's lock: the checks take seconds; what they learn is merged in after)
       const checked = structuredClone(rec);
       const validation = await validators.validate(checked, files, { cams });
+      const hard = validators.hardFailures(validation);
       const r2 = await store.updateRecording(sid, rid, (r) => {
         if (r.state !== 'validating') return;
-        r.validation = validation; r.state = 'review'; r.cams = cams;
+        r.validation = validation; r.cams = cams;
+        if (hard.length) { r.state = 'failed'; r.failReason = validators.reasonOf(hard); r.failedAt = new Date().toISOString(); }
+        else r.state = 'review';                             // checked: saved right below (settle() retries if that fails)
         if (checked.syncResult) r.syncResult = checked.syncResult;
         for (const c of cams) for (const k of ['fileInfo', 'motion']) if (checked.cameras?.[c]?.[k] && r.cameras?.[c]) r.cameras[c][k] = checked.cameras[c][k];
       });
-      hub()?.takeUpdate(sid, r2, { event: 'review' });
+      hub()?.takeUpdate(sid, r2, { event: r2.state === 'failed' ? 'failed' : 'checked' });
+      if (r2.state === 'failed') await noteResult(sid, r2);
+      else if (r2.state === 'review') await autoSave(sid, r2);
+  }
+  /** A camera check: did each camera produce real video? The verdict goes to session.cameraChecks (per device). */
+  async function finishCheck(sid, rid, rec, cams) {
+    const v = await store.updateRecording(sid, rid, (r) => { r.state = 'validating'; r.validatingAt = new Date().toISOString(); });
+    hub()?.takeUpdate(sid, v);
+    const part = CAMS.filter((c) => cams.includes(c) || (rec.finishedWithout || []).includes(c));
+    const result = {}, info = {};
+    for (const c of part) {
+      const cc = rec.cameras?.[c];
+      const abs = cc?.file ? await local(store.recordingPath(sid, rec, cc.file)) : null;
+      const pr = abs ? await media.probe(abs).catch((e) => ({ ok: false, error: e.message })) : null;
+      if (pr?.ok) info[c] = pr;
+      result[c] = validators.checkCamera(cc, pr);
+    }
+    const at = new Date().toISOString();
+    const r2 = await store.updateRecording(sid, rid, (r) => {
+      if (r.state !== 'validating') return;
+      r.state = 'checked'; r.result = result; r.cams = cams; r.checkedAt = at;
+      for (const c of Object.keys(info)) if (r.cameras?.[c]) r.cameras[c].fileInfo = info[c];
+    });
+    const s = await store.updateSession(sid, (s) => {
+      s.cameraChecks ||= {};
+      for (const [c, x] of Object.entries(result)) s.cameraChecks[c] = { checkId: rid, ...x, deviceId: rec.cameras?.[c]?.deviceId || s.devices?.[c]?.deviceId || null, at };
+    });
+    hub()?.disarm(sid, rid);
+    hub()?.takeUpdate(sid, r2, { event: 'checked' });
+    hub()?.broadcast(sid, { t: 'session', session: forCameras(s) });
+  }
+  /** A take's outcome in the session — what the animation list shows (failed with its reason, rejected). */
+  async function noteResult(sid, rec) {
+    const at = new Date().toISOString();
+    const s = await store.updateSession(sid, (s) => {
+      if (rec.kind === 'calibration') {
+        const c = (s.calibrations[rec.courtSetup] ||= { takes: [rec.id], current: null, status: 'missing' });
+        if (rec.state === 'failed') c.lastFailed = { id: rec.id, reason: rec.failReason || 'failed', at };
+        return;
+      }
+      if (rec.kind !== 'take') return;
+      const e = (s.animations[rec.animId] ||= { takes: [rec.id], selectedTake: null });
+      (e.results ||= {})[rec.id] = rec.state === 'failed' ? { state: 'failed', reason: rec.failReason || 'failed', at } : { state: rec.state, at };
+    });
+    hub()?.disarm(sid, rec.id);
+    hub()?.broadcast(sid, { t: 'session', session: forCameras(s) });
+    return s;
+  }
+  async function autoSave(sid, rec) {
+    try { await acceptRecording(sid, rec, { auto: true }); }
+    catch (e) { console.error('[capture] auto-save', rec.id, e.message); }   // stays checked ('review'): settle() saves it later
+  }
+  /**
+   * Move on what a restart (or a refused bucket write) left half-way — the newest take of each
+   * animation and each setup's newest calibration: a checked take whose save failed is saved, an
+   * outcome missing from the session is written, a stuck take is nudged, a take armed but never
+   * started (> 2 min) is discarded. In the background, at most every 4 s per session.
+   */
+  const settling = new Map();
+  function settle(sid) {
+    const last = settling.get(sid);
+    if (last && (last.running || Date.now() - last.at < 4000)) return;
+    const st = { running: true, at: Date.now() };
+    settling.set(sid, st);
+    (async () => {
+      const s = await store.loadSession(sid);
+      if (!s) return;
+      const ids = [];
+      for (const e of Object.values(s.animations || {})) { const id = e.takes?.[e.takes.length - 1]; if (id && !e.results?.[id]) ids.push(id); }
+      for (const c of Object.values(s.calibrations || {})) { const id = c.takes?.[c.takes.length - 1]; if (id && c.current !== id && c.lastFailed?.id !== id) ids.push(id); }
+      for (const id of ids) {
+        const rec = await store.loadRecording(sid, id).catch(() => null);
+        if (rec) await settleRec(sid, rec).catch((e) => console.error('[capture] settle', id, e.message));
+      }
+    })().catch((e) => console.error('[capture] settle', e.message)).finally(() => { st.running = false; st.at = Date.now(); });
+  }
+  async function settleRec(sid, rec) {
+    if (rec.state === 'review') {                            // checked, not saved (a restart, or the bucket refused)
+      const hard = validators.hardFailures(rec.validation);
+      if (!hard.length) return autoSave(sid, rec);
+      const r = await store.updateRecording(sid, rec.id, (x) => { if (x.state === 'review') { x.state = 'failed'; x.failReason = validators.reasonOf(hard); x.failedAt = new Date().toISOString(); } });
+      hub()?.takeUpdate(sid, r, { event: 'failed' });
+      return noteResult(sid, r);
+    }
+    if (rec.state === 'accepted') return acceptRecording(sid, rec, { auto: true });   // its session write was lost
+    if (rec.state === 'failed' || (rec.state === 'rejected' && rec.kind === 'take')) return noteResult(sid, rec);
+    if (rec.state === 'armed' && !Object.keys(rec.cameras || {}).length && Date.now() - Date.parse(rec.createdAt || 0) > 120000) {
+      const r = await store.updateRecording(sid, rec.id, (x) => { if (x.state === 'armed') { x.state = 'rejected'; x.rejectedAt = new Date().toISOString(); x.note = 'armed but never started'; } });
+      return noteResult(sid, r);
+    }
+    nudge(sid, rec);
   }
   /** A take that should move on but nothing is driving it (a restart mid-check / mid-finish). */
   const nudge = (sid, rec) => { if (['armed', 'recording', 'uploading', 'validating'].includes(rec.state) && !checking.has(`${sid}:${rec.id}`)) maybeFinish(sid, rec.id).catch((e) => console.error('[capture] finish', e.message)); };
-  // the director reviews what arrived when a camera stays away (e.g. its phone died mid-take)
+  // go on with what arrived when a camera stays away (e.g. its phone died mid-take)
   router.post('/api/capture/sessions/:sid/rec/:rid/finish', async (req, res, p) => {
     if (needDirector(req, res)) return;
     try {
@@ -384,46 +508,64 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
     } catch (e) { err(res, e); }
   });
 
-  // ── review: accept / retake / mark best / skip
+  // ── accept (the server does it by itself; the API stays) / discard / mark best / skip
+  /**
+   * SAVED: every file of the recording in the bucket, then its record says accepted, then the
+   * session's progress — only after all of it. A manual accept selects the take (unless
+   * select:false); the automatic one only when it is the animation's newest recorded take.
+   */
+  async function acceptRecording(sid, rec, { force = false, select, auto = false } = {}) {
+    // every file of the take in the bucket first (uploads are mirrored as they complete; this
+    // catches anything that was not) …
+    const dir = store.recDir(sid, rec.kind, rec.id);
+    for (const c of CAMS) {
+      const cc = rec.cameras?.[c]; if (!cc) continue;
+      for (const [f, done] of [[cc.file, cc.mirrored], [cc.file && cc.framesFile, cc.mirrored], [cc.native?.file, cc.native?.mirrored]]) {
+        if (!f || (done && cloud.available())) continue;
+        if (!plainName(f)) continue;
+        const abs = path.join(dir, f);
+        if (fs.existsSync(abs)) await store.mirror(abs);
+        else if (!done) throw Object.assign(new Error(`${f} is missing on the server — record it again`), { status: 409 });
+      }
+    }
+    // … then the record says accepted (mirrored; on failure the local copy goes back) …
+    const saved = await store.updateRecording(sid, rec.id, (r) => { r.state = 'accepted'; r.accepted = true; r.acceptedAt ||= new Date().toISOString(); r.forced = !!force && !rec.validation?.ok; if (auto) r.autoSaved = true; });
+    // … then the session's progress. SAVED only after all of it.
+    const at = new Date().toISOString();
+    const s = await store.updateSession(sid, (s) => {
+      if (rec.kind === 'calibration') {
+        const c = (s.calibrations[rec.courtSetup] ||= { takes: [rec.id], current: null });
+        c.current = rec.id; c.status = 'valid'; c.acceptedAt = at; delete c.suspectReason; delete c.lastFailed;
+        s.currentSetup = rec.courtSetup;
+      } else {
+        const e = (s.animations[rec.animId] ||= { takes: [rec.id], selectedTake: null });
+        const i = (id) => e.takes.indexOf(id);
+        if (auto ? (!e.selectedTake || i(e.selectedTake) < i(rec.id)) : (!e.selectedTake || select !== false)) e.selectedTake = rec.id;
+        (e.results ||= {})[rec.id] = {
+          state: 'recorded', at, cams: CAMS.filter((c) => saved.cameras?.[c]?.file),
+          durations: Object.fromEntries(CAMS.filter((c) => saved.cameras?.[c]?.fileInfo?.durationSec).map((c) => [c, saved.cameras[c].fileInfo.durationSec])),
+          warnings: (saved.validation?.checks || []).filter((c) => c.level !== 'ok').map((c) => c.msg).slice(0, 4),
+        };
+        e.skipped = false;
+      }
+    });
+    if (rec.kind === 'take') await markSelected(sid, s.animations[rec.animId]);
+    hub()?.disarm(sid, rec.id);
+    hub()?.takeUpdate(sid, saved, { event: 'saved' });
+    hub()?.broadcast(sid, { t: 'session', session: forCameras(s) });
+    // a saved calibration: each camera keeps what it sees now as the reference (moved-camera check)
+    if (rec.kind === 'calibration') hub()?.broadcast(sid, { t: 'setref', setup: rec.courtSetup, from: 'server' }, { roles: CAMS });
+    return { saved, session: s };
+  }
   router.post('/api/capture/sessions/:sid/rec/:rid/accept', async (req, res, p) => {
     if (needDirector(req, res)) return;
     try {
       const b = await body(req);
       const rec = await recOr404(res, p.sid, p.rid); if (!rec) return;
-      if (rec.state !== 'review' && rec.state !== 'accepted') return json(res, { error: `the take is ${rec.state} — wait for the upload + checks` }, 409);
+      if (rec.kind === 'check') return json(res, { error: 'a camera check is not a take' }, 409);
+      if (!['review', 'accepted', 'failed'].includes(rec.state)) return json(res, { error: `the take is ${rec.state} — wait for the upload + checks` }, 409);
       if (!rec.validation?.ok && !b.force) return json(res, { error: 'the checks failed — accept anyway with force', validation: rec.validation }, 409);
-      // every file of the take in the bucket first (uploads are mirrored as they complete; this
-      // catches anything that was not) …
-      const dir = store.recDir(p.sid, rec.kind, rec.id);
-      for (const c of CAMS) {
-        const cc = rec.cameras?.[c]; if (!cc) continue;
-        for (const [f, done] of [[cc.file, cc.mirrored], [cc.file && cc.framesFile, cc.mirrored], [cc.native?.file, cc.native?.mirrored]]) {
-          if (!f || (done && cloud.available())) continue;
-          if (!plainName(f)) continue;
-          const abs = path.join(dir, f);
-          if (fs.existsSync(abs)) await store.mirror(abs);
-          else if (!done) throw Object.assign(new Error(`${f} is missing on the server — record a retake`), { status: 409 });
-        }
-      }
-      // … then the record says accepted (mirrored; on failure the local copy goes back) …
-      const saved = await store.updateRecording(p.sid, p.rid, (r) => { r.state = 'accepted'; r.accepted = true; r.acceptedAt ||= new Date().toISOString(); r.forced = !!b.force && !rec.validation?.ok; });
-      // … then the session's progress. SAVED only after all of it.
-      const s = await store.updateSession(p.sid, (s) => {
-        if (rec.kind === 'calibration') {
-          const c = (s.calibrations[rec.courtSetup] ||= { takes: [], current: null });
-          c.current = rec.id; c.status = 'valid'; c.acceptedAt = new Date().toISOString(); delete c.suspectReason;
-          s.currentSetup = rec.courtSetup;
-        } else {
-          const e = (s.animations[rec.animId] ||= { takes: [rec.id], selectedTake: null });
-          if (!e.selectedTake || b.select !== false) e.selectedTake = rec.id;
-          e.skipped = false;
-          s.currentSetup = rec.courtSetup;
-        }
-      });
-      if (rec.kind === 'take') await markSelected(p.sid, s.animations[rec.animId]);
-      hub()?.disarm(p.sid, p.rid);
-      hub()?.takeUpdate(p.sid, saved, { event: 'saved' });
-      hub()?.broadcast(p.sid, { t: 'session', session: forCameras(s) });
+      const { saved, session: s } = await acceptRecording(p.sid, rec, { force: !!b.force, select: b.select });
       const { P } = await libraries(), L = await libOf(s);
       json(res, { saved: true, cloud: cloud.available(), take: saved, progress: P.progress(L, s, { after: rec.animId || null }) });
     } catch (e) { err(res, e); }
@@ -440,6 +582,7 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
     if (needDirector(req, res)) return;
     try {
       const r = await store.updateRecording(p.sid, p.rid, (r) => { if (r.state !== 'accepted') { r.state = 'rejected'; r.rejectedAt = new Date().toISOString(); } });
+      if (r.state === 'rejected') await noteResult(p.sid, r);
       hub()?.disarm(p.sid, p.rid);
       hub()?.takeUpdate(p.sid, r, { event: 'rejected' });
       json(res, { take: r });
@@ -572,6 +715,18 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       const job = await processing.start(b.processor || 'sam3dbody', { sessionId: p.sid, take: rec, cam, fps: b.fps, maxFrames: b.maxFrames, start: b.start, end: b.end, confirmCostUsd: b.confirmCostUsd, TMP_DIR, role: typeof b.role === 'string' ? b.role : null });
       json(res, { job });
     } catch (e) { err(res, e); }
+  });
+  // the analysis queue: the director sends recorded takes with an explicit cost confirmation
+  router.post('/api/capture/sessions/:sid/process-batch', async (req, res, p) => {
+    if (needDirector(req, res)) return;
+    try {
+      const b = await body(req);
+      json(res, await queue.enqueue(p.sid, { takes: b.takes, cam: b.cam, fps: b.fps, confirmCostUsd: b.confirmCostUsd }));
+    } catch (e) { if (e.status === 402) return json(res, { error: e.message, ...(e.extra || {}) }, 402); err(res, e); }
+  });
+  router.get('/api/capture/sessions/:sid/analysis', async (req, res, p) => {
+    if (needDirector(req, res)) return;
+    try { json(res, await queue.status(p.sid)); } catch (e) { err(res, e); }
   });
   router.get('/api/capture/jobs/:jid', async (req, res, p) => {
     if (needDirector(req, res)) return;

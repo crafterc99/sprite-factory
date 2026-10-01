@@ -35,19 +35,37 @@ export const SCHEMA_VERSION = 1;
 
 /** Canonical body states. */
 export const STATES = {
-  N: { name: 'Neutral athletic stance', group: 'neutral' },
-  TR: { name: 'Triple threat, ball right', group: 'triple', hand: 'R' },
-  TL: { name: 'Triple threat, ball left', group: 'triple', hand: 'L' },
-  DR: { name: 'Stationary dribble, right hand', group: 'dribble', hand: 'R' },
-  DL: { name: 'Stationary dribble, left hand', group: 'dribble', hand: 'L' },
-  MR: { name: 'Moving dribble, right hand', group: 'moving', hand: 'R' },
-  ML: { name: 'Moving dribble, left hand', group: 'moving', hand: 'L' },
-  G: { name: 'Two-hand gather / shooting pocket', group: 'gather', hand: 'both' },
-  DEF: { name: 'Defensive stance', group: 'defense' },
-  DEF_M: { name: 'Defensive locomotion', group: 'defense' },
-  LAND: { name: 'Balanced landing (resolves to N)', group: 'landing', resolves: 'N' },
-  N_SPRINT: { name: 'Sprinting, no ball', group: 'neutral' },
+  N: { name: 'Neutral athletic stance', short: 'Stance', group: 'neutral' },
+  TR: { name: 'Triple threat, ball right', short: 'Triple threat R', group: 'triple', hand: 'R' },
+  TL: { name: 'Triple threat, ball left', short: 'Triple threat L', group: 'triple', hand: 'L' },
+  DR: { name: 'Stationary dribble, right hand', short: 'Dribble R', group: 'dribble', hand: 'R' },
+  DL: { name: 'Stationary dribble, left hand', short: 'Dribble L', group: 'dribble', hand: 'L' },
+  MR: { name: 'Moving dribble, right hand', short: 'Moving dribble R', group: 'moving', hand: 'R' },
+  ML: { name: 'Moving dribble, left hand', short: 'Moving dribble L', group: 'moving', hand: 'L' },
+  G: { name: 'Two-hand gather / shooting pocket', short: 'Gather', group: 'gather', hand: 'both' },
+  DEF: { name: 'Defensive stance', short: 'Defense stance', group: 'defense' },
+  DEF_M: { name: 'Defensive locomotion', short: 'Defensive slide', group: 'defense' },
+  LAND: { name: 'Balanced landing (resolves to N)', short: 'Landing', group: 'landing', resolves: 'N' },
+  N_SPRINT: { name: 'Sprinting, no ball', short: 'Sprint', group: 'neutral' },
 };
+/** "Triple threat R → Dribble L" — an animation's start → finish pose in a few words (lists). */
+export const poseRoute = (a) => `${[].concat(a.startState).map((s) => STATES[s]?.short || s).join(' / ')} → ${STATES[a.endState]?.short || a.endState}`;
+/** Each state in plain words (the director's START / FINISH instructions). */
+export const POSES = {
+  N: 'Athletic stance: feet shoulder-width apart, knees soft, hands relaxed, facing the hoop.',
+  TR: 'Triple threat: ball on the right hip in both hands, knees bent, facing the hoop.',
+  TL: 'Triple threat: ball on the left hip in both hands, knees bent, facing the hoop.',
+  DR: 'Dribbling in place with the right hand, knees bent, eyes up, facing the hoop.',
+  DL: 'Dribbling in place with the left hand, knees bent, eyes up, facing the hoop.',
+  MR: 'Jogging while dribbling with the right hand.',
+  ML: 'Jogging while dribbling with the left hand.',
+  G: 'Ball in both hands in the shooting pocket, knees bent, ready to shoot.',
+  DEF: 'Defensive stance: low, feet wide, hands up and active, no ball.',
+  DEF_M: 'Sliding in a low defensive stance, feet never crossing.',
+  LAND: 'Landed on both feet, balanced and still — then stand relaxed.',
+  N_SPRINT: 'Running at full speed, no ball.',
+};
+
 /** Order the operator works through body states in (camera setup first, then this). */
 export const STATE_ORDER = ['N', 'TR', 'TL', 'DR', 'DL', 'MR', 'ML', 'G', 'DEF', 'DEF_M', 'N_SPRINT', 'LAND'];
 export const HAND_ORDER = ['R', 'L', 'both', 'none'];

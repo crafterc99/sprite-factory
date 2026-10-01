@@ -194,3 +194,127 @@ test('camera moved: a nudged camera is detected; a player walking through the vi
   assert.strictEqual(WebCamera.compare(ref, scene(3, 0, null)).moved, true, 'camera nudged 3 px');
   assert.strictEqual(WebCamera.compare(ref, scene(0, 0, null)).moved, false, 'nothing changed');
 });
+
+test('recorder format: WebKit (iPhone / iPad / Safari) records MP4 first; Chromium WebM first; a UA check that knows iPadOS', async () => {
+  const { pickMime, isWebKit, mimeCandidates } = await import('../capture/camera.mjs');
+  const all = () => true;
+  assert.match(pickMime({ webkit: true, supported: all }), /^video\/mp4/);
+  assert.match(pickMime({ webkit: false, supported: all }), /^video\/webm/);
+  // an iPhone that also claims VP9 WebM still gets MP4 (it recorded 5 bytes of WebM)
+  assert.strictEqual(pickMime({ webkit: true, supported: (m) => m === 'video/webm;codecs=vp9,opus' || m === 'video/mp4' }), 'video/mp4');
+  assert.strictEqual(pickMime({ webkit: true, supported: (m) => m.startsWith('video/webm') }), 'video/webm;codecs=h264,opus', 'WebM only when there is no MP4');
+  assert.ok(mimeCandidates(true).indexOf('video/mp4') < mimeCandidates(true).indexOf('video/webm'));
+  // a format the device recorded nothing with (while frames arrived) is passed over — but never the last one it has
+  assert.strictEqual(pickMime({ webkit: false, supported: all, bad: new Set(['video/webm;codecs=h264,opus']) }), 'video/webm;codecs=vp9,opus');
+  assert.strictEqual(pickMime({ webkit: true, supported: (m) => m === 'video/mp4', bad: new Set(['video/mp4']) }), 'video/mp4');
+  const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Mobile/15E148 Safari/604.1';
+  const ipadDesktop = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15';
+  const chromeMac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+  const chromeIos = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0 Mobile/15E148 Safari/604.1';
+  assert.deepStrictEqual([isWebKit(iphone, 5), isWebKit(ipadDesktop, 5), isWebKit(ipadDesktop, 0), isWebKit(chromeMac, 0), isWebKit(chromeIos, 5)], [true, true, true, false, true]);
+});
+
+test('recording health: the iPhone case (5 bytes, no frames), a hidden page, a paused preview with real data, Safari holding its data until the stop', async () => {
+  const { recordingProblem } = await import('../capture/camera.mjs');
+  assert.match(recordingProblem({ chunks: 1, bytes: 5, frames: 0, elapsedMs: 1600 }), /only 5 bytes/);
+  assert.match(recordingProblem({ hidden: true, chunks: 1, bytes: 90000, frames: 30, elapsedMs: 1600 }), /background/);
+  assert.match(recordingProblem({ muted: true, chunks: 1, bytes: 90000, frames: 30 }), /no picture/);
+  assert.match(recordingProblem({ trackState: 'ended' }), /stopped/);
+  assert.match(recordingProblem({ error: 'NotSupportedError' }), /recorder failed/);
+  assert.strictEqual(recordingProblem({ chunks: 1, bytes: 90000, frames: 0, elapsedMs: 1600 }), null, 'data streaming, preview paused: not an error');
+  assert.strictEqual(recordingProblem({ chunks: 0, bytes: 0, frames: 45, elapsedMs: 1600 }), null, 'Safari: frames, the data comes at the stop');
+  assert.match(recordingProblem({ chunks: 0, bytes: 0, frames: 0, elapsedMs: 3200 }), /no video frames and no data/);
+  assert.match(recordingProblem({ chunks: 0, bytes: 0, frames: 60, final: true, elapsedMs: 2000 }), /no data/);
+  assert.match(recordingProblem({ chunks: 2, bytes: 9000, frames: 60, final: true, elapsedMs: 2000 }), /only 9000 bytes/);
+  assert.strictEqual(recordingProblem({ chunks: 0, bytes: 0, final: true, elapsedMs: 200 }), null, 'a STOP right after RECORD is not a camera problem');
+  assert.strictEqual(recordingProblem({ chunks: 2, bytes: 400000, frames: 60, final: true, elapsedMs: 2000 }), null);
+  // Safari's first chunk can be only the file header: not an alarm while frames arrive — but it is from 3 s on
+  assert.strictEqual(recordingProblem({ chunks: 1, bytes: 1200, frames: 40, elapsedMs: 1600 }), null);
+  assert.match(recordingProblem({ chunks: 3, bytes: 1200, frames: 90, elapsedMs: 3200 }), /only 1200 bytes/);
+  assert.match(recordingProblem({ chunks: 1, bytes: 5, frames: 0, rvfc: false, elapsedMs: 1600 }), /only 5 bytes/, 'no frame counter: the bytes alone');
+  assert.strictEqual(recordingProblem({ chunks: 1, bytes: 3000, frames: 5, final: true, elapsedMs: 300 }), null, 'a CANCEL right after the start is not a camera problem');
+});
+
+test('camera check verdict: real video passes; 5 bytes / no decode / no frames / nothing arrived fail with the reason; what the camera said is kept apart', async () => {
+  const ok = validators.checkCamera({ file: 'camA.webm', bytes: 900000, frames: { frames: 60, fps: 30 } }, { ok: true, durationSec: 2.01, fps: 30, width: 1280, height: 720 });
+  assert.strictEqual(ok.ok, true);
+  assert.strictEqual(ok.reason, null);
+  const bad = validators.checkCamera({ file: 'camB.webm', bytes: 5, frames: { frames: 0 }, recError: 'the recorder produced only 5 bytes' }, { ok: false });
+  assert.strictEqual(bad.ok, false);
+  assert.match(bad.reason, /only 5 bytes · the video does not decode · no video frames/);
+  assert.strictEqual(bad.cameraSaid, 'the recorder produced only 5 bytes');
+  assert.match(validators.checkCamera(undefined, null).reason, /no recording arrived/);
+  assert.match(validators.checkCamera({ file: 'x.webm', bytes: 60000 }, { ok: true, durationSec: 0.3 }).reason, /only 0.3 s/);
+  // a browser that can't count frames (no requestVideoFrameCallback): the decoded file decides
+  assert.strictEqual(validators.checkCamera({ file: 'camB.mp4', bytes: 800000, frames: { frames: 0 }, recorder: { rvfc: false } }, { ok: true, durationSec: 2 }).ok, true);
+  assert.strictEqual(validators.checkCamera({ file: 'camB.mp4', bytes: 800000, frames: { frames: 0 }, recorder: { rvfc: true } }, { ok: true, durationSec: 2 }).ok, false);
+  // hard failures (needs redo) vs warnings
+  const hard = validators.hardFailures({ checks: [{ id: 'decode-camB', level: 'fail', msg: 'x' }, { id: 'fps-camA', level: 'fail', msg: 'y' }, { id: 'file-camA', level: 'ok', msg: 'z' }, { id: 'duration-match', level: 'warn', msg: 'w' }] });
+  assert.deepStrictEqual(hard.map((c) => c.id), ['decode-camB']);
+});
+
+test('slot status + the next animation to record: uploading, recorded (newest selected), failed (needs redo), analysed; recorded / uploading slots are passed over', async () => {
+  const { BASIC01 } = await L, p = await P;
+  const o = p.captureOrder(BASIC01), [a0, a1, a2, a3] = o;
+  const s = { animations: {
+    [a0.id]: { takes: ['t1'], selectedTake: null },                                                        // in flight
+    [a1.id]: { takes: ['t2', 't3'], selectedTake: 't2', results: { t2: { state: 'recorded' }, t3: { state: 'failed', reason: 'camB: 5 bytes' } } },
+    [a2.id]: { takes: ['t4'], selectedTake: null, results: { t4: { state: 'failed', reason: 'camB: file is only 5 bytes' } } },
+    [a3.id]: { takes: ['t5'], selectedTake: 't5', results: { t5: { state: 'recorded' } }, analysis: { takeId: 't5', state: 'done', motionId: 'mo-x' } },
+  } };
+  assert.strictEqual(p.slotStatus(s, a0.id).status, 'uploading');
+  assert.deepStrictEqual([p.slotStatus(s, a1.id).status, p.slotStatus(s, a1.id).takeId], ['recorded', 't2']);
+  assert.match(p.slotStatus(s, a1.id).note, /newest take failed/);
+  assert.deepStrictEqual([p.slotStatus(s, a2.id).status, p.slotStatus(s, a2.id).reason], ['failed', 'camB: file is only 5 bytes']);
+  assert.strictEqual(p.slotStatus(s, a3.id).status, 'analysed');
+  assert.strictEqual(p.slotStatus(s, o[4].id).status, 'missing');
+  const n = p.slotCounts(BASIC01, s);
+  assert.deepStrictEqual([n.uploading, n.recorded, n.failed, n.analysed, n.done, n.toRecord], [1, 1, 1, 1, 2, 79]);
+  assert.strictEqual(p.nextToRecord(BASIC01, s).id, a2.id, 'the first one to (re)do');
+  assert.strictEqual(p.nextToRecord(BASIC01, s, { after: a2.id }).id, o[4].id, 'on after the one just recorded');
+  assert.strictEqual(p.nextToRecord(BASIC01, s, { after: o[81].id }).id, a2.id, 'wraps');
+  // a redo in flight on a recorded slot
+  s.animations[a3.id].takes.push('t6');
+  assert.deepStrictEqual([p.slotStatus(s, a3.id).status, p.slotStatus(s, a3.id).redo], ['uploading', true]);
+  assert.strictEqual(p.autoStopSec(a0), a0.durationSec, 'a loop stops on time');
+  assert.strictEqual(p.autoStopSec(BASIC01.animations.find((a) => a.key === 'cross_RL')), 5, 'a one-shot gets 1 s more');
+});
+
+test('court diagram for the record step: START + FINISH markers, the path, a focused view; stationary moves share one spot', async () => {
+  const c = await C, { BASIC01 } = await L;
+  const drive = BASIC01.animations.find((a) => a.key === 'jab_drive_R');
+  const svg = c.courtSVG('B', drive, { focus: true, cameras: false });
+  assert.match(svg, />START</); assert.match(svg, />FINISH</);
+  assert.ok(!/>A<\/text>/.test(svg), 'no cameras when asked');
+  const vb = svg.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
+  assert.ok(vb[2] < 316 && vb[2] >= 160, `focused (${vb[2]} of 316 wide)`);
+  const cross = c.courtSVG('A', BASIC01.animations.find((a) => a.key === 'cross_RL'));
+  assert.match(cross, /START \+ FINISH/);
+  assert.match(c.courtSVG('A'), />A<\/text>[\s\S]*>B<\/text>/, 'the setup view shows both cameras');
+});
+
+test('pose descriptions: every state has plain words and a short name; the list shows start → finish in words', async () => {
+  const s = await S, { BASIC01 } = await L;
+  for (const k of Object.keys(s.STATES)) assert.ok(s.POSES[k] && s.POSES[k].length > 20 && s.STATES[k].short, k);
+  assert.match(s.POSES.TR, /right hip/);
+  assert.strictEqual(s.poseRoute(BASIC01.animations.find((a) => a.key === 'cross_RL')), 'Dribble R → Dribble L');
+  for (const a of BASIC01.animations) assert.ok(!/\b(TR|TL|DR|DL|MR|ML|DEF_M|N_SPRINT)\b/.test(s.poseRoute(a)), a.key);
+});
+
+test('calibration walk: four corners numbered front-left → front-right → back-right → back-left (as he faces the hoop), and the middle; the diagram draws it instead of START / FINISH', async () => {
+  const c = await C;
+  for (const id of ['A', 'B', 'C']) {
+    const w = c.calibrationWalk(id), ar = c.SETUPS[id].player.area;
+    assert.deepStrictEqual(w.corners.map((x) => x.n), [1, 2, 3, 4]);
+    assert.strictEqual(new Set(w.corners.map((x) => x.pos.join())).size, 4, `${id}: four different corners`);
+    for (const x of w.corners) assert.ok(ar.x.includes(x.pos[0]) && ar.y.includes(x.pos[1]), `${id}: ${x.name} is a corner of the area`);
+    // 1 and 2 are the front (toward the hoop): nearer the basket than 3 and 4
+    const d = (p) => Math.hypot(p[0] - c.COURT.basket[0], p[1] - c.COURT.basket[1]);
+    assert.ok(Math.max(d(w.corners[0].pos), d(w.corners[1].pos)) < Math.min(d(w.corners[2].pos), d(w.corners[3].pos)), `${id}: front corners nearer the hoop`);
+    const svg = c.courtSVG(id, null, { calibration: true, highlight: 2 });
+    assert.ok(['>1<', '>2<', '>3<', '>4<', '>✕<'].every((x) => svg.includes(x)) && !/START|FINISH/.test(svg), id);
+    assert.match(svg, /#ffd166/, 'the current corner is lit');
+  }
+  // setup A: he faces the baseline, so his left is +x
+  assert.deepStrictEqual(c.calibrationWalk('A').corners[0].pos, [2.6, 4.4]);
+});

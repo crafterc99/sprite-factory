@@ -3069,3 +3069,40 @@ None. All terminals are clear. Human decision required to begin next phase.
     - Jump shot released at frame 27, apex 5.16 m, swish. Between-the-legs shot released at frame 60, swish.
     - Hands at least 1 mm clear of the ball on every frame (0 frames > 3 mm), including 0.25× idle close-ups.
 - Not yet: the shot meter and right-stick moves are in progress (the plan is done; implementation was cut off by the session limit).
+
+## CAPTURE-02 — Soul Jam Capture redesigned after the user's real-device test (iPad + iPhone)
+- Status: NEEDS_REVIEW. Committed on the deploy-capture branch only: not pushed, not deployed.
+- Files changed:
+  - capture/app.mjs, capture.html, camera.mjs, court-layout.mjs, schema.mjs, protocol.mjs
+  - lib/capture/analysis.js (new), hub.js, store.js, validators.js, processing.js
+  - routes/capture.js, server.js (boot hook)
+  - tests/capture.test.js, tests/capture-server.test.js, tests/capture-e2e.spec.js
+  - docs/capture.md
+- What:
+  - The director works in steps: 1 Connect · 2 Calibrate · 3 Record · Animations · Analysis.
+    - Connect: live pictures from both cameras (a small JPEG relayed to the director only), and a
+      2 s camera check per phone (a `check` kind, never a take).
+    - Calibrate: why it matters, a numbered corner walk, 10 s, saves itself.
+    - Record: START/FINISH diagram, poses and protocol; 3-2-1 → it stops by itself → straight on to
+      the next animation, with checks in the background and Redo.
+    - Animations: all 82 slots with their status.
+    - Analysis: nothing automatic; process-batch with a cost confirmation, a persisted one-at-a-time
+      queue that resumes after a restart.
+  - The iPhone fix:
+    - WebKit records MP4 first;
+    - a health check reports "CAM B is not recording" within ~2 s;
+    - the wake lock and the preview are kept running;
+    - a format that records nothing is skipped from then on.
+  - The 60 fps cap of iOS browsers is stated honestly, with the slo-mo file path.
+  - CANCEL before the cameras start discards the take.
+  - The director never applies an older session over a newer one (a GET answered while a write was
+    being mirrored could undo a WebSocket update).
+- Validation:
+  - npm test 100/100, run twice;
+  - tests/capture-e2e.spec.js 59/59, run twice;
+  - screenshots of every step checked at 1180×820, 820×1180, 390×844 and 844×390.
+- Assumptions:
+  - The iPhone's 5-byte take came from the camera delivering no frames (page hidden or paused):
+    the iPad recorded the same WebM/VP9 fine.
+  - Not verified on a real iPhone yet.
+- Next: a real iPhone + iPad session on this build, then merge to main / deploy (the user's call).

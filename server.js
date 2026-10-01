@@ -891,6 +891,7 @@ if (require.main === module) {
     captureHub.hub.attach(server);
     require('./lib/capture/lan').start(safeHandler, { hub: captureHub.hub, dir: path.join(__dirname, 'data', 'capture', 'certs') });
     server.listen(PORT, () => {
+      captureHub.onBoot?.();                       // Soul Jam Capture: resume a queued analysis after a restart
       const { CHARACTERS } = require('./lib/sprite-generator/prompts');
       console.log(`\n  Sprite Production Studio running at http://localhost:${PORT}\n`);
       console.log(`  Characters: ${Object.keys(CHARACTERS).join(', ')}`);

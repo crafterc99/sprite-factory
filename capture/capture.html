@@ -7,172 +7,475 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Soul Jam Capture</title>
 <style>
-  :root { --bg:#0d0d14; --panel:#171724; --line:#2b2b40; --txt:#e8e8f2; --dim:#9a9ab2; --ok:#3ddc84; --warn:#ffb020; --bad:#ff4d4f; --rec:#ff2d3d; --acc:#ff6a1a; --a:#3d7bff; --b:#b04dff; }
+  :root {
+    --bg:#0d0d14; --panel:#161622; --panel2:#1d1d2d; --line:#2c2c44; --txt:#ececf5; --dim:#a0a0b8; --faint:#6e6e88;
+    --ok:#3ddc84; --warn:#ffb020; --bad:#ff5a5f; --rec:#ff2d3d; --acc:#ff6a1a; --a:#4d8bff; --b:#b45cff; --start:#3ddc84; --finish:#ff8a3d;
+    --r:16px; --gut:16px;
+  }
   * { box-sizing:border-box; }
-  html, body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-text-size-adjust:100%; }
-  body { min-height:100vh; padding: env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 16px); }
-  button { font:inherit; color:var(--txt); background:#22223a; border:1px solid var(--line); border-radius:12px; padding:10px 14px; cursor:pointer; }
-  button:disabled { opacity:0.4; cursor:not-allowed; }
-  button.pri { background:var(--acc); border-color:var(--acc); color:#140a02; font-weight:800; }
+  html, body { margin:0; background:var(--bg); color:var(--txt); font:16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust:100%; }
+  body { min-height:100vh; padding:0 0 calc(env(safe-area-inset-bottom) + 24px); overflow-x:hidden; }
+  button { font:inherit; color:var(--txt); background:#24243a; border:1px solid var(--line); border-radius:12px; padding:11px 16px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  button:disabled { opacity:0.38; cursor:not-allowed; }
+  button.pri { background:var(--acc); border-color:var(--acc); color:#170a02; font-weight:800; }
   button.ok { background:var(--ok); border-color:var(--ok); color:#06210f; font-weight:800; }
-  button.bad { background:#3a1418; border-color:var(--bad); color:#ffd6d8; font-weight:700; }
+  button.bad { background:#3a1418; border-color:var(--bad); color:#ffd6d8; font-weight:800; }
   button.ghost { background:transparent; }
+  button.link { background:none; border:none; padding:4px 2px; color:#8ec0ff; text-decoration:underline; }
+  button.small { padding:7px 11px; font-size:14px; border-radius:10px; }
   input, select { font:inherit; color:var(--txt); background:#12121e; border:1px solid var(--line); border-radius:10px; padding:10px; }
-  a { color:#7fb6ff; }
-  header { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 0 8px; }
-  header h1 { font-size:15px; letter-spacing:2px; margin:0; flex:1; font-weight:900; }
-  .pill { display:inline-flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 10px; font-size:13px; font-weight:700; white-space:nowrap; }
-  .dot { width:10px; height:10px; border-radius:50%; background:#555; }
+  a { color:#8ec0ff; }
+  h2, h3, h4 { margin:0; }
+  .hidden { display:none !important; }
+  .dim { color:var(--dim); } .faint { color:var(--faint); } .small { font-size:14px; } .tiny { font-size:12.5px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .grow { flex:1; min-width:0; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:16px; margin:12px 0; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#555; flex:none; }
   .dot.ok { background:var(--ok); box-shadow:0 0 8px var(--ok); } .dot.warn { background:var(--warn); } .dot.bad { background:var(--bad); } .dot.rec { background:var(--rec); box-shadow:0 0 10px var(--rec); }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; margin:10px 0; }
-  .dim { color:var(--dim); } .small { font-size:12.5px; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-  .grow { flex:1; }
-  .setup { font-weight:900; letter-spacing:1px; }
-  .bar { height:8px; background:#23233a; border-radius:8px; overflow:hidden; } .bar > i { display:block; height:100%; background:var(--ok); }
-  .anim-title { font-size:34px; line-height:1.02; font-weight:900; letter-spacing:0.5px; margin:6px 0 0; }
-  .anim-sub { font-size:22px; font-weight:800; color:#ffd166; margin:2px 0 8px; }
-  .facts { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:6px 12px; font-size:14px; }
-  .facts b { font-weight:800; }
-  .state { display:inline-block; padding:2px 8px; border-radius:8px; background:#2a2a44; font-weight:900; letter-spacing:0.5px; }
-  .big { width:100%; font-size:24px; padding:22px; border-radius:18px; letter-spacing:1px; }
-  .timer { font-size:72px; font-weight:900; text-align:center; font-variant-numeric:tabular-nums; }
-  .recframe { border:3px solid var(--rec); border-radius:18px; }
-  .checks div { padding:2px 0; font-size:14px; } .checks .ok::before { content:'✓ '; color:var(--ok); } .checks .warn::before { content:'! '; color:var(--warn); font-weight:900; } .checks .fail::before { content:'✗ '; color:var(--bad); font-weight:900; }
-  .saved { font-size:40px; font-weight:900; color:var(--ok); text-align:center; padding:18px; }
-  .vids { display:grid; grid-template-columns:1fr 1fr; gap:6px; } .vids video { width:100%; border-radius:10px; background:#000; }
-  .pv { position:relative; margin-top:8px; } .pv video { width:100%; border-radius:12px; background:#000; display:block; max-height:22vh; object-fit:contain; }
-  /* the action the operator needs next is always on screen */
-  .sticky { position:sticky; bottom: calc(env(safe-area-inset-bottom) + 8px); z-index:4; }
-  #recordBox.sticky { padding-top:8px; background:linear-gradient(to top, var(--bg) 70%, transparent); }
-  .actions { position:sticky; bottom: calc(env(safe-area-inset-bottom) + 8px); background:var(--panel); padding-top:8px; }
-  .pv .tag { position:absolute; left:8px; top:8px; }
-  .court svg { border-radius:12px; }
-  .cues li { margin:2px 0; }
-  details > summary { cursor:pointer; font-weight:700; padding:4px 0; }
-  .qr svg { width:220px; height:220px; background:#fff; border-radius:12px; padding:6px; }
-  .code { font-size:34px; font-weight:900; letter-spacing:6px; font-variant-numeric:tabular-nums; }
-  .list > div { display:flex; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
-  .banner { background:#3a2a05; border:1px solid var(--warn); color:#ffe2a8; border-radius:12px; padding:10px 12px; margin:8px 0; font-weight:700; }
+  .pill { display:inline-flex; align-items:center; gap:7px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 11px; font-size:13px; font-weight:700; white-space:nowrap; }
+  .chip { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px; font-size:13px; font-weight:800; white-space:nowrap; background:#26263b; color:var(--dim); border:1px solid transparent; }
+  .chip.ok { background:rgba(61,220,132,0.14); color:var(--ok); border-color:rgba(61,220,132,0.35); }
+  .chip.warn { background:rgba(255,176,32,0.14); color:var(--warn); border-color:rgba(255,176,32,0.35); }
+  .chip.bad { background:rgba(255,90,95,0.14); color:#ff8a8e; border-color:rgba(255,90,95,0.4); }
+  .chip.rec { background:rgba(255,45,61,0.18); color:#ff6b77; border-color:rgba(255,45,61,0.45); }
+  .chip.info { background:rgba(77,139,255,0.14); color:#8fb4ff; border-color:rgba(77,139,255,0.35); }
+  .chip.done { background:rgba(180,92,255,0.16); color:#d3a6ff; border-color:rgba(180,92,255,0.4); }
+  .banner { background:#3a2a05; border:1px solid var(--warn); color:#ffe2a8; border-radius:12px; padding:11px 14px; margin:10px 0; font-weight:700; }
   .banner.bad { background:#3a1418; border-color:var(--bad); color:#ffd6d8; }
-  /* camera mode */
+  .banner.ok { background:#10261a; border-color:rgba(61,220,132,0.55); color:#c8f5dc; }
+  .banner button { margin-left:6px; }
+
+  /* ── director: header + stepper */
+  header.top { position:sticky; top:0; z-index:20; background:rgba(13,13,20,0.94); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border-bottom:1px solid var(--line); padding:calc(env(safe-area-inset-top) + 8px) var(--gut) 8px; display:grid; grid-template-columns:auto 1fr auto; gap:8px 14px; align-items:center; }
+  .brand { font-weight:900; letter-spacing:2px; font-size:14px; white-space:nowrap; }
+  .brand b { color:var(--acc); }
+  nav.steps { display:flex; gap:4px; justify-content:center; overflow-x:auto; scrollbar-width:none; }
+  nav.steps::-webkit-scrollbar { display:none; }
+  nav.steps button { display:inline-flex; align-items:center; gap:7px; background:transparent; border:1px solid transparent; border-radius:999px; padding:8px 12px; color:var(--dim); font-weight:750; font-size:15px; white-space:nowrap; flex:none; }
+  nav.steps button i { font-style:normal; display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%; background:#2a2a42; color:var(--dim); font-size:12.5px; font-weight:900; }
+  nav.steps button.on { background:var(--panel2); border-color:var(--line); color:var(--txt); }
+  nav.steps button.on i { background:var(--acc); color:#170a02; }
+  nav.steps button.done i { background:var(--ok); color:#06210f; }
+  nav.steps button i.ic { font-size:15px; } nav.steps button i.ic.t { font-size:10.5px; letter-spacing:-0.3px; }
+  nav.steps button.on i.ic { background:var(--a); color:#fff; }
+  nav.steps button .cnt { font-size:12px; color:var(--faint); font-weight:700; }
+  nav.steps .sep { color:var(--faint); align-self:center; }
+  .campills { display:flex; gap:6px; align-items:center; justify-content:flex-end; min-width:0; }
+  .campills .pill { gap:6px; }
+  .selfthumb { width:56px; height:32px; object-fit:cover; border-radius:6px; background:#000; border:1px solid var(--line); }
+  main { max-width:1180px; margin:0 auto; padding:0 var(--gut); }
+  .step { padding-top:18px; }
+  .step-title { font-size:28px; font-weight:900; letter-spacing:0.2px; line-height:1.15; }
+  .lead { font-size:18px; color:#d7d7e6; margin:8px 0 14px; max-width:880px; }
+  .lead b { color:var(--txt); }
+  .note { font-size:14.5px; color:var(--dim); border-left:3px solid var(--line); padding:4px 0 4px 12px; margin:14px 0; max-width:900px; }
+  .actionbar { position:sticky; bottom:0; z-index:15; margin:18px calc(-1 * var(--gut)) 0; padding:12px var(--gut) calc(env(safe-area-inset-bottom) + 12px); background:rgba(13,13,20,0.96); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border-top:1px solid var(--line); display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end; }
+  .actionbar .why { flex:1 1 220px; color:var(--dim); font-size:14.5px; }
+  .actionbar .why:empty { display:none; }
+  .sm { display:none; }
+  .big { font-size:22px; padding:18px 28px; border-radius:16px; letter-spacing:1px; }
+
+  /* camera tiles */
+  .tiles { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; }
+  .tile { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:14px; display:flex; flex-direction:column; gap:10px; min-width:0; }
+  .tile-head { display:flex; align-items:center; gap:10px; }
+  .camname { font-weight:900; font-size:18px; letter-spacing:1px; }
+  .camname.a { color:var(--a); } .camname.b { color:var(--b); }
+  .view { position:relative; width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; display:grid; place-items:center; }
+  .view video, .view img { width:100%; height:100%; object-fit:contain; display:block; position:absolute; inset:0; }
+  .view .none { color:var(--faint); font-size:15px; padding:10px; text-align:center; }
+  .view .age { position:absolute; right:8px; bottom:8px; background:rgba(0,0,0,0.6); color:#ccc; font-size:12px; padding:2px 7px; border-radius:8px; }
+  .view .guide { position:absolute; inset:7% 6%; border:2px dashed rgba(127,209,255,0.85); border-radius:6px; pointer-events:none; }
+  .view .guide span { position:absolute; left:6px; top:4px; font-size:12px; font-weight:800; color:#bfe6ff; background:rgba(0,0,0,0.55); padding:1px 6px; border-radius:6px; }
+  .tile-info { font-size:14.5px; color:var(--dim); }
+  .checkline { font-size:15.5px; font-weight:700; padding:10px 12px; border-radius:10px; background:var(--panel2); }
+  .checkline.ok { color:var(--ok); } .checkline.bad { color:#ff9ea1; background:#2a1417; } .checkline.run { color:#8fb4ff; }
+  .pair { display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:center; }
+  .qr svg { width:168px; height:168px; background:#fff; border-radius:12px; padding:6px; display:block; }
+  .code { font-size:34px; font-weight:900; letter-spacing:6px; font-variant-numeric:tabular-nums; }
+
+  /* calibrate */
+  .cal-grid { display:grid; grid-template-columns:minmax(0, 5fr) minmax(0, 6fr); grid-template-rows:auto 1fr; grid-template-areas:"court views" "court howto"; gap:14px; align-items:start; }
+  .cg-court { grid-area:court; min-width:0; } .cg-views { grid-area:views; } .cg-howto { grid-area:howto; }
+  .cal-grid .court svg { max-height:min(52vh, 460px); width:auto !important; margin:0 auto; }
+  .howto { margin:0; padding-left:22px; font-size:17px; }
+  .howto li { margin:6px 0; }
+  .place { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; font-size:15px; margin-top:10px; }
+  .place b.a { color:var(--a); } .place b.b { color:var(--b); }
+  .views2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+  .views2 .lbl { font-size:13px; font-weight:800; letter-spacing:1px; margin-bottom:5px; }
+  .result { border-radius:var(--r); padding:16px; margin:12px 0; border:1px solid var(--line); background:var(--panel); }
+  .result.ok { border-color:rgba(61,220,132,0.5); } .result.bad { border-color:rgba(255,90,95,0.55); background:#1f1215; }
+  .result h3 { font-size:22px; }
+  .result.ok h3 { color:var(--ok); } .result.bad h3 { color:#ff8a8e; }
+  .stills { display:grid; grid-template-columns:repeat(2, minmax(0, 320px)); gap:10px; margin-top:10px; }
+  .stills img { width:100%; border-radius:10px; background:#000; display:block; aspect-ratio:16/9; object-fit:contain; }
+
+  /* record */
+  .rec-head { display:flex; align-items:center; gap:8px; color:var(--dim); font-weight:800; letter-spacing:0.5px; font-size:15px; }
+  .anim-title { font-size:44px; line-height:1.02; font-weight:900; letter-spacing:0.5px; margin:6px 0 0; overflow-wrap:anywhere; }
+  .anim-sub { font-size:24px; font-weight:800; color:#ffd166; margin:4px 0 12px; }
+  .rec-grid { display:grid; grid-template-columns:minmax(0, 5fr) minmax(0, 7fr); grid-template-areas:"court text" "cams text"; gap:14px; align-items:start; }
+  .rg-court { grid-area:court; min-width:0; } .rg-text { grid-area:text; min-width:0; } .rg-cams { grid-area:cams; min-width:0; }
+  .court svg { border-radius:12px; }
+  .rg-court .court svg { max-height:min(50vh, 520px); width:auto !important; margin:0 auto; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:13.5px; color:var(--dim); margin-top:8px; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:50%; background:var(--start); margin-right:5px; vertical-align:-1px; }
+  .legend i.f { border-radius:2px; background:var(--finish); } .legend i.p { width:18px; height:4px; border-radius:2px; background:#ffd166; vertical-align:3px; }
+  .phase { border-radius:14px; padding:13px 15px; margin-bottom:10px; background:var(--panel); border:1px solid var(--line); border-left-width:6px; }
+  .phase h4 { font-size:14px; letter-spacing:2px; font-weight:900; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .phase h4 small { font-size:14px; letter-spacing:0; font-weight:700; color:var(--dim); }
+  .phase.start { border-left-color:var(--start); } .phase.start h4 { color:var(--start); }
+  .phase.move { border-left-color:#ffd166; } .phase.move h4 { color:#ffd166; }
+  .phase.finish { border-left-color:var(--finish); } .phase.finish h4 { color:var(--finish); }
+  .pose { font-size:19px; font-weight:800; margin-top:5px; }
+  .pose-d { font-size:16px; color:#d7d7e6; margin-top:2px; }
+  .phase ul { margin:6px 0 0; padding-left:20px; font-size:17px; }
+  .phase li { margin:3px 0; }
+  .protocol { font-size:17px; font-weight:800; background:#241d0c; border:1px solid #5c4a14; color:#ffe2a8; border-radius:12px; padding:11px 14px; }
+  .facts { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .toast { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-radius:14px; padding:12px 14px; margin:0 0 12px; background:#10261a; border:1px solid rgba(61,220,132,0.45); font-weight:750; }
+  .toast.bad { background:#2a1417; border-color:rgba(255,90,95,0.55); }
+  .toast .t { flex:1 1 240px; }
+  .mini2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+  .mini2 .lbl { font-size:12.5px; font-weight:800; letter-spacing:1px; color:var(--dim); margin-bottom:4px; }
+
+  /* the recording overlay */
+  .overlay { position:fixed; inset:0; z-index:50; background:rgba(8,8,12,0.985); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bottom) + 20px); text-align:center; gap:10px; }
+  .overlay.recording { box-shadow:inset 0 0 0 10px var(--rec); }
+  .ov-top { font-size:18px; font-weight:800; color:var(--dim); letter-spacing:1px; }
+  .ov-name { font-size:30px; font-weight:900; }
+  .ov-big { font-size:min(34vw, 28vh, 240px); line-height:1; font-weight:900; font-variant-numeric:tabular-nums; }
+  .ov-map { width:min(560px, 92vw); display:flex; justify-content:center; }
+  .ov-map:empty { display:none; }
+  .ov-map svg { max-height:min(24vh, 230px); width:auto !important; border-radius:10px; }
+  .overlay.recording .ov-big { font-size:min(22vw, 150px); color:#fff; }
+  .ov-cue { font-size:min(7.5vw, 44px); font-weight:900; color:#ffd166; min-height:1.2em; }
+  .ov-sub { font-size:18px; color:#d7d7e6; max-width:720px; }
+  .ov-bar { width:min(720px, 90vw); height:12px; background:#26263b; border-radius:8px; overflow:hidden; }
+  .ov-bar i { display:block; height:100%; width:0; background:var(--rec); }
+  .ov-rec { display:inline-flex; gap:8px; align-items:center; font-weight:900; color:#ff6b77; letter-spacing:2px; }
+  .ov-live { position:absolute; right:16px; top:calc(env(safe-area-inset-top) + 14px); width:min(28vw, 220px); aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; border:1px solid var(--line); }
+  .ov-live video { width:100%; height:100%; object-fit:cover; }
+  .ov-warn { background:#3a1418; border:1px solid var(--bad); color:#ffd6d8; border-radius:12px; padding:10px 14px; font-weight:800; font-size:17px; max-width:760px; }
+  .overlay button.stop { font-size:26px; padding:20px 60px; border-radius:18px; margin-top:8px; }
+
+  /* animations list */
+  .seg { display:inline-flex; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:3px; gap:3px; }
+  .seg button { border:none; background:transparent; padding:8px 14px; border-radius:9px; font-weight:750; color:var(--dim); }
+  .seg button.on { background:var(--panel2); color:var(--txt); box-shadow:0 0 0 1px var(--line); }
+  .totals { display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 4px; }
+  .group { margin-top:18px; }
+  .group h3 { font-size:15px; letter-spacing:1.5px; color:var(--dim); font-weight:900; margin-bottom:8px; }
+  .slots { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap:8px; }
+  .slot { display:grid; grid-template-columns:44px 1fr auto; gap:4px 10px; align-items:center; text-align:left; width:100%; background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:10px 12px; }
+  .slot:hover { border-color:#3c3c5c; }
+  .slot .num { font-weight:900; color:var(--faint); font-variant-numeric:tabular-nums; }
+  .slot .nm { font-weight:850; overflow-wrap:anywhere; }
+  .slot .nm small { font-weight:700; color:#ffd166; }
+  .slot .st { grid-column:2 / 4; font-size:13.5px; color:var(--dim); }
+  .slot .why { grid-column:1 / 4; font-size:13.5px; color:#ff9ea1; }
+  .slot.cur { border-color:var(--acc); }
+  .sheet-bg { position:fixed; inset:0; z-index:40; background:rgba(0,0,0,0.6); display:flex; align-items:flex-end; justify-content:center; }
+  .sheet-bg.center { align-items:center; padding:16px; }
+  .sheet-bg.center .sheet { border-radius:20px; max-width:560px; }
+  .sheet { width:min(760px, 100%); max-height:88vh; overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:20px 20px 0 0; padding:18px var(--gut) calc(env(safe-area-inset-bottom) + 18px); }
+  .takes > div { display:flex; gap:8px 10px; align-items:center; flex-wrap:wrap; padding:12px 0; border-bottom:1px solid var(--line); }
+  .takes .line { display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%; }
+  .takes .chk { font-size:13px; color:var(--faint); width:100%; }
+  .takes .chk b { color:var(--dim); }
+  .filebtn { border:1px solid var(--line); border-radius:10px; padding:7px 10px; cursor:pointer; font-size:13.5px; background:#20203a; }
+
+  /* analysis */
+  .ctls { display:flex; gap:10px 16px; flex-wrap:wrap; align-items:center; margin:6px 0 12px; }
+  .ctl { display:inline-flex; gap:8px; align-items:center; }
+  .ana-row { display:grid; grid-template-columns:auto 1fr auto; gap:4px 12px; align-items:center; padding:11px 12px; border:1px solid var(--line); border-radius:12px; background:var(--panel); margin-bottom:8px; }
+  .ana-row input { width:22px; height:22px; accent-color:var(--acc); }
+  .ana-row .cost { font-weight:800; font-variant-numeric:tabular-nums; }
+  .ana-row .sub { grid-column:2 / 4; font-size:13.5px; color:var(--dim); }
+  .confirm { border:2px solid var(--acc); background:#1f1409; }
+  .confirm p { font-size:17px; }
+  h3.sec { font-size:15px; letter-spacing:1.5px; color:var(--dim); font-weight:900; text-transform:uppercase; margin:18px 0 4px; }
+  .qitem { display:flex; gap:6px 10px; align-items:center; flex-wrap:wrap; padding:10px 0; border-bottom:1px solid var(--line); }
+  .qitem:first-child { padding-top:0; } .qitem:last-child { border-bottom:none; padding-bottom:0; }
+  .qitem > b { flex:1 1 220px; }
+  .qitem .err { flex:1 1 100%; color:#ff9ea1; font-size:14px; }
+  .qitem .hint { flex:1 1 100%; color:var(--dim); font-size:13.5px; }
+  .progress { height:8px; background:#26263b; border-radius:6px; overflow:hidden; flex:1 1 140px; } .progress i { display:block; height:100%; background:var(--a); }
+
+  /* home */
+  .home { max-width:760px; margin:0 auto; padding:calc(env(safe-area-inset-top) + 18px) var(--gut) 20px; }
+  .list > div { display:flex; gap:10px; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); }
+
+  /* camera mode (camera B's phone) */
   #camera .full { position:fixed; inset:0; background:#000; }
   #camera .full video { width:100%; height:100%; object-fit:contain; }
-  #camera .hud { position:fixed; left:10px; right:10px; top: calc(env(safe-area-inset-top) + 10px); display:flex; gap:8px; flex-wrap:wrap; }
-  #camera .foot { position:fixed; left:10px; right:10px; bottom: calc(env(safe-area-inset-bottom) + 10px); }
-  #camera.recording .full { box-shadow: inset 0 0 0 8px var(--rec); }
-  .tap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); z-index:5; }
-  .lm-img { position:relative; } .lm-img img { width:100%; display:block; border-radius:10px; } .lm-img i { position:absolute; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%; border:2px solid #fff; background:var(--acc); }
-  .hidden { display:none !important; }
+  #camera.recording .full { box-shadow:inset 0 0 0 10px var(--rec); }
+  .cam-top { position:fixed; left:12px; right:12px; top:calc(env(safe-area-inset-top) + 10px); display:flex; gap:8px; flex-wrap:wrap; z-index:3; }
+  .cam-top .role { font-size:16px; font-weight:900; letter-spacing:1px; color:var(--b); }
+  .cam-foot { position:fixed; left:12px; right:12px; bottom:calc(env(safe-area-inset-bottom) + 12px); z-index:3; display:flex; flex-direction:column; gap:8px; align-items:stretch; max-width:640px; margin:0 auto; }
+  .cam-status { background:rgba(16,16,26,0.86); border:1px solid var(--line); border-radius:18px; padding:14px 18px; text-align:center; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+  .cam-status .big-s { font-size:clamp(22px, 6.5vw, 34px); font-weight:900; }
+  .cam-status .sub-s { font-size:15px; color:var(--dim); margin-top:4px; }
+  .cam-status.ok .big-s { color:var(--ok); } .cam-status.rec .big-s { color:#ff6b77; } .cam-status.up .big-s { color:#8fb4ff; } .cam-status.bad .big-s { color:#ff8a8e; }
+  .tap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.72); z-index:5; padding:20px; }
+
+  /* iPad portrait and smaller: the steps get their own row */
+  @media (max-width: 1099px) {
+    header.top { grid-template-columns:minmax(0, 1fr) auto; }
+    nav.steps { grid-column:1 / 3; grid-row:2; justify-content:flex-start; }
+  }
+  /* narrow screens: phone portrait */
+  @media (max-width: 760px) {
+    nav.steps button { padding:7px 10px; font-size:14px; }
+    .pill .ptxt { display:none; }
+    .pill { padding:6px 9px; }
+    .tiles { grid-template-columns:minmax(0, 1fr); }
+    .cal-grid { grid-template-columns:minmax(0, 1fr); grid-template-rows:none; grid-template-areas:"howto" "court" "views"; }
+    .cal-grid .court svg { max-height:40vh; }
+    .rec-grid { grid-template-columns:minmax(0, 1fr); grid-template-areas:"court" "text" "cams"; }
+    .rg-court .court svg { max-height:38vh; }
+    .stills { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    .lg { display:none; } .sm { display:inline; }
+    .actionbar { gap:8px; padding-top:10px; }
+    .actionbar .why { flex-basis:100%; font-size:13px; }
+    .actionbar > button { flex:1 1 40%; padding:11px 8px; font-size:15px; }
+    .actionbar > button.pri { flex:1 1 100%; }
+    .actionbar > button.big { font-size:20px; padding:15px 18px; }
+    #stepSlots .row > h2 { flex:1 0 auto; }
+    .home .row > b { flex:1 1 100%; }
+    .step-title { font-size:24px; }
+    .lead { font-size:16.5px; }
+    .anim-title { font-size:34px; }
+    .anim-sub { font-size:20px; }
+    .pair { grid-template-columns:minmax(0, 1fr); justify-items:center; text-align:center; }
+    .big { font-size:20px; padding:16px 22px; }
+    .actionbar > button { flex:1 1 auto; }
+    .selfthumb { width:40px; height:24px; }
+  }
+  /* phone portrait: all five steps in one row, the label under its number */
+  @media (max-width: 560px) {
+    nav.steps { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:2px; }
+    nav.steps .sep, nav.steps button .cnt { display:none; }
+    nav.steps button { flex-direction:column; gap:3px; padding:5px 1px 4px; font-size:11.5px; border-radius:12px; min-width:0; justify-content:center; }
+    nav.steps button i { width:24px; height:24px; }
+    .ov-live { display:none; }
+  }
+  @media (max-width: 420px) { .brand span { display:none; } }
+  /* phone landscape: short screens */
+  @media (max-height: 500px) and (orientation: landscape) {
+    header.top { position:static; }
+    .actionbar { padding-top:8px; padding-bottom:calc(env(safe-area-inset-bottom) + 8px); }
+    .actionbar .why { display:none; }
+    .actionbar > button.big { font-size:18px; padding:12px 22px; }
+    .rg-court .court svg { max-height:70vh; }
+    .ov-big { font-size:min(22vh, 120px); } .overlay.recording .ov-big { font-size:min(20vh, 96px); }
+    .ov-live, .ov-map { display:none; }
+    .cal-grid .court svg { max-height:70vh; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>SOUL JAM CAPTURE</h1>
-  <span class="pill" id="pillA"><i class="dot"></i>CAM A <span id="pillAtxt">—</span></span>
-  <span class="pill" id="pillB"><i class="dot"></i>CAM B <span id="pillBtxt">—</span></span>
-</header>
 
 <!-- sessions / join -->
-<section id="home" class="hidden">
+<section id="home" class="hidden home">
+  <div class="brand" style="font-size:16px;margin-bottom:6px">SOUL JAM <b>CAPTURE</b></div>
   <div class="card">
-    <div class="row"><b class="grow">Capture sessions</b><button class="pri" id="newSession">New BASIC-01 session</button></div>
+    <div class="row"><b class="grow" style="font-size:19px">Capture sessions</b><button class="pri" id="newSession">New BASIC-01 session</button></div>
     <div id="sessions" class="list" style="margin-top:8px"></div>
   </div>
   <div class="card">
-    <b>Join as a camera</b>
-    <p class="dim small">On the second phone: scan the QR code on the director's phone — or type the 6-digit code.</p>
+    <b style="font-size:19px">Join as a camera</b>
+    <p class="dim small">On the second phone: scan the QR code on the director's screen — or type the 6-digit code.</p>
     <div class="row"><input id="joinCode" inputmode="numeric" maxlength="6" placeholder="123456" style="width:9em;font-size:22px;letter-spacing:4px"><select id="joinRole"><option value="camB">Camera B</option><option value="camA">Camera A</option></select><button id="joinBtn">Join</button></div>
-    <div id="joinErr" class="dim small"></div>
+    <div id="joinErr" class="dim small" style="margin-top:8px"></div>
   </div>
   <p class="dim small" id="homeNote"></p>
 </section>
 
 <!-- director -->
 <section id="director" class="hidden">
-  <div id="banners"></div>
-  <div class="card">
-    <div class="row"><span class="setup grow" id="setupLine">—</span><span class="dim small" id="totals"></span></div>
-    <div class="bar" style="margin-top:8px"><i id="setupBar" style="width:0%"></i></div>
-  </div>
-
-  <!-- move cameras / calibrate for a setup -->
-  <div class="card hidden" id="setupCard">
-    <div class="anim-title" id="setupTitle">SETUP</div>
-    <div class="anim-sub" id="setupSub"></div>
-    <div class="court" id="setupCourt"></div>
-    <div class="facts" style="margin-top:8px"><div><b style="color:var(--a)">CAM A</b> <span id="setupCamA"></span></div><div><b style="color:var(--b)">CAM B</b> <span id="setupCamB"></span></div></div>
-    <ul class="cues small" id="setupFraming"></ul>
-    <div class="row" style="margin-top:8px"><button class="pri grow" id="calibrateBtn">CALIBRATE</button><button id="skipCalBtn">Cameras are placed — skip</button></div>
-  </div>
-
-  <!-- the animation to record -->
-  <div class="card" id="animCard">
-    <div class="row"><span class="dim small" id="animMeta"></span><span class="grow"></span><button class="ghost small" id="prevAnim">◀</button><button class="ghost small" id="nextAnim">▶</button></div>
-    <div class="anim-title" id="animTitle">—</div>
-    <div class="anim-sub" id="animSub"></div>
-    <div class="facts">
-      <div>START: <span class="state" id="fStart"></span></div><div>END: <span class="state" id="fEnd"></span></div>
-      <div>DURATION: <b id="fDur"></b></div><div>CAPTURE: <b id="fFps"></b></div>
-      <div>BALL: <b id="fHand"></b></div><div>MOVE: <b id="fDir"></b></div>
+  <header class="top">
+    <div class="brand">SOUL JAM <b>CAPTURE</b></div>
+    <nav class="steps" id="stepper" aria-label="Steps">
+      <button data-step="connect"><i>1</i>Connect</button>
+      <button data-step="calibrate"><i>2</i>Calibrate</button>
+      <button data-step="record"><i>3</i>Record <span class="cnt" id="recCnt"></span></button>
+      <span class="sep">·</span>
+      <button data-step="slots"><i class="ic">≡</i>Animations</button>
+      <button data-step="analysis"><i class="ic t">3D</i>Analysis</button>
+    </nav>
+    <div class="campills">
+      <span class="pill" id="pillA" title="CAM A"><i class="dot"></i>A<span class="ptxt" id="pillAtxt">—</span></span>
+      <span class="pill" id="pillB" title="CAM B"><i class="dot"></i>B<span class="ptxt" id="pillBtxt">—</span></span>
+      <video id="selfVideo" class="selfthumb" playsinline muted title="CAM A (this device)"></video>
     </div>
-    <div class="dim small" id="fProtocol" style="margin:6px 0"></div>
-    <ul class="cues" id="fCues"></ul>
-    <details><summary>Court setup + camera positions</summary><div class="court" id="animCourt"></div><div class="small dim" id="animCams"></div><ul class="small dim" id="animFraming"></ul></details>
-    <div class="pv" id="selfPv"><video id="selfVideo" playsinline muted></video><span class="pill tag" style="color:var(--a)">CAM A · this phone</span></div>
+  </header>
+
+  <main>
+    <div id="banners"></div>
+
+    <!-- STEP 1: CONNECT -->
+    <section id="stepConnect" class="step hidden">
+      <h2 class="step-title">1 · Connect the cameras</h2>
+      <p class="lead" id="connectLead">This device is <b>CAM A</b>. Pair a phone as <b>CAM B</b>: scan the QR code with its camera. Put both on tripods. Each camera then records a 2-second test by itself.</p>
+      <div class="tiles">
+        <div class="tile" id="tileA">
+          <div class="tile-head"><span class="camname a">CAM A</span><span class="dim small grow" id="subA">this device</span><span class="chip" id="stA">—</span></div>
+          <div class="view" id="viewA"><video data-self playsinline muted></video><img class="snap hidden" alt="CAM A live picture"><div class="none">Starting the camera…</div><span class="age hidden"></span></div>
+          <div class="tile-info" id="infoA">—</div>
+          <div class="checkline" id="chkA">Camera check: waiting for the camera</div>
+        </div>
+        <div class="tile" id="tileB">
+          <div class="tile-head"><span class="camname b">CAM B</span><span class="dim small grow" id="subB">second phone</span><span class="chip" id="stB">—</span></div>
+          <div class="view" id="viewB"><img class="snap hidden" id="snapB" alt="CAM B live picture"><div class="none">No picture yet</div><span class="age hidden"></span></div>
+          <div id="pairBox" class="pair hidden">
+            <div class="qr" id="qr"></div>
+            <div>
+              <div class="dim small">Scan with CAM B's camera — or open <b>/capture</b> on it and type</div>
+              <div class="code" id="pairCode">——————</div>
+              <div class="tiny dim" id="pairExpiry"></div>
+              <div class="tiny" id="pairUrls" style="margin-top:6px;overflow-wrap:anywhere"></div>
+              <div class="tiny dim hidden" id="pairLanHint">On the Mac's own network the address uses a self-signed certificate: accept the warning once on each phone.</div>
+            </div>
+          </div>
+          <div class="tile-info" id="infoB">—</div>
+          <div class="checkline" id="chkB">Camera check: waiting for CAM B</div>
+          <div class="row"><button class="link small" id="pairAgain">Pair a different phone as CAM B</button></div>
+        </div>
+      </div>
+      <p class="note"><b>Frame rate:</b> iPhone/iPad browsers record at most 60 fps (that is a limit of Safari, not of the phone). For 120/240 fps, record the same move in the Camera app (Slo-mo) and attach it in the slot's takes: <b>Animations</b> → tap the animation → <b>Slo-mo file</b>.</p>
+      <div class="actionbar">
+        <span class="why" id="connectWhy"></span>
+        <button id="checkBtn"><span class="lg">Run the camera check again</span><span class="sm">Check again</span></button>
+        <button id="oneCamBtn"><span class="lg">Continue with one camera</span><span class="sm">One camera only</span></button>
+        <button class="pri" id="connectNext">NEXT: Calibrate →</button>
+      </div>
+    </section>
+
+    <!-- STEP 2: CALIBRATE -->
+    <section id="stepCalibrate" class="step hidden">
+      <h2 class="step-title" id="calTitle">2 · Calibrate</h2>
+      <p class="lead"><b>Why:</b> calibration lets the two camera views be combined into 3-D later. Both cameras must see the whole capture area — and must not move afterwards.</p>
+      <div id="calMove" class="banner hidden"></div>
+      <div id="calResult"></div>
+      <div class="cal-grid">
+        <div class="card cg-court" style="margin:0">
+          <div class="court" id="calCourt"></div>
+          <div class="place" id="calPlace"></div>
+        </div>
+        <div class="views2 cg-views">
+          <div><div class="lbl" style="color:var(--a)">CAM A</div><div class="view" id="calViewA"><video data-self playsinline muted></video><img class="snap hidden" alt=""><div class="none">No picture</div><div class="guide"><span>capture area inside</span></div></div></div>
+          <div><div class="lbl" style="color:var(--b)">CAM B</div><div class="view" id="calViewB"><img class="snap hidden" alt=""><div class="none">No picture</div><div class="guide"><span>capture area inside</span></div></div></div>
+        </div>
+        <ol class="howto cg-howto">
+          <li><b>Place the cameras</b> as the diagram shows (A and B), lens at chest height, and lock them on the tripods.</li>
+          <li><b>Check both pictures:</b> the whole dashed area fits inside the dashed frame, with room above the head.</li>
+          <li><b>Press CALIBRATE.</b> After 3-2-1, walk to the corners <b>1 → 2 → 3 → 4</b> of the area, then stand in the middle (✕) with your arms up. It stops by itself after 10 s and saves.</li>
+        </ol>
+      </div>
+      <div class="actionbar">
+        <span class="why" id="calWhy"></span>
+        <button id="skipCalBtn"><span class="lg">Skip — cameras are placed; I'll calibrate later</span><span class="sm">Skip — calibrate later</span></button>
+        <button class="pri big" id="calibrateBtn">CALIBRATE</button>
+        <button class="pri big hidden" id="calNext">NEXT: Record →</button>
+      </div>
+    </section>
+
+    <!-- STEP 3: RECORD -->
+    <section id="stepRecord" class="step hidden">
+      <div id="toast"></div>
+      <div id="recSetup" class="banner hidden"></div>
+      <div class="rec-head"><span id="recPos" class="grow">—</span><button class="small ghost" id="prevAnim" title="previous animation">◀<span class="lg"> Prev</span></button><button class="small ghost" id="nextAnim" title="next animation"><span class="lg">Next </span>▶</button></div>
+      <div class="anim-title" id="animTitle">—</div>
+      <div class="anim-sub" id="animSub"></div>
+      <div class="rec-grid">
+        <div class="rg-court">
+          <div class="court" id="animCourt"></div>
+          <div class="legend"><span><i></i>START</span><span><i class="f"></i>FINISH</span><span><i class="p"></i>path</span><span>- - → the way he faces</span></div>
+        </div>
+        <div class="rg-cams mini2">
+          <div><div class="lbl">CAM A</div><div class="view" id="recViewA"><video data-self playsinline muted></video><img class="snap hidden" alt=""><div class="none">No picture</div></div></div>
+          <div><div class="lbl">CAM B</div><div class="view" id="recViewB"><img class="snap hidden" alt=""><div class="none">No picture</div></div></div>
+        </div>
+        <div class="rg-text">
+          <div class="phase start"><h4>START <small id="startWhere"></small></h4><div class="pose" id="startPose"></div><div class="pose-d" id="startDesc"></div></div>
+          <div class="phase move"><h4>THE MOVE <small id="moveWhere"></small></h4><ul id="moveCues"></ul></div>
+          <div class="phase finish"><h4>FINISH <small id="finishWhere"></small></h4><div class="pose" id="finishPose"></div><div class="pose-d" id="finishDesc"></div></div>
+          <div class="protocol" id="protocol"></div>
+          <div class="facts" id="facts"></div>
+        </div>
+      </div>
+      <div class="actionbar">
+        <span class="why" id="recordWhy"></span>
+        <button class="small" id="slotsBtn">All animations</button>
+        <button class="pri big" id="recordBtn" disabled>RECORD</button>
+      </div>
+    </section>
+
+    <!-- ANIMATIONS -->
+    <section id="stepSlots" class="step hidden">
+      <div class="row"><h2 class="step-title grow">Animations</h2><div class="seg" id="slotFilter"><button data-filter="todo">To record</button><button data-filter="all">All</button></div></div>
+      <div class="totals" id="slotTotals"></div>
+      <div id="slotList"></div>
+      <div class="card">
+        <div class="row"><b class="grow">Dataset</b><a id="exportLink" href="#"><button class="small">Download recorded takes (.tar)</button></a><a id="exportAll" href="#"><button class="small">Every take (.tar)</button></a><a href="/capture"><button class="small">All sessions</button></a></div>
+        <div class="tiny dim" id="deviceLine" style="margin-top:8px"></div>
+      </div>
+    </section>
+
+    <!-- ANALYSIS -->
+    <section id="stepAnalysis" class="step hidden">
+      <h2 class="step-title">Analysis</h2>
+      <p class="lead">Nothing is analysed automatically. Pick the recorded animations to send to <b>SAM 3D Body</b>, the camera view, and confirm the cost (about $0.03 per frame).</p>
+      <div id="anaAvail"></div>
+      <div id="anaQueueBox" class="hidden">
+        <h3 class="sec">Sent to analysis</h3>
+        <div id="anaQueue" class="card" style="margin-top:6px"></div>
+      </div>
+      <h3 class="sec">Ready to send</h3>
+      <div class="ctls">
+        <span class="ctl"><span class="dim small">Camera</span><span class="seg" id="anaCam"><button data-cam="camA">CAM A</button><button data-cam="camB">CAM B</button></span></span>
+        <span class="ctl"><span class="dim small">Frames</span><span class="seg" id="anaFps"><button data-fps="30">30 / s</button><button data-fps="15">15 / s</button></span></span>
+        <span class="ctl"><button class="small" id="anaAll">Select all</button><button class="small" id="anaNone">None</button></span>
+      </div>
+      <div id="anaList"></div>
+      <div id="anaConfirm" class="sheet-bg center hidden"><div class="sheet confirm" id="anaConfirmBody" role="dialog" aria-label="Confirm the cost"></div></div>
+      <div class="actionbar">
+        <span class="why" id="anaTotal"></span>
+        <button class="pri" id="anaSend" disabled>Send to analysis</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- the recording overlay (countdown → recording → stops by itself) -->
+  <div id="recOverlay" class="overlay hidden" role="dialog" aria-live="assertive">
+    <div class="ov-live"><video data-self playsinline muted></video></div>
+    <div class="ov-top" id="ovTop"></div>
+    <div class="ov-name" id="ovName"></div>
+    <div class="ov-rec hidden" id="ovRec"><i class="dot rec"></i>RECORDING</div>
+    <div class="ov-big" id="ovBig">3</div>
+    <div class="ov-cue" id="ovCue"></div>
+    <div class="ov-map court" id="ovMap"></div>
+    <div class="ov-bar"><i id="ovBar"></i></div>
+    <div class="ov-sub" id="ovSub"></div>
+    <div class="ov-warn hidden" id="ovWarn"></div>
+    <button class="bad stop" id="stopBtn">STOP</button>
   </div>
 
-  <!-- record / stop -->
-  <div id="recordBox" class="sticky">
-    <button class="pri big" id="recordBtn" disabled>RECORD BOTH</button>
-    <div class="dim small" id="recordWhy" style="text-align:center;margin-top:6px"></div>
-  </div>
-  <div id="recordingBox" class="card recframe hidden sticky" style="text-align:center">
-    <div class="row" style="justify-content:center"><i class="dot rec"></i><b>RECORDING</b></div>
-    <div class="timer" id="timer">0.0</div>
-    <div class="dim" id="recName"></div>
-    <div class="bar" style="margin:6px 0 12px"><i id="recBar" style="width:0%;background:var(--rec)"></i></div>
-    <button class="bad big" id="stopBtn">STOP</button>
-  </div>
-  <div id="reviewBox" class="card hidden">
-    <div class="row"><b class="grow" id="reviewTitle">Take</b><span class="pill" id="reviewState">uploading</span></div>
-    <div class="small dim" id="uploadLine" style="margin:6px 0"></div>
-    <div class="vids" id="reviewVids"></div>
-    <div class="row" style="margin:6px 0"><button id="playBoth" disabled>▶ Play both</button><span class="grow"></span></div>
-    <div class="row hidden" id="finishRow" style="margin:6px 0"><span class="small dim grow" id="finishWhy"></span><button id="finishBtn">REVIEW WITHOUT CAM B</button></div>
-    <div class="checks" id="checks"></div>
-    <div class="row actions" style="margin-top:10px"><button class="bad grow" id="retakeBtn">RETAKE</button><button class="ok grow" id="acceptBtn" disabled>ACCEPT + NEXT</button></div>
-  </div>
-  <div id="savedBox" class="saved hidden">SAVED ✓</div>
-
-  <!-- landmarks (after a calibration) -->
-  <div id="landmarkBox" class="card hidden">
-    <b>Calibration landmarks — <span id="lmCam"></span></b>
-    <p class="dim small">Tap a landmark name, then tap it in the picture. Skip any you can't see. Save when done.</p>
-    <div class="row" id="lmNames"></div>
-    <div class="lm-img" id="lmImg"></div>
-    <div class="row" style="margin-top:8px"><button id="lmSkip">Skip</button><span class="grow"></span><button class="pri" id="lmSave">Save</button></div>
-  </div>
-
-  <div class="card">
-    <div class="row"><button id="pairBtn">Pair camera</button><button id="takesBtn">Takes</button><button id="exportBtn">Export</button><button id="sessionsBtn">Sessions</button><button id="missingBtn" class="pri">CONTINUE MISSING</button></div>
-    <div id="pairBox" class="hidden" style="margin-top:10px">
-      <div class="row" style="align-items:flex-start"><div class="qr" id="qr"></div><div class="grow"><div class="dim small">Code</div><div class="code" id="pairCode">—</div><div class="small dim" id="pairExpiry"></div><div class="small" id="pairUrls"></div><p class="dim small">Camera B: scan the QR (or open the link, or type the code on the capture home page).</p><p class="dim small hidden" id="pairLanHint">On the Mac's own network the address is https with a self-signed certificate — accept the warning once on each phone.</p></div></div>
-    </div>
-    <div id="takesBox" class="hidden" style="margin-top:10px"></div>
-    <div id="exportBox" class="hidden" style="margin-top:10px">
-      <p class="small dim">The organised dataset: session.json · calibration/setup_X/… · setup_X/&lt;animation&gt;/takeNN/{camA, camB, metadata.json, frame times}.</p>
-      <div class="row"><a id="exportLink" href="#"><button class="pri">Download accepted takes (.tar)</button></a><a id="exportAll" href="#"><button>Every take</button></a></div>
-    </div>
-    <div class="small dim" style="margin-top:8px" id="deviceLine"></div>
-  </div>
+  <!-- one animation: its takes -->
+  <div id="slotSheet" class="sheet-bg hidden"><div class="sheet" id="sheetBody"></div></div>
 </section>
 
 <!-- camera (B, or A on its own phone) -->
 <section id="camera" class="hidden">
   <div class="full"><video id="camVideo" playsinline muted></video></div>
-  <div class="hud"><span class="pill" id="camRole">CAMERA B</span><span class="pill" id="camStatus"><i class="dot"></i><span>connecting</span></span><span class="pill" id="camFormat">—</span><span class="pill" id="camUpload">uploads ✓</span></div>
-  <div class="foot"><div id="camBanner"></div><div class="card small" id="camInfo" style="opacity:0.92">Paired. Leave this phone on its tripod — the director starts and stops recording.</div></div>
+  <div class="cam-top"><span class="pill role" id="camRole">CAM B</span><span class="pill" id="camFormat">—</span></div>
+  <div class="cam-foot">
+    <div id="camBanner"></div>
+    <div class="cam-status" id="camStatusBox"><div class="big-s" id="camStatus">Connecting…</div><div class="sub-s" id="camSub"></div></div>
+  </div>
   <div class="tap" id="camTap"><button class="pri big" id="camStart" style="max-width:420px">TAP TO START CAMERA</button></div>
 </section>
 

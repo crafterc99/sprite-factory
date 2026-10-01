@@ -23,19 +23,65 @@ const WANT = [
   { frameRate: 30, width: 1280, height: 720 },
 ];
 
-/** Safari (every browser on iPhone / iPad is Safari underneath). */
-export function isWebKit() {
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
-  return /CriOS|FxiOS|EdgiOS/.test(ua) || (/AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg|Android/.test(ua));
+/**
+ * Is this WebKit (Safari: iPhone, iPad, Mac)? Every iOS / iPadOS browser is WebKit, and iPadOS
+ * Safari says "Macintosh" (told apart from a Mac by its touch points).
+ */
+export function isWebKit(ua = typeof navigator !== 'undefined' ? navigator.userAgent : '', touchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints || 0 : 0) {
+  if (/iPhone|iPad|iPod/.test(ua)) return true;
+  if (/Macintosh/.test(ua) && touchPoints > 1) return true;
+  return /AppleWebKit\//.test(ua) && /Safari\//.test(ua) && !/(Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|FxiOS|Firefox)\//.test(ua);
 }
-export function pickMime() {
-  // Chromium: WebM first — it streams real 1 s chunks while recording (Chromium's MP4 recorder holds
-  // everything until stop). Safari: MP4 first — its WebM/VP9 recorder can claim support and then
-  // record nothing on an iPhone (a 5-byte file in the field); MP4 is Safari's own, dependable path.
-  const webm = ['video/webm;codecs=h264,opus', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
-  const mp4 = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4'];
-  if (typeof MediaRecorder === 'undefined') return null;
-  return (isWebKit() ? [...mp4, ...webm] : [...webm, ...mp4]).find((m) => MediaRecorder.isTypeSupported(m)) || '';
+const WEBM = ['video/webm;codecs=h264,opus', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+const MP4 = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4'];
+/**
+ * The recorder format, best first. WebKit: MP4 (H.264) — an iPhone can claim WebM/VP9 and then
+ * record nothing (a 5-byte file). Chromium: WebM, which streams real 1 s chunks while recording
+ * (its MP4 recorder holds everything until the stop).
+ */
+export function mimeCandidates(webkit = isWebKit()) { return webkit ? [...MP4, ...WEBM] : [...WEBM, ...MP4]; }
+/**
+ * Formats this device's recorder advertised but recorded nothing with (while the camera delivered
+ * frames): skipped from then on. Kept in localStorage, so a reload keeps the working format.
+ */
+const BAD_KEY = 'sjc-bad-mime';
+const badMimes = (() => { try { return new Set(JSON.parse(localStorage.getItem(BAD_KEY) || '[]')); } catch { return new Set(); } })();
+export function markBadMime(m) {
+  if (!m || badMimes.has(m)) return false;
+  badMimes.add(m);
+  try { localStorage.setItem(BAD_KEY, JSON.stringify([...badMimes])); } catch {}
+  return true;
+}
+export function pickMime({ webkit = isWebKit(), supported = null, bad = badMimes } = {}) {
+  if (!supported) {
+    if (typeof MediaRecorder === 'undefined') return null;
+    supported = (m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } };
+  }
+  const ok = mimeCandidates(webkit).filter(supported);
+  // never every format: the last one the device supports is kept even if it failed once
+  return ok.find((m) => !bad.has(m)) || ok[0] || '';
+}
+
+/**
+ * Is a recording really producing video? Looked at ~1.6 s and ~3.2 s after it started and at its
+ * stop. Returns the problem in plain words, or null.
+ *   live: recorder error · camera ended / muted · page hidden · (nearly) empty chunks — at 1.6 s
+ *         only when no frame arrived either (Safari's first chunk can be just the file header),
+ *         from 3 s on in any case · no frames and no data at all
+ *   final (≥ 1.5 s recorded): no data, or a file under 20 kB
+ */
+export function recordingProblem({ error = null, trackState = 'live', muted = false, hidden = false, chunks = 0, bytes = 0, frames = 0, rvfc = true, final = false, elapsedMs = 0 } = {}) {
+  const why = [];
+  if (error) why.push(`the recorder failed (${error})`);
+  if (trackState === 'ended') why.push('the camera stopped');
+  else if (muted) why.push('the camera delivers no picture');
+  if (hidden) why.push('the page is in the background (screen locked or another app in front)');
+  const small = chunks > 0 && bytes < (final ? 20000 : 4096);
+  if (small && (final ? elapsedMs >= 1500 : frames === 0 || !rvfc || elapsedMs >= 3000)) why.push(`the recorder produced only ${bytes} bytes`);
+  else if (small) { /* a small first chunk (or a STOP right after the start): looked at again later / not a camera problem */ }
+  else if (final && elapsedMs >= 1500 && chunks === 0) why.push('the recorder produced no data');
+  else if (rvfc && frames === 0 && chunks === 0 && elapsedMs >= 3000) why.push('no video frames and no data');
+  return why.length ? why.join(' · ') : null;
 }
 
 export class WebCamera {
@@ -84,13 +130,37 @@ export class WebCamera {
       // the web path can't reach 120 here: say so (native capture path)
       webLimited: (this.settings.frameRate || 0) < 119,
     };
-    if (this.video) { this.video.srcObject = stream; this.video.muted = true; this.video.playsInline = true; await this.video.play().catch(() => {}); }
+    // tell the director at once when the camera stops delivering (screen locked, page hidden, taken by another app)
+    for (const ev of ['mute', 'unmute', 'ended']) this.track.addEventListener(ev, () => this.emit());
+    if (this.video) {
+      this.video.srcObject = stream; this.video.muted = true; this.video.playsInline = true;
+      if (!this._onPause) { this._onPause = () => { if (this.stream && (typeof document === 'undefined' || document.visibilityState === 'visible')) setTimeout(() => this.keepPlaying(), 100); }; this.video.addEventListener('pause', this._onPause); }
+      await this.video.play().catch(() => {});
+    }
     this.emit();
     return this.describe();
   }
   describe() {
     const s = this.settings || {};
-    return { deviceId: this.deviceId, label: this.track?.label || null, width: s.width || null, height: s.height || null, frameRate: s.frameRate ? +s.frameRate.toFixed(2) : null, facingMode: s.facingMode || null, zoom: s.zoom ?? null, aspectRatio: s.aspectRatio || null, mime: pickMime(), capabilities: this.caps };
+    const w = s.width || this.video?.videoWidth || null, h = s.height || this.video?.videoHeight || null;
+    return { deviceId: this.deviceId, label: this.track?.label || null, width: w, height: h, frameRate: s.frameRate ? +s.frameRate.toFixed(2) : null, facingMode: s.facingMode || null, zoom: s.zoom ?? null, aspectRatio: s.aspectRatio || null,
+      orientation: w && h ? (w >= h ? 'landscape' : 'portrait') : null, mime: pickMime(), muted: !!this.track?.muted, ended: this.track?.readyState === 'ended', capabilities: this.caps };
+  }
+  /** A small JPEG of what the camera sees (the director's live view of this camera). */
+  snapshot({ maxW = 320, maxH = 400, quality = 0.6 } = {}) {
+    const v = this.video;
+    if (!v || !v.videoWidth || !v.videoHeight) return null;
+    const k = Math.min(1, maxW / v.videoWidth, maxH / v.videoHeight);
+    const w = Math.max(2, Math.round(v.videoWidth * k)), h = Math.max(2, Math.round(v.videoHeight * k));
+    const c = (this._sc ||= document.createElement('canvas')); c.width = w; c.height = h;
+    try { c.getContext('2d').drawImage(v, 0, 0, w, h); return { jpg: c.toDataURL('image/jpeg', quality), w, h }; } catch { return null; }
+  }
+  /** Keep the preview playing (iOS pauses it when the page is hidden; frame times need it running). */
+  keepPlaying() {
+    const v = this.video;
+    if (!v || !this.stream) return;
+    if (v.srcObject !== this.stream) v.srcObject = this.stream;
+    if (v.paused) v.play().catch(() => {});
   }
   async setZoom(z) { try { await this.track.applyConstraints({ advanced: [{ zoom: z }] }); this.settings = this.track.getSettings(); this.emit(); } catch {} }
   /** Lock focus / exposure / white balance where the platform lets a web page (it often doesn't). */
@@ -115,25 +185,45 @@ export class WebCamera {
     const mime = pickMime();
     const fps = this.settings?.frameRate || 30, px = (this.settings?.width || 1280) * (this.settings?.height || 720);
     const bps = bitsPerSecond || Math.round(Math.min(40e6, Math.max(8e6, px * fps * 0.12)));
-    const st = { tag, mime, bps, seq: 0, frames: [], mediaTimes: [], streaming: false, rec: null, timer: null, active: false, stopping: false, done: null };
+    const st = { tag, mime, bps, seq: 0, bytes: 0, frameCount: 0, frames: [], mediaTimes: [], streaming: false, rec: null, timer: null, active: false, stopping: false, done: null, error: null, recError: null, health: [] };
     this.cur = st;
     st.go = () => {
       st.timer = null;
       if (st.rec) return;
-      const rec = (st.rec = new MediaRecorder(this.stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: bps, audioBitsPerSecond: 128000 }));
-      rec.ondataavailable = (e) => { if (e.data && e.data.size) { this.onChunk?.(st.seq++, e.data, st.tag, st.mime); if (st.active && e.data.size > 4096) st.streaming = true; } };
+      this.keepPlaying();
+      let rec;
+      try { rec = st.rec = new MediaRecorder(this.stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: bps, audioBitsPerSecond: 128000 }); }
+      catch (e) { st.error = e.name || e.message; this.flag(st); return; }
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) { st.bytes += e.data.size; this.onChunk?.(st.seq++, e.data, st.tag, st.mime); if (st.active && e.data.size > 4096) st.streaming = true; } };
       rec.onstop = () => { st.active = false; this.recording = !!this.cur?.active; st.done?.(); };
-      rec.onerror = (e) => { this.onError?.(`the recorder failed: ${e?.error?.name || e?.error?.message || 'error'}`); };
+      rec.onerror = (e) => { st.error = e?.error?.name || e?.error?.message || 'error'; this.flag(st); };
       st.startedLocal = Date.now();
-      try { rec.start(timesliceMs); }
-      catch (e) { this.onError?.(`the recorder would not start: ${e.name || e.message}`); st.rec = null; return; }
+      try { rec.start(timesliceMs); } catch (e) { st.error = e.name || e.message; this.flag(st); return; }
       st.active = true; this.recording = true;
       this.watchFrames(st);
-      // no picture reaching the page 3 s in (screen locked, Safari in the background, camera taken): say so
-      setTimeout(() => { if (st.active && !st.frames.length && !(this.video && this.video.readyState >= 2 && !this.video.paused)) this.onError?.('this camera is not delivering a picture — keep its screen on and Safari in front'); }, 3000);
+      // is it really recording? told to the director within ~2 s (e.g. an iPhone whose recorder gives 5 bytes)
+      st.health = [1600, 3200].map((ms) => setTimeout(() => { if (st.active) this.flag(st); }, ms));
     };
     const wait = atLocal - Date.now();
     if (wait > 4) st.timer = setTimeout(st.go, wait); else st.go();
+  }
+  /** Check the recording `st`; the first problem found is reported once (onHealth(message, tag)). */
+  flag(st, { final = false } = {}) {
+    if (st.recError) return st.recError;
+    const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden', trackState = this.track?.readyState, muted = !!this.track?.muted;
+    let msg = recordingProblem({ error: st.error, trackState, muted, hidden,
+      chunks: st.seq, bytes: st.bytes, frames: st.frameCount, rvfc: !!this.video?.requestVideoFrameCallback, final, elapsedMs: (st.stoppedLocal || Date.now()) - (st.startedLocal || Date.now()) });
+    if (msg) {
+      // frames arrived and the page was in front, yet the recorder made (almost) nothing: this
+      // device can't record that format — the next recording uses the next one it offers
+      if (/recorder produced/.test(msg) && st.frameCount > 0 && !hidden && !muted && trackState !== 'ended' && !st.error && markBadMime(st.mime)) {
+        const next = pickMime();
+        if (next && next !== st.mime) { st.mimeSwitched = next; msg += ` — the next recording uses ${/mp4/.test(next) ? 'MP4' : 'WebM'} instead`; }
+      }
+      st.recError = msg; this.onHealth?.(msg, st.tag);
+    }
+    else if (!final && st.frameCount === 0 && st.bytes > 4096 && this.video?.requestVideoFrameCallback) { st.recWarn = 'no frame times: the preview was paused'; this.keepPlaying(); }
+    return msg;
   }
   get streaming() { return !!this.cur?.streaming; }
   get mime() { return this.cur?.mime ?? pickMime(); }
@@ -143,6 +233,7 @@ export class WebCamera {
     if (!v || !v.requestVideoFrameCallback) return;
     const tick = (now, meta) => {
       if (!st.active) return;
+      st.frameCount++;
       // captureTime / receiveTime are on the performance clock (ms); map to wall clock, then to the server
       const perf = meta.captureTime ?? meta.receiveTime ?? meta.expectedDisplayTime ?? now;
       const wall = performance.timeOrigin + perf;
@@ -155,10 +246,15 @@ export class WebCamera {
   /** Stop the current recording at local time `atLocal`; resolves after its last chunk was handed over. */
   stop({ atLocal = Date.now() } = {}) {
     const st = this.cur;
-    if (!st) return Promise.resolve({ chunks: 0, mime: pickMime(), bps: null, frames: [], mediaTimes: [], startedLocal: null, stoppedLocal: Date.now(), tag: null });
+    if (!st) return Promise.resolve({ chunks: 0, bytes: 0, mime: pickMime(), bps: null, frames: [], mediaTimes: [], startedLocal: null, stoppedLocal: Date.now(), tag: null, recError: null });
     st.stopping = true;
     return (st.stopped ||= new Promise((resolve) => {
-      const done = () => { st.active = false; st.stoppedLocal = Date.now(); resolve({ chunks: st.seq, mime: st.mime, bps: st.bps, frames: st.frames, mediaTimes: st.mediaTimes, startedLocal: st.startedLocal, stoppedLocal: st.stoppedLocal, streaming: st.streaming, tag: st.tag }); };
+      const done = () => {
+        st.active = false; st.stoppedLocal = Date.now(); st.health.forEach(clearTimeout);
+        if (st.startedLocal) this.flag(st, { final: true });
+        resolve({ chunks: st.seq, bytes: st.bytes, mime: st.mime, bps: st.bps, frames: st.frames, mediaTimes: st.mediaTimes, startedLocal: st.startedLocal, stoppedLocal: st.stoppedLocal, streaming: st.streaming, tag: st.tag, recError: st.recError, recWarn: st.recWarn || null,
+          rvfc: !!this.video?.requestVideoFrameCallback, mimeSwitched: st.mimeSwitched || null });
+      };
       const go = () => {
         // STOP before the scheduled start: start now and stop at once (a short file, never a recorder left running)
         if (st.timer) { clearTimeout(st.timer); st.go(); }
