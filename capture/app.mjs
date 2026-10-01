@@ -15,7 +15,7 @@ import * as P from './protocol.mjs';
 import { SETUPS, courtSVG } from './court-layout.mjs';
 import { ClockSync, CHIRP, frameStats } from './camera-sync.mjs';
 import { WebCamera } from './camera.mjs';
-import { Uploader, recLock } from './uploader.mjs';
+import { Uploader, recLock, storageMode } from './uploader.mjs';
 
 const $ = (id) => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
@@ -125,7 +125,7 @@ class CameraRole {
   }
   ready() { return !!(this.cam.stream && this.link.open && this.clock.best); }
   pushState() {
-    this.link.send({ t: 'state', state: { recError: this.recError || null, ready: this.ready(), recording: this.recording, camera: this.cam.stream ? this.cam.describe() : null, clock: this.clock.best, uploads: this.uploads, calibrated: !!this.cam.ref, moved: this.movedReason, streaming: this.recording ? !!this.cam.streaming : undefined } });
+    this.link.send({ t: 'state', state: { recError: this.recError || null, storage: storageMode(), uploadError: this.uploads?.error || null, ready: this.ready(), recording: this.recording, camera: this.cam.stream ? this.cam.describe() : null, clock: this.clock.best, uploads: this.uploads, calibrated: !!this.cam.ref, moved: this.movedReason, streaming: this.recording ? !!this.cam.streaming : undefined } });
   }
   /** A recorded chunk → the device's store, for the take that recording belongs to. */
   onChunk(seq, blob, tag, mime) {
@@ -203,6 +203,7 @@ function keptActions(box, role, redraw) {
   });
 }
 
+window.addEventListener('sjc-db-memory', () => { const b = document.createElement('div'); b.className = 'banner'; b.textContent = 'Phone storage is unavailable here — recordings upload straight from memory. Keep this page open (don\'t reload it) until uploads say ✓.'; document.body.prepend(b); });
 window.addEventListener('sjc-db-blocked', () => { const b = document.createElement('div'); b.className = 'banner bad'; b.textContent = 'Another Soul Jam Capture tab on this phone is holding its storage — close the other tab.'; document.body.prepend(b); });
 
 // ═══ CAMERA MODE ═══════════════════════════════════════════════════════════
@@ -355,7 +356,11 @@ async function directorMode(sessionId) {
     const c = cal(a.courtSetup);
     if (c?.status === 'suspect') bs.push(`<div class="banner bad">Calibration for setup ${a.courtSetup} may be invalid — ${esc(c.suspectReason || 'a camera moved')}. Recalibrate.</div>`);
     if (D.camErr) bs.push(`<div class="banner bad">This phone's camera: ${esc(D.camErr)}</div>`);
-    for (const r of ['camA', 'camB']) { const e = D.presence[r]?.state?.recError; if (e) bs.push(`<div class="banner bad">${r === 'camA' ? 'CAM A' : 'CAM B'}: ${esc(e)}</div>`); }
+    for (const r of ['camA', 'camB']) {
+      const st = D.presence[r]?.state, name = r === 'camA' ? 'CAM A' : 'CAM B';
+      if (st?.recError) bs.push(`<div class="banner bad">${name}: ${esc(st.recError)}</div>`);
+      if (st?.uploadError && (st.uploads?.chunks || st.uploads?.finals)) bs.push(`<div class="banner bad">${name} upload: ${esc(st.uploadError)}</div>`);
+    }
     const lim = ['camA', 'camB'].map((r) => [r, D.presence[r]?.state?.camera]).filter(([, cam]) => cam?.capabilities?.webLimited && cam.frameRate);
     if (lim.length) bs.push(`<div class="banner small">Browser capture: ${lim.map(([r, cam]) => `${r === 'camA' ? 'A' : 'B'} ${Math.round(cam.frameRate)} fps`).join(' · ')} — 120 fps is not available to web pages on ${lim.length > 1 ? 'these phones' : 'this phone'} (see docs/capture.md → native capture).</div>`);
     const up = ['camA', 'camB'].map((r) => D.presence[r]?.state?.uploads).filter((u) => u && (u.chunks || u.finals));

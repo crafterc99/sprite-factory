@@ -13,24 +13,49 @@
  * device (keptAside / saveKept / dropKept) until the operator saves or discards it.
  */
 
-const DB = 'souljam-capture', VER = 2;
+// A fresh database name: an old capture tab (older code, older schema) left open on the phone can
+// never block it. If IndexedDB is unavailable or does not open within 3 s, the queue runs in memory
+// (uploads still go; the page just must not be reloaded mid-take) and the page says so.
+const DB = 'souljam-capture-v2', VER = 1;
+const STORES = ['chunks', 'finals', 'kept'];
+let MEM = null;                                            // { chunks: MemStore, … } in memory mode
+class MemStore {
+  constructor() { this.m = new Map(); }
+  req(v) { const r = { result: v, onsuccess: null }; queueMicrotask(() => r.onsuccess?.()); return r; }
+  put(o) { this.m.set(o.k, o); return this.req(o.k); }
+  delete(k) { this.m.delete(k); return this.req(); }
+  get(k) { return this.req(this.m.get(k)); }
+  getAll() { return this.req([...this.m.values()]); }
+  clear() { this.m.clear(); return this.req(); }
+}
+const toMemory = (why) => {
+  if (!MEM) { MEM = Object.fromEntries(STORES.map((n) => [n, new MemStore()])); window.dispatchEvent(new CustomEvent('sjc-db-memory', { detail: why })); }
+  return null;
+};
+export const storageMode = () => (MEM ? 'memory' : 'device');
 function db() {
-  return (db._p ||= new Promise((resolve, reject) => {
-    const r = indexedDB.open(DB, VER);
+  return (db._p ||= new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') return resolve(toMemory('no IndexedDB'));
+    const timer = setTimeout(() => resolve(toMemory('phone storage did not open')), 3000);
+    let r;
+    try { r = indexedDB.open(DB, VER); } catch (e) { clearTimeout(timer); return resolve(toMemory(e.message)); }
     r.onupgradeneeded = () => {
       const d = r.result;
-      if (!d.objectStoreNames.contains('chunks')) d.createObjectStore('chunks', { keyPath: 'k' });
-      if (!d.objectStoreNames.contains('finals')) d.createObjectStore('finals', { keyPath: 'k' });
-      if (!d.objectStoreNames.contains('kept')) d.createObjectStore('kept', { keyPath: 'k' });
+      for (const n of STORES) if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'k' });
     };
-    r.onsuccess = () => { const d = r.result; d.onversionchange = () => { d.close(); db._p = null; }; resolve(d); };
-    r.onerror = () => reject(r.error);
-    // an older capture tab still has the database open: it is asked to let go (above); until then say so
+    r.onsuccess = () => { clearTimeout(timer); const d = r.result; d.onversionchange = () => { d.close(); db._p = null; }; resolve(MEM ? null : d); };
+    r.onerror = () => { clearTimeout(timer); resolve(toMemory(String(r.error?.message || 'storage error'))); };
     r.onblocked = () => window.dispatchEvent(new CustomEvent('sjc-db-blocked'));
   }));
 }
 async function tx(stores, mode, fn) {
   const d = await db();
+  if (MEM || !d) {
+    const list = Array.isArray(stores) ? stores.map((n) => MEM[n]) : MEM[stores];
+    const out = await fn(list);
+    await new Promise((r) => setTimeout(r, 0));             // let queued request callbacks run
+    return out;
+  }
   return new Promise((resolve, reject) => {
     const t = d.transaction(stores, mode);
     let out;

@@ -468,6 +468,14 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       json(res, { calibration: r });
     } catch (e) { err(res, e); }
   });
+  // live status of the room's devices (what the hub sees right now) — for the director / diagnosis
+  router.get('/api/capture/sessions/:sid/devices', async (req, res, p) => {
+    if (needDirector(req, res)) return;
+    const r = hub()?.rooms.get(p.sid);
+    const now = Date.now(), out = {};
+    for (const [role, d] of r?.devices || []) out[role] = { online: d.online, lastSeenAgoMs: now - (d.lastSeen || 0), deviceId: d.deviceId, ua: d.device?.ua || null, state: d.state ? { ...d.state, camera: d.state.camera ? { width: d.state.camera.width, height: d.state.camera.height, frameRate: d.state.camera.frameRate, mime: d.state.camera.mime, label: d.state.camera.label } : null } : null };
+    json(res, { armed: r?.armed || null, devices: out });
+  });
   // a camera's calibration reference view: kept on the server, so a reloaded camera page still
   // notices being moved (camera token or director)
   router.put('/api/capture/sessions/:sid/calref/:setup/:cam', async (req, res, p) => {
