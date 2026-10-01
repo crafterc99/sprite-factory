@@ -710,16 +710,39 @@ rBtn.addEventListener('pointerdown', () => { touch.run = true; rBtn.classList.ad
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) rBtn.addEventListener(ev, () => { touch.run = false; rBtn.classList.remove('held'); });
 
 const dz = (v) => (Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85);
+/**
+ * Right-stick flick gestures (2K "pro stick"): a flick is a quick push past 0.7 that comes back
+ * toward the centre. Two flicks in a row within 0.5 s make a combo — 'left-right' fires once.
+ */
+const FLICK = { at: 0.7, back: 0.35, combo: 500, last: null, lastAt: 0, dir: null };
+function stickFlicks(x) {
+  const now = performance.now();
+  if (!FLICK.dir && Math.abs(x) >= FLICK.at) FLICK.dir = x < 0 ? 'left' : 'right';
+  if (FLICK.dir && Math.abs(x) <= FLICK.back) {
+    const d = FLICK.dir; FLICK.dir = null;
+    const combo = FLICK.last && now - FLICK.lastAt < FLICK.combo ? `${FLICK.last}-${d}` : null;
+    FLICK.last = combo ? null : d; FLICK.lastAt = now;
+    return combo;
+  }
+  // a direction pushed straight to the other side (no pause at the centre) counts too
+  if (FLICK.dir && Math.sign(x) && (x < 0 ? 'left' : 'right') !== FLICK.dir && Math.abs(x) >= FLICK.at) {
+    const d = FLICK.dir; FLICK.dir = x < 0 ? 'left' : 'right';
+    FLICK.last = d; FLICK.lastAt = now;
+  }
+  return null;
+}
 const padPrev = {};
 function padEdge(gp, i) { const now = !!gp?.buttons[i]?.pressed; const was = padPrev[i]; padPrev[i] = now; return now && !was; }
 function readInput() {
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   const gp = pads[0];
-  let mx = 0, my = 0, cx = 0, cy = 0, shoot = false, sprint = false;
-  const edge = { cross: false, spin: false, hesi: false, btl: false, hand: false, ball: false };
+  let mx = 0, my = 0, cx = 0, cy = 0, rx = 0, ry = 0, shoot = false, sprint = false;
+  const edge = { cross: false, spin: false, hesi: false, btl: false, hand: false, ball: false, doubleCross: false };
   if (gp) {
     mx = dz(gp.axes[0] || 0); my = dz(gp.axes[1] || 0);
-    cx = dz(gp.axes[2] || 0); cy = dz(gp.axes[3] || 0);
+    rx = gp.axes[2] || 0; ry = gp.axes[3] || 0;          // the right stick: ball handling (flick gestures)
+    // the camera: D-pad (left / right turn, up / down zoom)
+    cx = (gp.buttons[15]?.pressed ? 1 : 0) - (gp.buttons[14]?.pressed ? 1 : 0); cy = (gp.buttons[13]?.pressed ? 1 : 0) - (gp.buttons[12]?.pressed ? 1 : 0);
     shoot = !!gp.buttons[2]?.pressed;                   // Square (PS) / X (Xbox)
     sprint = (gp.buttons[7]?.value || 0) > 0.3;         // R2
     edge.cross = padEdge(gp, 1); edge.spin = padEdge(gp, 3); edge.hesi = padEdge(gp, 0); edge.ball = edge.hesi; // ✕ without the ball = a new ball
@@ -735,7 +758,10 @@ function readInput() {
   if (pressedSinceTick.has('KeyU')) edge.btl = true;
   if (pressedSinceTick.has('KeyH')) edge.hand = true;
   if (pressedSinceTick.has('KeyX')) edge.ball = true;
+  if (pressedSinceTick.has('KeyL')) edge.doubleCross = true;
   pressedSinceTick.clear();
+  // right stick (keyboard: ← then → quickly): flick left, then right = the double crossover
+  if (stickFlicks(gp ? rx : (keys.has('ArrowLeft') ? -1 : 0) + (keys.has('ArrowRight') ? 1 : 0)) === 'left-right') edge.doubleCross = true;
   if (touch.id != null) { mx = touch.x; my = touch.y; }
   if (touch.shoot || touch.tap) { shoot = true; edge.ball = true; }
   if (touch.move) edge.cross = true;
@@ -766,7 +792,7 @@ function toggleDbg() { S.dbg = !S.dbg; $('dbgBtn').classList.toggle('on', S.dbg)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function toast(html, ms = 2600) { const t = $('toast'); t.innerHTML = html; t.style.display = 'block'; S.toastUntil = performance.now() + ms; }
 
-const ROLE_NAMES = { 'move-crossover': 'crossover', 'move-spin': 'spin move', 'move-hesi': 'hesitation', 'move-btl': 'between-the-legs', 'shot-jumper': 'jump shot', 'shot-stepback': 'step-back jumper' };
+const ROLE_NAMES = { 'move-double-cross': 'double crossover', 'move-crossover': 'crossover', 'move-spin': 'spin move', 'move-hesi': 'hesitation', 'move-btl': 'between-the-legs', 'shot-jumper': 'jump shot', 'shot-stepback': 'step-back jumper' };
 function trigger(role) {
   const p = S.player;
   // (the contact system buffers a request and fires it in a valid window — a move may chain)
@@ -1290,6 +1316,7 @@ function gameTick(dt, rdt, inp, now) {
   if (!trig && inp.edge.spin) trig = trigger('move-spin');
   if (!trig && inp.edge.hesi) trig = trigger('move-hesi');
   if (!trig && inp.edge.btl) trig = trigger('move-btl');
+  if (!trig && inp.edge.doubleCross) trig = trigger('move-double-cross');
   if (inp.edge.hand && P.mode === 'loco') switchHand();
   // (game time: a slow frame is capped, the wait is measured in dribbles, not wall-clock)
   if (S.ball) {
