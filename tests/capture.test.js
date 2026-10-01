@@ -477,3 +477,49 @@ test('the live hotfixes, kept: every iOS browser records MP4 (High profile first
   assert.strictEqual(recordingProblem({ chunks: 1, bytes: 16000, frames: 0, playing: false, elapsedMs: 1600 }), null, 'not before 3 s (the preview is restarted at 1.6 s)');
   assert.strictEqual(recordingProblem({ chunks: 3, bytes: 900000, frames: 0, playing: true, elapsedMs: 3200 }), null, 'playing, data flowing, no frame times: a warning only (recWarn)');
 });
+
+test('the toast after a take says exactly one state: a failed take never reads "recorded — uploading"; a saved take never "will need a redo"', async () => {
+  const { takeToast } = await import('../capture/toast.mjs');
+  const anim = { id: '005', title: 'JAB', subtitle: 'LEFT FOOT' };
+  const t = (state = 'uploading') => ({ anim, takeId: 'tk1', state });
+  // CAM B wrote 5 bytes: the check failed
+  const failed = takeToast(t(), { takes: ['tk1'], results: { tk1: { state: 'failed', reason: 'camB recorded no usable video (file is only 5 bytes)' } } });
+  assert.strictEqual(failed.cls, 'bad');
+  assert.match(failed.msg, /^✗ JAB LEFT FOOT: the check failed — CAM B recorded no usable video/);
+  assert.doesNotMatch(failed.msg, /uploading/);
+  // the hub said CAM B never started, then the take failed: the failure, not "uploading"
+  assert.match(takeToast(t(), { results: { tk1: { state: 'failed', reason: 'camB never started recording' } } }, { cams: ['camB'] }).msg, /^✗ .*the check failed/);
+  // one-camera mode: CAM B never started, the take is saved with CAM A — "saved", no redo demanded
+  const saved = takeToast(t(), { takes: ['tk1'], selectedTake: 'tk1', results: { tk1: { state: 'recorded', warnings: [] } } }, { cams: ['camB'] });
+  assert.deepStrictEqual([saved.msg, saved.cls, saved.saved], ['✓ JAB LEFT FOOT — saved.', '', true]);
+  // still on its way, and the hub said CAM B never started: told now
+  assert.match(takeToast(t(), { takes: ['tk1'] }, { cams: ['camB'] }).msg, /^✗ CAM B did not start recording JAB LEFT FOOT — it will need a redo/);
+  // on its way, nothing wrong
+  assert.deepStrictEqual(takeToast(t(), { takes: ['tk1'] }), { msg: '✓ JAB LEFT FOOT recorded — uploading in the background…', cls: '', saved: false, failed: false });
+  // saved with a warning that matters
+  const w = takeToast(t('saved'), { takes: ['tk1'], selectedTake: 'tk1', results: { tk1: { state: 'recorded', warnings: ['camA: 1.4 s — shorter than half the target (4 s)'] } } });
+  assert.deepStrictEqual([w.cls, /^✓ JAB LEFT FOOT saved — but CAM A: 1\.4 s — shorter than half/.test(w.msg)], ['warn', true]);
+});
+
+test('a recorder that never says "stopped": the take finishes after 4 s, and the format is NOT blacklisted from what had arrived by then (a slow Safari flush keeps High-profile MP4)', async () => {
+  const { WebCamera, pickMime } = await import('../capture/camera.mjs');
+  const realMR = globalThis.MediaRecorder;
+  globalThis.MediaRecorder = class { static isTypeSupported(m) { return m.startsWith('video/mp4'); } constructor(stream, o) { this.mimeType = o?.mimeType; this.state = 'inactive'; } start() { this.state = 'recording'; } stop() { /* never fires onstop */ } };
+  try {
+    const cam = new WebCamera({ onChunk: () => {} });
+    Object.assign(cam, { stream: {}, settings: { frameRate: 30, width: 1280, height: 720 }, track: { readyState: 'live', muted: false }, video: { requestVideoFrameCallback() {}, readyState: 4, paused: false } });
+    cam.start({ atLocal: Date.now(), tag: 'tk-slow' });
+    const st = cam.cur;
+    assert.strictEqual(st.mime, 'video/mp4;codecs=avc1.640028,mp4a.40.2');
+    st.rec.ondataavailable({ data: { size: 1000 } });            // only the file header so far
+    st.frameCount = 90; st.startedLocal = Date.now() - 3000;       // 3 s recorded, frames arriving
+    const t0 = Date.now();
+    const r = await cam.stop();
+    assert.ok(Date.now() - t0 >= 3900, 'finished by the 4 s fallback');
+    assert.strictEqual(r.stopTimedOut, true);
+    assert.ok(r.stoppedLocal - t0 < 500, 'the stop time is when it was asked to stop, not 4 s later');
+    assert.match(r.recError, /did not finish within 4 s of the stop/);
+    assert.strictEqual(r.mimeSwitched, null);
+    assert.strictEqual(pickMime({ webkit: true, supported: () => true }), 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'High-profile MP4 is kept');
+  } finally { globalThis.MediaRecorder = realMR; }
+});

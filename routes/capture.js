@@ -132,6 +132,16 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
   }
   /** A file the record points at, on this disk (fetched from the bucket after a redeploy). */
   const local = async (abs) => { if (!fs.existsSync(abs)) await cloud.ensureLocal(abs, store.cloudKey(abs)).catch(() => null); return fs.existsSync(abs) ? abs : null; };
+  /**
+   * The same for the checks, which must not judge a take on a storage hiccup: a file the bucket
+   * does not have → null (the check fails it), but a failed fetch THROWS — the take stays
+   * "validating" and the next read of the session (settle → nudge) checks it again.
+   */
+  const fetchForCheck = async (abs) => {
+    if (fs.existsSync(abs)) return abs;
+    const got = await cloud.ensureLocal(abs, store.cloudKey(abs));      // throws on a storage error
+    return got && fs.existsSync(abs) ? abs : null;
+  };
   // analysis (SAM 3D Body) runs only when the director sends takes, one at a time, surviving restarts
   const queue = analysis.createQueue({ hub, local, TMP_DIR, anim: async (s, id) => (await libraries()).LIBRARIES[s?.libraryId]?.animations.find((a) => a.id === id) || null });
   hubRef.onBoot = () => { const t = setTimeout(() => queue.resumeAll().catch((e) => console.error('[capture] analysis resume', e.message)), 3000); t.unref?.(); };
@@ -218,6 +228,13 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       if (b.setup != null && !SETUPS.includes(b.setup)) return json(res, { error: 'setup must be A, B or C' }, 400);
       const s = await store.updateSession(p.sid, (s) => {
         if (typeof b.oneCamera === 'boolean') s.oneCamera = b.oneCamera;
+        // two cameras again: a calibration made with one camera's view can't combine two views —
+        // stale, so the director is sent to Calibrate and no two-camera take points at it
+        if (b.oneCamera === false) {
+          for (const c of Object.values(s.calibrations || {})) {
+            if (c && ['valid', 'suspect'].includes(c.status) && Array.isArray(c.cams) && c.cams.length < 2) Object.assign(c, { status: 'stale', staleAt: new Date().toISOString(), staleReason: `recorded with ${c.cams.map(camName).join(' + ') || 'one camera'} only; two cameras need a calibration with both` });
+          }
+        }
         if (!b.setup) return;
         const st = STATION_OF[b.setup];
         moveTo(s, st);
@@ -380,8 +397,11 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       const v = await store.updateRecording(sid, rid, (r) => { r.state = 'validating'; r.validatingAt = new Date().toISOString(); });
       hub()?.takeUpdate(sid, v);
       const files = {};
-      for (const c of cams) files[c] = await local(store.recordingPath(sid, rec, rec.cameras[c].file));
-      const oneCamera = !!(await store.loadSession(sid).catch(() => null))?.oneCamera;
+      for (const c of cams) files[c] = await fetchForCheck(store.recordingPath(sid, rec, rec.cameras[c].file));
+      // the mode decides two-camera failures: a session that can't be read now is read again later
+      const sess = await store.loadSession(sid);
+      if (!sess) throw new Error(`session ${sid} could not be read — the take is checked again later`);
+      const oneCamera = !!sess.oneCamera;
       // (outside the record's lock: the checks take seconds; what they learn is merged in after)
       const checked = structuredClone(rec);
       const validation = await validators.validate(checked, files, { cams });
@@ -420,7 +440,7 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
     const result = {}, info = {};
     for (const c of part) {
       const cc = rec.cameras?.[c];
-      const abs = cc?.file ? await local(store.recordingPath(sid, rec, cc.file)) : null;
+      const abs = cc?.file ? await fetchForCheck(store.recordingPath(sid, rec, cc.file)) : null;
       const pr = abs ? await media.probe(abs).catch((e) => ({ ok: false, error: e.message })) : null;
       if (pr?.ok) info[c] = pr;
       result[c] = validators.checkCamera(cc, pr);
@@ -613,6 +633,7 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
         const c = (s.calibrations[st] ||= { takes: [rec.id], current: null });
         if (!c.takes.includes(rec.id)) c.takes.push(rec.id);
         c.current = rec.id; c.status = 'valid'; c.acceptedAt = at; delete c.suspectReason; delete c.lastFailed; delete c.staleReason; delete c.staleAt;
+        c.cams = CAMS.filter((cm) => saved.cameras?.[cm]?.file);              // the views it holds (one-camera mode: one)
         moveTo(s, st);
       } else {
         const e = (s.animations[rec.animId] ||= { takes: [rec.id], selectedTake: null });
@@ -621,15 +642,21 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
         const first = (c) => (/^(duration-|recorder-|missing-)/.test(c.id || '') ? 0 : c.id === 'one-view' ? 1 : 2);   // what matters for the clip first
         const warnings = (saved.validation?.checks || []).filter((c) => c.level !== 'ok').sort((a, b) => first(a) - first(b)).map((c) => c.msg).slice(0, 5);
         const short = durationIssue(saved.validation);
+        const cams = CAMS.filter((c) => saved.cameras?.[c]?.file);
         const cur = e.selectedTake, curShort = !!(cur && e.results?.[cur]?.short);
+        // two-camera mode: a newer take with fewer views (one camera missed it) never replaces one
+        // with both — the same way a short take never replaces a full one
+        const curViews = cur ? (e.results?.[cur]?.cams?.length ?? CAMS.length) : 0;
+        const fewerViews = !s.oneCamera && !!cur && cams.length < curViews;
         if (auto) {
-          if (!cur || (!repair && i(cur) < i(rec.id) && (!short || curShort))) e.selectedTake = rec.id;
+          if (!cur || (!repair && i(cur) < i(rec.id) && (!short || curShort) && !fewerViews)) e.selectedTake = rec.id;
         } else if (!cur || select !== false) e.selectedTake = rec.id;
+        const passedOver = auto && !repair && e.selectedTake !== rec.id && i(cur) < i(rec.id) ? (short && !curShort ? 'short' : fewerViews ? 'one-view' : null) : null;
         (e.results ||= {})[rec.id] = {
-          state: 'recorded', at, cams: CAMS.filter((c) => saved.cameras?.[c]?.file),
+          state: 'recorded', at, cams,
           durations: Object.fromEntries(CAMS.filter((c) => saved.cameras?.[c]?.fileInfo?.durationSec).map((c) => [c, saved.cameras[c].fileInfo.durationSec])),
-          // passedOver: saved, but the automatic choice kept the selected (full) take
-          warnings, ...(short ? { short: true } : {}), ...(auto && !repair && short && e.selectedTake !== rec.id ? { passedOver: true } : {}),
+          // passedOver: saved, but the automatic choice kept the selected (full / two-view) take
+          warnings, ...(short ? { short: true } : {}), ...(passedOver ? { passedOver } : {}),
         };
         e.skipped = false;
       }

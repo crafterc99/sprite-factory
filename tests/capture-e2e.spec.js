@@ -320,7 +320,10 @@ function breakableRecorder() {
     let shotRec = false;
     const r1 = await recordTake(null, { onRecording: async () => { await sleep(2500); await shot(A, '08-recording', [IPAD, PHONE], { top: false }); await shot(B, '08-cameraB-recording', [PHONE]); shotRec = true; } });
     const toast1 = await A.page.textContent('#toastMsg').catch(() => '');
-    check('#1 stops by itself at its target (8 s), the next animation is up at once — no review', r1.sec > 7 && r1.sec < 10.5 && r1.after !== r1.before && /recorded|saved/.test(toast1) && await A.page.$('#acceptBtn') == null, `${r1.before} (${r1.sec.toFixed(1)} s) → ${r1.after} · "${oneLine(toast1, 80)}"`);
+    const toast1State = await A.page.$eval('#toast .toast', (e) => e.dataset.state).catch(() => '');
+    // exactly the take's state: on its way, or already saved — never a failure or a redo request
+    const toast1Ok = /^✓ NEUTRAL IDLE athletic stance (recorded — uploading in the background…|— saved\.)$/.test(toast1) && ['uploading', 'saved'].includes(toast1State);
+    check('#1 stops by itself at its target (8 s), the next animation is up at once — no review', r1.sec > 7 && r1.sec < 10.5 && r1.after !== r1.before && toast1Ok && await A.page.$('#acceptBtn') == null, `${r1.before} (${r1.sec.toFixed(1)} s) → ${r1.after} · "${oneLine(toast1, 80)}" (${toast1State})`);
     await shot(A, '09-after-take', [IPAD, PHONE]);
     // #2, #3 with STOP, back to back
     const r2 = await recordTake(2400), r3 = await recordTake(2400);
@@ -393,6 +396,10 @@ function breakableRecorder() {
     const a5 = await animOfTake(r5.tid);
     let st5 = null; const t5 = Date.now();
     while (Date.now() - t5 < 60000) { st5 = (await import('../capture/protocol.mjs')).slotStatus(await sess(), a5); if (st5.status !== 'uploading') break; await sleep(400); }
+    // the toast says the take failed — never "recorded — uploading" in red
+    await A.page.waitForFunction(() => document.querySelector('#toast .toast')?.dataset.state === 'failed', null, { timeout: 15000 }).catch(() => {});
+    const toast5 = { text: await A.page.textContent('#toastMsg').catch(() => ''), state: await A.page.$eval('#toast .toast', (e) => e.dataset.state).catch(() => ''), cls: await A.page.$eval('#toast .toast', (e) => e.className).catch(() => '') };
+    check('… the toast says it failed, with the reason (not "recorded — uploading")', toast5.state === 'failed' && /\bbad\b/.test(toast5.cls) && /^✗ .*: the check failed — CAM B recorded no usable video/.test(toast5.text) && !/uploading/.test(toast5.text), oneLine(toast5.text, 160));
     await clickEl(A.page, '#stepper button[data-step="slots"]');
     await sleep(500);
     const row5 = await D((aid) => document.querySelector(`.slot[data-anim="${aid}"]`)?.textContent, a5);

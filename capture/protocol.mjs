@@ -76,7 +76,8 @@ export function slotStatus(session, animId) {
     const done = e.analysis?.state === 'done' && e.analysis.takeId === sel;
     const lr = res(latest), sr = res(sel);
     const note = latest === sel ? null : lr?.state === 'failed' ? `the newest take failed: ${lr.reason}`
-      : lr?.passedOver ? `the newest take (${takes.indexOf(latest) + 1}) is short and was not selected: ${lr.warnings?.[0] || 'too short'}` : null;
+      : lr?.passedOver === 'one-view' ? `the newest take (${takes.indexOf(latest) + 1}) has only one camera's view and was not selected: ${lr.warnings?.find((w) => /one view/.test(w)) || lr.warnings?.[0] || 'one view'}`
+        : lr?.passedOver ? `the newest take (${takes.indexOf(latest) + 1}) is short and was not selected: ${lr.warnings?.[0] || 'too short'}` : null;
     return { ...base, status: done ? 'analysed' : 'recorded', takeId: sel, ...(sr?.warnings?.length ? { warn: sr.warnings[0], short: !!sr.short } : {}), ...(note ? { note } : {}) };
   }
   if (latest && res(latest)?.state === 'failed') return { ...base, status: 'failed', takeId: latest, reason: res(latest).reason };

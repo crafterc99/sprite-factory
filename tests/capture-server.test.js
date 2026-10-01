@@ -1358,6 +1358,20 @@ test('(p) calibration: one per camera placement (setups A and B share one); with
   assert.strictEqual(d3.state, 'accepted');
   sess = await sessionWhen(s.id, (x) => x.calibrations.A.current === c3.id, 'the one-camera calibration saved');
   assert.deepStrictEqual([sess.calibrations.A.status, sess.calibrations.A.current], ['valid', c3.id]);
+  assert.deepStrictEqual(sess.calibrations.A.cams, ['camA'], 'the calibration says which views it holds');
+  // back to two cameras: the CAM-A-only calibration can't serve two views — stale, takes don't point at it
+  const two = await dapi('POST', `/api/capture/sessions/${s.id}/setup`, { oneCamera: false });
+  assert.strictEqual(two.status, 200, JSON.stringify(two.json));
+  assert.strictEqual(two.json.session.calibrations.A.status, 'stale');
+  assert.match(two.json.session.calibrations.A.staleReason, /CAM A only/);
+  const t2cam = await armTake(s.id, ANIMS[26].id);
+  assert.deepStrictEqual([t2cam.calibrationId, t2cam.calibrationStatus], [null, 'stale'], 'a two-camera take never links a one-camera calibration');
+  // a calibration with both views stays valid when the mode changes
+  const { done: d4 } = await calib('A', ['camA', 'camB'], [[camA, true], [camB, true]]);
+  assert.strictEqual(d4.state, 'accepted', JSON.stringify(d4.validation?.checks?.slice(0, 2)));
+  sess = await sessionWhen(s.id, (x) => x.calibrations.A.status === 'valid', 'the two-camera calibration saved');
+  assert.deepStrictEqual(sess.calibrations.A.cams, ['camA', 'camB']);
+  assert.strictEqual((await dapi('POST', `/api/capture/sessions/${s.id}/setup`, { oneCamera: false })).json.session.calibrations.A.status, 'valid');
   assert.strictEqual((await dapi('POST', `/api/capture/sessions/${s.id}/setup`, { setup: 'D' })).status, 400);
   camA.close(); camB.close(); dir.close();
 });
@@ -1374,7 +1388,7 @@ test('(r) a redo stopped early (short) is saved but does not replace a full take
   assert.strictEqual(e.selectedTake, t1.id, 'the full take stays selected');
   assert.strictEqual(e.results[t2.id].state, 'recorded');
   assert.strictEqual(e.results[t2.id].short, true);
-  assert.strictEqual(e.results[t2.id].passedOver, true);
+  assert.strictEqual(e.results[t2.id].passedOver, 'short');
   assert.match(e.results[t2.id].warnings.join(' '), /shorter than half the target/);
   const P = await import('../capture/protocol.mjs');
   assert.match(P.slotStatus(sess, anim.id).note, /is short/);
@@ -1494,4 +1508,117 @@ test('(v) live device status (director only): each camera\'s storage mode and up
   const ss = await sessionWhen(s.id, (x) => x.animations[anim2.id]?.results?.[t2.id]?.state === 'recorded', 'the take in the progress');
   assert.match(ss.animations[anim2.id].results[t2.id].warnings.join(' '), /only camA recorded — camB was not ready at RECORD \(one view: no 3-D\)/);
   camA2.close(); camB2.close(); dir2.close();
+});
+
+test('(w) analysis: a take left "queued" outside the queue (its session write was lost) can be sent again — not "already queued" for ever; a run interrupted after its result was stored is done, not an error inviting a second payment', async () => {
+  await redeploy({ wipe: false, env: ANA_ENV });
+  const s = await newSession('server-test ana4');
+  const token = await pairByToken(s);
+  const t1 = await uploadedTake(s.id, token, ANIMS[32].id);
+  const t2 = await uploadedTake(s.id, token, ANIMS[33].id);
+  const url = `/api/capture/sessions/${s.id}/process-batch`;
+  const q1 = await dapi('POST', url, { takes: [t1.id], cam: 'camA', fps: 10 });
+  assert.strictEqual(q1.status, 402, JSON.stringify(q1.json));
+  // the bucket refuses the session write of the confirmation: the take's record already says "queued"
+  const bSession = bucketPath(s.id, 'session.json');
+  fs.mkdirSync(`${bSession}.part`);
+  let refused;
+  try { refused = await dapi('POST', url, { takes: [t1.id], cam: 'camA', fps: 10, confirmCostUsd: q1.json.estimateUsd }); }
+  finally { fs.rmSync(`${bSession}.part`, { recursive: true, force: true }); }
+  assert.notStrictEqual(refused.status, 200, 'the confirmation is not reported queued');
+  assert.strictEqual((await getTake(s.id, t1.id)).analysis?.state, 'queued', 'the record says queued …');
+  assert.ok(!((await getSession(s.id)).session.analysisQueue || []).some((x) => x.takeId === t1.id), '… but it is in nobody\'s queue');
+  // sent again: quoted and queued (it used to answer "Nothing to send: already queued" for ever)
+  const q2 = await dapi('POST', url, { takes: [t1.id], cam: 'camA', fps: 10 });
+  assert.strictEqual(q2.status, 402, JSON.stringify(q2.json));
+  assert.deepStrictEqual(q2.json.items.map((x) => x.takeId), [t1.id]);
+  const ok = await dapi('POST', url, { takes: [t1.id], cam: 'camA', fps: 10, confirmCostUsd: q2.json.estimateUsd });
+  assert.strictEqual(ok.status, 200, JSON.stringify(ok.json));
+  assert.deepStrictEqual(ok.json.queued.map((x) => x.takeId), [t1.id]);
+  const d1 = await waitTake(s.id, t1.id, (x) => ['done', 'error'].includes(x.analysis?.state), 'the analysis', 60000);
+  assert.strictEqual(d1.analysis.state, 'done', JSON.stringify(d1.analysis));
+  // a queued item is "already queued"; one running right now (fresh heartbeat) is never overwritten
+  const q3 = await dapi('POST', url, { takes: [t1.id], cam: 'camA', fps: 10 });
+  assert.strictEqual(q3.status, 402, 'a done take can be sent again on purpose');
+  // the server died after the paid result was stored, before "done": on the new server it is done
+  const motions0 = mocapCount();
+  await redeploy({
+    env: ANA_ENV,
+    between: () => {
+      const f = bucketPath(s.id, 'takes', t2.id, 'take.json'), j = readJson(f);
+      const started = new Date(Date.now() - 600000).toISOString(), at = new Date(Date.now() - 590000).toISOString();
+      j.analysis = { state: 'running', processor: 'sam3dbody', cam: 'camA', fps: 10, maxFrames: 20, estimateUsd: 0.6, attempts: 1, startedAt: started, beatAt: started, owner: 'old-container' };
+      j.processing = { sam3dbody: { camA: { motionId: 'mo-stored-before-crash', frames: 20, costUsd: 0.6, at } } };
+      fs.writeFileSync(f, JSON.stringify(j));
+      const sf = bucketPath(s.id, 'session.json'), sj = readJson(sf);
+      sj.analysisQueue = [{ takeId: t2.id, animId: t2.animId, cam: 'camA', fps: 10, maxFrames: 20, estimateUsd: 0.6, queuedAt: started }];
+      fs.writeFileSync(sf, JSON.stringify(sj));
+    },
+  });
+  const d2 = await waitTake(s.id, t2.id, (x) => ['done', 'error'].includes(x.analysis?.state), 'the interrupted run settled', 60000);
+  assert.strictEqual(d2.analysis.state, 'done', JSON.stringify(d2.analysis));
+  assert.strictEqual(d2.analysis.motionId, 'mo-stored-before-crash');
+  assert.strictEqual(d2.analysis.attempts, 1, 'not run again');
+  assert.strictEqual(mocapCount() - motions0, 0, 'the pipeline did not run again');
+  const sess = await sessionWhen(s.id, (x) => x.animations[t2.animId]?.analysis?.state === 'done', 'the slot analysed');
+  assert.deepStrictEqual(sess.analysisQueue, []);
+});
+
+test('(x) two cameras: a newer one-view take never replaces a selected two-view take; a storage hiccup while checking never fails a good take (it is checked again)', async () => {
+  if (!alive()) await startServer();
+  const s = await newSession('server-test views');
+  const token = await pairByToken(s);
+  const camA = await camera(s.id, token, 'camA');
+  const camB = await camera(s.id, token, 'camB');
+  const dir = await directorWs(s.id);
+  const take = async (anim, ready, upload, { before = null } = {}) => {
+    await setReady(dir, ready);
+    const t = await armTake(s.id, anim.id);
+    dir.send({ t: 'start', takeId: t.id });
+    await waitTake(s.id, t.id, (x) => x.state === 'recording', 'recording');
+    dir.send({ t: 'stop', takeId: t.id });
+    await dir.waitFor((m) => m.t === 'halt' && m.takeId === t.id, 'halt');
+    for (const [i, cam] of upload.entries()) {
+      await putChunks(s.id, t.id, cam, token);
+      if (i === upload.length - 1 && before) await before(t);
+      assert.strictEqual((await complete(s.id, t.id, cam, token)).status, 200);
+    }
+    return t;
+  };
+  const anim = ANIMS[40];
+  const t1 = await take(anim, [[camA, true], [camB, true]], ['camA', 'camB']);
+  await waitTake(s.id, t1.id, (x) => x.state === 'accepted', 'two views saved');
+  let sess = await sessionWhen(s.id, (x) => x.animations[anim.id]?.selectedTake === t1.id, 'the two-view take selected');
+  const t2 = await take(anim, [[camA, true], [camB, false]], ['camA']);       // CAM B asleep: one view
+  await waitTake(s.id, t2.id, (x) => x.state === 'accepted', 'one view saved');
+  sess = await sessionWhen(s.id, (x) => x.animations[anim.id]?.results?.[t2.id]?.state === 'recorded', 'the one-view take in the progress');
+  const e = sess.animations[anim.id];
+  assert.strictEqual(e.selectedTake, t1.id, 'the two-view take stays selected');
+  assert.strictEqual(e.results[t2.id].passedOver, 'one-view');
+  const P = await import('../capture/protocol.mjs');
+  assert.match(P.slotStatus(sess, anim.id).note, /only one camera's view and was not selected/);
+  // a newer two-view take does replace it
+  const t3 = await take(anim, [[camA, true], [camB, true]], ['camA', 'camB']);
+  await sessionWhen(s.id, (x) => x.animations[anim.id]?.selectedTake === t3.id, 'a newer two-view take selected');
+  // the bucket can't hand CAM A's file back while the take is checked (it is not on this disk)
+  const anim2 = ANIMS[41];
+  let bFile = null;
+  const t4 = await take(anim2, [[camA, true], [camB, true]], ['camA', 'camB'], {
+    before: async (t) => {
+      const r = await getTake(s.id, t.id);
+      fs.rmSync(diskPath(s.id, 'takes', t.id, r.cameras.camA.file));
+      bFile = bucketPath(s.id, 'takes', t.id, r.cameras.camA.file);
+      fs.chmodSync(bFile, 0o000);
+    },
+  });
+  try {
+    await sleep(1500);
+    const mid = await getTake(s.id, t4.id);
+    assert.notStrictEqual(mid.state, 'failed', `a storage hiccup failed a good take: ${mid.failReason}`);
+    assert.strictEqual(mid.state, 'validating', 'left to be checked again');
+  } finally { fs.chmodSync(bFile, 0o644); }
+  const done = await waitTake(s.id, t4.id, (x) => ['accepted', 'failed'].includes(x.state), 'checked again once the bucket answers', 30000);
+  assert.strictEqual(done.state, 'accepted', JSON.stringify(done.failReason));
+  assert.deepStrictEqual(done.cams, ['camA', 'camB']);
+  camA.close(); camB.close(); dir.close();
 });

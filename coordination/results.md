@@ -3129,3 +3129,16 @@ None. All terminals are clear. Human decision required to begin next phase.
   assertion still expecting the old failure wording, fixed); screenshots checked at 1180×820 and 390×844.
 - Assumptions: MP4 recording, the health checks and the memory fallback are not verified on a real iPhone.
 - Next: a real iPad + iPhone session on this branch, then merge to main (the user's call).
+
+## CAPTURE-04 — Capture redesign: 7 audit findings fixed
+- Status: NEEDS_REVIEW. deploy-capture only: not pushed, not deployed.
+- Files changed: capture/toast.mjs (new), capture/app.mjs, camera.mjs, protocol.mjs; lib/capture/analysis.js;
+  routes/capture.js; tests/capture.test.js, capture-server.test.js, capture-e2e.spec.js; docs/capture.md.
+- What: a take left "queued" outside the queue can be sent again (and a running one is never overwritten);
+  the toast says exactly one state (a failed take never reads "recorded — uploading"); a one-camera
+  calibration goes stale on going back to two cameras; a storage error while checking leaves a take to be
+  checked again; a one-view take never replaces a two-view one; the 4 s stop fallback never blacklists MP4;
+  an interrupted run whose result was stored is done, not an error.
+- Validation: each new test failed on the previous code and passes now; npm test 118/118; capture unit +
+  server 63/63; e2e 67/67 (once, as asked).
+- Not done: data a recorder hands over after the 4 s fallback is still not added to the take (pre-existing on main).

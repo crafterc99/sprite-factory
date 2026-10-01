@@ -20,6 +20,7 @@ import { STATES, poseRoute } from './schema.mjs';
 import * as P from './protocol.mjs';
 import { SETUPS, STATIONS, courtSVG, calibrationWalk, walkStep, stationOf } from './court-layout.mjs';
 import { takeScript, phaseAt, poseName, poseDesc } from './instructions.mjs';
+import { takeToast, importantWarning, human } from './toast.mjs';
 import { ClockSync, CHIRP, frameStats } from './camera-sync.mjs';
 import { WebCamera } from './camera.mjs';
 import { Uploader, recLock, storageMode } from './uploader.mjs';
@@ -40,8 +41,6 @@ const CAM = { camA: 'CAM A', camB: 'CAM B' };
 const DIR_LABEL = { none: 'on the spot', forward: 'toward the hoop', backward: 'away from the hoop', right: 'to his right', left: 'to his left', 'forward-right': 'forward-right', 'forward-left': 'forward-left', 'back-right': 'back-right', 'back-left': 'back-left', 'to-basket': 'toward the hoop', up: 'straight up' };
 const NUM_WORD = ['the middle', 'one', 'two', 'three', 'four'];
 const HAND_LABEL = { R: 'right hand', L: 'left hand', both: 'both hands', none: 'no ball' };
-/** A check's wording for the operator: "camB: …" → "CAM B: …". */
-const human = (s) => String(s ?? '').replace(/\bcam([AB])\b/g, 'CAM $1');
 const mimeLabel = (m) => (/mp4/.test(m || '') ? 'MP4' : /webm/.test(m || '') ? 'WebM' : m ? m.split(';')[0] : '?');
 const fmtFormat = (d) => (d ? `${d.width}×${d.height} · ${d.frameRate ? Math.round(d.frameRate) : '?'} fps${d.orientation ? ` · ${d.orientation}` : ''} · ${mimeLabel(d.mime)}` : '—');
 
@@ -208,7 +207,7 @@ class CameraRole {
         chunks: r.chunks, ...(lost.length ? { gaps: lost } : {}), mimeType: r.mime, frames: r.frames, mediaTimes: r.mediaTimes,
         meta: {
           deviceId, device: deviceInfo(), track: { width: d.width, height: d.height, frameRate: d.frameRate, facingMode: d.facingMode, zoom: d.zoom, label: d.label, aspectRatio: d.aspectRatio, orientation: d.orientation },
-          capabilities: d.capabilities, recorder: { mimeType: r.mime, bitsPerSecond: r.bps, timesliceMs: 1000, bytes: r.bytes, rvfc: !!r.rvfc, ...(r.mimeSwitched ? { nextMimeType: r.mimeSwitched } : {}) }, source: 'web',
+          capabilities: d.capabilities, recorder: { mimeType: r.mime, bitsPerSecond: r.bps, timesliceMs: 1000, bytes: r.bytes, rvfc: !!r.rvfc, ...(r.mimeSwitched ? { nextMimeType: r.mimeSwitched } : {}), ...(r.stopTimedOut ? { stopTimedOut: true } : {}) }, source: 'web',
           clock: this.clock.best, startedAtServerMs: this.clock.toServer(r.startedLocal), stoppedAtServerMs: this.clock.toServer(r.stoppedLocal),
           commandAtServerMs: this.recAt, frames: frameStats(r.frames), streamedChunks: !!r.streaming, ...(this.storageError && lost.length ? { storageError: this.storageError } : {}),
           ...(r.recError ? { recError: r.recError } : {}), ...(r.recWarn ? { recWarn: r.recWarn } : {}),
@@ -345,13 +344,6 @@ const STEP_EL = { connect: 'stepConnect', calibrate: 'stepCalibrate', record: 's
 const SLOT_CHIP = { missing: ['', 'Not recorded'], uploading: ['info', 'Uploading…'], recorded: ['ok', 'Recorded ✓'], failed: ['bad', 'Check failed — redo'], analysed: ['done', 'Analysed ✓'], skipped: ['', 'Skipped'] };
 /** Per-device settings (this iPad's countdown, its voice): conveniences only, never needed. */
 const pref = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, String(v)); } catch {} } };
-/**
- * The warning worth a "Redo?" next to a saved take: it was cut short (or ran far too long), a
- * camera said it was not recording, or (two cameras) only one of them recorded it. Not the device limits every take has (30 fps) nor the motion
- * heuristics (a possibly cropped athlete) — those stay in the take's checks.
- */
-const IMPORTANT = /shorter than half|much longer than|said while recording|never started|one view: no 3-D/;
-const importantWarning = (res) => (res?.warnings || []).find((w) => IMPORTANT.test(w)) || null;
 
 async function directorMode(sessionId) {
   show($('director'));
@@ -703,7 +695,7 @@ async function directorMode(sessionId) {
     const moving = here() && here() !== st;
     show($('calMove'), !!moving || c?.status === 'stale');
     if (moving) setText($('calMove'), `New place: move the two cameras to the ${S.name.toLowerCase()} positions below, then mark the floor and calibrate.`);
-    else if (c?.status === 'stale') setText($('calMove'), `The cameras were moved since this was calibrated (${c.staleReason || 'moved'}) — calibrate again (or skip).`);
+    else if (c?.status === 'stale') setText($('calMove'), `This placement's calibration is out of date (${human(c.staleReason || 'the cameras moved')}) — calibrate again (or skip).`);
     setHTML($('calCourt'), courtSVG(st, null, { width: 520, calibration: true }));
     setHTML($('calPlace'), `<b class="a">CAM A</b><span>${esc(S.camA.note)}</span><b class="b">CAM B</b><span>${esc(S.camB.note)}</span>`);
     setHTML($('calMarks'), `<li><b>✕ (middle)</b> — ${esc(walk.middleWords)}</li>${walk.corners.map((k) => `<li><b>${k.n}</b> ${esc(k.name)} — ${esc(k.words)}</li>`).join('')}`);
@@ -816,22 +808,11 @@ async function directorMode(sessionId) {
   function renderToast() {
     const t = D.toast;
     if (!t) return setHTML($('toast'), '');
-    const e = D.session.animations?.[t.anim.id], res = e?.results?.[t.takeId], nr = D.notRec[t.takeId];
-    const failed = res?.state === 'failed' || t.state === 'failed';
-    const saved = res?.state === 'recorded' || t.state === 'saved';
-    const name = `${t.anim.title}${t.anim.subtitle ? ' ' + t.anim.subtitle : ''}`;
-    const warn = saved && res ? importantWarning(res) : null;
-    let msg, cls = '';
-    if (failed) { msg = `✗ ${name}: the check failed — ${human(res?.reason || 'a camera produced no usable video')}. Record it again.`; cls = 'bad'; }
-    else if (saved && res?.short && e?.selectedTake && e.selectedTake !== t.takeId) { msg = `✓ ${name} saved — but it is short (${human(warn || 'stopped early')}), so take ${e.takes.indexOf(e.selectedTake) + 1} stays the selected one. Redo?`; cls = 'warn'; }
-    else if (saved && warn) { msg = `✓ ${name} saved — but ${human(warn)}. Redo?`; cls = 'warn'; }
-    else if (saved) msg = `✓ ${name} — saved.`;
+    const { msg, cls, saved } = takeToast(t, D.session.animations?.[t.anim.id], D.notRec[t.takeId] || null);
     if (saved && !t.savedAt) t.savedAt = Date.now();
     if (!cls && saved && Date.now() - t.savedAt > 15000) { D.toast = null; return setHTML($('toast'), ''); }   // done: it goes away by itself
-    else if (nr) { msg = `✗ ${nr.cams.map((c) => CAM[c]).join(' + ')} did not start recording ${name} — it will need a redo. Keep that phone's screen on and the page in front.`; cls = 'bad'; }
-    else msg = `✓ ${name} recorded — uploading in the background…`;
     const redo = !!cls || Date.now() - t.at < 12000;
-    setHTML($('toast'), `<div class="toast ${cls}"><span class="t" id="toastMsg">${esc(msg)}</span>${redo ? `<button class="small" id="toastRedo" data-act="redo">Redo ${esc(t.anim.title)}</button>` : ''}${cls ? '<button class="small ghost" data-act="toastOk" title="dismiss">OK</button>' : ''}</div>`);
+    setHTML($('toast'), `<div class="toast ${cls}" data-state="${saved ? 'saved' : cls === 'bad' ? 'failed' : 'uploading'}"><span class="t" id="toastMsg">${esc(msg)}</span>${redo ? `<button class="small" id="toastRedo" data-act="redo">Redo ${esc(t.anim.title)}</button>` : ''}${cls ? '<button class="small ghost" data-act="toastOk" title="dismiss">OK</button>' : ''}</div>`);
   }
   $('recordBtn').onclick = () => { if (D.current) begin('take', { anim: D.current }); };
   $('slotsBtn').onclick = () => go('slots');

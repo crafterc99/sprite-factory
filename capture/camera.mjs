@@ -236,8 +236,12 @@ export class WebCamera {
     const wait = atLocal - Date.now();
     if (wait > 4) st.timer = setTimeout(st.go, wait); else st.go();
   }
-  /** Check the recording `st`; the first problem found is reported once (onHealth(message, tag)). */
-  flag(st, { final = false } = {}) {
+  /**
+   * Check the recording `st`; the first problem found is reported once (onHealth(message, tag)).
+   * `late`: the recorder never said "stopped" and the take was finished by the 4 s fallback — its
+   * data may still be on its way (a slow Safari flush), so the format is NOT judged from it.
+   */
+  flag(st, { final = false, late = false } = {}) {
     if (st.recError) return st.recError;
     const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden', trackState = this.track?.readyState, muted = !!this.track?.muted;
     const v = this.video, playing = !v || (v.readyState >= 2 && !v.paused);
@@ -247,7 +251,8 @@ export class WebCamera {
       // the FINISHED recording: frames arrived and the page was in front, yet the recorder made
       // (almost) nothing — this device can't record that format: the next recording uses the next
       // one it offers (never judged mid-recording: Safari may deliver everything at the stop)
-      if (final && /recorder produced/.test(msg) && st.frameCount > 0 && !hidden && !muted && trackState !== 'ended' && !st.error && markBadMime(st.mime)) {
+      if (late && /recorder produced/.test(msg)) msg = `the recorder did not finish within 4 s of the stop (${msg} by then)`;
+      else if (final && /recorder produced/.test(msg) && st.frameCount > 0 && !hidden && !muted && trackState !== 'ended' && !st.error && markBadMime(st.mime)) {
         const next = pickMime();
         if (next && next !== st.mime) { st.mimeSwitched = next; msg += ` — the next recording uses ${/mp4/.test(next) ? 'MP4' : 'WebM'} instead`; }
       }
@@ -280,20 +285,23 @@ export class WebCamera {
     if (!st) return Promise.resolve({ chunks: 0, bytes: 0, mime: pickMime(), bps: null, frames: [], mediaTimes: [], startedLocal: null, stoppedLocal: Date.now(), tag: null, recError: null });
     st.stopping = true;
     return (st.stopped ||= new Promise((resolve) => {
-      const done = () => {
-        st.active = false; st.stoppedLocal = Date.now(); st.health.forEach(clearTimeout);
-        if (st.startedLocal) this.flag(st, { final: true });
+      // late: finished by the 4 s fallback (the recorder never said "stopped") — the stop time is
+      // when it was asked to stop, and the format is not judged from what had arrived by then
+      const done = (late = false) => {
+        st.active = false; st.stoppedLocal = late && st.stopAskedLocal ? st.stopAskedLocal : Date.now(); st.health.forEach(clearTimeout);
+        if (st.startedLocal) this.flag(st, { final: true, late });
         resolve({ chunks: st.seq, bytes: st.bytes, mime: st.mime, bps: st.bps, frames: st.frames, mediaTimes: st.mediaTimes, startedLocal: st.startedLocal, stoppedLocal: st.stoppedLocal, streaming: st.streaming, tag: st.tag, recError: st.recError, recWarn: st.recWarn || null,
-          rvfc: !!this.video?.requestVideoFrameCallback, mimeSwitched: st.mimeSwitched || null, refused: st.refused || null });
+          rvfc: !!this.video?.requestVideoFrameCallback, mimeSwitched: st.mimeSwitched || null, refused: st.refused || null, ...(late ? { stopTimedOut: true } : {}) });
       };
       const go = () => {
         // STOP before the scheduled start: start now and stop at once (a short file, never a recorder left running)
         if (st.timer) { clearTimeout(st.timer); st.go(); }
         if (!st.rec || st.rec.state === 'inactive') return done();
         let finished = false;
-        const once = () => { if (!finished) { finished = true; done(); } };
-        st.done = once; try { st.rec.stop(); } catch { once(); }
-        setTimeout(once, 4000);                             // a recorder that never says "stopped" still finishes the take
+        const once = (late = false) => { if (!finished) { finished = true; done(late); } };
+        st.stopAskedLocal = Date.now();
+        st.done = () => once(false); try { st.rec.stop(); } catch { once(false); }
+        setTimeout(() => once(true), 4000);                 // a recorder that never says "stopped" still finishes the take
       };
       const wait = atLocal - Date.now();
       if (wait > 4) setTimeout(go, wait); else go();

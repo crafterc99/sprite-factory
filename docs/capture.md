@@ -249,7 +249,10 @@ and there are two native paths:
   whenever the page comes back to the front, and restarts the preview video when iOS pauses it
   (frame timestamps need it playing).
 - **A recorder that never says "stopped"** still finishes the take 4 s after the stop, with what
-  it handed over (the take is not left "finishing").
+  it handed over (the take is not left "finishing"), stamped with the time it was asked to stop
+  (`recorder.stopTimedOut`). Its format is not judged from that (a slow Safari flush would
+  otherwise drop High-profile MP4 for a week). Data the recorder hands over after the fallback is
+  not added to the take (its upload was already declared complete).
 
 ## Persistence
 
@@ -279,7 +282,8 @@ and there are two native paths:
   session's progress are all stored in the bucket. Nobody accepts a take by hand: once a take's
   uploads are in and its checks pass, the server saves it and selects it if it is the newest
   recorded take of its animation — unless it is short (stopped early: a duration warning) and the
-  selected one is not; then it is saved, the old one stays selected and the list says so.
+  selected one is not, or (two cameras) it has fewer views than the selected one; then it is
+  saved, the old one stays selected and the list says so.
   `POST …/accept` stays as an API, and **Use it anyway** uses a failed take.
 - **Sessions of the old, reviewed flow.** A take that was checked but never accepted is not saved
   behind the operator's back: its slot asks for a decision (**Use it anyway** or record it again).
@@ -311,7 +315,10 @@ see the whole area, head to feet, and must not move once it is recorded.
   a calibration with only one camera's view is not saved ("the calibration needs both cameras");
   in one-camera mode one view is saved. The CALIBRATE button waits for both cameras to be READY.
 - **Moving the cameras** to another placement makes the old placement's calibration **stale**.
-  Coming back needs a new calibration (or an explicit skip). A take records the calibration it was
+  Coming back needs a new calibration (or an explicit skip). So does going back to two cameras
+  after a one-camera calibration: a calibration records the views it holds
+  (`session.calibrations.X.cams`), and one with a single view goes stale — the app then opens
+  Calibrate. A take records the calibration it was
   made with only while that calibration is valid (`calibrationId`, `calibrationStatus`).
 - Kept apart from the takes in `calibrations/`. Court landmarks can still be added per camera
   through the API (`POST …/rec/:id/landmarks`), as normalised image points paired with court
@@ -396,8 +403,10 @@ Nothing is analysed when it is recorded. The **Analysis** screen sends the chose
 - `POST /api/capture/sessions/:sid/process-batch {takes, cam, fps, confirmCostUsd}`. Without a
   `confirmCostUsd` ≥ the estimate it answers **402** with the quote (frames, dollars, per take) and
   queues nothing. With one, it queues the recorded takes (each the slot's selected take). It leaves
-  out, with the reason, any take that isn't recorded, has no recording from that camera, or is
-  already queued.
+  out, with the reason, any take that isn't recorded, has no recording from that camera, is already
+  in the queue, or is running right now (decided again under the take's lock, so two confirmations
+  at once never overwrite a running take). A take whose record says "queued" but that is in no
+  queue (the session write was lost) can be sent again.
 - The server runs the queue **one take at a time**. Each take goes through the existing mocap
   pipeline (`lib/mocap/pipeline.js`: SAM 3 + SAM 3D Body on fal.ai) and becomes a motion in the clip
   library. Its game role comes from the animation's `gameRoles` (e.g. `cross_RL → move-crossover`).
@@ -409,7 +418,7 @@ Nothing is analysed when it is recorded. The **Analysis** screen sends the chose
 - **Paid work never runs twice without asking.** A running take writes a heartbeat (`beatAt`).
   Another server leaves it alone while the heartbeat is fresh. Once it is stale (90 s), the server
   that ran it is gone, and the take becomes an **error**: "interrupted by a server restart … send it
-  again". It is never re-run by itself. SIGTERM stops the queue from starting anything new. A
+  again" — or **done**, when that run had already stored its result. It is never re-run by itself. SIGTERM stops the queue from starting anything new. A
   result the bucket refused to store is kept and only its writes are retried; the pipeline is not
   run again.
 - `GET /api/capture/sessions/:sid/analysis` returns the queue with live progress. Errors are shown as
@@ -439,12 +448,16 @@ interface.
       redo / use it anyway; a session of the old reviewed flow is never saved behind the operator's
       back;
     - a late STOP; an expected camera that never starts (told within seconds, nothing waits for it);
-    - calibrations: one per camera placement, both views needed with two cameras, stale after a move;
+    - calibrations: one per camera placement, both views needed with two cameras, stale after a move
+      and after going back to two cameras from a one-camera calibration;
     - the camera check (never a take), the live-snapshot relay (director only, rate limited), the
       zoom relay;
     - the analysis queue: the quote, the confirmed queue run one at a time (`MOCAP_MOCK=1`), a
-      redeploy (queued resumes; an interrupted run becomes an error, a fresh heartbeat is left
-      alone), and a refused result write that is retried without running the pipeline again;
+      redeploy (queued resumes; an interrupted run becomes an error — or done when its result was
+      stored —, a fresh heartbeat is left alone), a refused result write that is retried without
+      running the pipeline again, and a take left "queued" outside the queue that can be sent again;
+    - a one-view take never replaces a selected two-view take; a storage error while a take is
+      checked leaves it to be checked again (never "needs redo");
     - live device status (director only: storage mode, upload errors); a camera page of the earlier
       code still counts as started; a two-camera take one camera recorded says "one view";
     - security: a camera token can't act as director or reach director endpoints; pairing limits,
