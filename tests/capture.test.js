@@ -462,3 +462,18 @@ test('the hub hears "I started this take" from a camera page — and from one of
   assert.strictEqual(validators.reasonOf([{ msg: 'camB: file is only 25 bytes' }, { msg: 'camB: the recording does not decode' }]), 'camB recorded no usable video (file is only 25 bytes, the recording does not decode)');
   assert.strictEqual(validators.reasonOf([{ msg: 'no recording from camB' }]), 'no recording from camB');
 });
+
+test('the live hotfixes, kept: every iOS browser records MP4 (High profile first); a camera that delivers no picture 3 s in is reported even while audio flows', async () => {
+  const { pickMime, isWebKit, mimeCandidates, recordingProblem } = await import('../capture/camera.mjs');
+  assert.strictEqual(mimeCandidates(true)[0], 'video/mp4;codecs=avc1.640028,mp4a.40.2');
+  assert.strictEqual(pickMime({ webkit: true, supported: () => true }), 'video/mp4;codecs=avc1.640028,mp4a.40.2');
+  const fxios = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/140.0 Mobile/15E148 Safari/605.1.15';
+  const inApp = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
+  const macWebView = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)';
+  const android = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36';
+  assert.deepStrictEqual([isWebKit(fxios, 5), isWebKit(inApp, 5), isWebKit(macWebView, 0), isWebKit(android, 5)], [true, true, true, false]);
+  // no frame and the preview not playing 3 s in: the camera delivers no picture (audio alone can be > 4 kB)
+  assert.match(recordingProblem({ chunks: 3, bytes: 48000, frames: 0, playing: false, elapsedMs: 3200 }), /not delivering a picture/);
+  assert.strictEqual(recordingProblem({ chunks: 1, bytes: 16000, frames: 0, playing: false, elapsedMs: 1600 }), null, 'not before 3 s (the preview is restarted at 1.6 s)');
+  assert.strictEqual(recordingProblem({ chunks: 3, bytes: 900000, frames: 0, playing: true, elapsedMs: 3200 }), null, 'playing, data flowing, no frame times: a warning only (recWarn)');
+});

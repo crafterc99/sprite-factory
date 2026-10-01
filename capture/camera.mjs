@@ -24,16 +24,17 @@ const WANT = [
 ];
 
 /**
- * Is this WebKit (Safari: iPhone, iPad, Mac)? Every iOS / iPadOS browser is WebKit, and iPadOS
- * Safari says "Macintosh" (told apart from a Mac by its touch points).
+ * Is this WebKit (Safari: iPhone, iPad, Mac)? Every iOS / iPadOS browser is WebKit (Safari, Chrome =
+ * CriOS, Firefox = FxiOS, Edge = EdgiOS, in-app web views), and iPadOS Safari says "Macintosh"
+ * (told apart from a Mac by its touch points). Any AppleWebKit browser that is not Chromium counts.
  */
 export function isWebKit(ua = typeof navigator !== 'undefined' ? navigator.userAgent : '', touchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints || 0 : 0) {
-  if (/iPhone|iPad|iPod/.test(ua)) return true;
+  if (/iPhone|iPad|iPod|CriOS|FxiOS|EdgiOS/.test(ua)) return true;
   if (/Macintosh/.test(ua) && touchPoints > 1) return true;
-  return /AppleWebKit\//.test(ua) && /Safari\//.test(ua) && !/(Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|FxiOS|Firefox)\//.test(ua);
+  return /AppleWebKit\//.test(ua) && !/Chrome|Chromium|Edg|OPR|Android/.test(ua);
 }
 const WEBM = ['video/webm;codecs=h264,opus', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
-const MP4 = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4'];
+const MP4 = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4'];
 /**
  * The recorder format, best first. WebKit: MP4 (H.264) — an iPhone can claim WebM/VP9 and then
  * record nothing (a 5-byte file). Chromium: WebM, which streams real 1 s chunks while recording
@@ -78,9 +79,11 @@ export function pickMime({ webkit = isWebKit(), supported = null, bad = badMimes
  *   live: recorder error · camera ended / muted · page hidden · (nearly) empty chunks while NO
  *         frame arrives (with frames arriving, Safari's MP4 recorder may hand over only the file
  *         header until the stop: that is left to the final check) · no frames and no data at all
+ *         · from 3 s on: no frame while the preview is not playing either (`playing` false: the
+ *         camera delivers no picture — the recorder may still hand out audio)
  *   final (≥ 1.5 s recorded): no data, or a file under 20 kB
  */
-export function recordingProblem({ error = null, trackState = 'live', muted = false, hidden = false, chunks = 0, bytes = 0, frames = 0, rvfc = true, final = false, elapsedMs = 0 } = {}) {
+export function recordingProblem({ error = null, trackState = 'live', muted = false, hidden = false, chunks = 0, bytes = 0, frames = 0, rvfc = true, final = false, elapsedMs = 0, playing = true } = {}) {
   const why = [];
   if (error) why.push(/^the recorder /.test(error) ? error : `the recorder failed (${error})`);
   if (trackState === 'ended') why.push('the camera stopped');
@@ -91,6 +94,7 @@ export function recordingProblem({ error = null, trackState = 'live', muted = fa
   else if (small) { /* a small first chunk (or a STOP right after the start): looked at again later / not a camera problem */ }
   else if (final && elapsedMs >= 1500 && chunks === 0) why.push('the recorder produced no data');
   else if (rvfc && frames === 0 && chunks === 0 && elapsedMs >= 3000) why.push('no video frames and no data');
+  else if (!final && rvfc && frames === 0 && !playing && elapsedMs >= 3000 && trackState !== 'ended' && !muted && !hidden) why.push('this camera is not delivering a picture');
   return why.length ? why.join(' · ') : null;
 }
 
@@ -236,7 +240,8 @@ export class WebCamera {
   flag(st, { final = false } = {}) {
     if (st.recError) return st.recError;
     const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden', trackState = this.track?.readyState, muted = !!this.track?.muted;
-    let msg = recordingProblem({ error: st.error, trackState, muted, hidden,
+    const v = this.video, playing = !v || (v.readyState >= 2 && !v.paused);
+    let msg = recordingProblem({ error: st.error, trackState, muted, hidden, playing,
       chunks: st.seq, bytes: st.bytes, frames: st.frameCount, rvfc: !!this.video?.requestVideoFrameCallback, final, elapsedMs: (st.stoppedLocal || Date.now()) - (st.startedLocal || Date.now()) });
     if (msg) {
       // the FINISHED recording: frames arrived and the page was in front, yet the recorder made

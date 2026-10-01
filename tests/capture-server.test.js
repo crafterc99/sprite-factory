@@ -1444,3 +1444,54 @@ test('(u) zoom: the director widens one camera (the Calibrate step) — only tha
   assert.strictEqual(camB.all.filter((m) => m.t === 'zoom').length, 1, 'bad values and a camera\'s relay are dropped');
   camA.close(); camB.close(); dir.close();
 });
+
+test('(v) live device status (director only): each camera\'s storage mode and upload error; a camera page of the earlier code (no take ids in its state) still counts as started; a two-camera take one camera recorded says "one view"', async () => {
+  if (!alive()) await startServer();
+  const s = await newSession('server-test devices');
+  const token = await pairByToken(s);
+  const camA = await camera(s.id, token, 'camA');
+  const camB = await camera(s.id, token, 'camB', 'old-page-b', { ack: false });
+  const dir = await directorWs(s.id);
+  await setReady(dir, [[camA, true], [camB, true]]);
+  dir.clear();
+  camB.send({ t: 'state', state: { ready: true, recording: false, storage: 'memory', uploadError: 'the server refused tk-x (HTTP 500) — retrying later', uploads: { chunks: 2, finals: 0 } } });
+  await dir.waitFor((m) => m.t === 'presence' && m.devices?.camB?.state?.storage === 'memory', 'presence with camB in memory mode');
+  const dv = await dapi('GET', `/api/capture/sessions/${s.id}/devices`);
+  assert.strictEqual(dv.status, 200, JSON.stringify(dv.json));
+  assert.strictEqual(dv.json.devices.camB.state.storage, 'memory');
+  assert.match(dv.json.devices.camB.state.uploadError, /HTTP 500/);
+  assert.strictEqual(dv.json.devices.camB.online, true);
+  assert.strictEqual((await capi(token, 'GET', `/api/capture/sessions/${s.id}/devices`)).status, 401, 'director only');
+  // the older camera page: on "record" it reports recording, without naming the take
+  camB.ws.on('message', (raw) => { let m; try { m = JSON.parse(raw); } catch { return; } if (m.t === 'record') camB.send({ t: 'state', state: { ready: true, recording: true } }); });
+  const anim = ANIMS[30];
+  const take = await armTake(s.id, anim.id);
+  dir.clear();
+  dir.send({ t: 'start', takeId: take.id });
+  await camB.waitFor((m) => m.t === 'record' && m.takeId === take.id, 'record on camB');
+  await sleep(4500);                                          // past the 3 s grace
+  assert.ok(!dir.all.some((m) => m.t === 'notrecording' && m.takeId === take.id), 'not reported as never started');
+  dir.send({ t: 'stop', takeId: take.id });
+  await dir.waitFor((m) => m.t === 'halt' && m.takeId === take.id, 'halt');
+  const t1 = await getTake(s.id, take.id);
+  assert.ok(!t1.missingCams, JSON.stringify(t1.missingCams));
+  assert.deepStrictEqual(t1.expectedCams, ['camA', 'camB']);
+  camA.close(); camB.close(); dir.close();
+  // two cameras, but only CAM A was READY at RECORD: saved, with a "one view" warning the list shows
+  const camA2 = await camera(s.id, token, 'camA');
+  const camB2 = await camera(s.id, token, 'camB', 'phone-b2');
+  const dir2 = await directorWs(s.id);
+  await setReady(dir2, [[camA2, true], [camB2, false]]);
+  const anim2 = ANIMS[31];
+  const t2 = await armTake(s.id, anim2.id);
+  dir2.send({ t: 'start', takeId: t2.id });
+  await camA2.waitFor((m) => m.t === 'record' && m.takeId === t2.id, 'record on camA');
+  dir2.send({ t: 'stop', takeId: t2.id });
+  await dir2.waitFor((m) => m.t === 'halt' && m.takeId === t2.id, 'halt');
+  await putChunks(s.id, t2.id, 'camA', token);
+  assert.strictEqual((await complete(s.id, t2.id, 'camA', token)).status, 200);
+  await waitTake(s.id, t2.id, (x) => x.state === 'accepted', 'saved with camA');
+  const ss = await sessionWhen(s.id, (x) => x.animations[anim2.id]?.results?.[t2.id]?.state === 'recorded', 'the take in the progress');
+  assert.match(ss.animations[anim2.id].results[t2.id].warnings.join(' '), /only camA recorded — camB was not ready at RECORD \(one view: no 3-D\)/);
+  camA2.close(); camB2.close(); dir2.close();
+});

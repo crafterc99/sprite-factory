@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Status** | IN_PROGRESS |
-| **Last Updated** | 2026-09-30 |
+| **Last Updated** | 2026-10-01 |
 | **Owner** | Claude Code |
 
 ## Goal
@@ -88,3 +88,4 @@ None currently — pending Railway stability.
 - 2026-09-30: Soul Jam Capture live at /capture: two-phone synchronised capture for the SAM 3D pipeline, with production durability on Railway (bucket mirror, redeploy-safe) and hardening. The user's Spalding basketball model replaces the procedural ball in the 3D court. docs/capture.md.
 - 2026-09-30: Court shots and hands. The user's jump shot now releases at the top of the jump and swishes (arm-extension release, launch clear of the body, make/miss flight hook). Fingers grip the ball and never go through it or flare off it (each hand solved against its own skin).
 - 2026-09-30: Soul Jam Capture redesigned after the user's iPad + iPhone test (branch deploy-capture, not deployed): the steps Connect (live pictures, camera check) · Calibrate (a numbered corner walk, saves itself) · Record (START/FINISH, no review, it stops by itself) · Animations (all 82 slots) · Analysis (sent by hand with a cost confirmation, a queue that survives restarts). The iPhone fix: MP4 on WebKit, a ~2 s "not recording" warning, the wake lock and preview kept running. npm test 100/100; e2e 59/59.
+- 2026-10-01: Soul Jam Capture redesign finished on deploy-capture (not deployed): review fixes (START/FINISH per hand and distance, honest holds for moving moves, an easy ~21 s calibration walk saved only with both cameras, no paid analysis twice, nothing waits for a camera that never started) and the live iPhone hotfixes carried over (MP4 on every iOS browser, a stuck stop finishes, souljam-capture-v2 storage with a memory fallback, device status). npm test 114/114; e2e 66/66 twice.

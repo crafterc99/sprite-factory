@@ -163,8 +163,10 @@ class CameraRole {
   ready() { return !!(this.cam.stream && this.cam.track?.readyState !== 'ended' && this.link.open && this.clock.best && document.visibilityState !== 'hidden'); }
   pushState() {
     // take / lastTake: "I got the start of this take" — the hub tells a camera that never started (asleep) from one that did
+    // storage: 'device' (IndexedDB) or 'memory' (phone storage unavailable: a reload would lose what is not uploaded yet)
     this.link.send({ t: 'state', state: { ready: this.ready(), recording: this.recording, take: this.recording ? this.take : null, lastTake: this.lastTake, camera: this.cam.stream ? this.cam.describe() : null, clock: this.clock.best, uploads: this.uploads, calibrated: !!this.cam.ref, moved: this.movedReason,
-      streaming: this.recording ? !!this.cam.streaming : undefined, recError: this.recError?.msg || null, recErrorTake: this.recError?.takeId || null, hidden: document.visibilityState === 'hidden' } });
+      streaming: this.recording ? !!this.cam.streaming : undefined, recError: this.recError?.msg || null, recErrorTake: this.recError?.takeId || null, hidden: document.visibilityState === 'hidden',
+      storage: storageMode(), uploadError: this.uploads?.error || null } });
   }
   /** A recorded chunk → the device's store, for the take that recording belongs to. */
   onChunk(seq, blob, tag, mime) {
@@ -561,6 +563,9 @@ async function directorMode(sessionId) {
       if (st?.recError) bs.push(`<div class="banner bad">${st.recording ? `${CAM[r]} is not recording` : `${CAM[r]}'s last recording failed`} — keep its screen on and the page in front. <span class="small">(${esc(st.recError)})</span></div>`);
       else if (st?.hidden) bs.push(`<div class="banner">${CAM[r]}'s page is in the background — bring it to the front (and keep its screen on).</div>`);
       else if (st?.camera?.ended || st?.camera?.muted) bs.push(`<div class="banner">${CAM[r]}'s camera delivers no picture — keep its screen on and the page in front.</div>`);
+      // its uploads are stuck (the server refuses them, or the network) — said while some are waiting
+      if (st?.uploadError && (st.uploads?.chunks || st.uploads?.finals)) bs.push(`<div class="banner bad">${CAM[r]} upload: ${esc(human(st.uploadError))}</div>`);
+      if (st?.storage === 'memory' && r === 'camB') bs.push(`<div class="banner">${CAM[r]} can't use its phone storage: its recordings upload straight from memory — don't reload its page until its uploads are done.</div>`);
     }
     // an expected camera that never started (the hub noticed a few seconds after RECORD)
     for (const [tid, x] of Object.entries(D.notRec)) {

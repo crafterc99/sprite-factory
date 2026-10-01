@@ -3106,3 +3106,26 @@ None. All terminals are clear. Human decision required to begin next phase.
     the iPad recorded the same WebM/VP9 fine.
   - Not verified on a real iPhone yet.
 - Next: a real iPhone + iPad session on this build, then merge to main / deploy (the user's call).
+
+## CAPTURE-03 — Capture redesign: review fixes + the live hotfixes carried over
+- Status: NEEDS_REVIEW. Committed on deploy-capture only (rebased onto origin/main 35bb892): not pushed, not deployed.
+- Files changed:
+  - capture/app.mjs, capture.html, camera.mjs, court-layout.mjs, instructions.mjs (new), protocol.mjs, schema.mjs, basic01.mjs
+  - lib/capture/analysis.js, hub.js, store.js, validators.js; routes/capture.js; server.js (SIGTERM drain)
+  - tests/capture.test.js, tests/capture-server.test.js, tests/capture-e2e.spec.js; docs/capture.md
+- What:
+  - Review fixes (UX + code review of 0fe47d5): START/FINISH by hand and travel distance, moving
+    starts/finishes never told to "hold"; cameras re-placed for a 1× lens; floor marks in court
+    words; calibration walk at 1.3 m/s (~21 s), saved only with both views; stale calibration when
+    the cameras move; a camera that never starts is noticed in 3 s and nothing waits for it; the
+    analysis queue never pays twice (heartbeat lease, interrupted → error, SIGTERM drain, refused
+    result writes retried without re-running); short redos don't replace full takes; one-view takes
+    and failures shown in plain words.
+  - Live hotfixes kept (25cc6a2, 9bf28a4): every iOS browser records MP4 (High profile first); a
+    stop that never fires finishes after 4 s; recorder errors / no picture 3 s in → state.recError on
+    both screens; IndexedDB souljam-capture-v2 with a 3 s memory fallback; storage mode + upload
+    errors in camera state and on the director; GET …/devices.
+- Validation: npm test 114/114; capture server + unit 59/59; e2e 66/66 twice (one earlier run 65/66: an
+  assertion still expecting the old failure wording, fixed); screenshots checked at 1180×820 and 390×844.
+- Assumptions: MP4 recording, the health checks and the memory fallback are not verified on a real iPhone.
+- Next: a real iPad + iPhone session on this branch, then merge to main (the user's call).

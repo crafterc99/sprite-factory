@@ -397,7 +397,7 @@ function breakableRecorder() {
     await sleep(500);
     const row5 = await D((aid) => document.querySelector(`.slot[data-anim="${aid}"]`)?.textContent, a5);
     check('CAM B records nothing: the director sees it during the take (in the recording screen)', /CAM B is not recording/.test(warnDuring), oneLine(warnDuring, 160));
-    check('… the slot says "Check failed — redo" with the reason; nothing waited for a review', st5?.status === 'failed' && /camB/.test(st5.reason) && /Check failed/.test(row5) && /CAM B: /.test(row5), oneLine(row5, 200));
+    check('… the slot says "Check failed — redo" with the reason; nothing waited for a review', st5?.status === 'failed' && /camB/.test(st5.reason) && /Check failed/.test(row5) && /CAM B recorded no usable video \(.*bytes/.test(row5), oneLine(row5, 200));
     await shot(A, '13-animations-failed', [IPAD, PHONE]);
     // redo it (camera B fixed)
     await D((aid) => document.querySelector(`.slot[data-anim="${aid}"]`).click(), a5);

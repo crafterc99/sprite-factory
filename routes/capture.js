@@ -34,6 +34,8 @@
  *   POST /api/capture/sessions/:sid/process-batch {takes, cam, fps, confirmCostUsd}   queue takes for analysis
  *                                                              (no confirmCostUsd → 402 with the quote, nothing queued)
  *   GET  /api/capture/sessions/:sid/analysis                   the analysis queue + live progress
+ *   GET  /api/capture/sessions/:sid/devices                    the hub's live view of each device (director; diagnosis):
+ *                                                              online, READY, format, uploads, storage mode, errors
  *
  * A take moves on by itself (nobody reviews it): RECORD → the cameras upload → the checks run →
  * SAVED and selected (the newest recorded take of its animation — unless it is short and the
