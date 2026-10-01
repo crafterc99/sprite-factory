@@ -23,12 +23,19 @@ const WANT = [
   { frameRate: 30, width: 1280, height: 720 },
 ];
 
+/** Safari (every browser on iPhone / iPad is Safari underneath). */
+export function isWebKit() {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  return /CriOS|FxiOS|EdgiOS/.test(ua) || (/AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg|Android/.test(ua));
+}
 export function pickMime() {
-  // WebM first: it streams real 1 s chunks while recording (Chromium's MP4 recorder holds everything
-  // until stop); H.264 inside WebM where the browser offers it. Safari records MP4.
-  const cands = ['video/webm;codecs=h264,opus', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4'];
+  // Chromium: WebM first — it streams real 1 s chunks while recording (Chromium's MP4 recorder holds
+  // everything until stop). Safari: MP4 first — its WebM/VP9 recorder can claim support and then
+  // record nothing on an iPhone (a 5-byte file in the field); MP4 is Safari's own, dependable path.
+  const webm = ['video/webm;codecs=h264,opus', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  const mp4 = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/mp4'];
   if (typeof MediaRecorder === 'undefined') return null;
-  return cands.find((m) => MediaRecorder.isTypeSupported(m)) || '';
+  return (isWebKit() ? [...mp4, ...webm] : [...webm, ...mp4]).find((m) => MediaRecorder.isTypeSupported(m)) || '';
 }
 
 export class WebCamera {
@@ -116,10 +123,14 @@ export class WebCamera {
       const rec = (st.rec = new MediaRecorder(this.stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: bps, audioBitsPerSecond: 128000 }));
       rec.ondataavailable = (e) => { if (e.data && e.data.size) { this.onChunk?.(st.seq++, e.data, st.tag, st.mime); if (st.active && e.data.size > 4096) st.streaming = true; } };
       rec.onstop = () => { st.active = false; this.recording = !!this.cur?.active; st.done?.(); };
+      rec.onerror = (e) => { this.onError?.(`the recorder failed: ${e?.error?.name || e?.error?.message || 'error'}`); };
       st.startedLocal = Date.now();
-      rec.start(timesliceMs);
+      try { rec.start(timesliceMs); }
+      catch (e) { this.onError?.(`the recorder would not start: ${e.name || e.message}`); st.rec = null; return; }
       st.active = true; this.recording = true;
       this.watchFrames(st);
+      // no picture reaching the page 3 s in (screen locked, Safari in the background, camera taken): say so
+      setTimeout(() => { if (st.active && !st.frames.length && !(this.video && this.video.readyState >= 2 && !this.video.paused)) this.onError?.('this camera is not delivering a picture — keep its screen on and Safari in front'); }, 3000);
     };
     const wait = atLocal - Date.now();
     if (wait > 4) st.timer = setTimeout(st.go, wait); else st.go();
@@ -152,7 +163,10 @@ export class WebCamera {
         // STOP before the scheduled start: start now and stop at once (a short file, never a recorder left running)
         if (st.timer) { clearTimeout(st.timer); st.go(); }
         if (!st.rec || st.rec.state === 'inactive') return done();
-        st.done = done; st.rec.stop();
+        let finished = false;
+        const once = () => { if (!finished) { finished = true; done(); } };
+        st.done = once; try { st.rec.stop(); } catch { once(); }
+        setTimeout(once, 4000);                             // a recorder that never says "stopped" still finishes the take
       };
       const wait = atLocal - Date.now();
       if (wait > 4) setTimeout(go, wait); else go();

@@ -82,6 +82,7 @@ class CameraRole {
   constructor({ sessionId, role, token, clock, video, onUi }) {
     Object.assign(this, { sessionId, role, token, clock, onUi });
     this.cam = new WebCamera({ video, clock, onChunk: (seq, blob, tag, mime) => this.onChunk(seq, blob, tag, mime), onState: () => this.pushState() });
+    this.cam.onError = (msg) => { this.recError = msg; this.onUi?.(`Recording problem: ${msg}`); this.pushState(); };
     this.lost = new Map(); this.locks = new Map();
     this.uploader = new Uploader({ token, onProgress: (p) => { this.uploads = p; this.onUi?.(); this.pushState(); } });
     this.link = new Link({ sessionId, role, token, clock, onMessage: (m) => this.onMessage(m), onStatus: () => { this.onUi?.(); this.pushState(); } });
@@ -124,7 +125,7 @@ class CameraRole {
   }
   ready() { return !!(this.cam.stream && this.link.open && this.clock.best); }
   pushState() {
-    this.link.send({ t: 'state', state: { ready: this.ready(), recording: this.recording, camera: this.cam.stream ? this.cam.describe() : null, clock: this.clock.best, uploads: this.uploads, calibrated: !!this.cam.ref, moved: this.movedReason, streaming: this.recording ? !!this.cam.streaming : undefined } });
+    this.link.send({ t: 'state', state: { recError: this.recError || null, ready: this.ready(), recording: this.recording, camera: this.cam.stream ? this.cam.describe() : null, clock: this.clock.best, uploads: this.uploads, calibrated: !!this.cam.ref, moved: this.movedReason, streaming: this.recording ? !!this.cam.streaming : undefined } });
   }
   /** A recorded chunk → the device's store, for the take that recording belongs to. */
   onChunk(seq, blob, tag, mime) {
@@ -147,6 +148,7 @@ class CameraRole {
     if (m.t === 'record') {
       if (!this.cam.stream || (this.recording && this.take === m.takeId)) return;
       this.take = m.takeId; this.recording = true; this.recAt = m.at;
+      this.recError = null;
       this.holdLock(m.takeId);
       this.cam.start({ atLocal: this.clock.toLocal(m.at) ?? Date.now(), tag: m.takeId });
       // safety: never record forever if the stop never arrives
@@ -353,6 +355,7 @@ async function directorMode(sessionId) {
     const c = cal(a.courtSetup);
     if (c?.status === 'suspect') bs.push(`<div class="banner bad">Calibration for setup ${a.courtSetup} may be invalid — ${esc(c.suspectReason || 'a camera moved')}. Recalibrate.</div>`);
     if (D.camErr) bs.push(`<div class="banner bad">This phone's camera: ${esc(D.camErr)}</div>`);
+    for (const r of ['camA', 'camB']) { const e = D.presence[r]?.state?.recError; if (e) bs.push(`<div class="banner bad">${r === 'camA' ? 'CAM A' : 'CAM B'}: ${esc(e)}</div>`); }
     const lim = ['camA', 'camB'].map((r) => [r, D.presence[r]?.state?.camera]).filter(([, cam]) => cam?.capabilities?.webLimited && cam.frameRate);
     if (lim.length) bs.push(`<div class="banner small">Browser capture: ${lim.map(([r, cam]) => `${r === 'camA' ? 'A' : 'B'} ${Math.round(cam.frameRate)} fps`).join(' · ')} — 120 fps is not available to web pages on ${lim.length > 1 ? 'these phones' : 'this phone'} (see docs/capture.md → native capture).</div>`);
     const up = ['camA', 'camB'].map((r) => D.presence[r]?.state?.uploads).filter((u) => u && (u.chunks || u.finals));
