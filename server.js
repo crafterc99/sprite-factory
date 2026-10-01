@@ -887,7 +887,7 @@ if (require.main === module) {
     const server = http.createServer(safeHandler);
     // Soul Jam Capture: the WebSocket hub on this server, and a LAN HTTPS listener for phones
     const { Hub } = require('./lib/capture/hub');
-    captureHub.hub = new Hub({ isAuthed: (req) => !require('./middleware/auth').enabled() || require('./middleware/auth').isAuthed(req), onStop: (sid, rid) => captureHub.onStop?.(sid, rid) });
+    captureHub.hub = new Hub({ isAuthed: (req) => !require('./middleware/auth').enabled() || require('./middleware/auth').isAuthed(req), onStop: (sid, rid) => captureHub.onStop?.(sid, rid), onMissing: (sid, rid, cams) => captureHub.onMissing?.(sid, rid, cams) });
     captureHub.hub.attach(server);
     require('./lib/capture/lan').start(safeHandler, { hub: captureHub.hub, dir: path.join(__dirname, 'data', 'capture', 'certs') });
     server.listen(PORT, () => {
@@ -1163,6 +1163,7 @@ if (require.main === module) {
     // Without this, any fire-and-forget R2 saves in-flight are dropped.
     process.on('SIGTERM', async () => {
       console.log('\n  [shutdown] SIGTERM — flushing data to R2...');
+      try { captureHub.onShutdown?.(); } catch {}   // Soul Jam Capture: start no new paid analysis
       const deadline = Date.now() + 20000; // 20s hard cap
 
       try {

@@ -86,8 +86,7 @@
   .view video, .view img { width:100%; height:100%; object-fit:contain; display:block; position:absolute; inset:0; }
   .view .none { color:var(--faint); font-size:15px; padding:10px; text-align:center; }
   .view .age { position:absolute; right:8px; bottom:8px; background:rgba(0,0,0,0.6); color:#ccc; font-size:12px; padding:2px 7px; border-radius:8px; }
-  .view .guide { position:absolute; inset:7% 6%; border:2px dashed rgba(127,209,255,0.85); border-radius:6px; pointer-events:none; }
-  .view .guide span { position:absolute; left:6px; top:4px; font-size:12px; font-weight:800; color:#bfe6ff; background:rgba(0,0,0,0.55); padding:1px 6px; border-radius:6px; }
+  .view .cap { position:absolute; left:6px; right:6px; bottom:6px; font-size:12px; font-weight:800; color:#bfe6ff; background:rgba(0,0,0,0.6); padding:2px 7px; border-radius:6px; pointer-events:none; text-align:center; }
   .tile-info { font-size:14.5px; color:var(--dim); }
   .checkline { font-size:15.5px; font-weight:700; padding:10px 12px; border-radius:10px; background:var(--panel2); }
   .checkline.ok { color:var(--ok); } .checkline.bad { color:#ff9ea1; background:#2a1417; } .checkline.run { color:#8fb4ff; }
@@ -101,6 +100,11 @@
   .cal-grid .court svg { max-height:min(52vh, 460px); width:auto !important; margin:0 auto; }
   .howto { margin:0; padding-left:22px; font-size:17px; }
   .howto li { margin:6px 0; }
+  .marks-h { font-size:13px; letter-spacing:1.5px; color:var(--dim); font-weight:900; text-transform:uppercase; margin:12px 0 4px; }
+  .marks { margin:0; padding-left:18px; font-size:14.5px; }
+  .marks li { margin:2px 0; } .marks b { color:#ffd166; }
+  .zoom { display:inline-flex; gap:5px; align-items:center; margin-left:8px; font-weight:700; color:var(--dim); letter-spacing:0; }
+  .zoom button { padding:3px 8px; font-size:12.5px; }
   .place { display:grid; grid-template-columns:auto 1fr; gap:6px 10px; font-size:15px; margin-top:10px; }
   .place b.a { color:var(--a); } .place b.b { color:var(--b); }
   .views2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
@@ -131,12 +135,17 @@
   .phase.finish { border-left-color:var(--finish); } .phase.finish h4 { color:var(--finish); }
   .pose { font-size:19px; font-weight:800; margin-top:5px; }
   .pose-d { font-size:16px; color:#d7d7e6; margin-top:2px; }
+  .where { font-size:14.5px; color:#bfe6ff; margin-top:5px; }
+  .compact { display:none; font-size:15px; font-weight:800; color:#ffe2a8; background:#241d0c; border:1px solid #5c4a14; border-radius:10px; padding:8px 11px; margin:0 0 8px; }
+  .soundnote { display:flex; gap:8px 12px; flex-wrap:wrap; align-items:center; font-size:14.5px; color:var(--dim); margin-top:10px; }
+  .soundnote .seg button { padding:5px 10px; font-size:13.5px; }
   .phase ul { margin:6px 0 0; padding-left:20px; font-size:17px; }
   .phase li { margin:3px 0; }
   .protocol { font-size:17px; font-weight:800; background:#241d0c; border:1px solid #5c4a14; color:#ffe2a8; border-radius:12px; padding:11px 14px; }
   .facts { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
   .toast { display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-radius:14px; padding:12px 14px; margin:0 0 12px; background:#10261a; border:1px solid rgba(61,220,132,0.45); font-weight:750; }
   .toast.bad { background:#2a1417; border-color:rgba(255,90,95,0.55); }
+  .toast.warn { background:#2b2108; border-color:rgba(255,176,32,0.6); color:#ffe2a8; }
   .toast .t { flex:1 1 240px; }
   .mini2 { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
   .mini2 .lbl { font-size:12.5px; font-weight:800; letter-spacing:1px; color:var(--dim); margin-bottom:4px; }
@@ -176,6 +185,7 @@
   .slot .nm small { font-weight:700; color:#ffd166; }
   .slot .st { grid-column:2 / 4; font-size:13.5px; color:var(--dim); }
   .slot .why { grid-column:1 / 4; font-size:13.5px; color:#ff9ea1; }
+  .slot .warnline { grid-column:1 / 4; font-size:13.5px; color:var(--warn); font-weight:700; }
   .slot.cur { border-color:var(--acc); }
   .sheet-bg { position:fixed; inset:0; z-index:40; background:rgba(0,0,0,0.6); display:flex; align-items:flex-end; justify-content:center; }
   .sheet-bg.center { align-items:center; padding:16px; }
@@ -235,7 +245,12 @@
     .cal-grid { grid-template-columns:minmax(0, 1fr); grid-template-rows:none; grid-template-areas:"howto" "court" "views"; }
     .cal-grid .court svg { max-height:40vh; }
     .rec-grid { grid-template-columns:minmax(0, 1fr); grid-template-areas:"court" "text" "cams"; }
-    .rg-court .court svg { max-height:38vh; }
+    .rg-court .court svg { max-height:28vh; }
+    .compact { display:block; }
+    .legend { display:none; }
+    #stepRecord .actionbar .why, #slotsBtn { display:none; }
+    #stepRecord .actionbar > button.big { flex:1 1 100%; }
+    .anim-title { margin-top:2px; }
     .stills { grid-template-columns:repeat(2, minmax(0, 1fr)); }
     .lg { display:none; } .sm { display:inline; }
     .actionbar { gap:8px; padding-top:10px; }
@@ -270,6 +285,7 @@
     .actionbar .why { display:none; }
     .actionbar > button.big { font-size:18px; padding:12px 22px; }
     .rg-court .court svg { max-height:70vh; }
+    .compact { display:block; }
     .ov-big { font-size:min(22vh, 120px); } .overlay.recording .ov-big { font-size:min(20vh, 96px); }
     .ov-live, .ov-map { display:none; }
     .cal-grid .court svg { max-height:70vh; }
@@ -345,7 +361,7 @@
           <div class="row"><button class="link small" id="pairAgain">Pair a different phone as CAM B</button></div>
         </div>
       </div>
-      <p class="note"><b>Frame rate:</b> iPhone/iPad browsers record at most 60 fps (that is a limit of Safari, not of the phone). For 120/240 fps, record the same move in the Camera app (Slo-mo) and attach it in the slot's takes: <b>Animations</b> → tap the animation → <b>Slo-mo file</b>.</p>
+      <p class="note"><b>Frame rate:</b> iPhone/iPad browsers record at most 60 fps (a limit of Safari, not of the phone). For 120/240 fps, film the same take in Slo-mo with the Camera app of a <b>third phone</b> standing next to CAM A or CAM B (not on CAM A/B themselves: opening the Camera app on them stops their recording), then attach that file in the slot's takes: <b>Animations</b> → tap the animation → <b>Slo-mo file</b>.</p>
       <div class="actionbar">
         <span class="why" id="connectWhy"></span>
         <button id="checkBtn"><span class="lg">Run the camera check again</span><span class="sm">Check again</span></button>
@@ -357,23 +373,22 @@
     <!-- STEP 2: CALIBRATE -->
     <section id="stepCalibrate" class="step hidden">
       <h2 class="step-title" id="calTitle">2 · Calibrate</h2>
-      <p class="lead"><b>Why:</b> calibration lets the two camera views be combined into 3-D later. Both cameras must see the whole capture area — and must not move afterwards.</p>
+      <p class="lead"><b>Why:</b> calibration lets the two camera views be combined into 3-D later. So both cameras must see the whole area the athlete uses — head to feet — and must not move afterwards. <span class="dim" id="calFor"></span></p>
       <div id="calMove" class="banner hidden"></div>
       <div id="calResult"></div>
       <div class="cal-grid">
         <div class="card cg-court" style="margin:0">
           <div class="court" id="calCourt"></div>
+          <div class="tiny dim" style="margin-top:6px">"Right" / "left" below are as you stand on the court facing the hoop.</div>
           <div class="place" id="calPlace"></div>
+          <h4 class="marks-h">Floor marks — a cone or tape on each</h4>
+          <ul class="marks" id="calMarks"></ul>
         </div>
         <div class="views2 cg-views">
-          <div><div class="lbl" style="color:var(--a)">CAM A</div><div class="view" id="calViewA"><video data-self playsinline muted></video><img class="snap hidden" alt=""><div class="none">No picture</div><div class="guide"><span>capture area inside</span></div></div></div>
-          <div><div class="lbl" style="color:var(--b)">CAM B</div><div class="view" id="calViewB"><img class="snap hidden" alt=""><div class="none">No picture</div><div class="guide"><span>capture area inside</span></div></div></div>
+          <div><div class="lbl" style="color:var(--a)">CAM A<span id="calZoomA"></span></div><div class="view" id="calViewA"><video data-self playsinline muted></video><img class="snap hidden" alt=""><div class="none">No picture</div><div class="cap">marks 1–4 in the picture, head to feet</div></div></div>
+          <div><div class="lbl" style="color:var(--b)">CAM B<span id="calZoomB"></span></div><div class="view" id="calViewB"><img class="snap hidden" alt=""><div class="none">No picture</div><div class="cap">marks 1–4 in the picture, head to feet</div></div></div>
         </div>
-        <ol class="howto cg-howto">
-          <li><b>Place the cameras</b> as the diagram shows (A and B), lens at chest height, and lock them on the tripods.</li>
-          <li><b>Check both pictures:</b> the whole dashed area fits inside the dashed frame, with room above the head.</li>
-          <li><b>Press CALIBRATE.</b> After 3-2-1, walk to the corners <b>1 → 2 → 3 → 4</b> of the area, then stand in the middle (✕) with your arms up. It stops by itself after 10 s and saves.</li>
-        </ol>
+        <ol class="howto cg-howto" id="calHowto"></ol>
       </div>
       <div class="actionbar">
         <span class="why" id="calWhy"></span>
@@ -392,18 +407,20 @@
       <div class="anim-sub" id="animSub"></div>
       <div class="rec-grid">
         <div class="rg-court">
+          <div class="compact" id="recCompact"></div>
           <div class="court" id="animCourt"></div>
-          <div class="legend"><span><i></i>START</span><span><i class="f"></i>FINISH</span><span><i class="p"></i>path</span><span>- - → the way he faces</span></div>
+          <div class="legend"><span><i></i>START</span><span><i class="f"></i>FINISH</span><span><i class="p"></i>path</span><span>- - → the way he faces</span><span>Seen from the cameras' side: "right" / "left" are the athlete's, as he faces the hoop.</span></div>
         </div>
         <div class="rg-cams mini2">
           <div><div class="lbl">CAM A</div><div class="view" id="recViewA"><video data-self playsinline muted></video><img class="snap hidden" alt=""><div class="none">No picture</div></div></div>
           <div><div class="lbl">CAM B</div><div class="view" id="recViewB"><img class="snap hidden" alt=""><div class="none">No picture</div></div></div>
         </div>
         <div class="rg-text">
-          <div class="phase start"><h4>START <small id="startWhere"></small></h4><div class="pose" id="startPose"></div><div class="pose-d" id="startDesc"></div></div>
+          <div class="phase start"><h4>START <small id="startWhere"></small></h4><div class="pose" id="startPose"></div><div class="pose-d" id="startDesc"></div><div class="where" id="startMarks"></div></div>
           <div class="phase move"><h4>THE MOVE <small id="moveWhere"></small></h4><ul id="moveCues"></ul></div>
-          <div class="phase finish"><h4>FINISH <small id="finishWhere"></small></h4><div class="pose" id="finishPose"></div><div class="pose-d" id="finishDesc"></div></div>
+          <div class="phase finish"><h4>FINISH <small id="finishWhere"></small></h4><div class="pose" id="finishPose"></div><div class="pose-d" id="finishDesc"></div><div class="where" id="finishMarks"></div></div>
           <div class="protocol" id="protocol"></div>
+          <div class="soundnote"><span>🔊 The iPad calls out <b>Go</b> / <b>Hold</b> — turn its sound up, or have someone read this screen to the athlete.</span><span class="seg" id="countdownSeg" aria-label="Countdown"><button data-cd="3">3 s</button><button data-cd="5">5 s</button><button data-cd="10">10 s</button></span><button class="small" id="voiceBtn">Voice on</button></div>
           <div class="facts" id="facts"></div>
         </div>
       </div>
@@ -437,7 +454,7 @@
       <h3 class="sec">Ready to send</h3>
       <div class="ctls">
         <span class="ctl"><span class="dim small">Camera</span><span class="seg" id="anaCam"><button data-cam="camA">CAM A</button><button data-cam="camB">CAM B</button></span></span>
-        <span class="ctl"><span class="dim small">Frames</span><span class="seg" id="anaFps"><button data-fps="30">30 / s</button><button data-fps="15">15 / s</button></span></span>
+        <span class="ctl"><span class="dim small">Analyse</span><span class="seg" id="anaFps"><button data-fps="30">30 frames/s (best)</button><button data-fps="15">15 / s (half the cost)</button></span></span>
         <span class="ctl"><button class="small" id="anaAll">Select all</button><button class="small" id="anaNone">None</button></span>
       </div>
       <div id="anaList"></div>

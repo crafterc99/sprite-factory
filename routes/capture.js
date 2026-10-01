@@ -7,7 +7,10 @@
  *   GET  /api/capture/sessions/:sid                     the session (+ progress, next missing)
  *   GET  /api/capture/sessions/:sid/pair                pairing: a live code, camera URLs, QR (director)
  *   POST /api/capture/pair {code | token}               a camera joins (QR token, or the 6-digit code) → session + token
- *   POST /api/capture/sessions/:sid/setup {setup}       the cameras are placed for this setup
+ *   POST /api/capture/sessions/:sid/setup {setup, skipCalibration, oneCamera}
+ *                                                       the cameras are placed for this setup (moving them to another
+ *                                                       placement makes the old placement's calibration "stale");
+ *                                                       oneCamera: the director chose to go on with one camera
  *   POST /api/capture/sessions/:sid/takes {animId}      arm a take of an animation
  *   POST /api/capture/sessions/:sid/calibrations {setup} arm a calibration recording
  *   POST /api/capture/sessions/:sid/checks              arm a camera check (2 s test recording, never a take)
@@ -33,9 +36,14 @@
  *   GET  /api/capture/sessions/:sid/analysis                   the analysis queue + live progress
  *
  * A take moves on by itself (nobody reviews it): RECORD → the cameras upload → the checks run →
- * SAVED and selected (the newest recorded take of its animation), or "needs redo" when a camera
- * produced no decodable video. A calibration the same (saved → the cameras keep their reference
- * view). A camera check never becomes a take: its verdict goes to session.cameraChecks.
+ * SAVED and selected (the newest recorded take of its animation — unless it is short and the
+ * selected one is not), or "needs redo" when a camera produced no decodable video, or (two-camera
+ * mode) an expected camera never started recording. A calibration the same (saved → the cameras
+ * keep their reference view), and in two-camera mode only with both cameras. A camera check never
+ * becomes a take: its verdict goes to session.cameraChecks.
+ *
+ * Calibrations are kept per camera PLACEMENT (court-layout STATIONS: setups A and B share one,
+ * C has its own): session.calibrations.A / .C, session.currentSetup = the placement in use.
  *
  * Camera devices only hold the session's pairing token (X-Capture-Token): they may upload chunks,
  * complete their upload, keep their calibration reference and read the session — nothing else.
@@ -56,6 +64,7 @@ const validators = require('../lib/capture/validators');
 const processing = require('../lib/capture/processing');
 const analysis = require('../lib/capture/analysis');
 const auth = require('../middleware/auth');
+const { STATION_OF } = require('../lib/capture/hub');
 
 let libs = null;
 const libraries = () => (libs ||= Promise.all([import('../capture/basic01.mjs'), import('../capture/protocol.mjs'), import('../capture/court-layout.mjs'), import('../capture/schema.mjs')])
@@ -99,16 +108,32 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
   });
   const hub = () => hubRef.hub;
   hubRef.onStop = (sid, rid) => maybeFinish(sid, rid).catch((e) => console.error('[capture] finish', e.message));
+  // an expected camera never started (asleep / in the background): the take goes on without it
+  hubRef.onMissing = (sid, rid) => maybeFinish(sid, rid).catch((e) => console.error('[capture] finish', e.message));
   const err = (res, e) => { if (res.headersSent) return res.destroy(); json(res, { error: e.message, ...(e.missing ? { missing: e.missing } : {}) }, e.status || 500); };
   const isDirector = (req) => !auth.enabled() || auth.isAuthed(req);
   const needDirector = (req, res) => { if (isDirector(req)) return false; json(res, { error: 'director only — sign in', login: '/login' }, 401); return true; };
   const libOf = async (s) => { const L = (await libraries()).LIBRARIES[s.libraryId]; if (!L) throw Object.assign(new Error(`unknown library ${s.libraryId}`), { status: 400 }); return L; };
   const forCameras = (s) => ({ ...s, pair: { code: s.pair?.code } });
+  /**
+   * The cameras are now at placement `st`. Leaving another placement makes its calibration
+   * "stale": the cameras stood elsewhere since, so coming back needs a new calibration (or an
+   * explicit skip) — takes never point at a calibration made with the cameras somewhere else.
+   */
+  function moveTo(s, st) {
+    const from = STATION_OF[s.currentSetup] || null;
+    if (from && from !== st) {
+      const c = s.calibrations?.[from];
+      if (c && ['valid', 'skipped', 'suspect'].includes(c.status)) Object.assign(c, { status: 'stale', staleAt: new Date().toISOString(), staleReason: `the cameras moved to setup ${st}` });
+    }
+    s.currentSetup = st;
+  }
   /** A file the record points at, on this disk (fetched from the bucket after a redeploy). */
   const local = async (abs) => { if (!fs.existsSync(abs)) await cloud.ensureLocal(abs, store.cloudKey(abs)).catch(() => null); return fs.existsSync(abs) ? abs : null; };
   // analysis (SAM 3D Body) runs only when the director sends takes, one at a time, surviving restarts
   const queue = analysis.createQueue({ hub, local, TMP_DIR, anim: async (s, id) => (await libraries()).LIBRARIES[s?.libraryId]?.animations.find((a) => a.id === id) || null });
   hubRef.onBoot = () => { const t = setTimeout(() => queue.resumeAll().catch((e) => console.error('[capture] analysis resume', e.message)), 3000); t.unref?.(); };
+  hubRef.onShutdown = () => queue.drain();                // SIGTERM: no new paid item starts
 
   // ── libraries + sessions
   router.get('/api/capture/libraries', async (req, res) => {
@@ -188,11 +213,14 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
     if (needDirector(req, res)) return;
     try {
       const b = await body(req);
+      if (b.setup != null && !SETUPS.includes(b.setup)) return json(res, { error: 'setup must be A, B or C' }, 400);
       const s = await store.updateSession(p.sid, (s) => {
-        if (!SETUPS.includes(b.setup)) return;
-        s.currentSetup = b.setup;
+        if (typeof b.oneCamera === 'boolean') s.oneCamera = b.oneCamera;
+        if (!b.setup) return;
+        const st = STATION_OF[b.setup];
+        moveTo(s, st);
         // cameras placed without a calibration recording (can be calibrated later; a moved camera still flags it)
-        if (b.skipCalibration && (!s.calibrations[b.setup] || s.calibrations[b.setup].status !== 'valid')) s.calibrations[b.setup] = { ...(s.calibrations[b.setup] || { takes: [], current: null }), status: 'skipped', skippedAt: new Date().toISOString() };
+        if (b.skipCalibration && s.calibrations[st]?.status !== 'valid') s.calibrations[st] = { ...(s.calibrations[st] || { takes: [], current: null }), status: 'skipped', skippedAt: new Date().toISOString() };
       });
       hub()?.broadcast(s.id, { t: 'session', session: forCameras(s) });
       json(res, { session: s });
@@ -209,8 +237,9 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       const L = await libOf(s);
       const anim = L.animations.find((a) => a.id === b.animId);
       if (!anim) return json(res, { error: `no animation ${b.animId}` }, 400);
-      const cal = s.calibrations?.[anim.courtSetup];
-      const rec = await store.createRecording(s.id, { kind: 'take', anim, setup: anim.courtSetup, calibrationId: cal?.current || null, library: { id: L.id, version: L.version } });
+      const cal = s.calibrations?.[STATION_OF[anim.courtSetup]];
+      const calOk = ['valid', 'suspect'].includes(cal?.status);
+      const rec = await store.createRecording(s.id, { kind: 'take', anim, setup: anim.courtSetup, calibrationId: calOk ? cal.current : null, extra: { calibrationStatus: cal?.status || 'missing' }, library: { id: L.id, version: L.version } });
       armBroadcast(s.id, rec);
       json(res, { take: rec });
     } catch (e) { err(res, e); }
@@ -222,9 +251,10 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       if (!SETUPS.includes(b.setup)) return json(res, { error: 'setup must be A, B or C' }, 400);
       const s = await store.loadSession(p.sid);
       if (!s) return json(res, { error: 'session not found' }, 404);
-      const L = await libOf(s);
-      const rec = await store.createRecording(s.id, { kind: 'calibration', setup: b.setup, library: { id: L.id, version: L.version } });
-      armBroadcast(s.id, { ...rec, title: `CALIBRATION ${b.setup}`, subtitle: 'court landmarks · 10 s', targetDurationSec: 10 });
+      const L = await libOf(s), { C } = await libraries();
+      const st = STATION_OF[b.setup], sec = C.calibrationSec(st);           // one calibration per camera placement
+      const rec = await store.createRecording(s.id, { kind: 'calibration', setup: st, targetDurationSec: sec, library: { id: L.id, version: L.version } });
+      armBroadcast(s.id, { ...rec, title: `CALIBRATION ${st}`, subtitle: `the calibration walk · ${sec} s`, targetDurationSec: sec });
       json(res, { calibration: rec });
     } catch (e) { err(res, e); }
   });
@@ -311,6 +341,10 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
     return up.length ? up : CAMS;
   };
   const checking = new Set();                            // takes being validated by THIS process
+  /**
+   * Every camera the take waits for has uploaded → the checks. An expected camera the hub found
+   * never started (missingCams: asleep / in the background at RECORD) is not waited for.
+   */
   function maybeFinish(sid, rid) {
     return store.withLock(`f:${sid}:${rid}`, async () => {
       const rec = await store.loadRecording(sid, rid);
@@ -318,21 +352,51 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       // 'validating' left by an earlier process (a redeploy mid-check) is simply run again
       if (checking.has(`${sid}:${rid}`)) return;
       const cams = expectedCams(rec);
-      if (!cams.every((c) => rec.cameras?.[c]?.file)) return;
+      const missing = (rec.missingCams || []).filter((c) => cams.includes(c) && !rec.cameras?.[c]?.file);
+      const waitFor = cams.filter((c) => !missing.includes(c));
+      if (!waitFor.every((c) => rec.cameras?.[c]?.file)) return;
+      if (!waitFor.length && rec.kind !== 'check') {          // no camera started at all: nothing will ever arrive
+        const r = await store.updateRecording(sid, rid, (x) => { if (['armed', 'recording', 'uploading', 'validating'].includes(x.state)) { x.state = 'failed'; x.failReason = `no camera started recording (${missing.map(camName).join(' + ')}: page asleep or in the background)`; x.failedAt = new Date().toISOString(); } });
+        hub()?.takeUpdate(sid, r, { event: 'failed' });
+        await noteResult(sid, r);
+        return;
+      }
       checking.add(`${sid}:${rid}`);
-      try { await (rec.kind === 'check' ? finishCheck(sid, rid, rec, cams) : validateTake(sid, rid, rec, cams)); }
+      try { await (rec.kind === 'check' ? finishCheck(sid, rid, rec, waitFor, missing) : validateTake(sid, rid, rec, waitFor, missing)); }
       finally { checking.delete(`${sid}:${rid}`); }
     });
   }
-  /** The checks, then — nobody reviews — saved (and selected if newest), or "needs redo" when a camera produced no usable video. */
-  async function validateTake(sid, rid, rec, cams) {
+  const camName = (c) => (c === 'camA' ? 'CAM A' : c === 'camB' ? 'CAM B' : c);
+  /** A duration check that is not ok (a take stopped early, or far too long). */
+  const durationIssue = (validation) => (validation?.checks || []).some((c) => /^duration-cam/.test(c.id || '') && c.level !== 'ok');
+  /**
+   * The checks, then — nobody reviews — saved (and selected if newest), or "needs redo" when a
+   * camera produced no usable video, or — two cameras — when one of them never started recording,
+   * or a calibration has only one camera's view.
+   */
+  async function validateTake(sid, rid, rec, cams, missing = []) {
       const v = await store.updateRecording(sid, rid, (r) => { r.state = 'validating'; r.validatingAt = new Date().toISOString(); });
       hub()?.takeUpdate(sid, v);
       const files = {};
       for (const c of cams) files[c] = await local(store.recordingPath(sid, rec, rec.cameras[c].file));
+      const oneCamera = !!(await store.loadSession(sid).catch(() => null))?.oneCamera;
       // (outside the record's lock: the checks take seconds; what they learn is merged in after)
       const checked = structuredClone(rec);
       const validation = await validators.validate(checked, files, { cams });
+      const camFail = (msg) => { validation.checks = [{ id: 'cameras', level: 'fail', msg }, ...validation.checks.filter((c) => c.id !== 'cameras')]; validation.ok = false; };
+      if (missing.length) {
+        const msg = `${missing.join(' + ')} never started recording (its page was asleep or in the background when RECORD was pressed)`;
+        if (oneCamera) validation.checks.unshift(...missing.map((c) => ({ id: `missing-${c}`, level: 'warn', msg: `${c} never started recording (one-camera mode: saved with ${cams.join(' + ')})` })));
+        else camFail(msg);
+      }
+      // two-camera mode, a take only one camera recorded (the other was not READY at RECORD): saved,
+      // but the list says so — one view gives no 3-D
+      if (rec.kind === 'take' && !oneCamera && cams.length < 2 && !missing.length) {
+        const other = CAMS.find((c) => !cams.includes(c));
+        const why = (rec.finishedWithout || []).includes(other) ? `${other}'s recording never arrived (went on without it)` : `${other} was not ready at RECORD`;
+        validation.checks.push({ id: 'one-view', level: 'warn', msg: `only ${cams.join(' + ')} recorded — ${why} (one view: no 3-D)` });
+      }
+      if (rec.kind === 'calibration' && !oneCamera && cams.length < 2 && !missing.length) camFail(`the calibration needs both cameras — only ${cams.join(' + ')} recorded (calibrate again with both READY, or choose "Continue with one camera")`);
       const hard = validators.hardFailures(validation);
       const r2 = await store.updateRecording(sid, rid, (r) => {
         if (r.state !== 'validating') return;
@@ -347,10 +411,10 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       else if (r2.state === 'review') await autoSave(sid, r2);
   }
   /** A camera check: did each camera produce real video? The verdict goes to session.cameraChecks (per device). */
-  async function finishCheck(sid, rid, rec, cams) {
+  async function finishCheck(sid, rid, rec, cams, missing = []) {
     const v = await store.updateRecording(sid, rid, (r) => { r.state = 'validating'; r.validatingAt = new Date().toISOString(); });
     hub()?.takeUpdate(sid, v);
-    const part = CAMS.filter((c) => cams.includes(c) || (rec.finishedWithout || []).includes(c));
+    const part = CAMS.filter((c) => cams.includes(c) || missing.includes(c) || (rec.finishedWithout || []).includes(c));
     const result = {}, info = {};
     for (const c of part) {
       const cc = rec.cameras?.[c];
@@ -358,6 +422,7 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       const pr = abs ? await media.probe(abs).catch((e) => ({ ok: false, error: e.message })) : null;
       if (pr?.ok) info[c] = pr;
       result[c] = validators.checkCamera(cc, pr);
+      if (missing.includes(c) && !cc?.file) result[c].reason = 'it never started recording — its page was asleep or in the background';
     }
     const at = new Date().toISOString();
     const r2 = await store.updateRecording(sid, rid, (r) => {
@@ -384,7 +449,9 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
       }
       if (rec.kind !== 'take') return;
       const e = (s.animations[rec.animId] ||= { takes: [rec.id], selectedTake: null });
-      (e.results ||= {})[rec.id] = rec.state === 'failed' ? { state: 'failed', reason: rec.failReason || 'failed', at } : { state: rec.state, at };
+      (e.results ||= {})[rec.id] = rec.state === 'failed' ? { state: 'failed', reason: rec.failReason || 'failed', at }
+        : rec.state === 'review' ? { state: 'review', reason: 'recorded before the automatic flow and never saved — keep it ("Use it anyway") or record it again', at }
+          : { state: rec.state, at };
     });
     hub()?.disarm(sid, rec.id);
     hub()?.broadcast(sid, { t: 'session', session: forCameras(s) });
@@ -420,13 +487,17 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
   }
   async function settleRec(sid, rec) {
     if (rec.state === 'review') {                            // checked, not saved (a restart, or the bucket refused)
+      // a take of the old, reviewed flow that nobody accepted: never saved behind the operator's back
+      if (!rec.autoSave) return noteResult(sid, rec);
       const hard = validators.hardFailures(rec.validation);
       if (!hard.length) return autoSave(sid, rec);
       const r = await store.updateRecording(sid, rec.id, (x) => { if (x.state === 'review') { x.state = 'failed'; x.failReason = validators.reasonOf(hard); x.failedAt = new Date().toISOString(); } });
       hub()?.takeUpdate(sid, r, { event: 'failed' });
       return noteResult(sid, r);
     }
-    if (rec.state === 'accepted') return acceptRecording(sid, rec, { auto: true });   // its session write was lost
+    // its session write was lost (or a session of the old flow without results): written again, the
+    // selection left as it is (an earlier MARK BEST stays)
+    if (rec.state === 'accepted') return acceptRecording(sid, rec, { auto: true, repair: true });
     if (rec.state === 'failed' || (rec.state === 'rejected' && rec.kind === 'take')) return noteResult(sid, rec);
     if (rec.state === 'armed' && !Object.keys(rec.cameras || {}).length && Date.now() - Date.parse(rec.createdAt || 0) > 120000) {
       const r = await store.updateRecording(sid, rec.id, (x) => { if (x.state === 'armed') { x.state = 'rejected'; x.rejectedAt = new Date().toISOString(); x.note = 'armed but never started'; } });
@@ -512,9 +583,11 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
   /**
    * SAVED: every file of the recording in the bucket, then its record says accepted, then the
    * session's progress — only after all of it. A manual accept selects the take (unless
-   * select:false); the automatic one only when it is the animation's newest recorded take.
+   * select:false). The automatic one selects it when it is the animation's newest recorded take —
+   * unless it is short (a duration warning: stopped early) and the selected one is not; `repair`
+   * (settle) never changes the selection of an animation that has one.
    */
-  async function acceptRecording(sid, rec, { force = false, select, auto = false } = {}) {
+  async function acceptRecording(sid, rec, { force = false, select, auto = false, repair = false } = {}) {
     // every file of the take in the bucket first (uploads are mirrored as they complete; this
     // catches anything that was not) …
     const dir = store.recDir(sid, rec.kind, rec.id);
@@ -534,17 +607,27 @@ function register(router, { json, TMP_DIR, PORT }, hubRef) {
     const at = new Date().toISOString();
     const s = await store.updateSession(sid, (s) => {
       if (rec.kind === 'calibration') {
-        const c = (s.calibrations[rec.courtSetup] ||= { takes: [rec.id], current: null });
-        c.current = rec.id; c.status = 'valid'; c.acceptedAt = at; delete c.suspectReason; delete c.lastFailed;
-        s.currentSetup = rec.courtSetup;
+        const st = STATION_OF[rec.courtSetup] || rec.courtSetup;
+        const c = (s.calibrations[st] ||= { takes: [rec.id], current: null });
+        if (!c.takes.includes(rec.id)) c.takes.push(rec.id);
+        c.current = rec.id; c.status = 'valid'; c.acceptedAt = at; delete c.suspectReason; delete c.lastFailed; delete c.staleReason; delete c.staleAt;
+        moveTo(s, st);
       } else {
         const e = (s.animations[rec.animId] ||= { takes: [rec.id], selectedTake: null });
         const i = (id) => e.takes.indexOf(id);
-        if (auto ? (!e.selectedTake || i(e.selectedTake) < i(rec.id)) : (!e.selectedTake || select !== false)) e.selectedTake = rec.id;
+        // the selected take's checks first: what the warnings say, and whether it is short
+        const first = (c) => (/^(duration-|recorder-|missing-)/.test(c.id || '') ? 0 : c.id === 'one-view' ? 1 : 2);   // what matters for the clip first
+        const warnings = (saved.validation?.checks || []).filter((c) => c.level !== 'ok').sort((a, b) => first(a) - first(b)).map((c) => c.msg).slice(0, 5);
+        const short = durationIssue(saved.validation);
+        const cur = e.selectedTake, curShort = !!(cur && e.results?.[cur]?.short);
+        if (auto) {
+          if (!cur || (!repair && i(cur) < i(rec.id) && (!short || curShort))) e.selectedTake = rec.id;
+        } else if (!cur || select !== false) e.selectedTake = rec.id;
         (e.results ||= {})[rec.id] = {
           state: 'recorded', at, cams: CAMS.filter((c) => saved.cameras?.[c]?.file),
           durations: Object.fromEntries(CAMS.filter((c) => saved.cameras?.[c]?.fileInfo?.durationSec).map((c) => [c, saved.cameras[c].fileInfo.durationSec])),
-          warnings: (saved.validation?.checks || []).filter((c) => c.level !== 'ok').map((c) => c.msg).slice(0, 4),
+          // passedOver: saved, but the automatic choice kept the selected (full) take
+          warnings, ...(short ? { short: true } : {}), ...(auto && !repair && short && e.selectedTake !== rec.id ? { passedOver: true } : {}),
         };
         e.skipped = false;
       }

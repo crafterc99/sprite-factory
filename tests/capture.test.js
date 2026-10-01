@@ -165,13 +165,101 @@ test('validators + media on a generated take: probe, motion map, checks', async 
   assert.ok(!bad.ok && bad.checks.some((c) => c.level === 'fail' && /camB/.test(c.msg)));
 });
 
-test('court layout: setups A/B/C with cameras + a top-down diagram; paths follow the facing', async () => {
+test('court layout: setups A/B/C with cameras + a top-down diagram; paths follow the facing; A and B share one camera placement', async () => {
   const c = await C, { BASIC01 } = await L;
   for (const s of ['A', 'B', 'C']) { assert.ok(c.SETUPS[s].camA.pos && c.SETUPS[s].camB.pos && c.SETUPS[s].framing.length); assert.match(c.courtSVG(s), /^<svg[\s\S]+<\/svg>$/); }
   const fwd = BASIC01.animations.find((a) => a.key === 'dribble_forward_R');
   const p = c.playerPath(fwd);
   assert.ok(p.end[1] < p.start[1], 'forward = toward the basket (facing −y)');
   assert.ok(c.COURT.landmarks.rim_centre[2] === 3.05);
+  assert.deepStrictEqual(['A', 'B', 'C'].map(c.stationOf), ['A', 'A', 'C']);
+  assert.ok(c.sameStation('A', 'B') && !c.sameStation('B', 'C'));
+  // the server's copy of that mapping (lib/capture/hub.js) agrees
+  const { STATION_OF } = require('../lib/capture/hub');
+  for (const s of ['A', 'B', 'C']) assert.strictEqual(STATION_OF[s], c.stationOf(s), s);
+});
+
+test('camera placements: with a phone\'s normal lens each camera sees its whole area head to feet (nearest corner ≥ 4.5 m, ≤ 60° across, ≤ 36° tall), the rim too at the rim; positions in plain court words', async () => {
+  const c = await C;
+  for (const st of Object.values(c.STATIONS)) {
+    for (const cam of ['camA', 'camB']) {
+      const f = c.framing(st[cam], st.area, { top: 2.5 });
+      assert.ok(f.nearM >= 4.5, `${st.id} ${cam}: nearest corner ${f.nearM} m`);
+      assert.ok(f.acrossDeg <= 60, `${st.id} ${cam}: ${f.acrossDeg}° across`);
+      assert.ok(f.verticalDeg <= 36, `${st.id} ${cam}: ${f.verticalDeg}° from the floor to head height at the nearest corner`);
+      assert.match(st[cam].note, /(sideline|lane line|baseline)/, 'where it stands, in court words');
+      assert.match(st[cam].note, /m from ✕/);
+    }
+    // every path of the station's setups is inside its area
+    const { BASIC01 } = await L;
+    for (const a of BASIC01.animations.filter((x) => st.setups.includes(x.courtSetup))) {
+      const pth = c.playerPath(a);
+      for (const q of [pth.start, pth.end]) assert.ok(q[0] >= st.area.x[0] && q[0] <= st.area.x[1] && q[1] >= st.area.y[0] && q[1] <= st.area.y[1], `${a.key} ${q} in station ${st.id}`);
+    }
+  }
+  // setup C: the rim (3.05 m) is in both pictures (angle above the lens at its distance < 20°)
+  for (const cam of ['camA', 'camB']) {
+    const p = c.STATIONS.C[cam].pos, d = Math.hypot(p[0] - c.COURT.basket[0], p[1] - c.COURT.basket[1]);
+    assert.ok(Math.atan((c.COURT.basket[2] + 0.4 - p[2]) / d) * 180 / Math.PI < 20, `${cam} sees above the rim`);
+  }
+  assert.match(c.spotWords([0, 6.6]), /^in the middle, 0\.8 m behind the free-throw line$/);
+  assert.match(c.spotWords([-6.5, 2]), /right sideline, 2\.0 m up from the baseline/, 'right = −x as you face the hoop');
+});
+
+test('START / FINISH paths: left- and right-hand moves toward the basket mirror each other; a right-hand layup starts on the athlete\'s right (−x); one-shots travel their own distance', async () => {
+  const c = await C, { BASIC01 } = await L;
+  const by = (k) => BASIC01.animations.find((a) => a.key === k);
+  const pairs = BASIC01.animations.filter((a) => a.direction === 'to-basket' && a.ballHand === 'R').map((a) => [a, by(a.key.replace(/_R$/, '_L'))]);
+  assert.ok(pairs.length >= 7 && pairs.every(([, l]) => l), pairs.map(([r]) => r.key).join(','));
+  for (const [r, l] of pairs) {
+    const pr = c.playerPath(r), pl = c.playerPath(l);
+    assert.deepStrictEqual([pl.start[0], pl.start[1], pl.end[0], pl.end[1]], [-pr.start[0] || 0, pr.start[1], -pr.end[0] || 0, pr.end[1]], `${r.key} / ${l.key} mirror`);
+    assert.ok(pr.end[0] < 0 && pl.end[0] > 0, `${r.key} finishes on his right, ${l.key} on his left`);
+  }
+  const lay = c.playerPath(by('layup_R'));
+  assert.ok(lay.start[0] < -1 && lay.end[1] < lay.start[1], `right-hand layup from the right side: ${lay.start}`);
+  assert.deepStrictEqual(c.playerPath(by('two_foot_finish')).start[0], 0, 'two-foot finishes come down the middle');
+  // one-shots: their own distance (a step-back is one step, a closeout several)
+  const len = (k) => c.playerPath(by(k)).lengthM;
+  assert.strictEqual(len('stepback_R'), 1);
+  assert.strictEqual(len('pullback_R'), 1.5);
+  assert.ok(len('closeout') >= 3 && len('defense_to_sprint') >= 3.5 && len('stationary_to_forward_R') >= 3);
+  assert.strictEqual(len('cross_RL'), 0, 'a crossover stays on its spot');
+});
+
+test('START and FINISH labels never overlap, for every animation (focused and full diagrams)', async () => {
+  const c = await C, { BASIC01 } = await L;
+  const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  for (const k of [0.8, 1]) for (const a of BASIC01.animations) {
+    const m = c.pathMarks(c.playerPath(a), { k });
+    if (m.finish) assert.ok(!hit(m.start, m.finish), `${a.key} (k ${k}): START ${JSON.stringify(m.start)} / FINISH ${JSON.stringify(m.finish)}`);
+  }
+  const svg = c.courtSVG('A', BASIC01.animations.find((a) => a.key === 'stepback_R'), { focus: true, cameras: false });
+  assert.match(svg, />START</); assert.match(svg, />FINISH</);
+});
+
+test('the athlete\'s instructions: a clip that starts moving never says "hold the start pose", one that ends moving never "hold the finish pose"; still states keep their holds; where in court words', async () => {
+  const { BASIC01 } = await L, I = await import('../capture/instructions.mjs');
+  const movingIn = BASIC01.animations.filter(I.startsMoving), movingOut = BASIC01.animations.filter(I.endsMoving);
+  assert.ok(movingIn.length >= 10 && movingOut.length >= 5, `${movingIn.length} start moving, ${movingOut.length} end moving`);
+  for (const a of BASIC01.animations) {
+    const x = I.takeScript(a), cues = x.phases.map((p) => p.cue).join(' | ');
+    if (a.loop) { assert.match(x.protocol, /^Loop/); continue; }
+    if (I.startsMoving(a)) {
+      assert.ok(!/Hold the start pose/i.test(x.protocol) && !/HOLD THE START/.test(cues), `${a.key}: ${x.protocol} / ${cues}`);
+      assert.match(x.startWhere, /already .* as you cross START/);
+      assert.match(cues, /ALREADY MOVING/);
+    } else assert.match(x.protocol, /^Hold the start pose 1 s/, a.key);
+    if (I.endsMoving(a)) {
+      assert.ok(!/hold the finish pose/i.test(x.protocol) && !/HOLD THE FINISH/.test(cues), `${a.key}: ${x.protocol}`);
+      assert.match(x.finishWhere, /don't stop/);
+    } else assert.match(x.protocol, /hold the finish pose 1 s/, a.key);
+    assert.ok(x.phases.every((p) => !p.say || p.at >= 0.6), `${a.key}: nothing is spoken over the sync chirp`);
+  }
+  const lay = I.takeScript(BASIC01.animations.find((a) => a.key === 'layup_R'));
+  assert.match(lay.startMarks, /right of the middle/);
+  assert.match(lay.finishWhere, /about 3\.4 m toward the hoop/);
+  assert.match(I.takeScript(BASIC01.animations.find((a) => a.key === 'stepback_R')).finishWhere, /about 1\.0 m backward/);
 });
 
 test('sync chirp: found in two recordings at their own times → the exact camera offset', async () => {
@@ -228,9 +316,12 @@ test('recording health: the iPhone case (5 bytes, no frames), a hidden page, a p
   assert.match(recordingProblem({ chunks: 2, bytes: 9000, frames: 60, final: true, elapsedMs: 2000 }), /only 9000 bytes/);
   assert.strictEqual(recordingProblem({ chunks: 0, bytes: 0, final: true, elapsedMs: 200 }), null, 'a STOP right after RECORD is not a camera problem');
   assert.strictEqual(recordingProblem({ chunks: 2, bytes: 400000, frames: 60, final: true, elapsedMs: 2000 }), null);
-  // Safari's first chunk can be only the file header: not an alarm while frames arrive — but it is from 3 s on
+  // Safari's MP4 recorder may hand over only the file header until the STOP: while frames arrive
+  // that is never a live alarm (it would flag a working iPhone) — the final check judges the file
   assert.strictEqual(recordingProblem({ chunks: 1, bytes: 1200, frames: 40, elapsedMs: 1600 }), null);
-  assert.match(recordingProblem({ chunks: 3, bytes: 1200, frames: 90, elapsedMs: 3200 }), /only 1200 bytes/);
+  assert.strictEqual(recordingProblem({ chunks: 1, bytes: 1500, frames: 190, elapsedMs: 3200 }), null);
+  assert.strictEqual(recordingProblem({ chunks: 3, bytes: 1200, frames: 90, elapsedMs: 3200 }), null);
+  assert.match(recordingProblem({ chunks: 1, bytes: 1500, frames: 190, final: true, elapsedMs: 3200 }), /only 1500 bytes/, '… the finished file does');
   assert.match(recordingProblem({ chunks: 1, bytes: 5, frames: 0, rvfc: false, elapsedMs: 1600 }), /only 5 bytes/, 'no frame counter: the bytes alone');
   assert.strictEqual(recordingProblem({ chunks: 1, bytes: 3000, frames: 5, final: true, elapsedMs: 300 }), null, 'a CANCEL right after the start is not a camera problem');
 });
@@ -286,8 +377,8 @@ test('court diagram for the record step: START + FINISH markers, the path, a foc
   const svg = c.courtSVG('B', drive, { focus: true, cameras: false });
   assert.match(svg, />START</); assert.match(svg, />FINISH</);
   assert.ok(!/>A<\/text>/.test(svg), 'no cameras when asked');
-  const vb = svg.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
-  assert.ok(vb[2] < 316 && vb[2] >= 160, `focused (${vb[2]} of 316 wide)`);
+  const vb = svg.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number), full = c.courtSVG('B').match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
+  assert.ok(vb[2] < full[2] * 0.7 && vb[2] >= 160, `focused (${vb[2]} of ${full[2]} wide)`);
   const cross = c.courtSVG('A', BASIC01.animations.find((a) => a.key === 'cross_RL'));
   assert.match(cross, /START \+ FINISH/);
   assert.match(c.courtSVG('A'), />A<\/text>[\s\S]*>B<\/text>/, 'the setup view shows both cameras');
@@ -301,10 +392,19 @@ test('pose descriptions: every state has plain words and a short name; the list 
   for (const a of BASIC01.animations) assert.ok(!/\b(TR|TL|DR|DL|MR|ML|DEF_M|N_SPRINT)\b/.test(s.poseRoute(a)), a.key);
 });
 
-test('calibration walk: four corners numbered front-left → front-right → back-right → back-left (as he faces the hoop), and the middle; the diagram draws it instead of START / FINISH', async () => {
+test('calibration walk: one per camera placement; four corners numbered front-left → front-right → back-right → back-left (as he faces the hoop), and the middle; timed at an easy walk; the diagram draws it instead of START / FINISH', async () => {
   const c = await C;
   for (const id of ['A', 'B', 'C']) {
-    const w = c.calibrationWalk(id), ar = c.SETUPS[id].player.area;
+    const w = c.calibrationWalk(id), ar = c.STATIONS[c.stationOf(id)].area;
+    assert.strictEqual(w.station, c.stationOf(id));
+    // an easy walk (1.3 m/s, never ~3 m/s): 2 s on ✕, the five legs, 2 s arms up → about 20 s
+    for (const l of w.legs) assert.ok(l.metres / (l.until - l.at) <= 1.31, `${id}: leg to ${l.to} at ${(l.metres / (l.until - l.at)).toFixed(2)} m/s`);
+    assert.ok(w.totalSec >= 18 && w.totalSec <= 28, `${id}: ${w.totalSec} s`);
+    assert.strictEqual(c.calibrationSec(id), w.totalSec);
+    assert.deepStrictEqual(w.legs.map((l) => l.to), [1, 2, 3, 4, 0]);
+    const seq = []; for (let t = 0; t <= w.totalSec; t += 0.25) { const st = c.walkStep(w, t); if (seq[seq.length - 1] !== `${st.phase}${st.target}`) seq.push(`${st.phase}${st.target}`); }
+    assert.deepStrictEqual(seq, ['start0', 'walk1', 'walk2', 'walk3', 'walk4', 'walk0', 'end0']);
+    assert.ok(w.corners.every((k) => k.words && /m /.test(k.words)) && w.middleWords, 'every mark in court words (for the cones / tape)');
     assert.deepStrictEqual(w.corners.map((x) => x.n), [1, 2, 3, 4]);
     assert.strictEqual(new Set(w.corners.map((x) => x.pos.join())).size, 4, `${id}: four different corners`);
     for (const x of w.corners) assert.ok(ar.x.includes(x.pos[0]) && ar.y.includes(x.pos[1]), `${id}: ${x.name} is a corner of the area`);
@@ -316,5 +416,49 @@ test('calibration walk: four corners numbered front-left → front-right → bac
     assert.match(svg, /#ffd166/, 'the current corner is lit');
   }
   // setup A: he faces the baseline, so his left is +x
-  assert.deepStrictEqual(c.calibrationWalk('A').corners[0].pos, [2.6, 4.4]);
+  assert.deepStrictEqual(c.calibrationWalk('A').corners[0].pos, [2.1, 3.3]);
+  assert.strictEqual(c.calibrationWalk('B').corners[0].pos.join(), c.calibrationWalk('A').corners[0].pos.join(), 'B uses A\'s placement');
+  const p = await P;
+  assert.strictEqual(p.calibrationSec('C'), c.calibrationWalk('C').totalSec);
+});
+
+test('next to record: the cameras\' current placement first (its redos too), then the others; what is left at a placement; legacy takes nobody saved ask for a decision; a short newer take is a note', async () => {
+  const { BASIC01 } = await L, p = await P, c = await C;
+  const o = p.captureOrder(BASIC01);
+  const A = o.filter((a) => c.stationOf(a.courtSetup) === 'A'), Cc = o.filter((a) => a.courtSetup === 'C');
+  const s = { currentSetup: 'A', animations: {} };
+  for (const a of A) s.animations[a.id] = { takes: ['t' + a.id], selectedTake: 't' + a.id, results: { ['t' + a.id]: { state: 'recorded' } } };
+  const redo = A[4];
+  s.animations[redo.id] = { takes: ['x1'], selectedTake: null, results: { x1: { state: 'failed', reason: 'camB: 5 bytes' } } };
+  // after the last animation of the placement, the one that needs a redo HERE comes before setup C
+  assert.strictEqual(p.nextToRecord(BASIC01, s, { after: A[A.length - 1].id }).id, redo.id);
+  assert.deepStrictEqual(p.stationTodo(BASIC01, s, 'B').toRecord.map((a) => a.id), [redo.id], 'A and B are one placement');
+  s.animations[redo.id] = { takes: ['x1', 'x2'], selectedTake: null, results: { x1: { state: 'failed', reason: 'x' } } };   // its redo is uploading
+  assert.strictEqual(p.nextToRecord(BASIC01, s, { after: A[A.length - 1].id }).id, Cc[0].id, 'nothing left to record here: on to setup C');
+  assert.deepStrictEqual(p.stationTodo(BASIC01, s, 'A').uploading.map((a) => a.id), [redo.id]);
+  assert.ok(p.needsSetupChange(s, Cc[0]) && !p.needsSetupChange(s, A[A.length - 1]));
+  // at setup C, an animation left in A is only offered once C is done
+  s.currentSetup = 'C'; delete s.animations[redo.id];
+  assert.strictEqual(p.nextToRecord(BASIC01, s).id, Cc[0].id);
+  // a take of the old (reviewed) flow nobody accepted: needs a decision, never counted as recorded
+  const L0 = Cc[1];
+  s.animations[L0.id] = { takes: ['r1'], selectedTake: null, results: { r1: { state: 'review', reason: 'recorded before the automatic flow' } } };
+  assert.deepStrictEqual([p.slotStatus(s, L0.id).status, p.slotStatus(s, L0.id).review], ['failed', true]);
+  // a newer short take that was not selected: the selected one stays, with a note
+  s.animations[L0.id] = { takes: ['g1', 'g2'], selectedTake: 'g1', results: { g1: { state: 'recorded' }, g2: { state: 'recorded', short: true, passedOver: true, warnings: ['camA: 3.0 s — shorter than half the target (8 s)'] } } };
+  const st = p.slotStatus(s, L0.id);
+  assert.deepStrictEqual([st.status, st.takeId], ['recorded', 'g1']);
+  assert.match(st.note, /newest take \(2\) is short/);
+});
+
+test('the hub hears "I started this take" from a camera page — and from one of the earlier code still open on a phone after a deploy; failure reasons lead with plain words', async () => {
+  const { startedTake } = require('../lib/capture/hub');
+  assert.ok(startedTake({ take: 'tk1', lastTake: 'tk1', recording: true }, 'tk1'));
+  assert.ok(startedTake({ take: null, lastTake: 'tk1', recording: false }, 'tk1'), 'already stopped again: lastTake');
+  assert.ok(!startedTake({ take: null, lastTake: 'tk0', recording: false }, 'tk1'), 'asleep: still names the previous take');
+  assert.ok(!startedTake({ take: null, lastTake: null, recording: false }, 'tk1'));
+  assert.ok(startedTake({ recording: true }, 'tk1'), 'an older page (no take ids in its state): recording counts');
+  assert.ok(!startedTake({ recording: false }, 'tk1') && !startedTake(null, 'tk1'));
+  assert.strictEqual(validators.reasonOf([{ msg: 'camB: file is only 25 bytes' }, { msg: 'camB: the recording does not decode' }]), 'camB recorded no usable video (file is only 25 bytes, the recording does not decode)');
+  assert.strictEqual(validators.reasonOf([{ msg: 'no recording from camB' }]), 'no recording from camB');
 });

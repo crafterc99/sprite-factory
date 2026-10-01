@@ -3,7 +3,11 @@
  * director UI, the session order, the export and the processing all read this file.
  *
  * Court setups (capture/court-layout.mjs): A = stationary / dribble / locomotion / defense at the
- * top of the key · B = drives and pull-ups toward the basket · C = rim finishing.
+ * top of the key · B = drives and pull-ups toward the basket · C = rim finishing. A and B share one
+ * camera placement (one calibration); C needs the cameras moved.
+ *
+ * `travelM`: how far a one-shot travels from START to FINISH (the court diagram's marks); loops run
+ * a 3 m lane, moves toward the basket follow their setup's drive path (mirrored by the ball hand).
  */
 import { validateLibrary } from './schema.mjs';
 
@@ -37,10 +41,10 @@ for (const h of ['R', 'L']) {
       { gameRoles: LOCO_ROLE[d] ? [LOCO_ROLE[d]] : [] }));
   }
 }
-A.push(one('024', 'stationary_to_forward_R', 'START DRIBBLE', 'STATIONARY → FORWARD · RIGHT', 'LOCOMOTION', 'DR', 'MR', 5, 'R', 'forward', 'A', ['Stationary right dribble', 'Explode into a forward dribble jog, 3–4 steps'], { gameRoles: ['start-fwd'] }));
-A.push(one('025', 'stationary_to_forward_L', 'START DRIBBLE', 'STATIONARY → FORWARD · LEFT', 'LOCOMOTION', 'DL', 'ML', 5, 'L', 'forward', 'A', ['Stationary left dribble', 'Explode into a forward dribble jog, 3–4 steps'], { gameRoles: ['start-fwd'] }));
-A.push(one('026', 'forward_to_stationary_R', 'STOP DRIBBLE', 'FORWARD → STATIONARY · RIGHT', 'LOCOMOTION', 'MR', 'DR', 5, 'R', 'forward', 'A', ['Forward dribble jog, right hand', 'Plant and settle into a stationary right dribble'], { gameRoles: ['stop'] }));
-A.push(one('027', 'forward_to_stationary_L', 'STOP DRIBBLE', 'FORWARD → STATIONARY · LEFT', 'LOCOMOTION', 'ML', 'DL', 5, 'L', 'forward', 'A', ['Forward dribble jog, left hand', 'Plant and settle into a stationary left dribble'], { gameRoles: ['stop'] }));
+A.push(one('024', 'stationary_to_forward_R', 'START DRIBBLE', 'STATIONARY → FORWARD · RIGHT', 'LOCOMOTION', 'DR', 'MR', 5, 'R', 'forward', 'A', ['Stationary right dribble', 'Explode into a forward dribble jog, 3–4 steps'], { gameRoles: ['start-fwd'], travelM: 3 }));
+A.push(one('025', 'stationary_to_forward_L', 'START DRIBBLE', 'STATIONARY → FORWARD · LEFT', 'LOCOMOTION', 'DL', 'ML', 5, 'L', 'forward', 'A', ['Stationary left dribble', 'Explode into a forward dribble jog, 3–4 steps'], { gameRoles: ['start-fwd'], travelM: 3 }));
+A.push(one('026', 'forward_to_stationary_R', 'STOP DRIBBLE', 'FORWARD → STATIONARY · RIGHT', 'LOCOMOTION', 'MR', 'DR', 5, 'R', 'forward', 'A', ['Forward dribble jog, right hand', 'Plant and settle into a stationary right dribble'], { gameRoles: ['stop'], travelM: 2 }));
+A.push(one('027', 'forward_to_stationary_L', 'STOP DRIBBLE', 'FORWARD → STATIONARY · LEFT', 'LOCOMOTION', 'ML', 'DL', 5, 'L', 'forward', 'A', ['Forward dribble jog, left hand', 'Plant and settle into a stationary left dribble'], { gameRoles: ['stop'], travelM: 2 }));
 // ── TRIPLE THREAT
 A.push(one('028', 'jab_R', 'JAB', 'RIGHT FOOT', 'TRIPLE_THREAT', 'TR', 'TR', 4, 'R', 'none', 'A', ['Triple threat right', 'Quick right-foot jab step, recover to triple threat']));
 A.push(one('029', 'jab_L', 'JAB', 'LEFT FOOT', 'TRIPLE_THREAT', 'TR', 'TR', 4, 'R', 'none', 'A', ['Triple threat right', 'Quick left-foot jab step, recover to triple threat']));
@@ -65,10 +69,10 @@ A.push(hx('045', 'in_out_R', 'IN & OUT', 'RIGHT', 'DR', 'DR', 4, 'R', [], 'One i
 A.push(hx('046', 'in_out_L', 'IN & OUT', 'LEFT', 'DL', 'DL', 4, 'L', [], 'One in-and-out with the left hand'));
 A.push(hx('047', 'hesi_cross_RL', 'HESI CROSS', 'RIGHT → LEFT', 'DR', 'DL', 5, 'R', ['move-crossover'], 'Hesitation, then a crossover right → left'));
 A.push(hx('048', 'hesi_cross_LR', 'HESI CROSS', 'LEFT → RIGHT', 'DL', 'DR', 5, 'L', ['move-crossover'], 'Hesitation, then a crossover left → right'));
-A.push(one('049', 'pullback_R', 'PULLBACK', 'RIGHT', 'HANDLES', 'MR', 'DR', 5, 'R', 'backward', 'A', ['Forward dribble jog, right hand', 'Two-step pull-back dribble, settle stationary right'], { gameRoles: [] }));
-A.push(one('050', 'pullback_L', 'PULLBACK', 'LEFT', 'HANDLES', 'ML', 'DL', 5, 'L', 'backward', 'A', ['Forward dribble jog, left hand', 'Two-step pull-back dribble, settle stationary left'], { gameRoles: [] }));
-A.push(one('051', 'stepback_R', 'STEP-BACK', 'RIGHT', 'HANDLES', 'DR', 'DR', 5, 'R', 'backward', 'A', ['Stationary right dribble', 'One hard step-back, keep dribbling right']));
-A.push(one('052', 'stepback_L', 'STEP-BACK', 'LEFT', 'HANDLES', 'DL', 'DL', 5, 'L', 'backward', 'A', ['Stationary left dribble', 'One hard step-back, keep dribbling left']));
+A.push(one('049', 'pullback_R', 'PULLBACK', 'RIGHT', 'HANDLES', 'MR', 'DR', 5, 'R', 'backward', 'A', ['Forward dribble jog, right hand', 'Two-step pull-back dribble, settle stationary right'], { gameRoles: [], travelM: 1.5 }));
+A.push(one('050', 'pullback_L', 'PULLBACK', 'LEFT', 'HANDLES', 'ML', 'DL', 5, 'L', 'backward', 'A', ['Forward dribble jog, left hand', 'Two-step pull-back dribble, settle stationary left'], { gameRoles: [], travelM: 1.5 }));
+A.push(one('051', 'stepback_R', 'STEP-BACK', 'RIGHT', 'HANDLES', 'DR', 'DR', 5, 'R', 'backward', 'A', ['Stationary right dribble', 'One hard step-back, keep dribbling right'], { travelM: 1 }));
+A.push(one('052', 'stepback_L', 'STEP-BACK', 'LEFT', 'HANDLES', 'DL', 'DL', 5, 'L', 'backward', 'A', ['Stationary left dribble', 'One hard step-back, keep dribbling left'], { travelM: 1 }));
 // ── SHOOTING
 A.push(one('053', 'gather_R', 'GATHER', 'FROM RIGHT DRIBBLE', 'SHOOTING', 'DR', 'G', 4, 'R', 'none', 'A', ['Stationary right dribble', 'Gather into the two-hand shooting pocket and hold']));
 A.push(one('054', 'gather_L', 'GATHER', 'FROM LEFT DRIBBLE', 'SHOOTING', 'DL', 'G', 4, 'L', 'none', 'A', ['Stationary left dribble', 'Gather into the two-hand shooting pocket and hold']));
@@ -78,10 +82,10 @@ A.push(one('057', 'jumpshot', 'JUMP SHOT', 'FROM THE POCKET', 'SHOOTING', 'G', '
 A.push(one('058', 'catch_jumpshot', 'CATCH & SHOOT', 'JUMP SHOT', 'SHOOTING', 'N', 'LAND', 6, 'both', 'up', 'A', ['Neutral stance, hands ready', 'A partner passes; catch, jump shot, land balanced and hold'], { endResolves: 'N', gameRoles: ['shot-jumper'] }));
 A.push(one('059', 'pullup_R', 'PULL-UP', 'GOING RIGHT', 'SHOOTING', 'MR', 'LAND', 6, 'R', 'to-basket', 'B', ['Dribble jog toward the basket, right hand', 'Pull up into a jump shot, land balanced and hold'], { endResolves: 'N', gameRoles: ['shot-jumper'] }));
 A.push(one('060', 'pullup_L', 'PULL-UP', 'GOING LEFT', 'SHOOTING', 'ML', 'LAND', 6, 'L', 'to-basket', 'B', ['Dribble jog toward the basket, left hand', 'Pull up into a jump shot, land balanced and hold'], { endResolves: 'N', gameRoles: ['shot-jumper'] }));
-A.push(one('061', 'stepback_jumper', 'STEP-BACK JUMPER', 'RIGHT HAND', 'SHOOTING', 'DR', 'LAND', 6, 'R', 'backward', 'A', ['Stationary right dribble', 'Step back into a jump shot, land balanced and hold'], { endResolves: 'N', gameRoles: ['shot-stepback'] }));
+A.push(one('061', 'stepback_jumper', 'STEP-BACK JUMPER', 'RIGHT HAND', 'SHOOTING', 'DR', 'LAND', 6, 'R', 'backward', 'A', ['Stationary right dribble', 'Step back into a jump shot, land balanced and hold'], { endResolves: 'N', gameRoles: ['shot-stepback'], travelM: 1 }));
 // ── FINISHING
-A.push(one('062', 'layup_R', 'LAYUP', 'RIGHT HAND', 'FINISHING', 'MR', 'LAND', 7, 'R', 'to-basket', 'C', ['Drive from the wing with the right hand', 'Right-hand layup off the left foot, land balanced and hold'], { endResolves: 'N', gameRoles: ['layup'] }));
-A.push(one('063', 'layup_L', 'LAYUP', 'LEFT HAND', 'FINISHING', 'ML', 'LAND', 7, 'L', 'to-basket', 'C', ['Drive from the wing with the left hand', 'Left-hand layup off the right foot, land balanced and hold'], { endResolves: 'N', gameRoles: ['layup'] }));
+A.push(one('062', 'layup_R', 'LAYUP', 'RIGHT HAND', 'FINISHING', 'MR', 'LAND', 7, 'R', 'to-basket', 'C', ['Drive in from the right side of the lane, dribbling with the right hand', 'Right-hand layup off the left foot, land balanced and hold'], { endResolves: 'N', gameRoles: ['layup'] }));
+A.push(one('063', 'layup_L', 'LAYUP', 'LEFT HAND', 'FINISHING', 'ML', 'LAND', 7, 'L', 'to-basket', 'C', ['Drive in from the left side of the lane, dribbling with the left hand', 'Left-hand layup off the right foot, land balanced and hold'], { endResolves: 'N', gameRoles: ['layup'] }));
 A.push(one('064', 'drive_gather_R', 'DRIVE GATHER', 'RIGHT', 'FINISHING', 'MR', 'G', 5, 'R', 'to-basket', 'C', ['Drive toward the rim with the right hand', 'Gather two hands at the finish spot and hold']));
 A.push(one('065', 'drive_gather_L', 'DRIVE GATHER', 'LEFT', 'FINISHING', 'ML', 'G', 5, 'L', 'to-basket', 'C', ['Drive toward the rim with the left hand', 'Gather two hands at the finish spot and hold']));
 A.push(one('066', 'two_foot_finish', 'TWO-FOOT FINISH', 'POWER', 'FINISHING', ['G', 'MR', 'ML'], 'LAND', 7, 'both', 'to-basket', 'C', ['From a gather (or the drive)', 'Two-foot power jump finish at the rim, land balanced and hold'], { endResolves: 'N', gameRoles: ['layup'] }));
@@ -95,9 +99,9 @@ for (const d of DEF_DIRS) {
   const id = String(n++).padStart(3, '0');
   A.push(loop(id, `defense_${d.replace('-', '_')}`, `DEFENSE ${TITLE_DIR[d]}`, 'SLIDE', 'DEFENSE', 'DEF_M', 8, 'none', d, 'A', [`Defensive ${d === 'forward' || d === 'backward' ? 'shuffle' : 'slide'} ${d.replace('-', ' ')} along the lane, stay low, never cross the feet`, 'Reset outside the lane and repeat until the timer ends']));
 }
-A.push(one('078', 'defense_to_sprint', 'DEFENSE → SPRINT', 'OPEN AND GO', 'DEFENSE', 'DEF', 'N_SPRINT', 5, 'none', 'forward', 'A', ['Defensive stance', 'Open the hips and sprint out 3–4 steps']));
-A.push(one('079', 'sprint_to_defense', 'SPRINT → DEFENSE', 'BREAK DOWN', 'DEFENSE', 'N_SPRINT', 'DEF', 5, 'none', 'forward', 'A', ['Sprint in', 'Break down into a defensive stance and hold']));
-A.push(one('080', 'closeout', 'CLOSEOUT', 'CHOP FEET', 'DEFENSE', 'N_SPRINT', 'DEF', 6, 'none', 'forward', 'A', ['Sprint toward a shooter', 'Chop the feet, hand high, settle in stance']));
+A.push(one('078', 'defense_to_sprint', 'DEFENSE → SPRINT', 'OPEN AND GO', 'DEFENSE', 'DEF', 'N_SPRINT', 5, 'none', 'forward', 'A', ['Defensive stance', 'Open the hips and sprint out 3–4 steps'], { travelM: 3.5 }));
+A.push(one('079', 'sprint_to_defense', 'SPRINT → DEFENSE', 'BREAK DOWN', 'DEFENSE', 'N_SPRINT', 'DEF', 5, 'none', 'forward', 'A', ['Sprint in', 'Break down into a defensive stance and hold'], { travelM: 2.5 }));
+A.push(one('080', 'closeout', 'CLOSEOUT', 'CHOP FEET', 'DEFENSE', 'N_SPRINT', 'DEF', 6, 'none', 'forward', 'A', ['Sprint toward a shooter', 'Chop the feet, hand high, settle in stance'], { travelM: 3 }));
 A.push(one('081', 'hands_up_contest', 'HANDS-UP CONTEST', 'VERTICAL', 'DEFENSE', 'DEF', 'DEF', 5, 'none', 'none', 'A', ['Defensive stance', 'Both hands straight up, no jump, back to stance']));
 A.push(one('082', 'jump_contest', 'JUMP CONTEST', 'VERTICAL', 'DEFENSE', 'DEF', 'DEF', 6, 'none', 'up', 'A', ['Defensive stance', 'Vertical jump contest, land balanced, back to stance']));
 

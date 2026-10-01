@@ -11,40 +11,54 @@ reconstruction later) plugs in behind a processor interface.
 ## Run a session
 
 **What you need:** two phones or tablets on tripods (the iPad directs and is camera A; a phone is
-camera B), both online, and the studio password (for the director only).
+camera B), both online, the studio password (for the director only), and five cones or pieces of
+tape for the floor.
 
 1. **Connect.** On the iPad open `https://sprite-factory-production.up.railway.app/capture`, sign in,
    tap **New BASIC-01 session** and allow the camera. On the phone, scan the QR code on CAM B's tile
    (or open `/capture` and type the 6-digit code), then tap **TAP TO START CAMERA**. That is the
    phone's only touch.
-   - Each camera then records a 2-second **camera check** by itself. ✓ means it produced real
-     video (bytes, frames, a file that decodes); ✗ says why. Both tiles show what the camera sees.
-   - **NEXT** unlocks when both pass, or tap **Continue with one camera**.
-2. **Calibrate.** Calibration lets the two camera views be combined into 3-D later, so both cameras
-   must see the whole capture area and must not move afterwards.
-   - Place the cameras as the diagram shows and check that the dashed area fits in both pictures.
-   - Press **CALIBRATE**. After 3-2-1, walk to the corners **1 → 2 → 3 → 4** of the area (numbered on
-     the diagram), then stand in the middle with your arms up. It stops after 10 s and saves by
-     itself: **Calibration saved ✓** with a still from each camera.
+   - Both tiles show what the camera sees. Each camera records a 2-second **camera check** by
+     itself: ✓ means real video (bytes, frames, a file that decodes); ✗ says why.
+   - **NEXT** unlocks when both pass. **Continue with one camera** records with one view (no 3-D).
+2. **Calibrate.** Calibration lets the two camera views be combined into 3-D later. So both
+   cameras must see the whole area the athlete uses, head to feet, and must not move afterwards.
+   There are two camera placements: one for setups A + B (top of the key and the drive lane), one
+   for setup C (the rim).
+   - Put the cameras where the screen says, in court words (e.g. "1.1 m inside the right
+     sideline, 2.0 m up from the baseline"), lens at chest height, phone sideways.
+   - Put a cone or tape on the middle (✕) and on corners 1–4; each is listed in court words.
+   - Stand on each mark: you must be visible **head to feet** in both pictures. If not, move that
+     camera back (or tap **Wider** when the phone offers a wider lens).
+   - Press **CALIBRATE** (both cameras must be READY). After the countdown, walk ✕ → 1 → 2 → 3 →
+     4 → ✕ at an easy pace as the iPad calls out the corners, then stand on ✕ with your arms up. It
+     takes about 21 s, stops by itself and saves: **Calibration saved ✓** with a still from each
+     camera. With two cameras it is saved only when both recorded.
    - **Skip — cameras are placed; I'll calibrate later** also works.
 3. **Record**, one animation at a time. The screen shows `#12 of 82 · Setup A`, the name, a court
-   diagram with the **START** and **FINISH** marks and the path, the start pose, the move and the
-   finish pose, and the protocol: hold the start pose 1 s → the move at game speed → hold the
-   finish pose 1 s (loops: keep repeating).
-   - Press **RECORD**: 3-2-1, then it records with a big timer and stops by itself (or press
-     **STOP**). There is no review: the next animation to record comes up at once.
+   diagram with the **START** and **FINISH** marks and the path, where they are in court words, the
+   start pose, the move, the finish pose and the protocol:
+   - from a still pose: hold it 1 s → the move at game speed → hold the finish pose 1 s;
+   - from a moving one (moving dribble, sprint, slide): start 2–3 steps before START and cross it
+     already moving; a move that ends moving keeps going through FINISH;
+   - loops: keep repeating at game speed.
+   Press **RECORD**: a countdown (3, 5 or 10 s, kept on the iPad), then it records with a big timer,
+   says **Go** / **Hold** out loud, and stops by itself (or press **STOP**). There is no review: the
+   next animation to record comes up at once.
    - The take uploads and is checked in the background. It counts as **Recorded ✓** only once the
-     server and the bucket have it; until then the list says **Uploading**. A **Redo** button for the
-     take just recorded stays for a few seconds.
-   - When a setup is finished, the app asks you to move the cameras and calibrate the next setup.
+     server and the bucket have it; until then the list says **Uploading**. A **Redo** button for
+     the take just recorded stays for a few seconds (longer when its check failed or it was short).
+   - When a placement is finished, the app says what is left there first (redos, uploads), then
+     asks you to move the cameras and calibrate the next one.
 4. **Animations** lists all 82 slots by setup, in capture order: name, start → finish pose and
    status (**Not recorded · Uploading · Recorded ✓ · Check failed — redo** with the reason ·
-   **Analysed ✓**), with the totals. Filter **To record / All**. Tap a slot to see its takes (play,
-   **MARK BEST**, attach a slo-mo file, **Record it again**).
+   **Analysed ✓**), a warning line for a take that was cut short, and the totals. Filter **To record
+   / All**. Tap a slot to see its takes (play, **MARK BEST**, attach a slo-mo file, **Record it
+   again**).
 5. **Analysis** (any time later): nothing is analysed by itself. Pick the recorded animations
    (all by default), the camera (A or B), check the cost (about $0.03 per frame) and press
-   **Send to analysis**, then confirm the amount. The server runs them one at a time, and you can close
-   the page. Progress and errors (for example an empty fal.ai balance) show at the top.
+   **Send to analysis**, then confirm the amount. The server runs them one at a time, and you can
+   close the page. Progress and errors (for example an empty fal.ai balance) show at the top.
 
 Stop at any point: home → **CONTINUE MISSING** on the session goes to the next animation to record.
 **Export** is at the bottom of **Animations** (the organised dataset as a `.tar`).
@@ -55,12 +69,12 @@ Phones need HTTPS for the camera, so the Mac serves its own certificate: the fir
 warns about it (iOS: *Show Details → visit this website*; Android: *Advanced → Proceed*). Takes are
 then stored on the Mac (`data/capture`).
 
-**If a camera is not recording,** the director says so within about 2 s of the start (in the
-recording screen: "CAM B is not recording — keep its screen on and the page in front"). The take is
-flagged and, if no usable video arrives, the slot becomes **Check failed — redo**. Phone B's own
-screen says the same. The usual cause is a locked screen or the page in the background. The app
-keeps the screen awake and the preview playing, but a phone call or another app using the camera
-still stops it.
+**If a camera is not recording,** the director says so within about 3 s of the start, in the
+recording screen ("CAM B is not recording — keep its screen on and the page in front", or "CAM B
+did not start recording" when its page was asleep). Phone B's own screen says the same. The take
+does not wait for that camera: with two cameras it becomes **Check failed — redo**. The usual cause
+is a locked screen or the page in the background. The app keeps the screen awake and the preview
+playing, but a phone call or another app using the camera still stops it.
 
 ## What each screen shows
 
@@ -70,8 +84,8 @@ Analysis**) and the CAM A / CAM B status, then the step:
 | Step | Content |
 |---|---|
 | 1 Connect | Two camera tiles: a live picture (camera B sends a small JPEG every ~1.5 s), READY, resolution, fps, orientation, format and the camera check; pairing QR and code; the frame-rate note |
-| 2 Calibrate | Why it matters; the setup diagram (camera positions, the area, corners 1–4); both live pictures with a framing guide; CALIBRATE (3-2-1 → 10 s with prompts → saved by itself) or Skip |
-| 3 Record | `#n of 82 · Setup X`, name, START/FINISH diagram, start pose, the move, finish pose, protocol; RECORD → 3-2-1 → timer → stops by itself; "Saved ✓" / Redo |
+| 2 Calibrate | Why it matters; where each camera stands and where the floor marks go (court words); the diagram (camera positions, the area, corners 1–4, ✕); both live pictures (zoom when the phone has a wider lens); CALIBRATE (countdown → ~21 s walk with spoken corners → saved by itself) or Skip |
+| 3 Record | `#n of 82 · Setup X`, name, START/FINISH diagram and court words, start pose, the move, finish pose, protocol; countdown 3/5/10 s, voice on/off; RECORD → countdown → timer → stops by itself; "Saved ✓" / Redo. On a phone a one-line start → finish summary sits above the diagram |
 | Animations | All slots with status and totals; a slot's takes (play, MARK BEST, slo-mo file, "Use it anyway" for a failed check, record again); export |
 | Analysis | Sent to analysis (running with progress, queued, done, errors); the recorded takes to send with checkboxes, camera, frames per second and the cost; Send to analysis with a cost confirmation |
 
@@ -86,7 +100,10 @@ DISCARD) and **USE THIS PHONE** when another page took its role.
 capture/                       shared by the server and the browser (served at /capture/js/*.mjs)
   schema.mjs                   canonical states, the animation-definition schema + validation, state graph
   basic01.mjs                  BASIC-01 — the ONE source of truth for the 82 animations
-  court-layout.mjs             court geometry + landmarks, setups A/B/C (player path, camera poses, framing), SVG diagram
+  court-layout.mjs             court geometry + landmarks, camera placements (STATIONS), setups A/B/C (player paths,
+                               mirrored by ball hand), the calibration walk and its timing, framing checks, SVG diagram
+  instructions.mjs             what the athlete is told per animation: START / FINISH in court words, holds (or not, for
+                               moves that start / end moving), the protocol, the cues and spoken words second by second
   protocol.mjs                 session order, progress / next missing, take lifecycle, real-time message types
   camera-sync.mjs              shared session clock (ClockSync), sync chirp definition, alignTakes / frameStats
   camera.mjs                   web camera: capability ladder, MediaRecorder chunks, frame timestamps, moved detection
@@ -143,9 +160,14 @@ time, noted as `stopReconciled`. It also caps a take at 120 s without contact.
 dropped connection or a server restart. A director page refreshed mid-take comes back with STOP.
 
 **Which cameras a take waits for.** The ones that were READY when RECORD was pressed
-(`expectedCams`). If one of them never uploads (its phone died), the slot stays **Uploading**, and
-its takes offer **Go on with CAM A** (`POST …/finish`; a calibration offers **Save with CAM A only**
-after 20 s). The missing camera's footage is still added to the take if it arrives later.
+(`expectedCams`). Each camera's state report names the take it got the start of; one that has not
+3 s after the scheduled start never started (its page asleep or in the background). The hub then
+tells the director (`notrecording`), records it on the take (`missingCams`) and the take does not
+wait for it: with two cameras it is "needs redo" (`camB never started recording`); in one-camera
+mode it is saved with a warning. A camera that did start but never uploads (its phone died
+mid-take) keeps the slot **Uploading**; after 30 s the director shows a banner, and **Go on without
+CAM B** / the take's **Go on with CAM A** (`POST …/finish`) save it with the other camera. That
+camera's footage is still added to the take if it arrives later.
 
 **CANCEL** during the 3-2-1 (or in the 0.8 s before the cameras start) discards the take: the cameras
 halt and the take is marked `rejected`, so it never counts as a recording of the move.
@@ -169,10 +191,13 @@ the user's devices report `getCapabilities().frameRate.max = 60`), even though t
 120/240. Other phones' browsers are usually limited to 30 or 60 fps too. The Connect step says so,
 and there are two native paths:
 
-- **Now: a slo-mo file per take.** Record the same take with the phone's Camera app in Slo-mo
-  (120/240 fps), then attach it under **Animations → the slot → Slo-mo file: + CAM X**. Its audio
-  contains the director's sync chirp, so it is aligned to the take automatically. It is stored as
-  `camX.native.mov` next to the web recording, with its probe and chirp position.
+- **Now: a slo-mo file per take, from a third phone.** During the take, film the same move in
+  Slo-mo (120/240 fps) with the Camera app of a **third** phone standing next to CAM A or CAM B.
+  Not with CAM A or CAM B themselves: opening the Camera app on them sends the capture page to the
+  background and stops its recording. Then attach the file under **Animations → the slot →
+  Slo-mo file: + next to CAM X**. Its audio contains the director's sync chirp, so it is aligned to
+  the take automatically. It is stored as `camX.native.mov` next to the web recording, with its
+  probe and chirp position.
 - **Next: a native camera app** implementing the same protocol:
   1. join with the pairing token: `POST /api/capture/pair {token}`;
   2. open the WebSocket `/api/capture/ws?session=…&token=…`, send `hello {role: camB}`, and `ping`
@@ -187,12 +212,14 @@ and there are two native paths:
 ## Recording format and the "is it really recording?" check
 
 - **Format** (`pickMime`). On WebKit (Safari: iPhone, iPad, Mac) the recorder uses MP4 / H.264
-  first, then WebM. On Chromium it uses WebM first, because it streams real 1 s chunks. If a format
-  records (almost) nothing while the camera delivers frames, the device skips that format from then
-  on (kept in its `localStorage`) and says so.
+  first, then WebM. On Chromium it uses WebM first, because it streams real 1 s chunks. A format the
+  recorder refuses outright is skipped at once (the next one it offers is used for the same take).
+  A format whose FINISHED recording is (almost) empty while the camera delivered frames is skipped
+  for a week (kept in the phone's `localStorage`); it is never judged from a mid-recording byte
+  count, since Safari may deliver the whole take at the stop.
 - **Health check.** About 1.6 s and 3.2 s after the scheduled start, each camera checks that its
   recording is real. A problem is any of: a recorder error, the camera stopped or muted, the page in
-  the background, (nearly) empty chunks, or no frames and no data. It reports the problem at once
+  the background, (nearly) empty chunks while no frame arrives, or no frames and no data. It reports the problem at once
   (`state.recError`). The director shows it in the recording screen ("CAM B is not recording — keep
   its screen on and the page in front"), and phone B shows it too. The take carries it (a `recorder-camX`
   warning), and it is checked again at the stop.
@@ -219,8 +246,12 @@ and there are two native paths:
 - **Recorded ✓ / Saved ✓** appear only after the take's files, its record (marked accepted) and the
   session's progress are all stored in the bucket. Nobody accepts a take by hand: once a take's
   uploads are in and its checks pass, the server saves it and selects it if it is the newest
-  recorded take of its animation (`POST …/accept` stays as an API, and **Use it anyway** uses it for a
-  failed check).
+  recorded take of its animation — unless it is short (stopped early: a duration warning) and the
+  selected one is not; then it is saved, the old one stays selected and the list says so.
+  `POST …/accept` stays as an API, and **Use it anyway** uses a failed take.
+- **Sessions of the old, reviewed flow.** A take that was checked but never accepted is not saved
+  behind the operator's back: its slot asks for a decision (**Use it anyway** or record it again).
+  An earlier MARK BEST is kept when such a session is settled.
 - **Footage the server no longer knows** (e.g. a session removed by hand) is never deleted from the
   phone. It is kept aside, and the camera page offers **SAVE TO PHONE** or **DISCARD**.
 - **Retakes.** Takes are never deleted automatically. Each animation keeps all its takes and one
@@ -232,21 +263,34 @@ and there are two native paths:
 later, the processing side has to know where each camera stands relative to the court. The
 calibration recording gives it that: both cameras film the same known walk (the capture area's
 four corners and its middle, arms up), so the views can be matched. That is why both cameras must
-see the whole area, and must not move once it is recorded.
+see the whole area, head to feet, and must not move once it is recorded.
 
-- One calibration recording per court setup (10 s, prompted: corners 1 → 2 → 3 → 4 as numbered on
-  the diagram, then the middle), kept apart from the takes in `calibrations/`. It saves itself
-  once both recordings are uploaded and decode (no review). The corner positions are in
-  `court-layout.mjs` (`calibrationWalk`).
-- Court landmarks can still be added per camera through the API (`POST …/rec/:id/landmarks`), as
-  normalised image points paired with court metres; the main flow doesn't ask for them.
+- **One calibration per camera placement** (`court-layout.mjs` `STATIONS`): placement A serves
+  setups A and B (top of the key and the drive lane, the cameras do not move between them),
+  placement C serves the rim. Calibrations are kept as `session.calibrations.A` / `.C`, and
+  `session.currentSetup` is the placement in use.
+- **Where the cameras go.** Each placement puts both cameras so that a phone's normal (1×) lens
+  takes in the whole area head to feet: the nearest corner at least 4.5 m away and the area within
+  about 50° across (`tests/capture.test.js` checks it). Their positions are given in court words.
+  The area's corners and middle are listed in court words too: a cone or tape on each.
+- **The recording** (about 21 s, `calibrationWalk`): 2 s on ✕ arms up, then ✕ → 1 → 2 → 3 → 4 → ✕
+  at an easy 1.3 m/s, then 2 s arms up. The iPad says each corner out loud and lights it on the
+  map. It saves itself once both recordings are uploaded and decode (no review). With two cameras,
+  a calibration with only one camera's view is not saved ("the calibration needs both cameras");
+  in one-camera mode one view is saved. The CALIBRATE button waits for both cameras to be READY.
+- **Moving the cameras** to another placement makes the old placement's calibration **stale**.
+  Coming back needs a new calibration (or an explicit skip). A take records the calibration it was
+  made with only while that calibration is valid (`calibrationId`, `calibrationStatus`).
+- Kept apart from the takes in `calibrations/`. Court landmarks can still be added per camera
+  through the API (`POST …/rec/:id/landmarks`), as normalised image points paired with court
+  metres; the main flow doesn't ask for them.
 - When a calibration is saved, both cameras keep a reference view. It is stored on the server
   (`calrefs/`), so a reloaded camera page keeps watching. A camera that has no reference for an
   accepted calibration (it was not connected then) flags it, so the director recalibrates.
 - A camera is considered moved when a whole-picture shift explains a change in its view (edge maps,
-  ±4 px of 64), or when the phone is bumped (device motion). That marks the setup's calibration
-  **suspect**, and the director is prompted to recalibrate.
-- A player walking through the view doesn't count as a move.
+  ±4 px of 64), or when the phone is bumped (device motion). That marks the placement's calibration
+  **suspect**, and the director is prompted to recalibrate. A player walking through the view doesn't
+  count as a move.
 - You can skip calibration ("Skip — cameras are placed; I'll calibrate later"); that is recorded as `skipped`.
 - Court landmarks and known dimensions are in `court-layout.mjs` (`COURT.landmarks`). A ChArUco
   board can be recorded in the same calibration take.
@@ -268,9 +312,10 @@ They run in the background once a take's cameras have uploaded. Nobody waits for
 | Cropping | Motion running off two frame edges (a cheap motion map) |
 
 A **hard failure** means a camera produced no usable video: missing, a tiny file, no decode, or
-under 1 s. It makes the slot **Check failed — redo**, with the reason; the take is kept, and
-**Use it anyway** in its takes saves it regardless. Any other fail or warning is only shown with the
-take. Planned slots, same signature: body visible (2D pose), ball visible, feet visible, blur,
+under 1 s, or (two cameras) an expected camera never started. It makes the slot **Check failed —
+redo**, with the reason; the take is kept, and **Use it anyway** in its takes saves it regardless.
+Any other fail or warning is shown with the take; one that matters for the clip (cut short, the
+camera said it was not recording, the athlete cropped) also shows in the list and the toast. Planned slots, same signature: body visible (2D pose), ball visible, feet visible, blur,
 exposure.
 
 **The camera check** (Connect step) is a 2 s recording of kind `check` (`POST …/checks`), kept in
@@ -325,10 +370,16 @@ Nothing is analysed when it is recorded. The **Analysis** screen sends the chose
   pipeline (`lib/mocap/pipeline.js`: SAM 3 + SAM 3D Body on fal.ai) and becomes a motion in the clip
   library. Its game role comes from the animation's `gameRoles` (e.g. `cross_RL → move-crossover`).
 - The state is persisted on the take (`take.analysis = {state: queued | running | done | error,
-  cam, fps, maxFrames, estimateUsd, attempts, error, motionId}`), with the order in
-  `session.analysisQueue` and a summary per slot. After a restart, the queue resumes on boot or on
-  the next read of the session. A take interrupted twice by a restart becomes an error instead of
-  being paid for a third time.
+  cam, fps, maxFrames, estimateUsd, attempts, beatAt, error, motionId}`), with the order in
+  `session.analysisQueue` and a summary per slot. After a restart, queued takes resume on boot or on
+  the next read of the session (after a 2-minute grace, since a redeploy's old container may still
+  be running the queue; takes queued on the new server start at once).
+- **Paid work never runs twice without asking.** A running take writes a heartbeat (`beatAt`).
+  Another server leaves it alone while the heartbeat is fresh. Once it is stale (90 s), the server
+  that ran it is gone, and the take becomes an **error**: "interrupted by a server restart … send it
+  again". It is never re-run by itself. SIGTERM stops the queue from starting anything new. A
+  result the bucket refused to store is kept and only its writes are retried; the pipeline is not
+  run again.
 - `GET /api/capture/sessions/:sid/analysis` returns the queue with live progress. Errors are shown as
   the pipeline reports them, for example fal.ai's own message when its balance is empty. A take that
   failed goes back to the list to send again.
@@ -352,23 +403,31 @@ interface.
     - a **redeploy** (process killed, local disk wiped) mid-review, mid-upload and mid-check: the
       takes, videos, stills and export come back from the bucket;
     - which cameras a take waits for, and going on without one;
-    - saved by itself (the newest selected), MARK BEST, a failed check → needs redo / use it anyway;
-    - a late STOP;
-    - the camera check (never a take), the live-snapshot relay (director only, rate limited);
-    - the analysis queue: the quote, the confirmed queue run one at a time (`MOCAP_MOCK=1`), and its
-      resumption after a restart;
+    - saved by itself (the newest selected, unless it is short), MARK BEST, a failed check → needs
+      redo / use it anyway; a session of the old reviewed flow is never saved behind the operator's
+      back;
+    - a late STOP; an expected camera that never starts (told within seconds, nothing waits for it);
+    - calibrations: one per camera placement, both views needed with two cameras, stale after a move;
+    - the camera check (never a take), the live-snapshot relay (director only, rate limited), the
+      zoom relay;
+    - the analysis queue: the quote, the confirmed queue run one at a time (`MOCAP_MOCK=1`), a
+      redeploy (queued resumes; an interrupted run becomes an error, a fresh heartbeat is left
+      alone), and a refused result write that is retried without running the pipeline again;
     - security: a camera token can't act as director or reach director endpoints; pairing limits,
       code expiry and body size limits;
     - crash resistance: an oversized WebSocket frame, malformed URLs, `GET //`.
 - `node tests/capture-e2e.spec.js` runs two simulated phones (separate Chromium instances with fake
-  camera and microphone) against a dedicated server, with a folder as the bucket (about 60 checks).
+  camera and microphone) against a dedicated server, with a folder as the bucket (about 70 checks).
   The director is an iPad (1180×820) and camera B a phone (390×844), with screenshots of every step at
   iPad and phone sizes, portrait and landscape, in `tests/reports/capture-e2e/`:
   - connect: pairing by QR link and one tap, the camera check ✓ — and ✗ with the reason for a camera B
     whose recorder produces nothing (the iPhone case), told to the director while it records;
-  - calibrate: the walk diagram, the prompts, saved by itself with both stills;
-  - record three animations back to back with no review; the slot list (Uploading → Recorded ✓,
-    filters, totals); redo from the toast and from the list; MARK BEST; a failed check → redo;
+  - calibrate: camera positions and floor marks in court words, the walk diagram, the written and
+    spoken prompts at an easy walk, saved by itself with both stills;
+  - record: START/FINISH in court words, a move that starts moving (no "hold the start pose"), the
+    phone layout above the fold, the countdown setting; three animations back to back with no
+    review; the slot list (Uploading → Recorded ✓, filters, totals); redo from the toast and from
+    the list; MARK BEST; a failed check → redo; camera B asleep at RECORD;
   - analysis: the selection, the server's quote to confirm, the queue run (mock) → Analysed ✓;
   - CANCEL in the 3-2-1 and in the 0.8 s lead (the take is discarded, no recorder left running);
   - camera B offline mid-take (chunks kept on the device, uploaded after reconnect);
@@ -388,6 +447,10 @@ interface.
 | `CAPTURE_CLOUD=0` | on | Turns the cloud mirror off |
 | `CAPTURE_CLOUD_DIR` | unset | Tests only: a local folder stands in for the bucket |
 | `CAPTURE_DEBUG=1` | off | Logs hub liveness and event-loop stalls |
+| `CAPTURE_ACK_GRACE_MS` | `3000` | How long after a take's start a camera has to say it started |
+| `CAPTURE_ANALYSIS_LEASE_MS` | `90000` | A running analysis whose heartbeat is older: its server is gone (→ error) |
+| `CAPTURE_ANALYSIS_GRACE_MS` | `120000` | After a boot, queued analyses from before wait this long |
+| `CAPTURE_ANALYSIS_RETRY_MS` | `60000` | A refused analysis write is retried after this long |
 
 Limits: one camera's recording up to 900 MB (2000 chunks); a native file up to 2 GB; pairing by code
 is rate limited per client and to 60 wrong codes a minute overall.
@@ -400,7 +463,10 @@ is rate limited per client and to 60 wrong codes a minute overall.
   streaming. It is still saved to the device first, then uploaded.
 - **Keep the camera page in front.** Phones stop the camera when locked, backgrounded, or when
   another app takes the camera (a call, the Camera app). The app keeps a wake lock, and the director
-  is told within about 2 s when a camera stops recording; keep phone B on its tripod with the page open.
+  is told within about 3 s when a camera stops or never starts recording; keep phone B on its
+  tripod with the page open.
+- **The iPad's voice.** iOS speaks only after a tap on the page (RECORD / CALIBRATE is one) and
+  only with the sound on. With the voice off, someone reads the screen to the athlete.
 - **Self-signed certificate.** On the Mac's LAN listener each phone accepts the warning once. The
   Railway link has none.
 - **A deploy during a session** drops both phones' connections for a moment; they reconnect by

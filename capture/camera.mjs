@@ -41,15 +41,25 @@ const MP4 = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4;codecs=avc1', 'video/
  */
 export function mimeCandidates(webkit = isWebKit()) { return webkit ? [...MP4, ...WEBM] : [...WEBM, ...MP4]; }
 /**
- * Formats this device's recorder advertised but recorded nothing with (while the camera delivered
- * frames): skipped from then on. Kept in localStorage, so a reload keeps the working format.
+ * Formats this device's recorder refused, or advertised but recorded (almost) nothing with while
+ * the camera delivered frames — judged only from a FINISHED recording, never from a mid-recording
+ * byte count (Safari may hold its data until the stop). Skipped for a week (localStorage, so a
+ * reload keeps the working format; a browser update gets another chance).
  */
-const BAD_KEY = 'sjc-bad-mime';
-const badMimes = (() => { try { return new Set(JSON.parse(localStorage.getItem(BAD_KEY) || '[]')); } catch { return new Set(); } })();
+const BAD_KEY = 'sjc-bad-mime', BAD_TTL_MS = 7 * 86400000;
+const badStore = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(BAD_KEY) || '{}');
+    const o = Array.isArray(v) ? Object.fromEntries(v.map((m) => [m, Date.now()])) : v && typeof v === 'object' ? v : {};
+    for (const [m, at] of Object.entries(o)) if (!(Date.now() - at < BAD_TTL_MS)) delete o[m];
+    return o;
+  } catch { return {}; }
+})();
+const badMimes = new Set(Object.keys(badStore));
 export function markBadMime(m) {
   if (!m || badMimes.has(m)) return false;
-  badMimes.add(m);
-  try { localStorage.setItem(BAD_KEY, JSON.stringify([...badMimes])); } catch {}
+  badMimes.add(m); badStore[m] = Date.now();
+  try { localStorage.setItem(BAD_KEY, JSON.stringify(badStore)); } catch {}
   return true;
 }
 export function pickMime({ webkit = isWebKit(), supported = null, bad = badMimes } = {}) {
@@ -65,19 +75,19 @@ export function pickMime({ webkit = isWebKit(), supported = null, bad = badMimes
 /**
  * Is a recording really producing video? Looked at ~1.6 s and ~3.2 s after it started and at its
  * stop. Returns the problem in plain words, or null.
- *   live: recorder error · camera ended / muted · page hidden · (nearly) empty chunks — at 1.6 s
- *         only when no frame arrived either (Safari's first chunk can be just the file header),
- *         from 3 s on in any case · no frames and no data at all
+ *   live: recorder error · camera ended / muted · page hidden · (nearly) empty chunks while NO
+ *         frame arrives (with frames arriving, Safari's MP4 recorder may hand over only the file
+ *         header until the stop: that is left to the final check) · no frames and no data at all
  *   final (≥ 1.5 s recorded): no data, or a file under 20 kB
  */
 export function recordingProblem({ error = null, trackState = 'live', muted = false, hidden = false, chunks = 0, bytes = 0, frames = 0, rvfc = true, final = false, elapsedMs = 0 } = {}) {
   const why = [];
-  if (error) why.push(`the recorder failed (${error})`);
+  if (error) why.push(/^the recorder /.test(error) ? error : `the recorder failed (${error})`);
   if (trackState === 'ended') why.push('the camera stopped');
   else if (muted) why.push('the camera delivers no picture');
   if (hidden) why.push('the page is in the background (screen locked or another app in front)');
   const small = chunks > 0 && bytes < (final ? 20000 : 4096);
-  if (small && (final ? elapsedMs >= 1500 : frames === 0 || !rvfc || elapsedMs >= 3000)) why.push(`the recorder produced only ${bytes} bytes`);
+  if (small && (final ? elapsedMs >= 1500 : frames === 0 || !rvfc)) why.push(`the recorder produced only ${bytes} bytes`);
   else if (small) { /* a small first chunk (or a STOP right after the start): looked at again later / not a camera problem */ }
   else if (final && elapsedMs >= 1500 && chunks === 0) why.push('the recorder produced no data');
   else if (rvfc && frames === 0 && chunks === 0 && elapsedMs >= 3000) why.push('no video frames and no data');
@@ -182,23 +192,38 @@ export class WebCamera {
     if (!this.stream) throw new Error('camera not open');
     const prev = this.cur;
     if (prev && !prev.stopping) this.stop({});             // never two recorders (its data still reaches its own take)
-    const mime = pickMime();
     const fps = this.settings?.frameRate || 30, px = (this.settings?.width || 1280) * (this.settings?.height || 720);
     const bps = bitsPerSecond || Math.round(Math.min(40e6, Math.max(8e6, px * fps * 0.12)));
-    const st = { tag, mime, bps, seq: 0, bytes: 0, frameCount: 0, frames: [], mediaTimes: [], streaming: false, rec: null, timer: null, active: false, stopping: false, done: null, error: null, recError: null, health: [] };
+    const st = { tag, mime: pickMime(), bps, seq: 0, bytes: 0, frameCount: 0, frames: [], mediaTimes: [], streaming: false, rec: null, timer: null, active: false, stopping: false, done: null, error: null, recError: null, health: [] };
     this.cur = st;
     st.go = () => {
       st.timer = null;
       if (st.rec) return;
       this.keepPlaying();
-      let rec;
-      try { rec = st.rec = new MediaRecorder(this.stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: bps, audioBitsPerSecond: 128000 }); }
-      catch (e) { st.error = e.name || e.message; this.flag(st); return; }
-      rec.ondataavailable = (e) => { if (e.data && e.data.size) { st.bytes += e.data.size; this.onChunk?.(st.seq++, e.data, st.tag, st.mime); if (st.active && e.data.size > 4096) st.streaming = true; } };
-      rec.onstop = () => { st.active = false; this.recording = !!this.cur?.active; st.done?.(); };
-      rec.onerror = (e) => { st.error = e?.error?.name || e?.error?.message || 'error'; this.flag(st); };
-      st.startedLocal = Date.now();
-      try { rec.start(timesliceMs); } catch (e) { st.error = e.name || e.message; this.flag(st); return; }
+      let rec = null, lastErr = null;
+      // a type the recorder refuses outright (it advertised it, then the recorder can't be made
+      // or won't start) is skipped from now on: the next one it offers is tried at once, so a
+      // device never fails every recording the same way
+      for (let i = 0; i < 8 && !rec; i++) {
+        let r = null;
+        try {
+          r = new MediaRecorder(this.stream, { ...(st.mime ? { mimeType: st.mime } : {}), videoBitsPerSecond: bps, audioBitsPerSecond: 128000 });
+          r.ondataavailable = (e) => { if (e.data && e.data.size) { st.bytes += e.data.size; this.onChunk?.(st.seq++, e.data, st.tag, st.mime); if (st.active && e.data.size > 4096) st.streaming = true; } };
+          r.onstop = () => { st.active = false; this.recording = !!this.cur?.active; st.done?.(); };
+          r.onerror = (e) => { st.error = e?.error?.name || e?.error?.message || 'error'; this.flag(st); };
+          st.startedLocal = Date.now();
+          r.start(timesliceMs);
+          rec = r;
+        } catch (e) {
+          lastErr = e;
+          if (r) { r.ondataavailable = r.onstop = r.onerror = null; }
+          const next = st.mime && markBadMime(st.mime) ? pickMime() : null;
+          if (!next || next === st.mime) break;
+          (st.refused ||= []).push(st.mime); st.mime = next;
+        }
+      }
+      if (!rec) { st.error = `the recorder would not start: ${lastErr?.name || lastErr?.message || 'error'}`; st.startedLocal ||= Date.now(); this.flag(st); return; }
+      st.rec = rec;
       st.active = true; this.recording = true;
       this.watchFrames(st);
       // is it really recording? told to the director within ~2 s (e.g. an iPhone whose recorder gives 5 bytes)
@@ -214,9 +239,10 @@ export class WebCamera {
     let msg = recordingProblem({ error: st.error, trackState, muted, hidden,
       chunks: st.seq, bytes: st.bytes, frames: st.frameCount, rvfc: !!this.video?.requestVideoFrameCallback, final, elapsedMs: (st.stoppedLocal || Date.now()) - (st.startedLocal || Date.now()) });
     if (msg) {
-      // frames arrived and the page was in front, yet the recorder made (almost) nothing: this
-      // device can't record that format — the next recording uses the next one it offers
-      if (/recorder produced/.test(msg) && st.frameCount > 0 && !hidden && !muted && trackState !== 'ended' && !st.error && markBadMime(st.mime)) {
+      // the FINISHED recording: frames arrived and the page was in front, yet the recorder made
+      // (almost) nothing — this device can't record that format: the next recording uses the next
+      // one it offers (never judged mid-recording: Safari may deliver everything at the stop)
+      if (final && /recorder produced/.test(msg) && st.frameCount > 0 && !hidden && !muted && trackState !== 'ended' && !st.error && markBadMime(st.mime)) {
         const next = pickMime();
         if (next && next !== st.mime) { st.mimeSwitched = next; msg += ` — the next recording uses ${/mp4/.test(next) ? 'MP4' : 'WebM'} instead`; }
       }
@@ -253,7 +279,7 @@ export class WebCamera {
         st.active = false; st.stoppedLocal = Date.now(); st.health.forEach(clearTimeout);
         if (st.startedLocal) this.flag(st, { final: true });
         resolve({ chunks: st.seq, bytes: st.bytes, mime: st.mime, bps: st.bps, frames: st.frames, mediaTimes: st.mediaTimes, startedLocal: st.startedLocal, stoppedLocal: st.stoppedLocal, streaming: st.streaming, tag: st.tag, recError: st.recError, recWarn: st.recWarn || null,
-          rvfc: !!this.video?.requestVideoFrameCallback, mimeSwitched: st.mimeSwitched || null });
+          rvfc: !!this.video?.requestVideoFrameCallback, mimeSwitched: st.mimeSwitched || null, refused: st.refused || null });
       };
       const go = () => {
         // STOP before the scheduled start: start now and stop at once (a short file, never a recorder left running)

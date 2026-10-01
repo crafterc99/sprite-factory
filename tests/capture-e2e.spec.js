@@ -8,11 +8,14 @@
  *   1 Connect — both cameras run the 2 s camera check by themselves; a camera B whose recorder
  *     produces nothing (the iPhone case: 5 bytes, no frames) shows ✗ with the reason and the
  *     director is told during the recording; after the fix the check passes, NEXT unlocks.
- *   2 Calibrate — the goal explained, the walk diagram (corners 1–4, the middle), both live views,
- *     3-2-1 → 10 s with prompts ("Walk to corner 2", lit on the map) → stops and saves by itself
- *     (no review, no landmarks) → "Calibration saved ✓" with both stills.
- *   3 Record — START/FINISH instructions; three animations back to back (the first stops by
- *     itself at its target, the others with STOP), no review: straight on to the next one.
+ *   2 Calibrate — the goal explained, where each camera stands and where the floor marks go (in
+ *     court words), the walk diagram (corners 1–4, the middle), both live views, 3-2-1 → ~21 s at an
+ *     easy walk with spoken + written prompts ("Corner one", "Walk to corner 2", lit on the map) →
+ *     stops and saves by itself (no review, no landmarks) → "Calibration saved ✓" with both stills.
+ *   3 Record — START/FINISH instructions (a move that starts moving never says "hold the start
+ *     pose"), the phone layout shows them above the fold; the countdown setting; three animations
+ *     back to back (the first stops by itself at its target, the others with STOP), no review:
+ *     straight on to the next one.
  *   Animations — every slot with its status (Uploading → Recorded ✓), filters, totals; redo (the
  *     toast's Redo and "Record it again" from the list), MARK BEST; a take whose camera B records
  *     nothing is "Check failed — redo" with the reason, and the director saw it while recording.
@@ -24,7 +27,8 @@
  * CANCEL before the cameras' scheduled start (the take is discarded, no recorder left running) ·
  * camera B offline mid-take
  * (chunks kept on the phone) · camera B reloaded mid-take · the director refreshed mid-recording
- * (STOP comes back) · a second page on camera B's link (USE THIS PHONE, no flapping) · the server
+ * (STOP comes back) · camera B asleep at RECORD (never starts: told within seconds, the take is
+ * "needs redo", nothing waits for it) · a second page on camera B's link (USE THIS PHONE, no flapping) · the server
  * killed with its disk wiped (Railway redeploy) · the same mid-upload (409 missing → re-sent) ·
  * home → CONTINUE MISSING · the export's layout.
  *
@@ -65,7 +69,7 @@ const serverEnv = () => {
   const e = { ...process.env, PORT: String(PORT), CAPTURE_DIR: CAP, CAPTURE_CLOUD_DIR: CLOUD, CAPTURE_HTTPS: '0', APP_PASSWORD: '', CAPTURE_DEBUG: '1',
     // no real cloud storage, ever; SAM 3D Body in mock mode (synthetic, no fal.ai, no money), writing into the temp folder
     FIREBASE_SERVICE_ACCOUNT: '', GOOGLE_APPLICATION_CREDENTIALS_JSON: '', FIREBASE_PROJECT_ID: '', FIREBASE_CLIENT_EMAIL: '', FIREBASE_PRIVATE_KEY: '', FIREBASE_STORAGE_BUCKET: '',
-    R2_ENDPOINT: '', R2_BUCKET: '', R2_ACCESS_KEY_ID: '', R2_SECRET_ACCESS_KEY: '', FAL_KEY: '', MOCAP_MOCK: '1', MOCAP_DIR: path.join(DATA, 'mocap'), TMP_DIR: path.join(DATA, 'video-tmp') };
+    R2_ENDPOINT: '', R2_BUCKET: '', R2_ACCESS_KEY_ID: '', R2_SECRET_ACCESS_KEY: '', FAL_KEY: '', GITHUB_TOKEN: '', MOCAP_MOCK: '1', MOCAP_DIR: path.join(DATA, 'mocap'), TMP_DIR: path.join(DATA, 'video-tmp') };
   delete e.CAPTURE_CLOUD;                                    // (CAPTURE_CLOUD=0 would switch the bucket folder off)
   return e;
 };
@@ -118,6 +122,8 @@ function breakableRecorder() {
     browsers.push(browser);
     const ctx = await browser.newContext({ viewport, permissions: ['camera', 'microphone'] });
     if (breakable) await ctx.addInitScript(breakableRecorder);
+    // what the director says out loud (speech synthesis) — the athlete can't see the iPad
+    await ctx.addInitScript(() => { window.__said = []; const ss = window.speechSynthesis; if (ss) { const orig = ss.speak.bind(ss); ss.speak = (u) => { window.__said.push(u.text); try { orig(u); } catch {} }; } });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
     page.on('console', (m) => {
@@ -219,21 +225,37 @@ function breakableRecorder() {
     await A.page.waitForSelector('#stepCalibrate:not(.hidden)');
     const lead = await A.page.textContent('#stepCalibrate .lead');
     check('Calibrate: the goal in plain words, the setup diagram, both live views', /combined into 3-D/.test(lead) && /must not move/.test(lead) && await A.page.$('#calCourt svg') != null && await A.page.isVisible('#calViewB img.snap'), oneLine(lead, 120));
+    const place = await A.page.textContent('#calPlace'), marks = await A.page.$$eval('#calMarks li', (l) => l.map((x) => x.textContent)), howto = await A.page.textContent('#calHowto');
+    check('… where each camera stands and where the 5 floor marks go, in court words; "head to feet" in both pictures', /CAM A.*sideline.*m from ✕/.test(place) && /CAM B/.test(place) && marks.length === 5 && marks.every((m) => /(m |middle)/.test(m)) && /head to feet/.test(howto) && /cone|tape/.test(howto), `${oneLine(place, 110)} · ${oneLine(marks[1], 70)}`);
     const calSvg = await A.page.$eval('#calCourt svg', (e) => e.outerHTML);
     check('… the diagram shows the calibration walk: corners 1–4 and the middle (no START / FINISH), both cameras', ['>1<', '>2<', '>3<', '>4<', '>✕<', '>A<', '>B<'].every((x) => calSvg.includes(x)) && !/START|FINISH/.test(calSvg));
     await shot(A, '04-calibrate', [IPAD, IPAD_P, PHONE]);
+    const calTarget = (await import('../capture/court-layout.mjs')).calibrationSec('A');
     await A.page.click('#calibrateBtn');
     await A.page.waitForSelector('#recOverlay:not(.hidden)');
     const countdown = await A.page.textContent('#ovBig');
     await A.page.waitForSelector('#recOverlay.recording', { timeout: 10000 });
     const recAt = Date.now();
-    await sleep(3500);
-    const cue = await A.page.textContent('#ovCue');
-    const ovMap = await A.page.$eval('#ovMap svg', (e) => e.outerHTML).catch(() => '');
-    await shot(A, '05-calibrating', [IPAD]);
-    await A.page.waitForSelector('#recOverlay.hidden', { state: 'attached', timeout: 20000 });
+    // the prompts over time: when each corner comes up (an easy walk: corner 2 not before ~4.7 s)
+    const seenCues = [];
+    let ovMap = '', shotsDone = 0;
+    while (await A.page.isVisible('#recOverlay') && Date.now() - recAt < 40000) {
+      // the cue and the recording's own timer, read together (the page's clock, not this test's)
+      const { c, tSec } = await D(() => ({ c: document.getElementById('ovCue').textContent, tSec: +document.getElementById('ovBig').textContent || 0 })).catch(() => ({ c: '', tSec: 0 }));
+      if (c && c !== seenCues[seenCues.length - 1]?.cue) seenCues.push({ cue: c, t: +tSec.toFixed(1) });
+      if (!ovMap && /^Walk to corner 1/.test(c)) ovMap = await A.page.$eval('#ovMap svg', (e) => e.outerHTML).catch(() => '');
+      if (!shotsDone && /^Walk to corner 2/.test(c)) { shotsDone++; await shot(A, '05-calibrating', [IPAD], { top: false }); }
+      else if (shotsDone === 1 && /^Walk to corner 4/.test(c)) { shotsDone++; await shot(A, '05-calibrating-corner4', [PHONE], { top: false }); }
+      await sleep(150);
+    }
+    await A.page.waitForSelector('#recOverlay.hidden', { state: 'attached', timeout: 40000 });
     const calSec = (Date.now() - recAt) / 1000;
-    check('calibration: 3-2-1, prompts ("Walk to corner 2 …", the corner lit on the map), stops by itself after 10 s', /^[123]$/.test(countdown.trim()) && /^Walk to corner [1-4]/.test(cue) && /#ffd166/.test(ovMap) && calSec > 8.5 && calSec < 12.5, `countdown "${countdown}" · "${cue}" · ${calSec.toFixed(1)} s`);
+    const corners = seenCues.filter((x) => /^Walk to corner/.test(x.cue)).map((x) => +x.cue.match(/corner (\d)/)[1]);
+    const c2 = seenCues.find((x) => /^Walk to corner 2/.test(x.cue));
+    check(`calibration: 3-2-1, then prompts at an easy walk (corners 1 → 2 → 3 → 4 → the middle, lit on the map), stops by itself after ${calTarget} s`, /^[123]$/.test(countdown.trim()) && corners.join() === '1,2,3,4' && seenCues.some((x) => /^Back to ✕/.test(x.cue)) && c2 && c2.t >= 4.5 && /#ffd166/.test(ovMap) && calSec > calTarget - 1.5 && calSec < calTarget + 3, `countdown "${countdown}" · ${seenCues.map((x) => `${x.t}s ${x.cue.replace(/ \(.*\)/, '')}`).join(' → ')} · ${calSec.toFixed(1)} s`);
+    const said = await D(() => window.__said || []);
+    const hasVoice = await D(() => typeof window.speechSynthesis !== 'undefined');
+    check('… the iPad says the corners out loud (the athlete can\'t see its screen)', !hasVoice || ['Corner one', 'Corner two', 'Corner three', 'Corner four', 'Back to the middle'].every((w) => said.includes(w)), hasVoice ? said.join(' · ') : 'no speech synthesis in this browser');
     await A.page.waitForSelector('#calSaved', { timeout: 60000 });
     await A.page.waitForFunction(() => [...document.querySelectorAll('#calSaved .stills img')].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 15000 }).catch(() => {});
     const stills = await A.page.$$eval('#calSaved .stills img', (is) => is.map((i) => i.naturalWidth));
@@ -246,9 +268,26 @@ function breakableRecorder() {
     await A.page.waitForSelector('#stepRecord:not(.hidden)');
     const head = await A.page.textContent('#recPos'), title1 = await A.page.textContent('#animTitle');
     const svg = await A.page.$eval('#animCourt svg', (e) => e.outerHTML);
-    const instr = { start: await A.page.textContent('#startPose'), startW: await A.page.textContent('#startWhere'), finish: await A.page.textContent('#finishPose'), protocol: await A.page.textContent('#protocol') };
-    check('Record: "#1 of 82 · Setup A", the name, a START/FINISH diagram, start + finish pose, the protocol', /#1 of 82 · Setup A/.test(head) && title1 === 'NEUTRAL IDLE' && /START/.test(svg) && instr.start.length > 5 && instr.finish.length > 5 && /stops by itself/.test(instr.protocol), `${oneLine(head, 60)} · ${title1} · start "${instr.start}" ${instr.startW}`);
+    const instr = { start: await A.page.textContent('#startPose'), startW: await A.page.textContent('#startWhere'), marks: await A.page.textContent('#startMarks'), finish: await A.page.textContent('#finishPose'), protocol: await A.page.textContent('#protocol') };
+    check('Record: "#1 of 82 · Setup A", the name, a START/FINISH diagram, start + finish pose, where in court words, the protocol', /#1 of 82 · Setup A/.test(head) && title1 === 'NEUTRAL IDLE' && /START/.test(svg) && instr.start.length > 5 && instr.finish.length > 5 && /free-throw line/.test(instr.marks) && /stops by itself/.test(instr.protocol), `${oneLine(head, 60)} · ${title1} · start "${instr.start}" ${instr.startW} · ${instr.marks}`);
     await shot(A, '07-record', [IPAD, IPAD_P, PHONE, PHONE_L]);
+    // a phone in portrait: the start → finish summary and RECORD without scrolling
+    await A.page.setViewportSize(PHONE); await sleep(300); await A.page.evaluate(() => window.scrollTo(0, 0));
+    const fold = await D(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(); const c = r('recCompact'), b = r('recordBtn'), ct = r('animCourt'); return { compact: c.height > 0 && c.bottom <= innerHeight, record: b.height > 0 && b.top >= 0 && b.bottom <= innerHeight, court: ct.bottom <= innerHeight - 60, text: document.getElementById('recCompact').textContent }; });
+    await A.page.setViewportSize(IPAD); await sleep(200);
+    check('390×844: the start → finish summary, the diagram and RECORD are on screen without scrolling', fold.compact && fold.record && fold.court, `${fold.text} · compact ${fold.compact} · court ${fold.court} · RECORD ${fold.record}`);
+    // a move that starts already moving never says "hold the start pose"
+    const layIdx = (await import('../capture/protocol.mjs')).captureOrder((await import('../capture/basic01.mjs')).BASIC01).findIndex((a) => a.key === 'pullback_R');
+    await D((i) => { const d = window.__capture; d.current = d.order[i]; d.render(); }, layIdx);
+    await sleep(300);
+    const mv = { proto: await A.page.textContent('#protocol'), startW: await A.page.textContent('#startWhere'), finishW: await A.page.textContent('#finishWhere') };
+    check('a move that starts moving (PULLBACK): "cross START already moving", never "hold the start pose"; FINISH 1.5 m back, in words', !/Hold the start pose/i.test(mv.proto) && /already moving/i.test(mv.proto) && /already .* as you cross START/.test(mv.startW) && /about 1\.5 m backward/.test(mv.finishW), `${oneLine(mv.proto, 90)} · ${oneLine(mv.startW, 80)}`);
+    await shot(A, '07-record-moving-start', [IPAD, PHONE]);
+    // the countdown is a setting kept on this device (3 / 5 / 10 s)
+    await A.page.click('#countdownSeg button[data-cd="5"]');
+    const cd5 = await D(() => [window.__capture.countdown, localStorage.getItem('sjc-countdown')]);
+    await A.page.click('#countdownSeg button[data-cd="3"]');
+    check('countdown setting: 5 s is kept on the device (back to 3 s for the test)', cd5[0] === 5 && cd5[1] === '5' && await D(() => window.__capture.countdown) === 3, JSON.stringify(cd5));
     // a one-shot with a path (START → FINISH) for the screenshots
     const order = (await import('../capture/protocol.mjs')).captureOrder((await import('../capture/basic01.mjs')).BASIC01);
     const driveIdx = order.findIndex((a) => a.key === 'jab_drive_R');
@@ -388,7 +427,8 @@ function breakableRecorder() {
     await A.page.click('#anaYes');
     let an = null; const ta = Date.now();
     while (Date.now() - ta < 90000) { an = (await api(`/api/capture/sessions/${sessionId}/rec/${pick}`)).take.analysis; if (['done', 'error'].includes(an?.state)) break; await sleep(500); }
-    await sleep(1200);
+    // the screen follows the WebSocket (not the 2.5 s poll): "done" shows within moments
+    await A.page.waitForFunction(() => /done/.test(document.getElementById('anaQueue').textContent), null, { timeout: 15000 }).catch(() => {});
     const qtext = await A.page.textContent('#anaQueue');
     check('confirmed: queued → runs (SAM 3D Body in mock mode, no money) → done, shown in the queue', an?.state === 'done' && /^mo-/.test(an.motionId) && /done/.test(qtext), `${an?.state} ${an?.motionId || an?.error || ''}`);
     await shot(A, '16-analysis-done', [IPAD, PHONE]);
@@ -537,6 +577,22 @@ function breakableRecorder() {
       const bRec = await B.page.evaluate(() => window.__capture.role.cam.cur?.rec?.state || 'none');
       check('… STOP works (camera B halts) and the take settles by itself', ['accepted', 'failed'].includes(t.state) && t.sync?.stopAtServerMs && t.cameras?.camB?.file && !t.cameras.camB.stopCapped && stopped && bRec === 'inactive' && (hadChunk ? !!t.cameras?.camA?.interrupted : true),
         `${t.state} · camA ${t.cameras?.camA?.file || '—'}${t.cameras?.camA?.interrupted ? ' (interrupted, from the device)' : ''} · camB ${t.cameras?.camB?.file || '—'} · B recorder ${bRec}${t.failReason ? ' · ' + t.failReason : ''}`);
+    });
+
+    // camera B asleep at RECORD (READY a moment ago, its page no longer acts on anything): the hub
+    // notices within seconds, the director is told in the recording screen, nothing waits for B
+    await phase('camera B asleep at RECORD', async () => {
+      await bothReady();
+      await B.page.evaluate(() => { const r = window.__capture.role; r.__orig = r.onMessage; r.onMessage = (m) => (m.t === 'record' ? undefined : r.__orig.call(r, m)); });
+      let warn = '';
+      const r = await recordTake(5500, { onRecording: async () => { const t = Date.now(); while (Date.now() - t < 5000 && !/did not start recording/.test(warn)) { warn = await A.page.textContent('#ovWarn'); await sleep(150); } } });
+      await B.page.evaluate(() => { const r = window.__capture.role; r.onMessage = r.__orig; delete r.__orig; });
+      check('camera B asleep at RECORD: the recording screen says "CAM B did not start recording" within seconds', /CAM B did not start recording/.test(warn), oneLine(warn, 140));
+      const t = await settled(r.tid, 30000);
+      const toast = await A.page.textContent('#toast').catch(() => '');
+      const banner = await A.page.textContent('#banners');
+      check('… the take does not wait for it: "needs redo" (CAM B never started), the director is told', t.state === 'failed' && /camB never started recording/.test(t.failReason || '') && /(did not start|never started) recording/.test(toast + banner), `${t.state} · ${oneLine(t.failReason, 100)} · ${oneLine(toast || banner, 100)}`);
+      await shot(A, '16b-camB-asleep', [IPAD, PHONE]);
     });
 
     // a second page opens camera B's link: the newest page takes the role, the first one says so

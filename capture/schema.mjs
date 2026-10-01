@@ -29,6 +29,7 @@
  * @property {SetupId} courtSetup
  * @property {string[]} cues        what the athlete does (shown to the operator)
  * @property {string[]} [gameRoles] the court runtime roles it can feed (lib/mocap/game-roles.js)
+ * @property {number} [travelM]     a one-shot's START → FINISH distance in metres (court diagram)
  */
 
 export const SCHEMA_VERSION = 1;
@@ -40,14 +41,16 @@ export const STATES = {
   TL: { name: 'Triple threat, ball left', short: 'Triple threat L', group: 'triple', hand: 'L' },
   DR: { name: 'Stationary dribble, right hand', short: 'Dribble R', group: 'dribble', hand: 'R' },
   DL: { name: 'Stationary dribble, left hand', short: 'Dribble L', group: 'dribble', hand: 'L' },
-  MR: { name: 'Moving dribble, right hand', short: 'Moving dribble R', group: 'moving', hand: 'R' },
-  ML: { name: 'Moving dribble, left hand', short: 'Moving dribble L', group: 'moving', hand: 'L' },
+  MR: { name: 'Moving dribble, right hand', short: 'Moving dribble R', group: 'moving', hand: 'R', moving: true },
+  ML: { name: 'Moving dribble, left hand', short: 'Moving dribble L', group: 'moving', hand: 'L', moving: true },
   G: { name: 'Two-hand gather / shooting pocket', short: 'Gather', group: 'gather', hand: 'both' },
   DEF: { name: 'Defensive stance', short: 'Defense stance', group: 'defense' },
-  DEF_M: { name: 'Defensive locomotion', short: 'Defensive slide', group: 'defense' },
+  DEF_M: { name: 'Defensive locomotion', short: 'Defensive slide', group: 'defense', moving: true },
   LAND: { name: 'Balanced landing (resolves to N)', short: 'Landing', group: 'landing', resolves: 'N' },
-  N_SPRINT: { name: 'Sprinting, no ball', short: 'Sprint', group: 'neutral' },
+  N_SPRINT: { name: 'Sprinting, no ball', short: 'Sprint', group: 'neutral', moving: true },
 };
+/** A state the athlete is in while travelling (a clip starting in it begins already moving; one ending in it keeps going). */
+export const isMovingState = (s) => !!STATES[s]?.moving;
 /** "Triple threat R → Dribble L" — an animation's start → finish pose in a few words (lists). */
 export const poseRoute = (a) => `${[].concat(a.startState).map((s) => STATES[s]?.short || s).join(' / ')} → ${STATES[a.endState]?.short || a.endState}`;
 /** Each state in plain words (the director's START / FINISH instructions). */
@@ -102,6 +105,7 @@ export function validateAnimation(a) {
   if (!HAND_ORDER.includes(a.ballHand)) e.push(`${a.id}: ballHand "${a.ballHand}"`);
   if (!DIRECTIONS.includes(a.direction)) e.push(`${a.id}: direction "${a.direction}"`);
   if (!SETUPS.includes(a.courtSetup)) e.push(`${a.id}: courtSetup "${a.courtSetup}"`);
+  if (a.travelM != null && !(a.travelM > 0 && a.travelM <= 8)) e.push(`${a.id}: travelM ${a.travelM}`);
   if (!Array.isArray(a.cues) || !a.cues.length) e.push(`${a.id}: cues missing`);
   if (a.loop && startStates(a).some((s) => s !== a.endState)) e.push(`${a.id}: a loop must start and end in the same state`);
   return e;
