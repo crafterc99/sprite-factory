@@ -31,6 +31,7 @@
  */
 
 import { detectContacts, mergeContacts } from './ball-contacts.mjs';
+import { inferShotRelease } from './shot-release.mjs';
 
 // ── skeleton ────────────────────────────────────────────────────────────────
 export const MHR70 = [
@@ -310,7 +311,8 @@ export function prepareClip(json, rig, { mirror = false } = {}) {
   // no ball seen at the end: a hand-switching move still ends in the other hand
   const switches = json.switchesHand ?? SWITCHES_HAND.has(json.role);
   const endHand = endCount.left + endCount.right === 0 ? (switches ? (hand === 'left' ? 'right' : 'left') : hand) : endCount.left > endCount.right ? 'left' : 'right';
-  const shot = json.shot ? { ...json.shot, hand: side(json.shot.hand) } : null;
+  let shot = json.shot ? { ...json.shot, hand: side(json.shot.hand) } : null;
+  shot = shotReleaseGuard(json, shot, frames, ball, F);
   const loop = json.type === 'loop';
   const clip = {
     json, name: json.name, role: json.role, type: json.type, loop, mirror, fps: json.fps, F, k,
@@ -348,6 +350,39 @@ export function prepareClip(json, rig, { mirror = false } = {}) {
   if (clip.ballContacts.entryHand) clip.hand = clip.ballContacts.entryHand;
   if (clip.ballContacts.exitHand) clip.endHand = clip.ballContacts.exitHand;
   return clip;
+}
+
+/**
+ * A shot clip always lets go of the ball (engine3d/shot-release.mjs): a shot role with no usable
+ * release (none recorded, or on / past the last frame) gets one where the shooting arm
+ * straightens; a clip built before the builder knew "left the picture" (no shot.source) whose
+ * arm straightens ≥ 3 frames after its recorded release is moved there. The hold runs on to the
+ * new release (the ball on the shooting palm as last held), nothing after it. Frames are already
+ * mirrored (a mirrored clip's own hands).
+ */
+function shotReleaseGuard(json, shot, frames, ball, F) {
+  if (!/^shot-|^layup/.test(json.role || '')) return shot;
+  const jointAt = (i, n) => get3(frames.subarray(i * NJ * 3, (i + 1) * NJ * 3), J[n]);
+  let lastHeld = -1;
+  for (let i = F - 1; i >= 0; i--) if (ball[i]?.held) { lastHeld = i; break; }
+  const usable = shot && shot.releaseFrame > 0 && shot.releaseFrame < F - 1;
+  let inf = null;
+  if (!usable) inf = inferShotRelease(jointAt, F, json.fps, { from: Math.max(0, lastHeld), hand: ball[lastHeld]?.hand || null });
+  else if (shot.source === undefined && !ball.slice(shot.releaseFrame).some(Boolean)) {
+    const cand = inferShotRelease(jointAt, F, json.fps, { from: Math.max(0, shot.releaseFrame - 1), hand: shot.hand });
+    if (cand && cand.method === 'arm-extension' && cand.frame >= shot.releaseFrame + 3) inf = cand;
+  }
+  if (!inf) return shot;
+  const rel = inf.releaseFrame;
+  const palmAt = (i, h) => { const [w, m] = PALM[h], a = jointAt(i, MHR70[w]), b = jointAt(i, MHR70[m]); return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]; };
+  let off = null;
+  for (let i = Math.min(lastHeld, rel - 1); i >= 0 && !off; i--) if (ball[i]?.held && ball[i].off && ball[i].hand === inf.hand) off = ball[i].off.slice();
+  off ||= [0, 0.12 + 0.014, 0];
+  for (let k = 0; k < F; k++) {
+    if (k >= rel) { ball[k] = null; continue; }
+    if (k > lastHeld && !ball[k]?.held) { const p = palmAt(k, inf.hand); ball[k] = { held: true, hand: inf.hand, p: [p[0] + off[0], p[1] + off[1], p[2] + off[2]], off: off.slice() }; }
+  }
+  return { ...(shot || {}), releaseFrame: rel, lastHeldFrame: rel - 1, hand: inf.hand, stepFrame: shot?.stepFrame ?? null, source: 'runtime-' + inf.method, inferredFrame: inf.frame };
 }
 
 /** A point in the clip's root frame at trajectory tr → clip space (same as ball-contacts fromLocal). */
@@ -402,7 +437,7 @@ export function contactInput(clip, rig, json = clip.json) {
   return {
     id: json?.id || clip.name, F, fps: clip.fps, loop: clip.loop, R: 0.12, floorY: 0,
     trackSource: json?.trackSource || (video ? 'video' : 'generated'),
-    frames, traj: (t) => sampleTraj(clip, t), shot: clip.shot ? { releaseFrame: clip.shot.releaseFrame, hand: clip.shot.hand } : null,
+    frames, traj: (t) => sampleTraj(clip, t), shot: clip.shot ? { releaseFrame: clip.shot.releaseFrame, hand: clip.shot.hand } : null, hand: clip.hand,
     labels: clip.ballEvents?.frames || null, legsAt,
   };
 }
@@ -1883,7 +1918,8 @@ export class Player {
     else set3(this.base, BALL, gx(this.out, BALL), gy(this.out, BALL), gz(this.out, BALL));
     this.baseVelFrom(this.base, dt);
     // shot release
-    if (clip.shot && !a.released && a.t >= clip.shot.releaseFrame && tPrev < clip.shot.releaseFrame + 1e-6) {
+    // (a clock summed from frame steps lands a hair under the frame: not a whole tick late)
+    if (clip.shot && !a.released && a.t >= clip.shot.releaseFrame - 1e-4 && tPrev < clip.shot.releaseFrame + 1e-6) {
       a.released = true;
       this.ballFree = true; this.hasBall = false;
       this.events.push({ type: 'release', role: clip.role });
@@ -1910,6 +1946,17 @@ export class Player {
     if (!h) return false;
     const rel = K.events.find((e) => (e.type === 'release' || e.type === 'shot' || e.type === 'pass') && e.frame >= a.t);
     return !rel || (rel.frame - a.t) / a.clip.fps > 0.06;
+  }
+  /**
+   * The playing shot's timing (a shot meter's target): null outside a shot. releaseIn = seconds
+   * to the clip's release frame (the ball leaves then), windup = the whole wind-up from where the
+   * clip was entered.
+   */
+  shotTiming() {
+    const a = this.action, sh = a?.clip?.shot;
+    if (!sh) return null;
+    const fps = a.clip.fps, rel = sh.releaseFrame;
+    return { role: a.role, clip: a.clip.name, t: a.t, t0: a.t0, releaseFrame: rel, fps, releaseIn: (rel - a.t) / fps, windup: (rel - a.t0) / fps, released: !!a.released, source: sh.source || 'seen' };
   }
   /** The hand holding the ball in the playing move / the idle now (null in flight). */
   heldHandNow() {

@@ -17,6 +17,7 @@
  * Engine-agnostic (no three.js).
  */
 import { G, planDribble, planToss, solveSegment, retarget, segPos, segVel, segRot, releaseSpin, packSegment, unpackSegment, qmul, qinv, qnorm, qslerp, qexp, quatFromBasis, rollingSpin } from './ball-trajectory.mjs';
+import { fitBallToHands } from './ball-fit.mjs';
 
 export const STATES = ['HELD_RIGHT', 'HELD_LEFT', 'HELD_BOTH', 'RELEASE_RIGHT', 'RELEASE_LEFT', 'DRIBBLE_DOWN', 'BOUNCE', 'DRIBBLE_UP_RIGHT', 'DRIBBLE_UP_LEFT', 'CATCH_RIGHT', 'CATCH_LEFT', 'SHOT_RELEASE', 'PASS_RELEASE', 'LOOSE', 'DEAD'];
 const H = { left: 'LEFT', right: 'RIGHT', both: 'BOTH' };
@@ -80,6 +81,14 @@ export const BALL_CONTROL_DEFAULTS = Object.freeze({
   maxWristRotation: 0.3,    // rad
   maxElbowCorrection: 0.25, // rad
   maxExtension: 0.97,       // × (upper arm + forearm)
+  // the held ball out of the rigid hands / arms / head (engine3d/ball-fit.mjs): a two-hand hold,
+  // and any hold of a shot's last half second
+  handFit: true,
+  handFitMargin: 0.002,     // m clear
+  handFitMax: 0.3,          // m, the most it moves the ball off its targets
+  handFitHalflife: 0.04,    // s, the fit eases in / out (critically damped): a correction, never a pop
+  handFitMaxSpeed: 2.0,     // m/s the correction itself may move
+  shotPocketTime: 0.3,      // s before a shot's release the ball goes to the launch side of the hands
 });
 
 // ── vectors ──
@@ -155,7 +164,7 @@ export class BallController {
     this.state = `HELD_${H[hand]}`; this.since = t;
     this.p = T.p.slice(); this.v = (T.v || [0, 0, 0]).slice(); this.w = [0, 0, 0];
     this.hold = { hand, off: [0, 0, 0], offV: [0, 0, 0], attach: qmul(qinv(T.q), this.q), t0: t };
-    this.flight = null; this.recovery = null;
+    this.flight = null; this.recovery = null; this.fitOff = null; this.fitV = null;
     this.logLine(`new possession → HELD_${H[hand]}`, t);
     this.events.push({ type: 'possession', hand, t });
     return true;
@@ -163,7 +172,7 @@ export class BallController {
   /** Shot / physics hand-off: the ball leaves under the physics engine (the caller throws it). */
   toPhysics(state = 'SHOT_RELEASE', reason = 'shot', t = this.t) {
     if (!this.go(state, reason, t)) { this.state = state; this.since = t; }
-    this.flight = null; this.hold = null; this.recovery = null;
+    this.flight = null; this.hold = null; this.recovery = null; this.fitOff = null; this.fitV = null;
     this.ik = { left: 0, right: 0 };
   }
   /** Physics reports the ball (LOOSE / SHOT / DEAD): the controller mirrors it. */
@@ -196,7 +205,8 @@ export class BallController {
    * One tick.
    * @param {number} t       game time (s)
    * @param {number} dt      tick length (s)
-   * @param {object} f       { targets: { left, right } (p, v, q, n, c), schedule (Player.ballSchedule + world points), player: { pos, vel, yaw } }
+   * @param {object} f       { targets: { left, right } (p, v, q, n, c), schedule (Player.ballSchedule + world points), player: { pos, vel, yaw },
+   *                          obstacles (leg capsules), hands (body sample: the held-ball fit), shot ({ releaseIn: s, prefer: launch direction } | null) }
    */
   update(t, dt, f) {
     this.events = [];
@@ -232,7 +242,8 @@ export class BallController {
       const from = this.targetOf(hand, f.targets), to = this.targetOf(want, f.targets);
       if (from && to && this.go(`HELD_${H[want]}`, 'hand-off', t)) {
         // keep the ball where it is: the offset to the new target decays (a hand-off, not a teleport)
-        h.off = sub(this.p, to.p); h.offV = sub(this.v, to.v || [0, 0, 0]);
+        // (the hand fit's own correction stays its own: not counted twice)
+        h.off = sub(sub(this.p, this.fitOff || [0, 0, 0]), to.p); h.offV = sub(sub(this.v, this.fitV || [0, 0, 0]), to.v || [0, 0, 0]);
         h.hand = want; hand = want; h.t0 = t;
         h.attach = qmul(qinv(to.q), this.q);
       }
@@ -243,6 +254,11 @@ export class BallController {
     const p = add(T.p, h.off);
     const v = add(T.v || [0, 0, 0], h.offV);
     this.p = p; this.v = v;
+    // never inside the hands: a two-hand hold (the palms can be closer than the ball is wide), or
+    // any hold in a shot's last half second (the ball goes where it will be thrown from)
+    const cfg = this.cfg;
+    if (cfg.handFit && f.hands && (hand === 'both' || (f.shot && f.shot.releaseIn <= 0.5))) this.fitToHands(dt, hand, f.hands, f.shot);
+    else if (this.fitOff) this.fitToHands(dt, hand, null, null);
     const qT = qnorm(qmul(T.q, h.attach));
     this.w = sc(sub(qT.slice(0, 3), this.q.slice(0, 3)), 2 / Math.max(1e-4, dt));
     this.q = qT;
@@ -250,6 +266,32 @@ export class BallController {
     // the release (or a shot / pass from the clip: the game handles those)
     const rel = (S.events || []).find((e) => e.type === 'release' && (e.hand === hand || hand === 'both'));
     if (rel && rel.in <= 1e-6) this.release(t, f, S, rel);
+  }
+
+  /**
+   * The held ball out of the rigid hand (ball-fit): the correction eases toward the fitted place
+   * (critically damped, speed-capped) and its motion is the ball's too (no teleport, no pop).
+   * body null: ease the correction back to nothing.
+   */
+  fitToHands(dt, hand, body, shot) {
+    const c = this.cfg;
+    let want = [0, 0, 0];
+    if (body) {
+      const w = shot ? smooth(1 - shot.releaseIn / Math.max(1e-3, c.shotPocketTime)) : 0;
+      const r = fitBallToHands(this.p, body, c.R, { holding: hand, prefer: shot?.prefer || null, preferWeight: w, margin: c.handFitMargin, maxMove: c.handFitMax });
+      want = sub(r.p, this.p);
+      this.lastFit = { moved: r.moved, clearance: r.clearance, ok: r.ok, pocket: w >= 0.5 };
+    }
+    const prev = this.fitOff || [0, 0, 0];
+    let [x, v] = decay(sub(prev, want), this.fitV || [0, 0, 0], c.handFitHalflife, dt);
+    let next = add(want, x);
+    const step = sub(next, prev), sl = len(step), cap = c.handFitMaxSpeed * dt;
+    if (sl > cap) { next = add(prev, sc(step, cap / sl)); v = sc(step, c.handFitMaxSpeed / sl); }
+    this.fitOff = next; this.fitV = v;
+    this.p = add(this.p, next);
+    this.v = add(this.v, sc(sub(next, prev), 1 / Math.max(1e-4, dt)));
+    this.stats.maxHandFit = Math.max(this.stats.maxHandFit || 0, len(next));
+    if (!body && len(next) < 1e-4 && len(v) < 1e-3) { this.fitOff = null; this.fitV = null; }
   }
 
   release(t, f, S, rel) {
@@ -260,6 +302,7 @@ export class BallController {
     const T0 = this.targetOf(hand, f.targets);
     const vr = T0?.v ? T0.v.slice() : this.v.slice();
     const pr = this.p.slice();
+    this.fitOff = null; this.fitV = null;
     if (!catchEv) {
       // released and nobody receives it (a let-go / pass in the clip): the physics takes it
       this.go(`RELEASE_${H[hand]}`, 'release (no catch)', t);
@@ -493,6 +536,7 @@ export class BallController {
     const err = fl.catchErr ?? (T && seg ? len(sub(segPos(seg, fl.tc), Tat)) : 0);
     this.stats.catches++; this.stats.maxCatchErr = Math.max(this.stats.maxCatchErr, err);
     this.go(`HELD_${H[hand]}`, 'caught', t);
+    this.fitOff = null; this.fitV = null;
     // (the blend ended matched to the palm: the hold starts at rest relative to it — no spring kick)
     this.hold = { hand, off: T ? sub(this.p, T.p) : [0, 0, 0], offV: [0, 0, 0], attach: T ? qmul(qinv(T.q), this.q) : [0, 0, 0, 1], t0: t };
     this.events.push({ type: 'catch', hand, t, err, approach: fl.catchFrom?.err ?? null });
@@ -532,7 +576,7 @@ export class BallController {
     this.events.push({ type: 'recovery', reason, t, hand: h });
     const next = `HELD_${H[h]}`;
     if (!this.go(next, 'recovery: ' + reason, t)) { this.state = next; this.since = t; }
-    this.flight = null;
+    this.flight = null; this.fitOff = null; this.fitV = null;
     if (snap || !finite3(this.p)) {
       if (T) { this.p = T.p.slice(); this.v = (T.v || [0, 0, 0]).slice(); }
       this.hold = { hand: h, off: [0, 0, 0], offV: [0, 0, 0], attach: [0, 0, 0, 1], t0: t };

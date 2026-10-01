@@ -199,6 +199,7 @@ import * as CM from '/js/souljam-material.mjs';
 import * as BS from '/js/ball-session.mjs';
 import * as BC from '/js/ball-contacts.mjs';
 import * as GA from '/js/garments.mjs';
+import * as SF from '/js/shot-flight.mjs';
 window.__c3dBoot = true;
 { const e = document.getElementById('err'); if (e && e.getAttribute('data-src') === 'watchdog') e.innerHTML = ''; }
 if (window.__c3dPendingErr) window.__c3dFail(window.__c3dPendingErr);
@@ -781,13 +782,11 @@ function shotRole(moving) {
 }
 
 // ═══ The ball in play (physics owns it; these only give it impulses) ═══
-/** Shot release: the shooting hand's impulse sends the ball (wherever it physically is) toward the rim. */
+/** Shot release: the shooting hand's impulse sends the ball (wherever it physically is) toward the rim (engine3d/shot-flight.mjs: 47° entry). */
 function shootRelease() {
   const ph = S.phys, from = ph.pos;
-  const target = [0, RIM_Y + 0.03, 0];
-  const horiz = Math.hypot(target[0] - from[0], target[2] - from[2]);
-  const T = 0.75 + horiz * 0.07;                       // flight time (arc height follows)
-  ph.throwBall(ph.ballisticTo(target, T), 'both');
+  const plan = SF.planShot({ from, hoop: { center: [0, RIM_Y, 0], rimR: RIM_R }, outcome: 'make', cfg: { g: ph.cfg.gravity, drag: ph.cfg.linearDamping } });
+  ph.throwBall(plan.v0, 'both');
   S.freeBall = { kind: 'shot', t: 0, through: false, bounces0: ph.stats.bounces };
 }
 /** A rebounder passes the ball back: one throw impulse from where it lies to the player's hand. */
@@ -918,8 +917,9 @@ function ballStep(dt, r, now) {
   ball.scale.setScalar(ph.cfg.radius);
   ball.visible = true;
   S.lastBall.set(rs.p[0], rs.p[1], rs.p[2]);
-  // fingers against where the ball is drawn now: out of it, and the controlling hand's curled onto it
-  if (mhrRig) for (const s of ['l', 'r']) IK.conformFingers(boneMats, mhrRig, s, rs.p, ph.cfg.radius, { grip: !!ctl?.grip && ctl.hand?.[0] === s, rf: ph.cfg.radii.finger });
+  // the hands against where the ball is drawn now: the rigid hand out of it, the fingers out, the
+  // controlling hand's curled onto it
+  if (mhrRig) IK.clearHandsOfBall(boneMats, mhrRig, rs.p, ph.cfg.radius, { holding: ctl?.grip ? ctl.hand : null, rf: ph.cfg.radii.finger });
   window.__ballState = ph.state;
 }
 /** One tick of the ball in the contact system (engine3d/ball-session.mjs). */
@@ -939,13 +939,17 @@ function ballStepContact(dt, r, now) {
   ball.scale.setScalar(S.ball.ctl.cfg.R);
   ball.visible = true;
   S.lastBall.set(out.p[0], out.p[1], out.p[2]);
-  // fingers: out of the ball, and the holding hand's curled onto it (finger contact: its own pass)
-  if (mhrRig) { const h = S.ball.ctl.heldHand; for (const s of ['l', 'r']) IK.conformFingers(boneMats, mhrRig, s, out.p, S.ball.ctl.cfg.R, { grip: !!h && (h === 'both' || h[0] === s), rf: ph.cfg.radii.finger }); }
+  // the hands never inside the ball: the session already put this character's own hand skin against
+  // it (palm on it, fingers out of it / gripping it). A rig with no mesh: the joint render pass —
+  // the rigid hand moved out by its arm, the fingers out of it, the holding hand's curled onto it
+  if (mhrRig && !S.ball.hc) IK.clearHandsOfBall(boneMats, mhrRig, out.p, S.ball.ctl.cfg.R, { holding: S.ball.ctl.heldHand, rf: ph.cfg.radii.finger });
   window.__ballState = out.state;
 }
 function ballEvent(e) {
   if (e.type === 'recovery') { S.ballLog?.push(`${(S.gameT || 0).toFixed(2)} recovery: ${e.reason}`); if (S.dbgBall) console.warn('[ball] recovery', e.reason); }
   if (e.type === 'catch') S.lostToast = false;
+  // the shot that just left the hands (its outcome / aim / flight time): a shot meter reads it
+  if (e.type === 'shot') { S.lastShot = S.ball?.lastShot || { ...e }; S.shotsTaken = (S.shotsTaken || 0) + 1; }
 }
 /** How much each hand should reach for the ball, from the controller state. */
 function ikControl(ph, body) { return ph.ikControl(body); }
@@ -1105,6 +1109,14 @@ function drawBallContactDbg() {
     if (plan.bounce) cdbg.bnc.position.set(plan.bounce[0], 0.004, plan.bounce[2]); else cdbg.bnc.visible = false;
     setLine(cdbg.future, plan.pts.filter((q) => !q.past).map((q) => q.p)); setLine(cdbg.past, plan.pts.filter((q) => q.past).map((q) => q.p));
   } else { setLine(cdbg.future, []); setLine(cdbg.past, []); }
+  // a shot in the air: its planned arc (engine3d/shot-flight.mjs) — the physics flies it
+  const sp0 = B.free?.kind === 'shot' ? B.free.plan?.seg : null;
+  if (sp0) {
+    const pts = [];
+    for (let k = 0; k <= 40; k++) { const tt = (sp0.T * k) / 40; pts.push([sp0.p0[0] + sp0.vLin[0] * tt, sp0.p0[1] + sp0.vLin[1] * tt - 0.5 * sp0.g * tt * tt, sp0.p0[2] + sp0.vLin[2] * tt]); }
+    setLine(cdbg.future, pts); setLine(cdbg.past, []);
+    cdbg.rel.visible = cdbg.cat.visible = true; cdbg.rel.position.set(...sp0.p0); cdbg.cat.position.set(...sp0.p1);
+  }
   const nb = Sch.events.find((e) => e.type === 'bounce' && e.in >= 0 && e.world);
   cdbg.pred.visible = !!nb; if (nb) cdbg.pred.position.set(nb.world[0], 0.003, nb.world[2]);
   const v = C.v, sp = Math.hypot(...v);
@@ -1120,6 +1132,7 @@ function drawBallContactDbg() {
     `hand      animation ${Sch.hand || 'in flight'} · ball ${C.heldHand || C.flight?.toHand || '—'}${P.switchPending ? ' · switching' : ''}`,
     `distance  L ${f2(dL)} · R ${f2(dR)} · speed ${sp.toFixed(2)} m/s`,
     `IK        L ${(C.ik.left * 100).toFixed(0)}% · R ${(C.ik.right * 100).toFixed(0)}%${B.lastIk ? ` · reach ${f2(B.lastIk.reach)}` : ''}`,
+    B.lastHands ? `hands     ${['left', 'right'].map((h) => { const x = B.lastHands[h]; return `${h[0].toUpperCase()} ${x.depth == null ? 'far' : x.depth > 0 ? `⚠ ${(x.depth * 1000).toFixed(1)} mm in` : `${(-x.depth * 1000).toFixed(1)} mm clear`} · push ${f2(x.palmPush + x.residual)} · grip ${(B.gripW[h] * 100).toFixed(0)}%`; }).join(' | ')}` : 'hands     joint pass (no hand skin)',
     `next      ${nx || '—'}`,
     plan ? `flight    ${plan.kind} ${plan.fromHand}→${plan.toHand} · bounce ${plan.tb != null ? (plan.tb - B.t).toFixed(2) + 's' : '—'} · catch ${(plan.tc - B.t).toFixed(2)}s` : 'flight    —',
     `stats     ${C.stats.releases} releases · ${C.stats.bounces} bounces · ${C.stats.catches} catches · catch err ${f2(C.stats.maxCatchErr)} · leg slides ${C.stats.legSlides || 0}`,
@@ -1743,6 +1756,8 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     buildCharacter(rig);
     // this character's own limb radii (bounce clearance, loose-ball collisions)
     if (mhrRig) rig.limbRadii = BS.measureLimbRadii(rig.json, mhrRig, A.b64);
+    // this character's own hand skin (LOD0): the ball rests on its palm, no finger ever inside it
+    rig.handContact = mhrRig ? IK.buildHandContact(rig.json, mhrRig, A.b64, { maxPerSeg: IK.HAND.maxPerSeg, maxPalm: IK.HAND.maxPalm }) : null;
     // each clip: where its ball track came from (a video or generated) + its edited ball contacts
     const clipMeta = (j, id) => { const e = libInfo.clips.find((c) => c.id === id); if (e) { j.trackSource = e.source === 'video' ? 'video' : 'generated'; if (e.ballContacts) j.ballContacts = e.ballContacts; } return j; };
     S.clipMeta = clipMeta;
@@ -1767,9 +1782,11 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     await RAPIER.init();
     S.phys = new BP.BasketballPhysicsSystem(RAPIER, rig.limbRadii ? { ...loadBallCfg(), radii: { ...BP.BALL_DEFAULTS.radii, ...rig.limbRadii } } : loadBallCfg());
     if (BALL_MODE === 'contact' && mhrRig) {
-      S.ball = new BS.BallSession({ player: S.player, mhrRig, IK, MS, phys: S.phys, limbRadii: rig.limbRadii, hoop: { center: [0, RIM_Y, 0], rimR: RIM_R }, onEvent: ballEvent });
+      S.ball = new BS.BallSession({ player: S.player, mhrRig, IK, MS, phys: S.phys, limbRadii: rig.limbRadii, handContact: rig.handContact, hoop: { center: [0, RIM_Y, 0], rimR: RIM_R }, onEvent: ballEvent });
       S.ball.setGraph(S.player.lib);
       window.__ball = { log: () => S.ball.ctl.log.slice(), snapshot: () => S.ball.snapshot(), state: () => S.ball.state, session: S.ball };
+      // the shot hook (a shot meter): the playing shot's timing, the next release's grade, the last shot
+      window.__shot = { timing: () => S.player?.shotTiming?.() || null, input: (x) => S.ball?.setShotInput(x), last: () => S.ball?.lastShot || null };
     }
     if (S.court) {
       S.courtColliders = VC.addVantheahColliders(S.phys, S.court);

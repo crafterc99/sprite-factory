@@ -8,12 +8,15 @@
  *   → BallController (state machine + trajectories)
  *   → physics only when nobody controls the ball (shot in flight, loose, dead)
  *   → small, limited IK toward the ball
+ *   → the hands' own skin against the ball (palm on it, fingers out of it / gripping it)
  *
  * Engine-agnostic (no three.js). Needs: a Player (anim3d), the MHR rig (mhr-skin prepareMhr),
  * contact-ik, and optionally a BasketballPhysicsSystem.
  */
 import { BallController, palmTarget, isHeld, BALL_CONTROL_DEFAULTS } from './ball-control.mjs';
 import { clearOfCaps } from './ball-contacts.mjs';
+import { planShot, mulberry32 } from './shot-flight.mjs';
+import { handColliders, clearance, sweepClear, fitBallToHands } from './ball-fit.mjs';
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -21,6 +24,7 @@ const sc = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const len = (a) => Math.hypot(a[0], a[1], a[2]);
 const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 const other = (h) => (h === 'left' ? 'right' : h === 'right' ? 'left' : h);
+const norm = (a) => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 
 /**
  * Limb radii of a rig, measured from its own bind mesh (thigh / shin / foot / arms): the ball's
@@ -92,7 +96,8 @@ export const DRIBBLE_PROFILES = {
 
 export class BallSession {
   /**
-   * @param {object} o  { player, mhrRig, IK, phys?, cfg?, hoop?: { center, rimR }, log? }
+   * @param {object} o  { player, mhrRig, IK, phys?, cfg?, hoop?: { center, rimR }, log?, seed? (the shot rng),
+   *                     handContact?: contact-ik buildHandContact() of this rig — the hands' own skin against the ball }
    */
   constructor(o) {
     this.P = o.player; this.mrig = o.mhrRig; this.IK = o.IK; this.phys = o.phys || null; this.MS = o.MS || null;
@@ -109,6 +114,26 @@ export class BallSession {
     this.legRadii = o.limbRadii || null;
     this.lastBody = null;
     this.trace = o.trace ? [] : null;
+    this.rng = mulberry32(o.seed ?? 0x5eed);   // shot outcomes (a meter's "rim" grade): seeded, replayable
+    this.shotInput = null;                      // the next shot's grade (setShotInput), consumed at its release
+    this.lastShot = null;
+    // the hands' own skin (contact-ik buildHandContact): the palm target clears the palm skin, and every
+    // tick the palm rests on the ball, the fingers are out of it or (holding) on it — null: the joint passes
+    // (the mesh data is shared; the scratch skin and the fingers' smoothing state are this session's own)
+    const own = (H) => ({ ...H, pos: new Float32Array(H.pos.length), prevTh: new Float32Array(H.prevTh.length) });
+    this.hc = o.handContact ? { l: own(o.handContact.l), r: own(o.handContact.r) } : null;
+    this.palmClear = { left: 0, right: 0 };    // how much further out the palm skin puts the ball (m, per hand)
+    this.gripW = { left: 0, right: 0 };        // grip weight per hand (eased)
+    this.pullW = { left: 0, right: 0 };        // a holding palm follows a ball moved off its target (eased)
+    this.lastHands = null;                     // resolveHandBall() per hand, last tick
+  }
+
+  /** A palm target's clearance of this hand's palm skin (moves T.p out along T.n; T.p0 = the uncleared point). */
+  clearPalm(mats, T, hand, R) {
+    const e = this.hc ? this.IK.palmClearance(mats, this.hc[hand[0]], T.p, T.n, R, this.IK.HAND?.margin) : 0;
+    T.p0 = T.p; T.clear = e;
+    if (e > 0) T.p = add(T.p, sc(T.n, e));
+    return T;
   }
 
   get state() { return this.ctl.state; }
@@ -122,7 +147,9 @@ export class BallSession {
     const cfg = off ? { ...this.ctl.cfg, offsets: { ...this.ctl.cfg.offsets, ...off } } : this.ctl.cfg;
     for (const [s, hand] of [['l', 'left'], ['r', 'right']]) {
       const f = this.IK.palmFrame(mats, this.mrig, s);
-      const T = palmTarget(f, cfg, hand);
+      // (the ball against this hand's own palm skin, not a 1 cm palm)
+      const T = this.clearPalm(mats, palmTarget(f, cfg, hand), hand, cfg.R);
+      this.palmClear[hand] = T.clear;
       const prev = this.prevTargets?.[hand];
       T.v = prev && dt > 0 ? sc(sub(T.p, prev.p), 1 / dt) : [0, 0, 0];
       if (len(T.v) > 14) T.v = prev?.v || [0, 0, 0];   // a pose pop is not a hand speed
@@ -164,8 +191,8 @@ export class BallSession {
           this.MS.mhrBoneMatricesCaptured(W, this.mrig, [{ clip: src.clip, t: e.tt, w: 1 }], 1, m2);
           const off = src.clip?.ballContacts?.offsets;
           const cfg = off ? { ...this.ctl.cfg, offsets: { ...this.ctl.cfg.offsets, ...off } } : this.ctl.cfg;
-          const tgt = (h) => palmTarget(this.IK.palmFrame(m2, this.mrig, h[0]), cfg, h).p;
-          e.world = e.hand === 'both' ? tgt('left').map((x, k) => (x + tgt('right')[k]) / 2) : tgt(e.hand);
+          const tgt = (h) => this.clearPalm(m2, palmTarget(this.IK.palmFrame(m2, this.mrig, h[0]), cfg, h), h, cfg.R).p;
+          if (e.hand === 'both') { const L = tgt('left'), Rt = tgt('right'); e.world = L.map((x, k) => (x + Rt[k]) / 2); } else e.world = tgt(e.hand);
           e.skinned = true;
           continue;
         }
@@ -236,13 +263,31 @@ export class BallSession {
   }
 
   // ── possession changes ──
+  /**
+   * The shot meter's grade for the NEXT release (engine3d/shot-flight.mjs outcomeFor / planShot):
+   * { quality: 0…1, timing: 'early' | 'late' | 'perfect' } or an explicit { outcome }. No input: a make.
+   */
+  setShotInput(x) { this.shotInput = x ? { ...x } : null; }
+  /** The playing shot's timing (the hold fit's launch pocket): null outside a shot. */
+  shotContext() {
+    const a = this.P.action, sh = a?.clip?.shot;
+    if (!sh) return null;
+    const releaseIn = Math.max(0, (sh.releaseFrame - a.t) / a.clip.fps);
+    const plan = planShot({ from: this.ctl.p, hoop: this.hoop, outcome: 'make', cfg: this.shotCfg() });
+    return { releaseIn, prefer: norm(plan.v0) };
+  }
+  shotCfg() { const ph = this.phys; return { g: ph?.cfg?.gravity ?? 9.81, drag: ph?.cfg?.linearDamping ?? 0, R: this.ctl.cfg.R }; }
+
   /** A new possession: the ball on the palm of the hand the animation dribbles with. */
   reset(mats, t = this.t) {
     const P = this.P;
     P.giveBall(); P.syncDribbleToCatch();
+    this.gripW = { left: 0, right: 0 }; this.pullW = { left: 0, right: 0 }; this.palmClear = { left: 0, right: 0 }; this.lastHands = null;
+    if (this.hc) for (const s of ['l', 'r']) this.hc[s].prevTh.fill(0);
+    this.snapHands = true;   // (the new possession's hand holds the ball at once: its next pass is not eased)
     const targets = this.targets(mats, 0);
     const hand = P.hand || 'right';   // the dribbling hand (syncDribbleToCatch put its idle in a hold)
-    if (this.phys) this.phys.suspend?.();
+    if (this.phys) this.phys.suspend?.();   // (suspend also makes the body solid again after a shot)
     this.free = null; this.buffer = [];
     this.ctl.giveBall(hand === 'both' ? (P.hand || 'right') : hand, targets, t);
     this.log(`new possession (${hand})`);
@@ -254,6 +299,7 @@ export class BallSession {
     this.ctl.toPhysics('LOOSE', 'dropped', t);
     this.ctl.syncPhysics(p, v, [0, 0, 0, 1], w);
     this.phys?.resume?.(p, v, w, this.lastBody);
+    this.phys?.setBodyCollision?.(true);
     this.free = { kind: 'loose', t: 0 };
   }
 
@@ -275,11 +321,15 @@ export class BallSession {
     this.lastSchedule = S; this.lastTargets = targets;
     if (body) this.lastBody = body;
     // gameplay events from the animation
-    for (const e of r?.events || []) {
-      if (e.type === 'release' && C.controlled) this.shoot(t, targets);
-      if (e.type === 'handSwitch') this.log(`idle → ${e.hand} hand`);
-    }
-    const out = C.update(t, dt, { targets, schedule: S, player: { pos: P.pos, vel: P.vel, yaw: P.yaw }, obstacles: this.legCaps(mats) });
+    const releaseNow = (r?.events || []).some((e) => e.type === 'release');
+    for (const e of r?.events || []) if (e.type === 'handSwitch') this.log(`idle → ${e.hand} hand`);
+    // the hands hold the ball this tick (clear of them, a shot on its launch side) …
+    C.update(t, dt, { targets, schedule: S, player: { pos: P.pos, vel: P.vel, yaw: P.yaw }, obstacles: this.legCaps(mats), hands: body || this.lastBody, shot: this.shotContext() });
+    // … and a shot leaves from exactly there (this tick's hands, not last tick's ball); its flight
+    // starts next tick (this tick draws the ball where the hands let go of it)
+    const shotNow = releaseNow && C.controlled;
+    if (shotNow) this.shoot(t, targets, body || this.lastBody);
+    const out = C.out();
     // ownership wins over the animation: if the dribble animation plays the other hand while the ball
     // is held (a hand change the ball never made), the animation conforms to the ball
     const holder = C.heldHand;
@@ -294,42 +344,84 @@ export class BallSession {
     }
     // physics: only when nobody controls the ball
     if (C.physics && ph) {
-      ph.advance(dt, ph.lastSample || body, body, { has: false }, { has: false });
-      const rs = ph.renderState(1);
-      C.syncPhysics(rs.p, rs.v, rs.q, rs.w);
-      this.freeBall(t, dt, targets);
+      if (!shotNow) {
+        ph.advance(dt, ph.lastSample || body, body, { has: false }, { has: false });
+        const rs = ph.renderState(1);
+        C.syncPhysics(rs.p, rs.v, rs.q, rs.w);
+        this.freeBall(t, dt, targets, body || this.lastBody);
+      }
     } else if (ph && !ph.suspended) ph.suspend?.();
     // IK: the last centimetres, never a stretch; a knee still in the ball's way yields (≤ 5 cm)
     this.applyIk(mats);
     if (C.controlled) this.yieldLegs(mats);
+    // the hands' own skin against the ball where it is drawn this tick (every state: a shot's hands
+    // let go of it, a free hand never passes through it)
+    if (this.hc) this.resolveHands(mats, dt);
     if (this.trace) this.trace.push({ t, s: C.state, p: C.p.slice(), hand: S.hand, tl: targets.left.p, tr: targets.right.p });
     return C.out();
   }
 
-  /** The shot leaves the hands: physics from here (ballistic to the rim). */
-  shoot(t, targets) {
+  /**
+   * The shot leaves the hands from where the ball is this tick (fitted clear of them, on its
+   * launch side): the arc to the rim (engine3d/shot-flight.mjs — a make unless the meter's grade
+   * says otherwise), started clear of the body, with the ball ↔ body contacts off until it is
+   * clear of the thrower (the physics would otherwise swallow the throw in the hands it leaves).
+   */
+  shoot(t, targets, body = this.lastBody) {
     const C = this.ctl, ph = this.phys;
-    const from = C.p.slice(), v0 = C.v.slice();
-    C.toPhysics('SHOT_RELEASE', 'shot release', t);
-    this.stats.shots++;
-    this.free = { kind: 'shot', t: 0, bounces0: ph?.stats?.bounces ?? 0, through: false };
-    if (ph) {
-      ph.resume?.(from, v0, [0, 0, 0], this.lastBody);
-      const target = [this.hoop.center[0], this.hoop.center[1] + 0.03, this.hoop.center[2]];
-      const horiz = Math.hypot(target[0] - from[0], target[2] - from[2]);
-      ph.throwBall(ph.ballisticTo(target, 0.75 + horiz * 0.07), 'both');
+    const input = this.shotInput || { outcome: 'make' };
+    this.shotInput = null;
+    const holding = C.heldHand;
+    let from = C.p.slice();
+    const draws = [], rng = () => { const x = this.rng(); draws.push(x); return x; };
+    let plan = planShot({ from, hoop: this.hoop, ...input, rng, cfg: this.shotCfg() });
+    let swept = 0;
+    if (body) {
+      // a release point still touching the rigid hand (the fit eases in: a centimetre behind) starts
+      // just clear of it — the smallest move, biased to the launch side; only if that fails, along
+      // the launch (a grazing launch along the palm is the ball rolling off it: not an obstacle,
+      // the ball ↔ body contacts are off until it is clear)
+      const R = C.cfg.R, cols = handColliders(body, holding);
+      if (clearance(from, cols, R) < 0) {
+        const fit = fitBallToHands(from, body, R, { holding, prefer: norm(plan.v0), preferWeight: 0, cols });
+        const to = fit.ok ? fit.p : sweepClear(from, plan.v0, body, R, { holding, cols }).p;
+        swept = len(sub(to, from)); from = to;
+        let k = 0; const replay = () => (k < draws.length ? draws[k++] : this.rng());
+        plan = planShot({ from, hoop: this.hoop, ...input, outcome: plan.outcome, rng: replay, cfg: this.shotCfg() });
+      }
     }
-    this.onEvent?.({ type: 'shot', t });
+    C.toPhysics('SHOT_RELEASE', `shot release → ${plan.outcome}`, t);
+    C.p = from.slice(); C.v = plan.v0.slice(); C.w = plan.w0.slice();
+    this.stats.shots++;
+    this.free = { kind: 'shot', t: 0, bounces0: ph?.stats?.bounces ?? 0, through: false, plan, ghost: !!ph, prevP: from.slice() };
+    if (ph) {
+      ph.resume?.(from, plan.v0, plan.w0, body);
+      ph.setBodyCollision?.(false);
+      ph.throwBall(plan.v0, holding === 'left' || holding === 'right' ? holding : 'both');
+    }
+    this.lastShot = { outcome: plan.outcome, aim: plan.aim, T: plan.T, v0: plan.v0, w0: plan.w0, apexY: plan.apexY, entryDeg: plan.entryDeg, from, swept, t, input, through: false, minRimDist: Infinity, maxY: from[1] };
+    this.log(`shot → ${plan.outcome} (T ${plan.T.toFixed(2)} s, entry ${plan.entryDeg.toFixed(0)}°, apex ${plan.apexY.toFixed(2)} m${swept ? `, launched ${(swept * 100).toFixed(1)} cm clear of the hands` : ''})`);
+    this.onEvent?.({ type: 'shot', t, outcome: plan.outcome, aim: plan.aim, T: plan.T });
     void targets;
   }
 
   /** Shots settle → a controlled pass back; a loose ball is picked up (a hand near a slow ball) or scooped. */
-  freeBall(t, dt, targets) {
+  freeBall(t, dt, targets, body = this.lastBody) {
     const f = this.free, C = this.ctl, ph = this.phys, P = this.P;
     if (!f) return;
     f.t += dt;
     const p = C.p, v = C.v, sp = len(v);
     if (f.kind === 'shot') {
+      // the thrower's body is solid again once the ball is clear of it (or after half a second)
+      if (f.ghost && (f.t > 0.5 || (f.t > 0.05 && body && clearance(p, handColliders(body, null), C.cfg.R) > 0.03))) { ph.setBodyCollision?.(true); f.ghost = false; }
+      // the result (the meter reads it): through the ring downward, closest to the rim's centre, apex
+      const L = this.lastShot, c = this.hoop.center;
+      if (L) {
+        L.maxY = Math.max(L.maxY, p[1]);
+        L.minRimDist = Math.min(L.minRimDist, Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]));
+        if (!L.through && f.prevP && f.prevP[1] > c[1] && p[1] <= c[1] && Math.hypot(p[0] - c[0], p[2] - c[2]) < this.hoop.rimR - 0.03) L.through = true;   // (f.through is the court's own swish flag)
+      }
+      f.prevP = p.slice();
       const settled = ph.state === 'FREE' || ph.stats.bounces - (f.bounces0 ?? 0) >= 3 || f.t > 4.5;
       if (settled) this.passBack(t, targets);
       return;
@@ -372,8 +464,38 @@ export class BallSession {
     const hands = ['left', 'right'].filter((h) => w[h] > 0.001).sort((a, b) => w[b] - w[a]);
     if (!hands.length || !C.controlled) return null;
     const ctl = { hand: hands[0], weight: w[hands[0]], other: hands[1] || null, otherWeight: hands[1] ? w[hands[1]] : 0, grip: isHeld(C.state), reachMax: c.maxHandCorrection * this.armScale, reachLimit: 0.14 * this.armScale };
-    const cfg = { ikStrength: 1, ikMax: c.maxHandCorrection * this.armScale, ikAimMax: c.maxWristRotation, palmThickness: c.palmThickness, radii: { finger: 0.0095 }, ikReach: 0.14 * this.armScale, maxElbow: c.maxElbowCorrection, maxExtend: c.maxExtension };
+    // (with the hand's skin: the palm meets the ball where its own skin does, and the fingers are left to resolveHands)
+    const pt = this.hc ? { left: c.palmThickness + this.palmClear.left, right: c.palmThickness + this.palmClear.right } : c.palmThickness;
+    const cfg = { ikStrength: 1, ikMax: c.maxHandCorrection * this.armScale, ikAimMax: c.maxWristRotation, palmThickness: pt, skinContact: !!this.hc, radii: { finger: 0.0095 }, ikReach: 0.14 * this.armScale, maxElbow: c.maxElbowCorrection, maxExtend: c.maxExtension };
     return (this.lastIk = this.IK.contactPass(mats, this.mrig, { p: C.p, R: c.R }, ctl, cfg, null));
+  }
+
+  /**
+   * The hands' own skin against the ball (contact-ik resolveHandBall), after IK, before skinning:
+   * the palm rests on it, no finger is inside it, and the hand that holds (or is catching) it grips
+   * it — from the moment the ball flies to it; a holding palm that is off the ball reaches back onto
+   * it (not while the ball is fitted off the hands' targets). Grip and pull ease in and out (≤ gripRate
+   * per second); a new possession grips at once.
+   */
+  resolveHands(mats, dt) {
+    if (this.snapHands) { this.snapHands = false; dt = 0; }
+    // (the receiving hand grips from the moment the ball flies to it: the grip only turns a phalanx
+    // that is near the ball's surface, so it acts as the ball arrives — the fingers are on it when the
+    // palm is, not still opening a grip that ramps in after the contact)
+    const C = this.ctl, held = C.heldHand, catching = /^(CATCH_|DRIBBLE_UP_)/.test(C.state) || C.state === 'PASS_RELEASE' ? C.flight?.toHand : null;
+    const rate = (this.IK.HAND?.gripRate ?? 10) * Math.max(0, dt);
+    const ease = (x, want) => (dt > 0 ? clamp(x + clamp(want - x, -rate, rate), 0, 1) : want);
+    const out = {};
+    // (no pull while the ball is fitted off the hands' targets — a two-hand hold squeezed by the capture, a
+    // shot's launch pocket: pulling a palm onto it there drives the fingers into the ball, the arm pushes back)
+    const fitted = !!C.fitOff && len(C.fitOff) > 0.01;
+    for (const [s, side] of [['l', 'left'], ['r', 'right']]) {
+      const holds = held === side || held === 'both';
+      this.gripW[side] = ease(this.gripW[side], holds || catching === side ? 1 : 0);
+      this.pullW[side] = ease(this.pullW[side], holds && !fitted ? 1 : 0);
+      out[side] = this.IK.resolveHandBall(mats, this.mrig, this.hc[s], s, { p: C.p, R: C.cfg.R }, { grip: this.gripW[side], pull: this.pullW[side], pullMax: (this.IK.HAND?.pullMax ?? 0) * this.armScale, clear: this.palmClear[side], dt, reachArm: this.IK.reachArm });
+    }
+    return (this.lastHands = out);
   }
 
   /** Knee yield: a leg the (controlled) ball still overlaps moves its knee away, hip and ankle fixed. */

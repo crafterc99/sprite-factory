@@ -168,7 +168,7 @@ function closestOnSeg(p, a, b) {
   return { q: add(a, sc(ab, t)), t };
 }
 /** Signed distance from point p to an oriented box (centre c, rotation q, half extents h). */
-function sdBox(p, c, q, h) {
+export function sdBox(p, c, q, h) {
   const l = qrot(qconj(q), sub(p, c));
   const d = [Math.abs(l[0]) - h[0], Math.abs(l[1]) - h[1], Math.abs(l[2]) - h[2]];
   const out = len([Math.max(d[0], 0), Math.max(d[1], 0), Math.max(d[2], 0)]);
@@ -389,7 +389,7 @@ export class BasketballPhysicsSystem {
       .setRestitution(c.ballRestitution).setFriction(c.ballFriction)
       .setRestitutionCombineRule(R.CoefficientCombineRule.Average).setFrictionCombineRule(R.CoefficientCombineRule.Average)
       .setActiveEvents(R.ActiveEvents.COLLISION_EVENTS | R.ActiveEvents.CONTACT_FORCE_EVENTS).setContactForceEventThreshold(0.2)
-      .setCollisionGroups(groups(GROUP_BALL, GROUP_BODY | GROUP_STATIC)).setSolverGroups(groups(GROUP_BALL, GROUP_BODY | GROUP_STATIC));
+      .setCollisionGroups(groups(GROUP_BALL, this.ballFilter())).setSolverGroups(groups(GROUP_BALL, this.ballFilter()));
     this.ballCol = this.world.createCollider(cd, this.ball);
     this.names.set(this.ballCol.handle, 'ball');
   }
@@ -399,6 +399,7 @@ export class BasketballPhysicsSystem {
    * physics (a shot, a loose ball) at the controller's position and velocity — no pop.
    */
   suspend() {
+    if (this.bodyCollision === false) this.setBodyCollision(true);
     if (this.suspended) return;
     this.suspended = true;
     this.ball.setEnabled?.(false);
@@ -412,6 +413,22 @@ export class BasketballPhysicsSystem {
     this.wasHeld = false; this.lost = false; this.lostFor = 0; this.releasedBy = null;
     this.lastRelease = { t: this.time, v: v.slice(), hand: 'none' };
     this.sinceRelease = 1e9;   // no release guard (the controller released it, not a hand in this system)
+    // (the hands had it until now: a release gate set right after this — throwBall — holds for its
+    // window instead of being cleared on the first step by a separation never measured while suspended)
+    this.handGap = 0;
+  }
+  /** Which groups the ball collides with: the body too, or only the court / hoop / stands. */
+  ballFilter() { return this.bodyCollision === false ? GROUP_STATIC : GROUP_BODY | GROUP_STATIC; }
+  /**
+   * The ball ↔ player-body contacts on / off. A shot leaves the hands with them off (its first
+   * centimetres are still between the fingers, palms and forearms that threw it — a kinematic
+   * body there would swallow the throw) and they come back once it is clear (the session).
+   */
+  setBodyCollision(on) {
+    this.bodyCollision = !!on;
+    const g = groups(GROUP_BALL, this.ballFilter());
+    this.ballCol.setCollisionGroups(g); this.ballCol.setSolverGroups(g);
+    if (!on) for (const n of [...this.touching]) if (this.parts.has(n)) this.touching.delete(n);
   }
   /** Explicit set-up / reset (tests, debug drop, a new possession) — not used by play. */
   placeBall(p, v = [0, 0, 0], w = [0, 0, 0]) {

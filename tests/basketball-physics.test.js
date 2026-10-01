@@ -246,6 +246,70 @@ test('contact IK: fingers conform to the ball surface (no finger inside the ball
   }
 });
 
+// ── the hand's own skin against the ball (contact-ik buildHandContact / resolveHandBall) ──
+async function rigAt(id) {
+  const { MS, A } = await mods;
+  const json = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, `lib/mocap/mhr-rigs/${id}.json.gz`))));
+  const rig = MS.prepareMhr(json, A.MHR70);
+  const mats = new Float32Array(rig.n * 16);
+  for (let j = 0; j < rig.n; j++) mats[j * 16] = mats[j * 16 + 5] = mats[j * 16 + 10] = mats[j * 16 + 15] = 1;
+  return { json, rig, mats };
+}
+
+test('hand skin: each hand is sorted into its rigid palm and phalanges, with hinges that flex toward the palm (player / AC)', async () => {
+  const { IK, A } = await mods;
+  for (const id of ['player', 'ac-001']) {
+    const { json, rig } = await rigAt(id);
+    const hc = IK.buildHandContact(json, rig, A.b64);
+    assert.ok(hc, `${id}: built from its mesh`);
+    for (const s of ['l', 'r']) {
+      const H = hc[s];
+      assert.ok(H.palm.length > 50, `${id} ${s}: the palm has skin (${H.palm.length})`);
+      assert.strictEqual(H.segs.length, 16, 'thumb root + 5 × 3 phalanges');
+      for (const sg of H.segs) {
+        // (the stock player's thumb skin is (nearly) all on thumb0 — the rigid palm: its thumb joints carry
+        // little or none, nothing drawn to move; AC's every phalanx has skin)
+        if (sg.f !== 'thumb' || id === 'ac-001') assert.ok(sg.verts.length > 0, `${id} ${s} ${sg.f}${sg.k}: has skin`);
+        if (!sg.hinge0) continue;
+        // +θ about the bind hinge turns the phalanx toward the palm normal (flexion) on both hands
+        const a = rig.b[sg.j], d = [0, 1, 2].map((k) => rig.b[sg.jc][k] - a[k]), u = sg.hinge0, th = 0.3;
+        const cr = [u[1] * d[2] - u[2] * d[1], u[2] * d[0] - u[0] * d[2], u[0] * d[1] - u[1] * d[0]], ud = u[0] * d[0] + u[1] * d[1] + u[2] * d[2];
+        const r = [0, 1, 2].map((k) => d[k] * Math.cos(th) + cr[k] * Math.sin(th) + u[k] * ud * (1 - Math.cos(th)));
+        const dn = (v) => v[0] * H.bindN[0] + v[1] * H.bindN[1] + v[2] * H.bindN[2];
+        assert.ok(dn(r) > dn(d), `${id} ${s} ${sg.f}${sg.k}: the hinge flexes toward the palm`);
+      }
+    }
+    const sub = IK.buildHandContact(json, rig, A.b64, { maxPerSeg: IK.HAND.maxPerSeg, maxPalm: IK.HAND.maxPalm });
+    for (const sg of sub.r.segs) assert.ok(sg.verts.length <= IK.HAND.maxPerSeg, 'subsampled');
+    assert.ok(sub.r.palm.length <= IK.HAND.maxPalm && sub.r.all.length === hc.r.n, 'palm subsampled; the final check sees every vertex');
+  }
+  assert.strictEqual(IK.buildHandContact({ kind: 'mhr', mhr: {} }, (await rigAt('player')).rig, (await mods).A.b64), null, 'no mesh: null (the joint passes stay in charge)');
+});
+
+test('hand skin: a ball buried in the palm (the old 1 cm palm) ends with every skin vertex outside it, the palm on it and the fingertips gripping it', async () => {
+  const { IK, A, MS } = await mods;
+  for (const id of ['player', 'ac-001']) {
+    const { json, rig, mats: M0 } = await rigAt(id);
+    const full = IK.buildHandContact(json, rig, A.b64), hc = IK.buildHandContact(json, rig, A.b64, { maxPerSeg: IK.HAND.maxPerSeg, maxPalm: IK.HAND.maxPalm });
+    for (const s of ['l', 'r']) {
+      const mats = M0.slice(), R = 0.12, f = IK.palmFrame(mats, rig, s), p = f.c.map((v, i) => v + f.n[i] * (R + 0.014));
+      const H = full[s], gap = (v) => Math.hypot(H.pos[v * 3] - p[0], H.pos[v * 3 + 1] - p[1], H.pos[v * 3 + 2] - p[2]) - R;
+      MS.skinVerts(H.v0, H.si, H.sw, mats, H.pos);
+      let before = Infinity; for (let v = 0; v < H.n; v++) before = Math.min(before, gap(v));
+      assert.ok(before < -0.01, `${id} ${s}: the old palm target buries the ball in the hand (${(-before * 1000).toFixed(0)} mm)`);
+      const r = IK.resolveHandBall(mats, rig, hc[s], s, { p, R }, { grip: 1 });
+      MS.skinVerts(H.v0, H.si, H.sw, mats, H.pos);
+      let worst = Infinity; for (let v = 0; v < H.n; v++) worst = Math.min(worst, gap(v));
+      assert.ok(worst >= 0.001 - 1e-4, `${id} ${s}: every vertex of the full hand skin ≥ 1 mm outside (${(worst * 1000).toFixed(2)} mm)`);
+      assert.ok(Math.abs(r.depth + worst) < 1e-4, `${id} ${s}: the reported depth is the real one (${(r.depth * 1000).toFixed(2)} mm)`);
+      let pg = Infinity; for (const v of H.palm) pg = Math.min(pg, gap(v));
+      assert.ok(pg <= 0.01, `${id} ${s}: the palm rests on the ball (${(pg * 1000).toFixed(1)} mm)`);
+      const tips = H.segs.filter((sg) => sg.k === 2 && sg.f !== 'thumb').filter((sg) => { let m = Infinity; for (const v of sg.verts) m = Math.min(m, gap(v)); return m < 0.006; }).length;
+      assert.ok(tips >= 3, `${id} ${s}: the fingertips grip it (${tips} of 4 on the surface)`);
+    }
+  }
+});
+
 test('contact IK: a catch reach is bounded and ramps in (ikCatchMax)', async () => {
   const { R, BP } = await mods;
   const ph = new BP.BasketballPhysicsSystem(R, {});

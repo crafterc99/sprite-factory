@@ -46,6 +46,7 @@ export function fromLocal(q, tr) {
  *   id, F, fps, loop, R, floorY, trackSource ('video' | 'generated' | 'unknown')
  *   frames[i] = { ball: [x,y,z] | null (clip space), held, hand, palmL, palmR (clip space) }
  *   traj(t) → [x, z, yaw] (clip root at fractional frame t), shot { releaseFrame, hand } | null
+ *   hand?    the clip's own starting hand (a mirrored clip's is the other): a two-hand start enters there
  *   labels?  classifyBallEvents frames (flight kind names)
  *   legsAt?(t) → [{ a, b, r }] leg / foot capsules in clip space (bounce clearance)
  * @returns {object} contacts (see docs/ball-contact-system.md)
@@ -260,7 +261,7 @@ export function detectContacts(C) {
     return h < 0.55 ? 'low' : h > 1.0 ? 'high' : 'dribble';
   }
   // ── 6. normalized time, holds, entry / exit hands
-  const out = finalize({ version: CONTACTS_VERSION, moveId: C.id || null, F, fps, loop, trackSource: C.trackSource || 'unknown', heldDistance: +dh.toFixed(3), events, flights, log });
+  const out = finalize({ version: CONTACTS_VERSION, moveId: C.id || null, F, fps, loop, trackSource: C.trackSource || 'unknown', heldDistance: +dh.toFixed(3), events, flights, log, defaultHand: C.hand === 'left' || C.hand === 'right' ? C.hand : null });
   return out;
 }
 
@@ -329,7 +330,9 @@ export function finalize(c) {
   if (!c.events.length && c.holdHand) holds.push({ hand: c.holdHand, from: 0, to: F - 1 });
   c.holds = holds.sort((a, b) => a.from - b.from);
   const firstHold = c.holds[0], lastHold = [...c.holds].sort((a, b) => a.to - b.to).pop();
-  c.entryHand = c.entryHand || (firstHold ? (firstHold.hand === 'both' ? (ends[0]?.hand !== 'both' ? ends[0]?.hand : null) || 'right' : firstHold.hand) : null);
+  // (a two-hand start enters in the hand that lets go first, else the clip's own starting hand —
+  // a mirrored clip's is the other one, never the literal right)
+  c.entryHand = c.entryHand || (firstHold ? (firstHold.hand === 'both' ? (ends[0]?.hand !== 'both' ? ends[0]?.hand : null) || c.defaultHand || 'right' : firstHold.hand) : null);
   const lastHand = lastHold ? lastHold.hand : null;
   c.exitHand = c.exitHand || (lastHand === 'both' ? c.entryHand : lastHand);
   return c;

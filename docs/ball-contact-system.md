@@ -176,6 +176,14 @@ BallTarget  = palm centre + n · (R + palmThickness + normalOffset) + y · along
 the Contact Editor. Each target also carries its velocity and orientation. This is the single palm
 definition shared by the controller, the IK and the debug view.
 
+**The character's own palm.** `palmThickness` (1.4 cm) is a mannequin's palm: a real character's
+palm skin sits 3–5 cm in front of the palm centre (AC: the heel 53 mm, the thenar up to 67 mm), so
+the ball on that target was 3–4 cm INSIDE the hand. With the rig's hand skin
+(`contact-ik.mjs buildHandContact`, the session's `handContact`), each target is moved out along
+`n` by `palmClearance` — just far enough that no palm vertex (heel, thenar / hypothenar, the pads
+under the knuckles) is inside the ball — every tick, from the pose, and the skinned catch
+prediction the same way. The IK uses the same per-hand thickness.
+
 ### Contact tracking (every tick)
 
 For each hand: distance from the ball centre to the target, relative velocity, approach direction
@@ -325,9 +333,9 @@ slides out and the rest of the path is re-solved to the same bounce or catch. A 
 that the animation puts against a leg is eased out by at most 6 cm (the hand follows by IK) and
 the knee yields up to 5 cm, hip and ankle fixed.
 
-**Fingers:** `conformFingers` keeps every phalanx outside the ball and curls the controlling
-hand's fingers onto it. Priority is palm accuracy > wrist accuracy > finger detail; finger contact
-is a separate pass so a proper grip model can replace it later.
+**Fingers:** the hand's own skin against the ball (`contact-ik.mjs resolveHandBall`, the
+session's last step every tick, in every state; see *Hands never inside the ball* below). A rig
+with no mesh falls back to the joint passes (`conformFingers`, `clearHandsOfBall`).
 
 ---
 
@@ -379,9 +387,81 @@ root motion — the hands never pop, so neither does the ball.
 **Foot contact.** The existing foot planner and locks keep planted feet fixed (slide metric in the
 debug panel). Bounce targets are pushed off predicted planted feet.
 
-**Shots and passes.** A shot clip's gather and set are `HELD_BOTH`; at the release frame the ball
-enters `SHOT_RELEASE` and the existing ballistic shot takes over in Rapier. A pass back from the
+**Shots and passes.** A shot clip's gather and set are held (`HELD_BOTH` or the shooting hand); at
+the release frame the ball enters `SHOT_RELEASE` and Rapier flies it. A pass back from the
 rebounder is a controlled `PASS_RELEASE` flight that meets the player's catching hand.
+
+**The release frame** (`lib/mocap/motion-builder.js` `inferShotRelease`, runtime copy
+`engine3d/shot-release.mjs`). A shot filmed close leaves the top of the picture while still in the
+hands; the frame the ball vanished is not the release. When the ball was never seen clear of the
+picture's edge after the last hold (report `shotRelease.source` `left-picture` / `lost`), the
+release is where the shooting arm straightens (shoulder→wrist ≥ 0.88 of the arm's length; an arm
+that never does releases at its wrist's highest point, ≤ 0.6 s after the last seen hold) and the
+hold runs on to there. A release that was seen (`source: 'seen'`) is never moved. At load, a shot
+clip with no usable release (none, or on its last frame) gets one the same way (`anim3d`
+`shotReleaseGuard`), so a shot always lets go of the ball.
+
+**The held ball clear of the hands** (`engine3d/ball-fit.mjs`). A capture's hands can be closer
+together than the ball is wide (hands guessed off-screen), and a palm target can face into the
+other hand. In a two-hand hold, and in any hold of a shot's last 0.5 s, the ball is fitted out of
+the rigid hand (palms, knuckles, thumb bases), forearms, upper arms, head and chest — the smallest
+move; in the last 0.3 s before a release, the nearest clear place on the launch side. The fit
+eases in and out (critically damped, ≤ 2 m/s) and its motion is the ball's (no teleport, no pop).
+
+**The shot** (`engine3d/shot-flight.mjs` `planShot`). From where the ball is on the release tick
+(this tick's hands; a release point still touching the hand is moved just clear), the arc to the
+rim: a 47° entry angle, apex ≥ 45 cm over the rim, the launch velocity exact under gravity and the
+ball's air drag, backspin. The ball ↔ player-body contacts are off until the ball is 3 cm clear of
+the thrower (≤ 0.5 s) — the kinematic hands it leaves would otherwise swallow the throw. Its flight
+starts on the next tick. The outcome is a make unless a shot meter graded the release:
+`session.setShotInput({ quality: 0…1, timing: 'early' | 'late' | 'perfect' })` (or `{ outcome }`)
+before it — swish / make / rim-make / rim-out (a seeded roll) / short / long / airball, each aimed
+where it says. `Player.shotTiming()` gives the playing shot's time to its release (the meter's
+target); `session.lastShot` the result (`through`, `minRimDist`, `maxY`). In the court:
+`window.__shot = { timing(), input(x), last() }`, and Ball Debug Mode draws the planned arc.
+
+**Hands never inside the ball — and never flared off it** (`contact-ik.mjs resolveHandBall`,
+`BallSession.resolveHands`: every tick after the IK, before skinning, both hands). It works on what
+is drawn: the hand's LOD0 skin (true 4-weight LBS of the matrices; `buildHandContact` sorts it once
+per rig into the rigid palm — heel, the pads under the knuckles, the thenar — and the 16 phalanges,
+thumb root + 5 × 3, with each joint's anatomical hinge and flexion limits; 24 samples per phalanx,
+72 for the palm, every vertex for the final check):
+
+1. **The palm rests on the ball.** A palm whose skin is inside is moved straight out along its
+   normal by the arm (≤ 12 cm: a capture's two hands can be 15 cm apart around a 24 cm ball — the
+   guide hand of the user's jump shot needs ~17 cm). A holding palm that is off the ball reaches back
+   onto it (≤ 4 cm × arm scale) — not while the controller fits the ball off the hands' targets (a
+   two-hand squeeze, a shot's launch pocket), where that would drive the fingers into the ball.
+2. **Fingers wrap the ball, knuckle → tip.** Each phalanx turns about its hinge (within its limits)
+   by the least extension that takes its skin out of the ball. The hand that holds the ball — or
+   that it is flying to (the grip is on from the dribble's rebound: it only turns a phalanx near the
+   surface, so the fingers close as the ball arrives, not after the palm has it) — flexes each one
+   until its distal chain, as drawn last tick, touches the surface. A finger closes from the knuckle
+   out at ≤ 24 rad/s (a hand closes on a ball in ≈ 50 ms; a joint never curls ahead of the one before
+   it, so it never has to open again). Smoothing is one-sided: a correction the ball needs (more
+   extension) applies at once; anything else eases toward its new target with a 40 ms half-life —
+   a finger that was pushed out goes back onto the ball, a curl lets go at a release. A new
+   possession grips at once. A free hand's finger turns out of an arriving ball at ≤ 10 rad/s and
+   the arm moves the hand out for the rest (a hand pushed aside, not a finger flicked).
+3. **A phalanx still inside with its joint at its limit** (a straight fingertip lying in the ball):
+   the joints nearer the palm straighten the finger by the least that clears it. Anything left: the
+   arm moves the hand out along the deepest skin's own outward direction (≤ 3 steps), the fingers
+   swing straight out (≤ 0.35 rad).
+
+Result (headless court, AC / player, 30 / 60 fps and 240 Hz ticks = the court at 0.25× speed,
+every dribble, move and shot): the skin stays ≥ 1 mm outside the ball on every tick (it was 2–3 cm
+inside with the joint passes); in a hold the palm is 3–4 mm off the surface and 3–4 fingertip pads
+are on it. Flare, AC's idle dribble at 0.25×, 1× and 30 fps: every fingertip ≤ 4 mm and the thumb
+≤ 3 mm off the ball on every tick the hand has it (the joint passes: middle / ring / pinky a median
+44–66 mm off, joints flicked 1.1 rad in a tick); no finger joint is turned faster than the 24 rad/s
+close; the clip's own fingers move ≤ 5 rad/s (no spikes in the capture). Moves and shots: the
+fingertips are on the ball 90 % of the time (p90 ≤ 3 mm); a 10 m/s spin catch or the shot's launch
+pocket lifts one for a tick or two. ≈ 0.5–1 ms a tick for both hands. `session.lastHands` reports
+each hand's depth / push; Ball Debug Mode shows it (`hands` line).
+Known limits: the generated crossover's receiving hand lags, then jumps 10 m/s to its catch pose —
+the ball meets it on the way and pushes it back up to ~15 cm for a few ticks. On the stock `player`
+rig the user's jump shot's two-hand set (hands 15 cm apart around the ball) leaves its guide index
+and shooting pinky up to 6 cm off the ball; AC, the user's character, holds it clean.
 
 ---
 
@@ -465,3 +545,8 @@ transition, never below the floor; the recorded move with exactly two floor cont
   couple of frames after the 6 cm ease-out and the knee yield.
 - **Contact edits on this Mac** are written into the local clip mirror (`data/mocap`); the next
   `npm run clips:pull` overwrites them. On Railway they persist in the clip store.
+- **The jump shot (IMG_5816) ends in the air.** Its landing was in the frames the capture service
+  failed on (trimmed off); the clip now releases at frame 27 of 32 and returns to the idle from the
+  air. A runtime landing (both feet off at the last frame) is a separate task.
+- **A pass back is caught hard.** A made shot's rebound comes back from under the hoop (6–12 m/s);
+  the catch stops it within two ticks (the harness counts a pass catch as an impulse, like a throw).

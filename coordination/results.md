@@ -3047,3 +3047,25 @@ None. All terminals are clear. Human decision required to begin next phase.
   - MD's UVs and graphic placement.
 - Colourways: Original (black with the red graphic), White, Heather, Navy.
 - Validation: branch npm test 107/107. On the main build: outfit court 6/6 with croptop + shorts, no page errors; screenshots checked.
+
+## COURT-SHOT-HANDS — the jump shot leaves the hands and goes in; fingers grip the ball, never through it
+- Status: DONE (live).
+- Files changed:
+  - engine3d/{shot-release, shot-flight, ball-fit}.mjs (new);
+  - engine3d/{anim3d, ball-contacts, ball-control, ball-session, basketball-physics, contact-ik, court-vantheah}.mjs;
+  - court3d.html;
+  - lib/mocap/{motion-builder, clip-builder, game-clips}.js;
+  - server.js + middleware/auth.js: the 3 new modules are served and public, like the other engine modules;
+  - docs/ball-contact-system.md; tests/basketball-physics.test.js.
+- What changed:
+  - Release frame: the user's jump shot released at frame 20, where the ball only left the picture. Its release is now read from the shooting arm's extension (frame 27, the top of the jump); every shot clip gets one.
+  - The ball no longer launches from inside the player's hands, forearms and head. Those killed the throw on every shot clip.
+  - The held ball is fitted clear of the hands. Each hand is solved against its own skin: the palm rests on the ball, and the fingers wrap it closing from the knuckles out, with no flare (from the user's iPad screenshot).
+  - The flight goes through shot-flight.mjs, which takes the make/miss outcome (the shot meter's hook).
+- Validation:
+  - Branch npm test 143/144. The one failure is the garments cost check under load; it passes alone.
+  - Main build: npm test 87/87.
+  - Ball court on AC (deploy build): 10/10.
+    - Jump shot released at frame 27, apex 5.16 m, swish. Between-the-legs shot released at frame 60, swish.
+    - Hands at least 1 mm clear of the ball on every frame (0 frames > 3 mm), including 0.25× idle close-ups.
+- Not yet: the shot meter and right-stick moves are in progress (the plan is done; implementation was cut off by the session limit).

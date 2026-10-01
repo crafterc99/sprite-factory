@@ -241,6 +241,23 @@ function chainLinkTexture(renderer) {
 }
 
 /**
+ * A measured box that reaches into a ring (the rim mount's mesh bounds run from the board to the
+ * middle of the ring) is cut back to the ring's edge on its own side: the ring's hole stays open —
+ * a made shot dropping through the middle would otherwise bounce off a wall that is not there.
+ * lo / hi: the box's min / max corners (game space), modified in place.
+ */
+export function clipOutOfRings(lo, hi, goals = VANTHEAH.goals, r = VANTHEAH.rimR) {
+  for (const g of goals) {
+    if (hi[1] < g[1] - 0.3 || lo[1] > g[1] + 0.3) continue;
+    if (lo[0] > g[0] + r || hi[0] < g[0] - r || lo[2] > g[2] + r || hi[2] < g[2] - r) continue;
+    const cx = (lo[0] + hi[0]) / 2 - g[0], cz = (lo[2] + hi[2]) / 2 - g[2];
+    const ax = Math.abs(cz) >= Math.abs(cx) ? 2 : 0, off = ax === 2 ? cz : cx;
+    if (off < 0) hi[ax] = Math.min(hi[ax], g[ax] - r); else lo[ax] = Math.max(lo[ax], g[ax] + r);
+  }
+  return { lo, hi };
+}
+
+/**
  * Static collision for the physics system (BP.BasketballPhysicsSystem):
  * both hoops (open 32-capsule rims + backboards), the pack's fences, walls and
  * hoop bases, and the measured bounds of the hoop supports and courtside props.
@@ -268,9 +285,11 @@ export function addVantheahColliders(phys, court) {
     for (const name of ['Hoop_West_Support', 'Hoop_East_Support', 'Hoop_West_Mount', 'Hoop_East_Mount', 'Bleachers_Frame', 'Bleachers_Step', 'Bench_Seat', 'Bench_Seat.001', 'Ball_Rack', 'Duffel_Bag']) {
       const b = court.boundsOf(name);
       if (!b) continue;
-      const c = b.getCenter(new THREE.Vector3()), h = b.getSize(new THREE.Vector3()).multiplyScalar(0.5);
-      if (Math.max(h.x, h.y, h.z) > 12) continue; // not a prop
-      phys.addStaticBox([c.x, c.y, c.z], [h.x, h.y, h.z], { kind: /Hoop/.test(name) ? 'stanchion' : 'props', restitution: 0.3 });
+      const lo = [b.min.x, b.min.y, b.min.z], hi = [b.max.x, b.max.y, b.max.z];
+      if (Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) > 24) continue; // not a prop
+      clipOutOfRings(lo, hi);
+      if (!(hi[0] > lo[0] && hi[1] > lo[1] && hi[2] > lo[2])) continue;
+      phys.addStaticBox(lo.map((x, k) => (x + hi[k]) / 2), lo.map((x, k) => (hi[k] - x) / 2), { kind: /Hoop/.test(name) ? 'stanchion' : 'props', restitution: 0.3 });
       n++;
     }
   }
