@@ -228,6 +228,16 @@ export const HAND = Object.freeze({
   relaxHalf: 0.04,   // s: a correction the ball no longer needs eases toward its new target with this half-life
   curlRate: 24,      // rad/s: a curl onto the ball grows at most this fast (a hand closes on a ball in ≈ 50 ms)
   gripRate: 30,      // 1/s: a hand's grip weight changes at most this fast (the curl rate and the eased let-go do the smoothing)
+  shiftRate: 6,      // rad/s: a joint curls on at most this fast while the next joint of its finger is curled onto the ball
+  spreadMax: 0.3,    // rad: a finger whose flexion misses the ball spreads (abducts at its knuckle) at most this far toward it
+  spreadRate: 8,     // rad/s: … at most this fast
+  preShape: 0,       // s before a catch the receiving hand shapes its grip around where the ball will sit on it (it opens a
+                     // finger that is there ahead of the ball, curls the others onto that place — never into the ball's way
+                     // in). OFF: tried at 0.12 s — the jog's catches 40 → 3 mm, but on the stock rig the fingertips over-curl
+                     // and redistribute when the ball lands (joints 50–80 rad/s); docs/ball-contact-system.md
+  preCurl: true,
+  jointRate: 0,      // rad/s (0: off): a holding hand's finger correction changing at most this fast either way, the arm
+                     // taking the rest — tried at 24: the stock rig's pinky then closes late on a catch (25 mm off)
   far: 0.3,          // m beyond R: a wrist this far from the ball's centre is not near it (skipped)
   maxPerSeg: 24,     // skin samples per phalanx (farthest-point subsample of the bind mesh)
   maxPalm: 72,       // skin samples of the palm
@@ -376,6 +386,37 @@ export function palmClearance(mats, H, p, n, R, margin = HAND.margin) {
 }
 
 /**
+ * The knuckle spread (rotation about sAx, the palm normal at the knuckle) that lets a finger's distal chain
+ * (points `all` relative to its knuckle a, flexing about u up to hi) reach the grip sphere (cg, RRg): 0 when its
+ * flexion reaches it already or no spread helps; else the smallest spread that touches, or the one that comes
+ * closest (≤ max).
+ */
+function spreadFor(all, a, u, sAx, hi, cg, RRg, tol, max) {
+  const reach = (phi) => {
+    const Rs = axisAngle(sAx, phi), us = mv(Rs, u), L = phi ? all.map((q) => mv(Rs, q)) : all;
+    let best = -Infinity;
+    for (let k = 0; k <= 12; k++) {
+      const Rm = axisAngle(us, (hi * k) / 12);
+      let m = -Infinity; for (const q of L) { const x = RRg - len(sub(add(a, mv(Rm, q)), cg)); if (x > m) m = x; }
+      if (m > best) best = m;
+      if (m >= -tol) break;
+    }
+    return best;   // the closest the chain comes over its flexion (≥ −tol: it touches)
+  };
+  const r0 = reach(0);
+  if (r0 >= -tol - 0.002) return 0;
+  let bestPhi = 0, bestV = r0;
+  for (let k = 1; k <= 6; k++) {
+    for (const sgn of [1, -1]) {
+      const phi = (sgn * max * k) / 6, v = reach(phi);
+      if (v >= -tol) return phi;   // (the smallest spread that touches)
+      if (v > bestV) { bestV = v; bestPhi = phi; }
+    }
+  }
+  return bestV > r0 + 0.003 ? bestPhi : 0;
+}
+
+/**
  * One hand against the ball, after the animation and IK, before skinning (bone matrices modified
  * in place):
  *   1. the palm rests ON the ball — the arm moves the hand out along the palm normal (≤ pushMax);
@@ -395,7 +436,10 @@ export function palmClearance(mats, H, p, n, R, margin = HAND.margin) {
  * @param {object} H     buildHandContact()[s] (its pos / prevTh are this hand's scratch and smoothing state)
  * @param {'l'|'r'} s
  * @param {{ p: number[], R: number }} ball
- * @param {object} [opt] { grip: 0…1, pull: 0…1, clear: the palm clearance already in the target (m), dt (s; 0 = no smoothing), reachArm, …HAND }
+ * @param {object} [opt] { grip: 0…1, pull: 0…1, clear: the palm clearance already in the target (m), dt (s; 0 = no smoothing), reachArm,
+ *                       gripBall: { p, R } — the sphere the fingers wrap (default: the ball): a hand about to catch shapes its
+ *                       grip around where the ball will sit on it (its palm target), so the fingers are on the ball the moment
+ *                       it arrives — never into the real ball on the way, …HAND }
  * @returns {{ palmPush, palmPull, fingers, residual, depth: number|null }}  depth: the deepest skin into the real ball (m, > 0 inside), null when the hand is far from it
  */
 export function resolveHandBall(mats, rig, H, s, ball, opt = {}) {
@@ -403,17 +447,24 @@ export function resolveHandBall(mats, rig, H, s, ball, opt = {}) {
     grip: gripIn = 0, clear = 0, dt = 0, reachArm: reach = reachArm, margin = HAND.margin, tol = HAND.tol, pushMax = HAND.pushMax,
     gripReach = HAND.gripReach, gripNear = HAND.gripNear, gripTol = HAND.gripTol, relaxHalf = HAND.relaxHalf, curlRate = HAND.curlRate, far = HAND.far,
     outRate = HAND.outRate || 0, armFirst = HAND.armFirst ?? true, pull: pullIn = 0, pullMax = HAND.pullMax || 0, pullTol = HAND.pullTol ?? 0.003,
+    gripBall = null, spreadMax = HAND.spreadMax ?? 0, spreadRate = HAND.spreadRate ?? 8, jointRate = HAND.jointRate ?? 0,
   } = opt;
+  const prevSp = H.prevSp || (H.prevSp = new Float32Array(H.segs.length));
+  const thLast = H.prevTh.slice();   // (last tick's corrections: the rate limit of this tick's)
   const gripW = clamp(+gripIn || 0, 0, 1), grip = gripW > 1e-3, pullW = clamp(+pullIn || 0, 0, 1);
   // (a hand that is not holding the ball: an arriving ball turns its fingers out at most outRate, the
   // arm moves the hand out for the rest — a hand pushed aside, not a finger flicked)
   const soft = !grip;
   const c = ball.p, RR = ball.R + margin;
+  // the sphere the fingers wrap (the ball, or where it will sit on this palm: a catch about to land)
+  // (HAND.preCurl false: an arriving ball only opens the fingers ahead of it; they close on the ball itself)
+  const cg = gripBall?.p && HAND.preCurl ? gripBall.p : c, RRg = (gripBall?.R ?? ball.R) + margin;
+  const cOpen = gripBall?.p || c;
   const out = { palmPush: 0, palmPull: 0, fingers: 0, residual: 0, depth: null };
   // far from the ball: nothing to do — unless corrections of the last frames are still letting go
   const wr = jointPos(mats, rig, rig.JI[`${s}_wrist`]);
-  let busy = false; for (let i = 0; i < H.prevTh.length; i++) if (Math.abs(H.prevTh[i]) > 1e-3) { busy = true; break; }
-  if (len(sub(wr, c)) > ball.R + far && !busy) { H.prevTh.fill(0); return out; }
+  let busy = false; for (let i = 0; i < H.prevTh.length; i++) if (Math.abs(H.prevTh[i]) > 1e-3 || Math.abs(prevSp[i]) > 1e-3) { busy = true; break; }
+  if (len(sub(wr, c)) > ball.R + far && len(sub(wr, cg)) > ball.R + far && !busy) { H.prevTh.fill(0); prevSp.fill(0); return out; }
   // 1. the palm on the ball: the hand moves straight out along its normal by what the palm skin needs
   {
     skinHand(H, mats, H.palm);
@@ -476,11 +527,33 @@ export function resolveHandBall(mats, rig, H, s, ball, opt = {}) {
         }
       }
       if (!all) all = Array.from(chainV, (v) => sub(vpos(H, v), a));
-      const penOf = (L) => (th) => { const Rm = axisAngle(u, th); let m = -Infinity; for (const q of L) { const x = RR - len(sub(add(a, mv(Rm, q)), c)); if (x > m) m = x; } return m; };
-      const pen = penOf(own), penAll = penOf(all);
+      // a finger whose flexion arc misses the ball (it is off to the side of the hand: a guide hand, a two-hand
+      // set) spreads at its knuckle toward it — the least that lets the fingertip rest on the ball (eased, ≤ spreadRate)
+      if (pass === 0 && sg.k === 0 && sg.hinge0 && grip && spreadMax > 0) {
+        const sAx = norm(Qv(mats, sg.j, H.bindN));
+        const want = spreadFor(all, a, u, sAx, hi, cg, RRg, gripTol, spreadMax);
+        let sp = want * gripW;
+        if (dt > 0) { const pv = prevSp[si], k = Math.exp((-0.6931 * dt) / relaxHalf); sp = clamp(sp + (pv - sp) * k, pv - spreadRate * dt, pv + spreadRate * dt); }
+        prevSp[si] = sp;
+        if (Math.abs(sp) > 1e-5) {
+          const Rs = axisAngle(sAx, sp);
+          rotateSubtree(mats, rig, sg.j, Rs, a);
+          for (let q = 0; q < own.length; q++) own[q] = mv(Rs, own[q]);
+          for (let q = 0; q < all.length; q++) all[q] = mv(Rs, all[q]);
+          u = norm(Qv(mats, sg.j, sg.hinge0));
+        }
+      } else if (pass === 0 && sg.k === 0) prevSp[si] = 0;
+      const penOf = (L, cc = c, RRc = RR) => (th) => { const Rm = axisAngle(u, th); let m = -Infinity; for (const q of L) { const x = RRc - len(sub(add(a, mv(Rm, q)), cc)); if (x > m) m = x; } return m; };
+      const pen = penOf(own), penAll = penOf(all), penG = penOf(own, cg, RRg), penAllG = penOf(all, cg, RRg);
       const p0 = pen(0);
-      let th = 0;
-      if (p0 > 0) {
+      let th = 0, soonOut = false;
+      const penO = penOf(own, cOpen, RRg);
+      if (p0 <= 0 && gripBall && grip && pass === 0 && hinge && penO(0) > 0) {
+        // inside where the arriving ball will sit: opened to that surface ahead of it (eased, ≤ curlRate — the
+        // ball is not there yet), so it never has to be flicked out of the ball the tick it lands
+        if (penO(lo) <= 0) { let A = lo, B = 0; for (let it = 0; it < 18; it++) { const m = (A + B) / 2; if (penO(m) > 0) B = m; else A = m; } th = A; } else th = lo;
+        th *= gripW; soonOut = true;
+      } else if (p0 > 0) {
         // out: the least extension that clears this phalanx
         if (pen(lo) <= 0) { let A = lo, B = 0; for (let it = 0; it < 18; it++) { const m = (A + B) / 2; if (pen(m) > 0) B = m; else A = m; } th = A; }
         else if (!hinge) {
@@ -488,13 +561,20 @@ export function resolveHandBall(mats, rig, H, s, ball, opt = {}) {
           if (pen(hi) <= 0) { let A = 0, B = hi; for (let it = 0; it < 18; it++) { const m = (A + B) / 2; if (pen(m) > 0) A = m; else B = m; } th = B; }
           else { let bv = p0; for (let q = 0; q <= 16; q++) { const t = lo + ((hi - lo) * q) / 16, v = pen(t); if (v < bv) { bv = v; th = t; } } }
         } else th = lo;   // at its limit: the hand moves out below (step 3)
-      } else if (grip && pass === 0 && sg.k >= 0 && penAll(0) <= 0 && p0 > -(gripReach + clear)) {
-        // grip: flex until the first touch of the distal chain, else its closest approach (≤ gripNear)
+      } else if (grip && pass === 0 && sg.k >= 0 && penAll(0) <= 0 && penAllG(0) <= 0 && Math.max(p0, penG(0)) > -(gripReach + clear)) {
+        // grip: flex until the first touch of the distal chain, else as close as it comes — never off it, the
+        // grip sphere's surface (the ball, or where it will sit) — and never into the real ball
         const N = 16;
-        let best = 0, bv = penAll(0), first = null;
-        for (let q = 1; q <= N; q++) { const t = (hi * q) / N, v = penAll(t); if (v >= -gripTol) { first = t; break; } if (v > bv) { bv = v; best = t; } }
-        if (first != null) { let A = first - hi / N, B = first; for (let it = 0; it < 14; it++) { const m = (A + B) / 2; if (penAll(m) < -gripTol) A = m; else B = m; } th = A; }
-        else if (bv > -gripNear) th = best;
+        let best = 0, bv = penAllG(0), first = null;
+        for (let q = 1; q <= N; q++) { const t = (hi * q) / N, v = penAllG(t); if (v >= -gripTol) { first = t; break; } if (v > bv) { bv = v; best = t; } }
+        if (first != null) { let A = first - hi / N, B = first; for (let it = 0; it < 14; it++) { const m = (A + B) / 2; if (penAllG(m) < -gripTol) A = m; else B = m; } th = A; }
+        else if (bv > -Math.max(gripNear, gripReach)) th = best;
+        // never into the real ball — nor into where the arriving one still passes on its way in (gripBall.avoid)
+        const inWay = (x) => penAll(x) > 0 || (gripBall?.avoid || []).some((q) => penOf(all, q, RR)(x) > 0);
+        if (th > 0 && inWay(th)) { let A = 0, B = th; for (let it = 0; it < 14; it++) { const m = (A + B) / 2; if (inWay(m)) B = m; else A = m; } th = A; }
+        // (a shape ahead of the ball curls the finger as a hand does — a tip never far ahead of the joint before it:
+        // over-curled tips there redistribute in one tick when the ball lands)
+        if (gripBall && HAND.preCurl && sg.k >= 1 && H.segs[si - 1]?.f === sg.f) th = Math.min(th, Math.max(0, H.prevTh[si - 1]) + 0.35);
         th *= gripW;
       }
       if (pass === 0 && dt > 0) {
@@ -502,15 +582,23 @@ export function resolveHandBall(mats, rig, H, s, ball, opt = {}) {
         // eases toward its new target with a half-life — an extension back toward the pose or into a grip,
         // a curl letting go (never into the ball) — and a curl grows ≤ curlRate
         const prev = H.prevTh[si], k = Math.exp((-0.6931 * dt) / relaxHalf);
+        if (soonOut && th < prev) th = Math.max(th, prev - curlRate * dt);
         if (prev < -1e-4 && th > prev) th = Math.max(lo, th + (prev - th) * k);
         else if (prev > 1e-4 && th >= 0 && th < prev) { const rl = th + (prev - th) * k; if (penAll(rl) <= 0) th = Math.min(rl, hi); }
         // a finger closes from the knuckle out: while a joint nearer the palm is still closing (its curl
         // rate-limited), this one does not curl further — else it curls ahead to touch, and opens again
         // (a reversal, a flicker) as the knuckle catches up
         if (th > 0 && lagging === sg.f) th = Math.min(th, Math.max(prev, 0));
+        // (… and curls on slowly at a joint whose next one is curled onto the ball — the finger already rests on it: a
+        // knuckle closing fast under a curled tip straightens the tip in one tick, a 1.2 rad flick, the grip moved from
+        // one joint to the other; slowly, the grip moves over)
+        if (th > prev && th > 0 && H.segs[si + 1]?.f === sg.f && H.prevTh[si + 1] > 0.3) th = Math.min(th, Math.max(prev, 0) + HAND.shiftRate * dt);
         if (th > 0) { const cap = Math.max(prev, 0) + curlRate * dt; if (th > cap + 1e-6) { th = cap; lagging = sg.f; } }
         // (a free hand's finger turned out of an arriving ball: ≤ outRate — the arm takes the rest this tick)
         if (soft && th < 0 && outRate > 0) th = Math.max(th, Math.min(prev, 0) - outRate * dt);
+        // a hand that has the ball (or is about to): no joint turned faster than jointRate either way — what the
+        // finger cannot open in time, the arm takes (step 3 moves the hand out by the few mm left)
+        if (!soft && jointRate > 0) th = clamp(th, prev - jointRate * dt, prev + jointRate * dt);
       }
       if (pass === 0) H.prevTh[si] = th;   // (dt = 0: a snapped pass — the next tick smooths from it)
       if (Math.abs(th) > 1e-5) { rotateSubtree(mats, rig, sg.j, axisAngle(u, th), a); moved++; }
@@ -537,6 +625,9 @@ export function resolveHandBall(mats, rig, H, s, ball, opt = {}) {
     const penAll = (th) => { const Rm = axisAngle(u, th); let m = -Infinity; for (const q of all) { const x = RR - len(sub(add(a, mv(Rm, q)), c)); if (x > m) m = x; } return m; };
     let th = lo;
     if (penAll(lo) <= 0) { let A = lo, B = 0; for (let it = 0; it < 16; it++) { const mid = (A + B) / 2; if (penAll(mid) > 0) B = mid; else A = mid; } th = A; }
+    // (rate-limited like the rest for a hand that has the ball: the arm takes what is left)
+    if (!soft && jointRate > 0 && dt > 0) th = Math.max(th, Math.min(0, thLast[si] - jointRate * dt - H.prevTh[si]));
+    if (th > -1e-6) continue;
     rotateSubtree(mats, rig, sg.j, axisAngle(u, th), a);
     H.prevTh[si] += th; out.fingers++;
   }
@@ -553,7 +644,7 @@ export function resolveHandBall(mats, rig, H, s, ball, opt = {}) {
       skinHand(H, mats); r = skinDepth(H, H.all, c, RR);
     }
   };
-  if (armFirst && soft) armOut();
+  if (armFirst) armOut();   // (a holding hand too: a hand moved out by a few mm reads better than its fingers flicked straight)
   if (r.d > tol) { out.fingers += fingers(1); skinHand(H, mats); r = skinDepth(H, H.all, c, RR); }
   armOut();
   out.depth = r.d - margin;   // (r.d is against R + margin)

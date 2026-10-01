@@ -49,6 +49,20 @@
   #ballTune input[type=range] { width:90px; } #ballTune output { color:var(--txt); text-align:right; }
   #toast { position:fixed; left:50%; top:64px; transform:translateX(-50%); z-index:9; background:var(--panel); border:1px solid var(--accent); border-radius:12px; padding:8px 14px; display:none; max-width:90vw; text-align:center; }
   #toast a { color:var(--accent); }
+  /* the right stick's note (a move with no clip yet / the move it fell back to) */
+  #stickNote { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:6; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:4px 10px; font-size:12px; color:var(--txt); display:none; pointer-events:none; white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis; }
+  /* the shot meter (2K style): a bar beside the shooter that fills with the shot clip; let go on the mark. Big enough to
+     read at a glance on an iPad, above every other HUD panel (only the loading screen covers it) */
+  #shotMeter { position:fixed; left:0; top:0; z-index:12; pointer-events:none; display:none; will-change:transform, opacity; }
+  #shotMeter .sm-bar { position:relative; width:clamp(22px,3.2vmin,40px); height:clamp(170px,34vh,360px); border-radius:999px; background:rgba(8,8,18,.78); border:3px solid rgba(255,255,255,.95); box-shadow:0 0 0 2px rgba(0,0,0,.6), 0 4px 16px rgba(0,0,0,.5); overflow:hidden; }
+  #shotMeter .sm-late { position:absolute; left:0; right:0; top:0; background:rgba(255,59,78,.24); }
+  #shotMeter .sm-green { position:absolute; left:0; right:0; background:#19d27a; min-height:8px; box-shadow:0 0 10px rgba(25,210,122,.85); }
+  #shotMeter .sm-fill { position:absolute; left:0; right:0; bottom:0; height:0; background:#fff; }
+  #shotMeter .sm-mark { position:absolute; left:0; right:0; height:4px; margin-bottom:-2px; background:#fff; box-shadow:0 0 0 1px rgba(0,0,0,.7); }
+  #shotMeter .sm-txt { position:absolute; left:50%; bottom:calc(100% + 10px); transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; white-space:nowrap; font:900 clamp(18px,3.4vmin,36px)/1 system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing:.05em; text-shadow:0 2px 6px #000, 0 0 2px #000; }
+  #shotMeter .sm-fb { background:rgba(0,0,0,.55); padding:5px 10px 4px; border-radius:8px; }
+  #shotMeter .sm-res { font-size:clamp(22px,4.4vmin,50px); }
+  #shotMeter .sm-res:empty, #shotMeter .sm-fb:empty { display:none; }
   #loading { position:fixed; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; background:var(--bg); z-index:20; color:var(--dim); }
   #loading > * { margin:5px 0; }
   #loading .t { color:#fff; font-size:16px; }
@@ -62,7 +76,18 @@
   #moveBtn { right:140px; bottom:44px; width:72px; height:72px; background:rgba(47,107,255,.25); font-size:11px; }
   #runBtn { right:40px; bottom:150px; width:64px; height:64px; background:rgba(25,210,122,.22); font-size:11px; }
   .tbtn.held { background:rgba(255,106,26,.7); }
-  @media (pointer:coarse) { .tbtn { display:block; } #help { display:none; } }
+  /* the touch right stick: swipe on the right side of the screen = the moves (flick / hold / circle) */
+  #proZone { position:fixed; right:0; top:18vh; width:50vw; height:42vh; z-index:4; display:none; }
+  #proZone span { position:absolute; right:16px; bottom:6px; color:rgba(255,255,255,.28); font-size:11px; pointer-events:none; }
+  @media (pointer:coarse) { .tbtn { display:block; } #help { display:none; } #proZone { display:block; } }
+  /* the loft behind the court's door: its prompt (a button on touch), the load panel, the fade */
+  #doorPrompt { position:fixed; left:50%; bottom:64px; transform:translateX(-50%); z-index:8; display:none; font:600 15px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif; color:#fff; background:rgba(8,8,18,.86); border:1px solid #ffb070; border-radius:999px; padding:10px 18px 10px 10px; box-shadow:0 0 18px rgba(255,160,90,.35); white-space:nowrap; }
+  #doorPrompt .x { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; margin-right:10px; border-radius:50%; background:#2f6bff; color:#fff; font-size:16px; vertical-align:middle; }
+  #doorPrompt .k { color:var(--dim); font-weight:400; font-size:12px; margin-left:8px; }
+  #loftLoad { position:fixed; left:50%; top:42%; transform:translate(-50%,-50%); z-index:16; display:none; min-width:min(86vw,340px); max-width:92vw; text-align:center; font:14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background:rgba(8,8,18,.9); border:1px solid var(--line); border-radius:14px; padding:14px 18px; color:var(--txt); }
+  #loftLoad b { color:#fff; } #loftLoad .lbar { height:6px; border-radius:3px; background:#1d1d36; margin:10px 0 4px; overflow:hidden; } #loftLoad .lbar i { display:block; height:100%; width:0; background:#ffb070; }
+  #loftLoad .err { color:#ff8a8a; } #loftLoad button { margin-top:10px; padding:6px 14px; } #loftLoad .sub { color:var(--dim); font-size:12px; }
+  #fade { position:fixed; top:0; left:0; right:0; bottom:0; background:#000; opacity:0; z-index:15; pointer-events:none; display:none; color:#b9b4c8; font:15px/1 system-ui, -apple-system, "Segoe UI", sans-serif; text-align:center; padding-top:46vh; }
 </style>
 <script>
 // ── Boot watchdog (a plain script: runs even when the 3D module can't) ──
@@ -114,7 +139,7 @@
   <a class="pill" href="/?page=testing" title="Back to the 2D test court">← 2D</a>
   <span class="pill">3D COURT <span id="state">loading</span></span>
   <span class="pill">Player <select id="selChar"></select></span>
-  <span class="pill" title="Dribble hand — the loops are mirrored for the other hand (L1 / H)">Hand <button id="handBtn">—</button></span>
+  <span class="pill" title="The ball hand — the loops are mirrored for the other hand (switch: R3 / H; ?pad=classic: L1)">Hand <button id="handBtn">—</button></span>
   <span class="pill" title="Game speed (1.00× = real time). Saved on this device.">Speed <input type="range" id="speed" min="0.25" max="1.5" step="0.05"><b id="speedLbl">1.00×</b></span>
   <span class="pill">Cam <button id="camChase" class="on">2K</button><button id="camSide">Side</button><button id="camFree">Orbit</button></span>
   <span class="pill" title="Clips the game has, by role — record the rest (see the recording guide)"><span id="libInfo">clips…</span> <a href="/recording" style="color:var(--accent)">guide</a></span>
@@ -125,8 +150,8 @@
 </div>
 
 <div id="help">
-  <b>Controller</b> left stick move · hold <b>R2</b> run-dribble (turns to run) · hold <b>□</b> shoot (moving = step-back) · <b>○</b> crossover · <b>△</b> spin · <b>✕</b> hesi (no ball: new ball) · R1 between-legs · L1 switch hand · right stick camera<br>
-  <b>Keyboard</b> WASD move · hold Shift run · hold <b>I</b>/Space shoot · O cross · K spin · J hesi · U btl · H hand · <b>X</b> new ball · C camera · F feet<br>
+  <span id="helpPad"><b>Controller</b> left stick move · hold <b>R2</b> run-dribble · hold <b>□</b> shoot, let go on the meter's mark (green = perfect; moving = step-back) · <b>right stick = every move</b>, relative to him: flick toward the free hand crossover · <b>flick toward the free hand, then straight back</b> (ball in the right hand: ←, then →) double crossover · forward hesi · toward the ball hand in-and-out · back-diagonal, free side between the legs · back-diagonal, ball side step-back · straight back behind the back · ¼ or ½ circle spin · hold size-up · <b>R3</b> switch hand · D-pad camera (← → orbit, ↑ ↓ zoom) · View camera mode · ✕ new ball (at the <b>LOFT</b> door behind the baseline: in / out) · <a id="padLink" href="?pad=classic" style="color:var(--accent)">classic buttons</a><br>
+  <b>Keyboard</b> WASD move · hold Shift run · hold <b>I</b>/Space shoot, let go on the mark · <b>arrows = right stick</b> (tap = flick, hold, roll ↓ ↘ → ↗ = spin; ← then → quickly = double crossover) · O cross · <b>L</b> double crossover · K spin · J hesi · U btl · H hand · <b>X</b> new ball / the LOFT door · Q/E orbit · −/= zoom · C camera · F feet</span><br>
   Standing = idle dribble facing the basket. Let go at speed = slide-in stop. Moves pick the variant + frame nearest your pose.
 </div>
 <div id="outfitPanel"><div class="oh"><b>Outfit</b><span id="outfitInfo" style="color:var(--dim);font-size:12px"></span><button id="outfitClose" type="button">×</button></div>
@@ -136,6 +161,8 @@
 </div>
 <div id="dbg"><b>feet</b> · slide max <span id="dbgSlide"></span> <button id="dbgReset" type="button">reset</button><br><span id="dbgBody"></span></div>
 <div id="toast"></div>
+<div id="stickNote" aria-live="polite"></div>
+<div id="shotMeter" aria-hidden="true"><div class="sm-bar"><div class="sm-late"></div><div class="sm-green"></div><div class="sm-fill"></div><div class="sm-mark"></div></div><div class="sm-txt"><div class="sm-res"></div><div class="sm-fb"></div></div></div>
 <div id="ballPanel"><div class="bh"><b>Ball debug</b><span id="ballHz"></span><button id="ballClose" type="button">×</button></div>
   <canvas id="ballTimeline" width="330" height="58" style="width:100%;height:58px;display:block;background:#0b0d14;border-radius:6px"></canvas>
   <pre id="ballHud"></pre>
@@ -179,9 +206,14 @@
 
 <div id="stickZone"></div>
 <div id="stickBase"><div id="stickKnob"></div></div>
+<div id="proZone"><span>swipe = moves</span></div>
 <button id="shootBtn" class="tbtn">SHOOT</button>
 <button id="moveBtn" class="tbtn">CROSS</button>
 <button id="runBtn" class="tbtn">RUN</button>
+
+<button id="doorPrompt" type="button"><span class="x">✕</span><span id="doorTxt">Enter the loft</span><span class="k" id="doorKey"></span></button>
+<div id="fade"></div>
+<div id="loftLoad" role="status" aria-live="polite"><b id="loftLoadT">Loading the loft…</b><div class="lbar" id="loftLoadTrack"><i id="loftLoadBar"></i></div><div class="sub" id="loftLoadSub"></div><div class="err" id="loftLoadErr"></div><button id="loftRetry" type="button" style="display:none">Try again</button> <button id="loftCancel" type="button" style="display:none">Close</button></div>
 
 <div id="loading"><div class="t">Loading 3D court…</div><div id="loadMsg">downloading the 3D engine…</div><div id="err"></div></div>
 
@@ -200,7 +232,43 @@ import * as BS from '/js/ball-session.mjs';
 import * as BC from '/js/ball-contacts.mjs';
 import * as GA from '/js/garments.mjs';
 import * as SF from '/js/shot-flight.mjs';
+import * as SM from '/js/shot-meter.mjs';
+import * as PS from '/js/pro-stick.mjs';
+import * as LM from '/js/loft.mjs';
 window.__c3dBoot = true;
+// The loft is tone mapped with AgX (the court keeps ACES), graded like its bake was checked against the Cycles render
+// (AgX Punchy +0.35 EV): plain AgX + the CSS filter "contrast(1.08) saturate(1.18)" (layout.baked.canvasFilter). The
+// grade is computed at the end of three's AgX function — the same sRGB-space math as the CSS filter, so the HUD is
+// untouched and no compositor pass is added (an iPad) — and only what AgX draws (the loft) gets it.
+// ?loftlook=base: plain AgX · ?loftlook=punchy: Blender's Punchy look as an ASC CDL in AgX's log space (power 1.35,
+// saturation 1.4 — measured too saturated and dark against the render).
+const LOFT_LOOK = new URLSearchParams(location.search).get('loftlook') || 'grade';
+/** (Re)writes three's AgX function with the loft's grade — before any AgX program is compiled. */
+function setLoftGrade(contrast = 1.08, saturate = 1.18) {
+  const S0 = (THREE.ShaderChunk.__tonemapBase ||= THREE.ShaderChunk.tonemapping_pars_fragment);
+  const head = 'vec3 AgXToneMapping( vec3 color ) {', tail = 'color = LINEAR_REC2020_TO_LINEAR_SRGB * color;';
+  if (!S0.includes(head) || !S0.includes(tail)) return false;
+  const f = (x) => Number(x).toFixed(4);
+  let chunk = S0;
+  if (LOFT_LOOK === 'punchy') {
+    chunk = chunk.replace(head, 'vec3 agxLookPunchy( vec3 v ) {\n\tfloat luma = dot( v, vec3( 0.2126, 0.7152, 0.0722 ) );\n\tv = pow( max( v, vec3( 0.0 ) ), vec3( 1.35 ) );\n\treturn luma + 1.4 * ( v - luma );\n}\n' + head)
+      .replace('color = agxDefaultContrastApprox( color );', 'color = agxDefaultContrastApprox( color );\n\tcolor = agxLookPunchy( color );');
+  } else if (LOFT_LOOK === 'grade') {
+    chunk = chunk.replace(head, `vec3 loftGrade( vec3 c ) {
+	// linear → sRGB, contrast(${f(contrast)}) then saturate(${f(saturate)}) as CSS computes them (clamped), → linear
+	c = clamp( c, 0.0, 1.0 );
+	c = mix( 1.055 * pow( c, vec3( 1.0 / 2.4 ) ) - 0.055, c * 12.92, vec3( lessThanEqual( c, vec3( 0.0031308 ) ) ) );
+	c = clamp( ( c - 0.5 ) * ${f(contrast)} + 0.5, 0.0, 1.0 );
+	float l = dot( c, vec3( 0.213, 0.715, 0.072 ) );
+	c = clamp( l + ${f(saturate)} * ( c - l ), 0.0, 1.0 );
+	return mix( pow( ( c + 0.055 ) / 1.055, vec3( 2.4 ) ), c / 12.92, vec3( lessThanEqual( c, vec3( 0.04045 ) ) ) );
+}
+` + head).replace(tail, tail + '\n\tcolor = loftGrade( color );');
+  }
+  THREE.ShaderChunk.tonemapping_pars_fragment = chunk;
+  return true;
+}
+setLoftGrade();
 { const e = document.getElementById('err'); if (e && e.getAttribute('data-src') === 'watchdog') e.innerHTML = ''; }
 if (window.__c3dPendingErr) window.__c3dFail(window.__c3dPendingErr);
 
@@ -210,7 +278,6 @@ const RIM_Y = 3.05, RIM_R = 0.2286, BASELINE_Z = -1.575, HALF_LEN = 14.33, HALF_
 const COURT_KIND = new URLSearchParams(location.search).get('court') === 'classic' ? 'classic' : 'vantheah';
 const PLAY = COURT_KIND === 'vantheah' ? { ...VC.VANTHEAH.bounds } : { minX: -HALF_W, maxX: HALF_W, minZ: BASELINE_Z, maxZ: BASELINE_Z + HALF_LEN };
 const G = 9.81, BALL_R = 0.12;
-const HOLD_MS = 170;               // hold Square this long → shot (a tap shoots too)
 const $ = (id) => document.getElementById(id);
 const loadMsg = (m) => { $('loadMsg').textContent = m; };
 const textCache = new Map();
@@ -224,6 +291,9 @@ const canvas = $('view');
 const QS = new URLSearchParams(location.search);
 // the ball: the contact system (docs/ball-contact-system.md) — ?ball=legacy runs the old physics-driven dribble
 const BALL_MODE = QS.get('ball') === 'legacy' ? 'legacy' : 'contact';
+// the controls: 'pro' (default) — every ball-handling move on the right stick (engine3d/pro-stick.mjs), the
+// camera on the D-pad; ?pad=classic — the face buttons do the moves, the right stick / arrows are the camera
+const PAD_MODE = QS.get('pad') === 'classic' ? 'classic' : 'pro';
 const TOUCH = navigator.maxTouchPoints > 1 || COARSE;
 const LITE = QS.get('lite') === '1' || (TOUCH && QS.get('hq') !== '1');
 let renderer;
@@ -351,6 +421,100 @@ async function loadPracticeCourt() {
   camera.near = 0.1; camera.far = 350; camera.updateProjectionMatrix();   // as the pack's preview (depth precision for the floor layers)
   S.court = court;
   return court;
+}
+
+// ═══ The court's door: a small rooftop stair-house behind the left end of the baseline (both court kinds), its
+// door — lit, a glowing LOFT sign over it — facing the court (seen from the start, past the hoop). ✕ there goes
+// into the loft (the LOFT section below). ═══
+const DOOR = { x: -5.2, z: PLAY.minZ - 0.35, w: 1.0, h: 2.15, depth: 1.5, width: 2.2, height: 2.85 };   // z: the door's face
+DOOR.px = DOOR.x; DOOR.pz = DOOR.z + 0.15;   // the point the prompt measures from (the door, at the floor)
+function doorTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 512;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 256, 0); grd.addColorStop(0, '#4a2c1c'); grd.addColorStop(0.5, '#5c3824'); grd.addColorStop(1, '#46291a');
+  g.fillStyle = grd; g.fillRect(0, 0, 256, 512);
+  for (let i = 0; i < 90; i++) { const x = Math.random() * 256; g.strokeStyle = `rgba(${Math.random() < 0.5 ? '20,10,5' : '120,80,50'},${0.06 + Math.random() * 0.08})`; g.lineWidth = 1 + Math.random() * 2; g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + 6, 170, x - 6, 340, x + 3, 512); g.stroke(); }
+  // two recessed panels
+  for (const [y, h] of [[34, 200], [270, 206]]) { g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 6; g.strokeRect(34, y, 188, h); g.strokeStyle = 'rgba(255,220,180,.12)'; g.lineWidth = 2; g.strokeRect(40, y + 6, 176, h - 12); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+/** Board-formed concrete: soft noise, the boards' seams. */
+function concreteTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#8d8790'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 2600; i++) { const v = Math.random() < 0.5 ? 0 : 255; g.fillStyle = `rgba(${v},${v},${v},${Math.random() * 0.06})`; g.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 3, 1 + Math.random() * 3); }
+  for (let y = 0; y < 256; y += 32) { g.fillStyle = 'rgba(0,0,0,.16)'; g.fillRect(0, y, 256, 2); g.fillStyle = 'rgba(255,255,255,.07)'; g.fillRect(0, y + 2, 256, 1); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2, 2.4);
+  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+function signTexture() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 168;
+  const g = c.getContext('2d');
+  g.fillStyle = '#120c14'; g.beginPath(); g.roundRect(4, 4, 504, 160, 28); g.fill();
+  g.strokeStyle = 'rgba(255,170,100,.55)'; g.lineWidth = 5; g.beginPath(); g.roundRect(12, 12, 488, 144, 22); g.stroke();
+  g.font = '800 104px system-ui, -apple-system, "Segoe UI", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowColor = '#ff8a30'; g.shadowBlur = 26; g.fillStyle = '#ffd2a0';
+  for (let i = 0; i < 2; i++) g.fillText('LOFT', 256, 90);
+  g.shadowBlur = 0; g.fillStyle = '#fff4e6'; g.fillText('LOFT', 256, 90);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return t;
+}
+function buildCourtDoor() {
+  const g = new THREE.Group(); g.name = 'LoftDoor';
+  const box = (w, h, d, mat, x, y, z, cast = true) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; g.add(m); return m; };
+  const wallMat = new THREE.MeshStandardMaterial({ map: concreteTexture(), roughness: 0.92, metalness: 0.02 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x17171c, roughness: 0.42, metalness: 0.7 });
+  // (no real light at the door: two more lights would cost every lit pixel of the court — the lamp's wash is
+  // painted instead: the door a little emissive, a warm glow on the wall and a pool on the floor)
+  const doorTex = doorTexture();
+  const leafMat = new THREE.MeshStandardMaterial({ map: doorTex, roughness: 0.5, metalness: 0.04, emissive: 0xffa060, emissiveMap: doorTex, emissiveIntensity: 0.35 });
+  const { x, z, w, h, depth: D, width: Wd, height: H } = DOOR;
+  const house = box(Wd, H, D, wallMat, x, H / 2, z - D / 2);                       // the stair-house (behind the door's face)
+  box(Wd + 0.18, 0.12, D + 0.18, steel, x, H + 0.06, z - D / 2);                  // its roof cap
+  box(0.08, h + 0.08, 0.06, steel, x - w / 2 - 0.04, (h + 0.08) / 2, z + 0.03);   // the frame
+  box(0.08, h + 0.08, 0.06, steel, x + w / 2 + 0.04, (h + 0.08) / 2, z + 0.03);
+  box(w + 0.16, 0.08, 0.06, steel, x, h + 0.04, z + 0.03);
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.045), [steel, steel, steel, steel, leafMat, steel]);   // (+z face: the court side)
+  leaf.position.set(x, h / 2, z + 0.0225); leaf.castShadow = true; leaf.receiveShadow = true; g.add(leaf);
+  // a narrow glass light in the door: the warm room behind it
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 1.15), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.52, 0.2), toneMapped: false }));
+  glass.position.set(x - w / 2 + 0.2, 1.32, z + 0.047); g.add(glass);
+  box(0.035, 0.26, 0.035, steel, x + w / 2 - 0.11, 1.02, z + 0.075);               // the handle
+  box(w + 0.36, 0.05, 0.4, wallMat, x, 0.025, z + 0.2);                             // the threshold
+  // the LOFT sign over the door and its wall lamp
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.256), new THREE.MeshBasicMaterial({ map: signTexture(), transparent: true, toneMapped: false }));
+  sign.position.set(x, h + 0.3, z + 0.012); g.add(sign);
+  box(0.34, 0.06, 0.16, steel, x, h + 0.55, z + 0.08, false);
+  const lamp = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.1), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.8, 0.6).multiplyScalar(2), toneMapped: false }));
+  lamp.rotation.x = Math.PI / 2; lamp.position.set(x, h + 0.519, z + 0.08); g.add(lamp);
+  const glowTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const q = c.getContext('2d'), grd = q.createRadialGradient(64, 64, 2, 64, 64, 63);
+    grd.addColorStop(0, 'rgba(255,170,100,1)'); grd.addColorStop(0.4, 'rgba(255,140,70,.45)'); grd.addColorStop(1, 'rgba(255,120,60,0)');
+    q.fillStyle = grd; q.fillRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  const glowMat = (o) => new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: o, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  // (the wall's wash: on the face only, brightest under the lamp)
+  const washTex = (() => {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 160;
+    const q = c.getContext('2d'), grd = q.createRadialGradient(64, 10, 2, 64, 10, 150);
+    grd.addColorStop(0, 'rgba(255,170,100,1)'); grd.addColorStop(0.35, 'rgba(255,140,70,.4)'); grd.addColorStop(1, 'rgba(255,120,60,0)');
+    q.fillStyle = grd; q.fillRect(0, 0, 128, 160);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  const washMat = glowMat(0.34); washMat.map = washTex;
+  const wy0 = 0.3, wy1 = H - 0.03;
+  const wash = new THREE.Mesh(new THREE.PlaneGeometry(Wd - 0.1, wy1 - wy0), washMat); wash.position.set(x, (wy0 + wy1) / 2, z + 0.004); g.add(wash);
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.4), glowMat(0.3)); pool.rotation.x = -Math.PI / 2; pool.position.set(x, 0.014, z + 1.0); pool.renderOrder = 7; g.add(pool);
+  g.userData.loftDoor = true;
+  scene.add(g);
+  g.updateMatrixWorld(true);
+  // (the 2K camera never looks at the player through the house: it is pulled in front of it)
+  return { group: g, sign, box: new THREE.Box3().setFromObject(house).expandByScalar(0.12) };
 }
 
 // ═══ Basketball ═══
@@ -668,7 +832,10 @@ for (const s of ['left', 'right']) {
 // ═══ Input: gamepad + keyboard + touch ═══
 const keys = new Set();
 const pressedSinceTick = new Set(); // a quick tap between two frames still counts
-const GAME_KEYS = new Set(['KeyX', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'KeyV', 'KeyB', 'ShiftLeft', 'ShiftRight']);
+const GAME_KEYS = new Set(['KeyX', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'KeyV', 'KeyB', 'KeyQ', 'KeyE', 'Minus', 'Equal', 'ShiftLeft', 'ShiftRight']);
+// the pro stick's gesture recognizers (engine3d/pro-stick.mjs): the pad's right stick (or the touch zone), the arrow keys
+const PRO_PAD = new PS.ProStick(), PRO_KBD = new PS.ProStick(PS.KEYBOARD_STICK);
+window.addEventListener('gamepaddisconnected', () => PRO_PAD.reset());
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return; // browser shortcuts (Cmd+F, Ctrl+C) are not game input
   if (GAME_KEYS.has(e.code)) {
@@ -683,12 +850,12 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') toggleDbg();
   if (e.code === 'KeyB') toggleBallDbg();
 });
-window.addEventListener('keyup', (e) => keys.delete(e.code));
+window.addEventListener('keyup', (e) => { keys.delete(e.code); if (e.code === 'KeyI' || e.code === 'Space') S.shootUpAt = performance.now(); });   // (the shot meter: when the shot key came up, between two frames)
 // keys held while the window loses focus never get a keyup: drop all held input
-const dropInput = () => { keys.clear(); pressedSinceTick.clear(); touch.shoot = touch.run = false; touch.id = null; touch.x = touch.y = 0; sb.style.display = 'none'; };
+const dropInput = () => { keys.clear(); pressedSinceTick.clear(); touch.shoot = touch.run = false; touch.id = null; touch.x = touch.y = 0; sb.style.display = 'none'; touch.rid = null; touch.rx = touch.ry = 0; touch.rpk = null; PRO_PAD.reset(); PRO_KBD.reset(); };
 window.addEventListener('blur', dropInput);
 document.addEventListener('visibilitychange', () => { if (document.hidden) dropInput(); });
-const touch = { x: 0, y: 0, shoot: false, tap: false, move: false, id: null, ox: 0, oy: 0 };
+const touch = { x: 0, y: 0, shoot: false, tap: false, move: false, id: null, ox: 0, oy: 0, rid: null, rx: 0, ry: 0, rox: 0, roy: 0, rpk: null, door: false };
 const zone = $('stickZone'), sb = $('stickBase'), knob = $('stickKnob');
 zone.addEventListener('pointerdown', (e) => {
   if (e.pointerType === 'mouse' || touch.id != null) return; // mouse drags orbit; a second finger never takes over the stick
@@ -702,86 +869,132 @@ zone.addEventListener('pointermove', (e) => {
 const endTouch = (e) => { if (e.pointerId !== touch.id) return; touch.id = null; touch.x = touch.y = 0; sb.style.display = 'none'; knob.style.left = knob.style.top = '35px'; };
 zone.addEventListener('pointerup', endTouch); zone.addEventListener('pointercancel', endTouch);
 const sBtn = $('shootBtn');
-sBtn.addEventListener('pointerdown', () => { touch.shoot = true; touch.tap = true; sBtn.classList.add('held'); });
-for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) sBtn.addEventListener(ev, () => { touch.shoot = false; sBtn.classList.remove('held'); });
+// (held for the shot meter: the button keeps the finger even when it slides off — only lifting it lets go)
+sBtn.addEventListener('pointerdown', (e) => { touch.shoot = true; touch.tap = true; sBtn.classList.add('held'); try { sBtn.setPointerCapture(e.pointerId); } catch {} });
+for (const ev of ['pointerup', 'pointercancel']) sBtn.addEventListener(ev, () => { if (touch.shoot) S.shootUpAt = performance.now(); touch.shoot = false; sBtn.classList.remove('held'); });
 $('moveBtn').addEventListener('pointerdown', () => { touch.move = true; });
 const rBtn = $('runBtn');
 rBtn.addEventListener('pointerdown', () => { touch.run = true; rBtn.classList.add('held'); });
 for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) rBtn.addEventListener(ev, () => { touch.run = false; rBtn.classList.remove('held'); });
+// the touch right stick (pro stick, an iPad with no controller): a drag in the zone is the stick, 60 px = full;
+// a swipe faster than a frame still reaches the recognizer (its furthest point, for one frame — touch.rpk)
+const proZone = $('proZone');
+if (PAD_MODE !== 'pro') {
+  proZone.remove();
+  // ?pad=classic: the old mapping, and its help
+  const hp = $('helpPad');
+  if (hp) hp.innerHTML = '<b>Controller</b> left stick move · hold <b>R2</b> run-dribble (turns to run) · hold <b>□</b> shoot, let go at the top of the meter (green = perfect; moving = step-back) · <b>○</b> crossover · <b>△</b> spin · <b>✕</b> hesi (no ball: new ball) · R1 between-legs · L1 switch hand · right stick camera · <a id="padLink" href="?" style="color:var(--accent)">pro stick</a><br>'
+    + '<b>Keyboard</b> WASD move · hold Shift run · hold <b>I</b>/Space shoot, let go on the green · O cross · L double crossover · K spin · J hesi · U btl · H hand · <b>X</b> new ball · arrows camera · C camera · F feet';
+}
+else {
+  proZone.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' || touch.rid != null) return;
+    touch.rid = e.pointerId; touch.rox = e.clientX; touch.roy = e.clientY; touch.rx = touch.ry = 0;
+    try { proZone.setPointerCapture(e.pointerId); } catch {}
+  });
+  proZone.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== touch.rid) return;
+    const dx = e.clientX - touch.rox, dy = e.clientY - touch.roy, l = Math.hypot(dx, dy), k = l > 60 ? 1 / l : 1 / 60;
+    touch.rx = dx * k; touch.ry = dy * k;
+    if (!touch.rpk || Math.hypot(touch.rx, touch.ry) >= Math.hypot(touch.rpk[0], touch.rpk[1])) touch.rpk = [touch.rx, touch.ry];
+  });
+  const endPro = (e) => { if (e.pointerId !== touch.rid) return; touch.rid = null; touch.rx = touch.ry = 0; };
+  proZone.addEventListener('pointerup', endPro); proZone.addEventListener('pointercancel', endPro);
+}
+// (the help's link to the other mapping keeps the page's other parameters)
+{ const q = new URLSearchParams(location.search), pl = $('padLink'); if (PAD_MODE === 'pro') q.set('pad', 'classic'); else q.delete('pad'); if (pl) pl.href = '?' + q.toString(); }
 
 const dz = (v) => (Math.abs(v) < 0.15 ? 0 : (v - Math.sign(v) * 0.15) / 0.85);
-/**
- * Right-stick flick gestures (2K "pro stick"): a flick is a quick push past 0.7 that comes back
- * toward the centre. Two flicks in a row within 0.5 s make a combo — 'left-right' fires once.
- */
-const FLICK = { at: 0.7, back: 0.35, combo: 500, last: null, lastAt: 0, dir: null };
-function stickFlicks(x) {
-  const now = performance.now();
-  if (!FLICK.dir && Math.abs(x) >= FLICK.at) FLICK.dir = x < 0 ? 'left' : 'right';
-  if (FLICK.dir && Math.abs(x) <= FLICK.back) {
-    const d = FLICK.dir; FLICK.dir = null;
-    const combo = FLICK.last && now - FLICK.lastAt < FLICK.combo ? `${FLICK.last}-${d}` : null;
-    FLICK.last = combo ? null : d; FLICK.lastAt = now;
-    return combo;
-  }
-  // a direction pushed straight to the other side (no pause at the centre) counts too
-  if (FLICK.dir && Math.sign(x) && (x < 0 ? 'left' : 'right') !== FLICK.dir && Math.abs(x) >= FLICK.at) {
-    const d = FLICK.dir; FLICK.dir = x < 0 ? 'left' : 'right';
-    FLICK.last = d; FLICK.lastAt = now;
-  }
-  return null;
-}
 const padPrev = {};
 function padEdge(gp, i) { const now = !!gp?.buttons[i]?.pressed; const was = padPrev[i]; padPrev[i] = now; return now && !was; }
-function readInput() {
+/**
+ * The input of this frame (now: the frame's time, ms — the pro stick's clock). Pro mode (default): the right
+ * stick (or the arrow keys, or the touch zone) is every ball-handling move — inp.stick is the gesture it made
+ * this frame (engine3d/pro-stick.mjs), R3 switches hand, the D-pad moves the camera, View cycles it.
+ * ?pad=classic: the face buttons do the moves and the right stick / arrows are the camera, as before.
+ */
+function readInput(now = performance.now()) {
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   const gp = pads[0];
-  let mx = 0, my = 0, cx = 0, cy = 0, rx = 0, ry = 0, shoot = false, sprint = false;
-  const edge = { cross: false, spin: false, hesi: false, btl: false, hand: false, ball: false, doubleCross: false };
+  let mx = 0, my = 0, cx = 0, cy = 0, shoot = false, sprint = false, rx = 0, ry = 0;
+  const edge = { cross: false, spin: false, hesi: false, btl: false, hand: false, ball: false, ballTap: false, cam: false, doubleCross: false, door: false, hesiKey: false };
   if (gp) {
     mx = dz(gp.axes[0] || 0); my = dz(gp.axes[1] || 0);
-    rx = gp.axes[2] || 0; ry = gp.axes[3] || 0;          // the right stick: ball handling (flick gestures)
-    // the camera: D-pad (left / right turn, up / down zoom)
-    cx = (gp.buttons[15]?.pressed ? 1 : 0) - (gp.buttons[14]?.pressed ? 1 : 0); cy = (gp.buttons[13]?.pressed ? 1 : 0) - (gp.buttons[12]?.pressed ? 1 : 0);
     shoot = !!gp.buttons[2]?.pressed;                   // Square (PS) / X (Xbox)
     sprint = (gp.buttons[7]?.value || 0) > 0.3;         // R2
-    edge.cross = padEdge(gp, 1); edge.spin = padEdge(gp, 3); edge.hesi = padEdge(gp, 0); edge.ball = edge.hesi; // ✕ without the ball = a new ball
-    edge.btl = padEdge(gp, 5); edge.hand = padEdge(gp, 4);
+    if (PAD_MODE === 'classic') {
+      cx = dz(gp.axes[2] || 0); cy = dz(gp.axes[3] || 0);
+      edge.cross = padEdge(gp, 1); edge.spin = padEdge(gp, 3); edge.hesi = padEdge(gp, 0); edge.ball = edge.hesi; // ✕ without the ball = a new ball
+      edge.door = edge.hesi;                            // (✕ at the loft's door: through it, nothing else)
+      edge.btl = padEdge(gp, 5); edge.hand = padEdge(gp, 4);
+    } else {
+      rx = +gp.axes[2] || 0; ry = +gp.axes[3] || 0;    // the right stick: the moves (raw — the recognizer has its own radial deadzone)
+      cx = (gp.buttons[15]?.pressed ? 1 : 0) - (gp.buttons[14]?.pressed ? 1 : 0);   // D-pad ← → orbit
+      cy = (gp.buttons[13]?.pressed ? 1 : 0) - (gp.buttons[12]?.pressed ? 1 : 0);   // D-pad ↑ ↓ zoom
+      edge.ball = padEdge(gp, 0);                       // ✕: a new ball (only without one) — at the loft's door: through it
+      edge.door = edge.ball;
+      edge.hand = padEdge(gp, 11);                      // R3 (press the right stick): switch hand
+      edge.cam = padEdge(gp, 8);                        // View / Share: the camera mode
+    }
   }
   if (keys.has('KeyA')) mx -= 1; if (keys.has('KeyD')) mx += 1; if (keys.has('KeyW')) my -= 1; if (keys.has('KeyS')) my += 1;
-  if (keys.has('ArrowLeft')) cx -= 1; if (keys.has('ArrowRight')) cx += 1; if (keys.has('ArrowUp')) cy -= 1; if (keys.has('ArrowDown')) cy += 1;
+  let ax = 0, ay = 0;
+  if (PAD_MODE === 'classic') { if (keys.has('ArrowLeft')) cx -= 1; if (keys.has('ArrowRight')) cx += 1; if (keys.has('ArrowUp')) cy -= 1; if (keys.has('ArrowDown')) cy += 1; }
+  else {
+    // the arrows are the right stick (a tap shorter than a frame still deflects it for one frame)
+    const held = (k) => keys.has(k) || pressedSinceTick.has(k);
+    ax = (held('ArrowRight') ? 1 : 0) - (held('ArrowLeft') ? 1 : 0); ay = (held('ArrowDown') ? 1 : 0) - (held('ArrowUp') ? 1 : 0);
+    if (keys.has('KeyQ')) cx -= 1; if (keys.has('KeyE')) cx += 1; if (keys.has('Minus')) cy += 1; if (keys.has('Equal')) cy -= 1;
+  }
   if (keys.has('ShiftLeft') || keys.has('ShiftRight')) sprint = true;
   if (keys.has('KeyI') || keys.has('Space') || pressedSinceTick.has('KeyI') || pressedSinceTick.has('Space')) shoot = true;
   if (pressedSinceTick.has('KeyO')) edge.cross = true;
   if (pressedSinceTick.has('KeyK')) edge.spin = true;
-  if (pressedSinceTick.has('KeyJ')) edge.hesi = true;
+  if (pressedSinceTick.has('KeyJ')) edge.hesi = edge.hesiKey = true;
   if (pressedSinceTick.has('KeyU')) edge.btl = true;
+  if (pressedSinceTick.has('KeyL')) edge.doubleCross = true;   // (the pro stick: a crossover flick, then straight back)
   if (pressedSinceTick.has('KeyH')) edge.hand = true;
-  if (pressedSinceTick.has('KeyX')) edge.ball = true;
-  if (pressedSinceTick.has('KeyL')) edge.doubleCross = true;
+  if (pressedSinceTick.has('KeyX')) edge.ball = edge.door = true;
+  if (touch.door) edge.door = true;   // (the prompt itself, tapped)
+  touch.door = false;
   pressedSinceTick.clear();
-  // right stick (keyboard: ← then → quickly): flick left, then right = the double crossover
-  if (stickFlicks(gp ? rx : (keys.has('ArrowLeft') ? -1 : 0) + (keys.has('ArrowRight') ? 1 : 0)) === 'left-right') edge.doubleCross = true;
   if (touch.id != null) { mx = touch.x; my = touch.y; }
-  if (touch.shoot || touch.tap) { shoot = true; edge.ball = true; }
+  // (SHOOT held is the shot button; only its press is "new ball" — held through the end of a shot
+  // clip, a level here would put a new ball in his hands while the shot is still in the air — and not
+  // while a shot is in the air either: the rebound comes back to him)
+  if (touch.shoot || touch.tap) shoot = true;
+  if (touch.tap) edge.ballTap = true;
   if (touch.move) edge.cross = true;
   if (touch.run) sprint = true;
   touch.tap = false; touch.move = false;
   const l = Math.hypot(mx, my); if (l > 1) { mx /= l; my /= l; }
-  setText($('pad'), gp ? '🎮 ' + (gp.id.split('(')[0].trim().slice(0, 22) || 'controller') : (COARSE ? 'touch' : 'keyboard'));
-  return { mx, my, cx, cy, shoot, sprint, edge };
+  // the pro stick: both recognizers see every frame (so an excursion always ends); the pad's (or the touch
+  // zone's) gesture first. The touch zone stands in for the pad's stick while a finger is on it.
+  let stick = null;
+  if (PAD_MODE === 'pro') {
+    if (touch.rid != null) { rx = touch.rx; ry = touch.ry; } else if (touch.rpk) { rx = touch.rpk[0]; ry = touch.rpk[1]; }
+    touch.rpk = null;
+    const kl = Math.hypot(ax, ay) || 1;
+    const gk = PRO_KBD.sample(ax / kl, ay / kl, now), gpad = PRO_PAD.sample(rx, ry, now);
+    stick = gpad || gk;
+  }
+  setText($('pad'), gp ? '🎮 ' + (gp.id.split('(')[0].trim().slice(0, 22) || 'controller') + (PAD_MODE === 'pro' ? ' · pro stick' : ' · classic') : (COARSE ? 'touch' : 'keyboard'));
+  return { mx, my, cx, cy, shoot, sprint, edge, stick };
 }
 
 // ═══ Game state ═══
 const S = {
   rig: null, lib: null, player: null, clips: [], roles: {}, speed: 1,
-  sqAt: null, sqFired: false, lastMoveAt: -1e9,
+  meter: null,            // the shot meter (engine3d/shot-meter.mjs): hold the shot button, let go on its mark
+  shootPrev: false, shootUpAt: null, frameAt0: 0, lastMoveAt: -1e9,
   freeBall: null,         // a shot / pass in the air (nobody controls the ball): { kind, t, through }
   phys: null,             // BasketballPhysicsSystem (Rapier) — the ball's only authority
   body0: null, intent0: null, dbgBall: false, lab: null,
   lastBall: new THREE.Vector3(),
   cam: 'chase', camYaw: 0, camDist: 5.2, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(),
   dbg: false, toastUntil: 0,
+  stickLog: [], stickNoteUntil: 0,   // the pro stick: every gesture and where it went (window.__stick.log()), its note
+  stickPrev: null,                   // the last gesture it routed (the double crossover: a crossover flick, then straight back)
 };
 try { S.speed = parseFloat(localStorage.getItem('court3d_speed')) || 1; } catch {}
 $('speed').value = S.speed; $('speedLbl').textContent = S.speed.toFixed(2) + '×';
@@ -792,7 +1005,7 @@ function toggleDbg() { S.dbg = !S.dbg; $('dbgBtn').classList.toggle('on', S.dbg)
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function toast(html, ms = 2600) { const t = $('toast'); t.innerHTML = html; t.style.display = 'block'; S.toastUntil = performance.now() + ms; }
 
-const ROLE_NAMES = { 'move-double-cross': 'double crossover', 'move-crossover': 'crossover', 'move-spin': 'spin move', 'move-hesi': 'hesitation', 'move-btl': 'between-the-legs', 'shot-jumper': 'jump shot', 'shot-stepback': 'step-back jumper' };
+const ROLE_NAMES = { 'move-double-cross': 'double crossover', 'move-crossover': 'crossover', 'move-spin': 'spin move', 'move-hesi': 'hesitation', 'move-btl': 'between-the-legs', 'move-btb': 'behind the back', 'move-inout': 'in-and-out', 'move-stepback': 'step-back', 'move-sizeup': 'size-up', 'shot-jumper': 'jump shot', 'shot-stepback': 'step-back jumper' };
 function trigger(role) {
   const p = S.player;
   // (the contact system buffers a request and fires it in a valid window — a move may chain)
@@ -805,6 +1018,27 @@ function shotRole(moving) {
   if (moving && L['shot-stepback']) return 'shot-stepback';
   if (L['shot-jumper']) return 'shot-jumper';
   return L['shot-stepback'] ? 'shot-stepback' : 'shot-jumper';
+}
+/** The pro stick's note (bottom centre): a move with no clip yet, or the move it fell back to. */
+function stickNote(text, ms = 1300) { const el = $('stickNote'); setText(el, text); el.style.display = 'block'; S.stickNoteUntil = performance.now() + ms; }
+/**
+ * A right-stick gesture (engine3d/pro-stick.mjs) → the move: relative to his facing and the ball hand, the role
+ * the library has (a move with no clip falls back: behind the back → between the legs → crossover → the crossover
+ * dribble). Ignored with no ball, the shot button held or a shot playing (never buffered). Logged either way.
+ * @returns the role to request, or null
+ */
+function stickMove(g, camFwd, camRight, shootHeld) {
+  const P = S.player;
+  const res = PS.routeGesture(g, { P, ctl: S.ball ? S.ball.ctl : { heldHand: S.phys?.heldHand }, lib: P.lib, camFwd, camRight, shootHeld, prev: S.stickPrev });
+  S.stickPrev = res.combo ? null : res;
+  S.stickLog.push({ t: +(S.gameT || 0).toFixed(3), ...res, a: +g.a.toFixed(1), theta: res.theta != null ? +res.theta.toFixed(1) : null });
+  if (S.stickLog.length > 200) S.stickLog.shift();
+  if (res.ignored) return null;
+  const note = PS.gestureNote(res, ROLE_NAMES);
+  if (note) stickNote(note); else if (S.dbgBall) stickNote(PS.GESTURE_NAMES[res.gesture] + (res.kind === 'hold' ? ' (hold)' : ''), 900);
+  if (res.handSwitch) { if (P.mode === 'loco') switchHand(); return null; }
+  S.stickHand = res.hand || null;   // (the hand the ball was in when it was read: a double crossover fired later from the other hand is a crossover back)
+  return res.role ? trigger(res.role) : null;
 }
 
 // ═══ The ball in play (physics owns it; these only give it impulses) ═══
@@ -841,7 +1075,7 @@ function resetPossession() {
   if (S.ball) {
     S.ball.log(`new possession (was ${S.ball.state})`);
     P.giveBall(); P.syncDribbleToCatch();
-    poseCharacter(S.rig, P.update(1 / 120, { face: HOOP }).pose);
+    poseCharacter(S.rig, P.update(1 / 120, { face: faceAt() }).pose);
     S.ball.reset(boneMats, S.gameT || 0);
     S.freeBall = null; S.lostToast = false;
     return;
@@ -850,7 +1084,7 @@ function resetPossession() {
   P.giveBall(); P.syncDribbleToCatch();
   // pose the body at that catch frame BEFORE placing the ball on its palm (else the ball appears
   // where the hand was a moment ago, and the hand never takes it)
-  poseCharacter(S.rig, P.update(1 / 120, { face: HOOP }).pose);
+  poseCharacter(S.rig, P.update(1 / 120, { face: faceAt() }).pose);
   const J = mhrRig ? IK.jointAccessor(boneMats, mhrRig) : null;
   const body = J ? BP.bodySampleFromJoints(J, ph.cfg, null) : null;
   const hand = P.ballIntent()?.hand || P.hand || 'right';
@@ -952,13 +1186,8 @@ function ballStep(dt, r, now) {
 function ballStepContact(dt, r, now) {
   const ph = S.phys, P = S.player;
   const body = mhrRig ? BP.bodySampleFromJoints(IK.jointAccessor(boneMats, mhrRig), ph.cfg, null) : null;
-  const before = S.ball.ctl.p.slice();
   const out = S.ball.step(S.gameT || 0, dt, r, boneMats, body);
-  // a shot through the net: the ball crosses the rim plane downward inside the ring
-  if (out.state === 'SHOT_RELEASE' && before[1] > RIM_Y && out.p[1] <= RIM_Y && Math.hypot(out.p[0], out.p[2]) < RIM_R - 0.03 && !S.ball.free?.through) {
-    if (S.ball.free) S.ball.free.through = true;
-    net.scale.set(0.9, 1.15, 0.9); S.swishAt = now; S.swishes = (S.swishes || 0) + 1;
-  }
+  // (a shot through the net: the session's 'make' event — ballEvent)
   if (out.state === 'LOOSE' && !S.lostToast && (S.ball.free?.t || 0) > 0.4) { S.lostToast = true; toast('Ball loose — walk to it to pick it up, or press <b>X</b> / <b>✕</b> for a new ball.', 3500); }
   ball.position.set(out.p[0], out.p[1], out.p[2]);
   ball.quaternion.set(out.q[0], out.q[1], out.q[2], out.q[3]);
@@ -974,8 +1203,10 @@ function ballStepContact(dt, r, now) {
 function ballEvent(e) {
   if (e.type === 'recovery') { S.ballLog?.push(`${(S.gameT || 0).toFixed(2)} recovery: ${e.reason}`); if (S.dbgBall) console.warn('[ball] recovery', e.reason); }
   if (e.type === 'catch') S.lostToast = false;
-  // the shot that just left the hands (its outcome / aim / flight time): a shot meter reads it
+  // the shot that just left the hands (its outcome / aim / flight time, the meter's grade)
   if (e.type === 'shot') { S.lastShot = S.ball?.lastShot || { ...e }; S.shotsTaken = (S.shotsTaken || 0) + 1; }
+  // through the net (the ball crossed the rim plane downward inside the ring): the net flicks
+  if (e.type === 'make') { net.scale.set(0.9, 1.15, 0.9); S.swishAt = performance.now(); S.swishes = (S.swishes || 0) + 1; S.makeLabel = (e.touched || []).some((n) => n === 'rim' || n === 'board') ? 'MAKE' : 'SWISH'; }
 }
 /** How much each hand should reach for the ball, from the controller state. */
 function ikControl(ph, body) { return ph.ikControl(body); }
@@ -1161,6 +1392,10 @@ function drawBallContactDbg() {
     B.lastHands ? `hands     ${['left', 'right'].map((h) => { const x = B.lastHands[h]; return `${h[0].toUpperCase()} ${x.depth == null ? 'far' : x.depth > 0 ? `⚠ ${(x.depth * 1000).toFixed(1)} mm in` : `${(-x.depth * 1000).toFixed(1)} mm clear`} · push ${f2(x.palmPush + x.residual)} · grip ${(B.gripW[h] * 100).toFixed(0)}%`; }).join(' | ')}` : 'hands     joint pass (no hand skin)',
     `next      ${nx || '—'}`,
     plan ? `flight    ${plan.kind} ${plan.fromHand}→${plan.toHand} · bounce ${plan.tb != null ? (plan.tb - B.t).toFixed(2) + 's' : '—'} · catch ${(plan.tc - B.t).toFixed(2)}s` : 'flight    —',
+    // (the shot meter: its phase; the last shot — its grade, its outcome, bent in the air, in or out)
+    `shot      meter ${S.meter?.enabled ? S.meter.phase : 'off'}${B.lastShot ? ` · last ${B.lastShot.meter ? `${B.lastShot.meter.label} (${Math.round(B.lastShot.meter.e * 1000)} ms) → ` : B.lastShot.provisional ? 'held → ' : ''}${B.lastShot.outcome}${B.lastShot.reaimed ? ' (bent in the air)' : ''}${B.lastShot.result ? (B.lastShot.result.made ? ' · in' : ' · out') : ''}` : ''}`,
+    // (the pro stick: its last gesture — kind, move, θ from his facing toward the free hand — and where it went)
+    `stick     ${PAD_MODE === 'classic' ? 'classic (face buttons)' : (() => { const q = S.stickLog.at(-1); return q ? `${q.kind} ${q.gesture || ''}${q.theta != null ? ` θ ${q.theta}°` : ''}${q.hand ? ' (' + q.hand + ')' : ''} → ${q.ignored ? 'ignored: ' + q.ignored : q.role ? q.role + (q.fellBack ? ' (fallback)' : '') : q.handSwitch ? 'hand switch' : 'no clip'}` : '—'; })()}`,
     `stats     ${C.stats.releases} releases · ${C.stats.bounces} bounces · ${C.stats.catches} catches · catch err ${f2(C.stats.maxCatchErr)} · leg slides ${C.stats.legSlides || 0}`,
     `safety    recoveries ${C.recoveries} · rejected ${C.rejected} · floor fixes ${C.stats.floorViolations} · buffer ${B.buffer.map((b) => b.role).join(', ') || '—'}`,
     ...C.log.slice(-5),
@@ -1259,6 +1494,7 @@ function updateCamera(dt, inp) {
   S.camYaw += inp.cx * dt * 1.8;
   S.camDist = Math.max(2.2, Math.min(14, S.camDist + inp.cy * dt * 3));
   const pp = S.player.pos, p = new THREE.Vector3(pp[0], 0, pp[1]);
+  if (LOFT.where === 'loft' && LOFT.asset) return loftCamera(dt, inp, p);
   let want, look;
   if (S.cam === 'chase') {
     // 2K-style: behind the ball handler, looking past them at the basket
@@ -1274,10 +1510,441 @@ function updateCamera(dt, inp) {
     want = p.clone().add(new THREE.Vector3(Math.sin(S.camYaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(S.camYaw) * Math.cos(pitch)).multiplyScalar(S.camDist)).add(new THREE.Vector3(0, 1, 0));
     look = p.clone().add(new THREE.Vector3(0, 1.1, 0));
   }
-  const k = 1 - Math.exp(-dt * 6);
+  const k = S.camSnap ? 1 : 1 - Math.exp(-dt * 6);   // (snapped after a teleport through the loft's door)
+  S.camSnap = false;
   if (S.camFixed) { S.camPos.set(...S.camFixed.pos); S.camLook.set(...S.camFixed.look); }   // tests: a camera held still
-  else { S.camPos.lerp(want, k); S.camLook.lerp(look, k); }
+  else {
+    S.camPos.lerp(want, k); S.camLook.lerp(look, k);
+    // the loft's stair-house is never between the camera and the player: the camera comes in front of it
+    if (S.door) {
+      camHead.set(p.x, 1.45, p.z); camV.subVectors(S.camPos, camHead); const L = camV.length();
+      if (L > 1e-3) { camRay.ray.set(camHead, camV.divideScalar(L)); if (camRay.ray.intersectBox(S.door.box, camHit)) { const t = camHit.distanceTo(camHead); if (t < L) S.camPos.copy(camHead).addScaledVector(camV, Math.max(0.6, t - 0.1)); } }
+    }
+  }
   camera.position.copy(S.camPos); camera.lookAt(S.camLook);
+}
+
+// ═══ The shot meter (2K style): a bar beside the shooter (engine3d/shot-meter.mjs view()) ═══
+const SMV = { el: $('shotMeter'), shown: false, w: 0, h: 0, p: new THREE.Vector3(), right: new THREE.Vector3() };
+for (const k of ['bar', 'late', 'green', 'fill', 'mark', 'fb', 'res', 'txt']) SMV[k] = SMV.el.querySelector('.sm-' + k);
+window.addEventListener('resize', () => { SMV.w = 0; });
+const pct = (f) => (Math.max(0, Math.min(1, f)) * 100).toFixed(2) + '%';
+function drawShotMeter() {
+  const v = S.meter && S.ball && !S.replay && !S.lab ? S.meter.view(S.gameT || 0) : null;
+  const hide = () => { if (SMV.shown) { SMV.el.style.display = 'none'; SMV.shown = false; } };
+  if (!v?.visible || v.fade <= 0) return hide();
+  if (!SMV.shown) { SMV.el.style.display = 'block'; SMV.shown = true; }
+  if (!SMV.w) { SMV.w = SMV.bar.offsetWidth; SMV.h = SMV.bar.offsetHeight; }
+  // (the texts first: the label / result above the bar size how far it keeps from the screen's edges)
+  setText(SMV.fb, v.label); SMV.fb.style.color = v.color;
+  setText(SMV.res, v.result); SMV.res.style.color = v.resultColor;
+  // beside the shooter at chest height, to the camera's right — in the picture, clear of its edges
+  const P = S.player, ls = S.rig?.ls || 1;
+  camera.updateMatrixWorld();
+  SMV.right.setFromMatrixColumn(camera.matrixWorld, 0);
+  SMV.p.set(P.pos[0], 1.25 * ls, P.pos[1]).addScaledVector(SMV.right, 0.55 * ls).project(camera);
+  if (SMV.p.z > 1) return hide();   // (behind the camera)
+  const W = innerWidth, H = innerHeight, room = 16 + 128;   // (the grade and the result above the bar)
+  // (the label is centred over the bar: wider than it, it keeps the bar that much further from the edges)
+  const over = Math.max(0, (SMV.txt.offsetWidth - SMV.w) / 2);
+  const x = Math.max(16 + over, Math.min(W - 16 - over - SMV.w, (SMV.p.x * 0.5 + 0.5) * W - SMV.w / 2));
+  const y = Math.max(room, Math.min(H - 16 - SMV.h, (-SMV.p.y * 0.5 + 0.5) * H - SMV.h / 2));
+  SMV.el.style.transform = `translate3d(${x.toFixed(1)}px,${y.toFixed(1)}px,0)`;
+  SMV.el.style.opacity = v.fade.toFixed(3);
+  // the bar: white while it fills, the grade's colour where the button came up; the green window on the mark
+  SMV.fill.style.height = pct(v.fill); SMV.fill.style.background = v.grade ? v.color : '#fff';
+  SMV.green.style.bottom = pct(v.band[0]); SMV.green.style.height = pct(v.band[1] - v.band[0]);
+  SMV.late.style.height = pct(1 - v.mark); SMV.mark.style.bottom = pct(v.mark);
+}
+
+// ═══ The loft (engine3d/loft.mjs): ✕ at the court's door → a short fade → the loft (loaded on first entry,
+// usually preloaded: near the door or once the page is idle; kept for later entries), the court world hidden
+// and restored exactly on the way out. He keeps the ball (every move works in there); there is no hoop. ═══
+const LOFT = {
+  enabled: QS.get('loft') !== '0', preload: QS.get('loftpreload') !== '0',
+  where: 'court',             // 'court' | 'loft'
+  asset: null, loading: null, progress: null, error: null, bytes: null, prefetch: null,
+  want: false, panel: false,  // ✕ pressed before it was ready: go in when it is · the load panel is up
+  trans: null, fade: 0,       // the transition { to, phase: 'out' | 'hold' | 'in' } and the black's opacity
+  saved: null, W: null, prompt: null, cool: 0, face: 0, camH: 0, prevPos: null,
+  env: null, shadowDirty: false, readyAt: 0, blob: null, upload: null, warm: null,
+};
+const FADE_S = 0.35;
+const shotInAirNow = () => (S.ball ? S.ball.free?.kind === 'shot' : S.freeBall?.kind === 'shot');
+/** The door (either way) can be used now: no replay / lab / transition, no shot on (held, playing, in the air). */
+function loftUsable() {
+  const P = S.player;
+  if (!LOFT.enabled || !P || S.replay || S.lab || LOFT.trans) return false;
+  if (shotInAirNow() || P.action?.clip?.shot) return false;
+  if (S.meter && S.meter.phase !== 'idle' && S.meter.phase !== 'result') return false;
+  return true;
+}
+const doorDist = () => Math.hypot(S.player.pos[0] - DOOR.px, S.player.pos[1] - DOOR.pz);
+/** Where the player faces: the hoop on the court; in the loft, where he walks (kept while he stands). */
+function faceAt() {
+  const P = S.player;
+  if (LOFT.where !== 'loft' || !P) return HOOP;
+  return [P.pos[0] + Math.sin(LOFT.face) * 4, P.pos[1] + Math.cos(LOFT.face) * 4];
+}
+function loftLoadPanel() {
+  const el = $('loftLoad');
+  if (!LOFT.panel) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const pr = LOFT.progress, err = LOFT.error && !LOFT.loading;
+  setText($('loftLoadT'), err ? 'The loft could not load' : 'Loading the loft…');
+  let pct = 0, sub = '';
+  if (pr?.phase === 'download') { pct = pr.total ? (pr.got / pr.total) * 90 : 0; sub = `${(pr.got / 1e6).toFixed(1)}${pr.total ? ' / ' + (pr.total / 1e6).toFixed(1) : ''} MB`; }
+  else if (pr?.phase === 'unpack') { pct = 93; sub = 'unpacking…'; }
+  else if (LOFT.asset) pct = 100;
+  if (!err) setText($('loftLoadT'), `Loading the loft… ${Math.round(pct)}%`);
+  $('loftLoadBar').style.width = pct.toFixed(1) + '%';
+  $('loftLoadTrack').style.display = err ? 'none' : '';
+  setText($('loftLoadSub'), err ? 'You are still on the court.' : sub);
+  setText($('loftLoadErr'), err ? LOFT.error : '');
+  $('loftRetry').style.display = err ? '' : 'none';
+  $('loftCancel').style.display = err ? '' : 'none';
+}
+const loftProgress = (phase, got, total) => { LOFT.progress = { phase, got, total }; };
+/** The loft's bytes only (the idle preload: ~the file's size in memory, nothing decoded). */
+function loftPrefetch() {
+  if (LOFT.asset || LOFT.bytes || LOFT.loading || LOFT.prefetch) return;
+  LOFT.progress = { phase: 'layout', got: 0, total: 0 };
+  LOFT.prefetch = LM.fetchLoft({ onProgress: loftProgress })
+    .then((b) => { LOFT.bytes = b; })
+    .catch((e) => { LOFT.error = esc(e.message || String(e)); console.warn('[loft] prefetch failed', e); })
+    .finally(() => { LOFT.prefetch = null; });
+}
+/**
+ * Load the loft (once; a failed load can be tried again): its bytes (fetched ahead, or now) decoded into the
+ * room. user: the player asked for it (the panel shows it).
+ */
+function loftLoad(user) {
+  if (user) { LOFT.panel = true; LOFT.want = true; }
+  if (LOFT.asset || LOFT.loading) return LOFT.loading;
+  LOFT.error = null; if (!LOFT.prefetch) LOFT.progress = { phase: 'layout', got: 0, total: 0 };
+  const t0 = performance.now();
+  LOFT.loading = (async () => {
+    if (LOFT.prefetch) await LOFT.prefetch;   // (bytes on their way: theirs — or, if they failed, fetched again)
+    const f = LOFT.bytes || await LM.fetchLoft({ onProgress: loftProgress });
+    LOFT.bytes = null;                        // (decoded once: the room is kept, not its bytes)
+    const [{ GLTFLoader }, { DRACOLoader }] = await Promise.all([import('/vendor/three-addons/GLTFLoader.js'), import('/vendor/three-addons/DRACOLoader.js')]);
+    const a = await LM.buildLoft({ THREE, GLTFLoader, DRACOLoader, renderer, layout: f.layout, buffer: f.buffer, fetchMs: f.ms, quality: LITE ? 'mobile' : 'desktop',
+      // (lite devices: textures at most 1024 px — the full set is ~1.5 GB of GPU memory; ?loftq=full keeps them)
+      maxTexture: LITE && QS.get('loftq') !== 'full' ? 1024 : Infinity,
+      onProgress: loftProgress });
+    // the polished floor's planar reflection (desktop; never on lite devices). It draws the room a second time
+    // every frame: with the baked room (unlit materials) that is cheap — an M1 182 → 93 fps uncapped — and the
+    // baked floor has no other gloss, so it is on; with lit materials (60 → 37 fps) only on request.
+    // ?loftmirror=0 off · ?loftmirror=1 on · ?loftmirror=0.5 half as strong
+    const mq = QS.get('loftmirror');
+    let floorBaked = false;
+    a.root.traverse((o) => { if (o.isMesh && /^(lm-)?floor$/.test(o.name) && o.material?.userData?.lightmapped) floorBaked = true; });
+    if (!LITE && mq !== '0' && (mq || floorBaked)) {
+      try { const { Reflector } = await import('/vendor/three-addons/Reflector.js'); a.mirror = LM.addFloorMirror(THREE, Reflector, a, { amount: +mq || 1 }); }
+      catch (e) { console.warn('[loft] floor reflection', e); }
+    }
+    return a;
+  })().then((a) => {
+    a.group.position.set(...LM.LOFT_ORIGIN); a.group.updateMatrixWorld(true);
+    a.boxesWorld = a.boxes.map((b) => b.clone().translate(a.group.position));
+    LOFT.asset = a; LOFT.W = LM.worldLayout(a.layout);
+    // (the layout's own grade, if it names one: "contrast(c) saturate(s)" — nothing AgX has been compiled yet)
+    const cf = a.layout.baked?.canvasFilter, mc = /contrast\(([\d.]+)\)/.exec(cf || ''), ms = /saturate\(([\d.]+)\)/.exec(cf || '');
+    if (mc || ms) setLoftGrade(mc ? +mc[1] : 1, ms ? +ms[1] : 1);
+    a.stats.readyMs = Math.round(performance.now() - t0);
+    loftColliders(a);
+    LOFT.loading = null;
+    LOFT.upload = [...a.textures];   // (onto the GPU a few at a time while he is still on the court: loftFrame)
+    if (LOFT.want) {
+      LOFT.want = false; LOFT.panel = false;
+      if (LOFT.where === 'court' && loftUsable() && doorDist() < 1.5) loftGo('loft');
+      else toast('The loft is ready — press <b>✕</b> / <b>X</b> at the door.');
+    }
+  }).catch((e) => {
+    LOFT.loading = null;
+    LOFT.error = esc(e.message || String(e));
+    console.warn('[loft] load failed', e);
+  });
+  return LOFT.loading;
+}
+/** The room's walls (and the furniture, knee high) for a loose ball — far from the court, never in its way. */
+function loftColliders(a) {
+  if (!S.phys || a.colliders) return;
+  const W = LOFT.W, b = W.bounds, R = LM.PLAYER_R, H = 3;
+  const wall = (cx, cz, hx, hz) => S.phys.addStaticBox([cx, H, cz], [hx, H, hz], { kind: 'wall', restitution: 0.4 });
+  const x0 = b.minX - R, x1 = b.maxX + R, z0 = b.minZ - R, z1 = b.maxZ + R;
+  wall(x0 - 0.25, (z0 + z1) / 2, 0.25, (z1 - z0) / 2 + 0.5); wall(x1 + 0.25, (z0 + z1) / 2, 0.25, (z1 - z0) / 2 + 0.5);
+  wall((x0 + x1) / 2, z0 - 0.25, (x1 - x0) / 2 + 0.5, 0.25); wall((x0 + x1) / 2, z1 + 0.25, (x1 - x0) / 2 + 0.5, 0.25);
+  for (const c of W.colliders) S.phys.addStaticBox([(c.minX + c.maxX) / 2, 0.45, (c.minZ + c.maxZ) / 2], [(c.maxX - c.minX) / 2, 0.45, (c.maxZ - c.minZ) / 2], { kind: 'props', restitution: 0.3 });
+  a.colliders = true;
+}
+/** What stays visible in the loft: the player (every LOD, his clothes), his ball, debug / editor overlays. */
+function carriesIntoLoft(o) {
+  return charMeshes.includes(o) || o === ball || o.userData?.garment || o.userData?.loftOnly || o === dbg.group || o === cdbg.group
+    || o === plantMarks.left || o === plantMarks.right || o === CE.pl || o === CE.pr || CE.rings.includes(o);
+}
+/** A soft dark spot under the player and the ball (the room's shadow is drawn once, without them). */
+function loftBlobs() {
+  if (LOFT.blob) return LOFT.blob;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), grd = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grd.addColorStop(0, 'rgba(0,0,0,.62)'); grd.addColorStop(0.55, 'rgba(0,0,0,.3)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  const mk = () => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+    m.rotation.x = -Math.PI / 2; m.renderOrder = 3; m.visible = false; m.userData.loftOnly = true; scene.add(m); return m; };
+  LOFT.blob = { player: mk(), ball: mk() };
+  return LOFT.blob;
+}
+/** The room's environment, drawn once (reflections, the player's ambient light); then its decoded textures go. */
+function loftEnvironment(a) {
+  const t0 = Date.now();   // (wall-clock: for the tests)
+  LOFT.env = LM.captureEnvironment(THREE, renderer, a, { size: LITE ? 128 : 256, background: a.layout.background || '#000' });
+  const t1 = Date.now();
+  // (every texture is on the GPU now: the decoded copies in memory go — ?loftkeep=1 keeps them)
+  LOFT.upload = null;   // (whatever is left goes up now, with the release)
+  if (QS.get('loftkeep') !== '1') a.stats.releasedMB = LM.releaseCpuImages(renderer, a);
+  a.stats.firstEntry = { envMs: t1 - t0, releaseMs: Date.now() - t1, early: LOFT.where === 'court' && !LOFT.trans };
+}
+/**
+ * Before he goes in (on the court, the room loaded and on the GPU): its shaders compiled in parallel — first as
+ * the environment capture draws them, then the environment, then the room's and the player's as they will be
+ * drawn inside (AgX, the room's lights and environment). The first entry is then as quick as the others.
+ * Stops wherever the player has started through the door meanwhile.
+ */
+async function loftWarm() {
+  const a = LOFT.asset;
+  if (!a || LOFT.warm) return;
+  LOFT.warm = 'busy';
+  const t0 = Date.now();
+  const free = () => LOFT.where === 'court' && !LOFT.trans && a.group.parent !== scene;
+  const take = (sc) => { if (!free()) return false; sc.add(a.group); return true; };
+  const give = (sc) => { if (a.group.parent === sc) sc.remove(a.group); };
+  try {
+    if (!LOFT.env) {
+      const tmp = new THREE.Scene(), rt = new THREE.WebGLCubeRenderTarget(16, { type: THREE.HalfFloatType });
+      if (!take(tmp)) return;
+      renderer.setRenderTarget(rt);   // (render-target variants: no tone mapping, linear output)
+      let p;
+      try { p = renderer.compileAsync(tmp, camera); } finally { renderer.setRenderTarget(null); give(tmp); }
+      await p; rt.dispose();
+      if (!free() || LOFT.env) return;
+      loftEnvironment(a);
+    }
+    const tgt = new THREE.Scene(); tgt.environment = LOFT.env; tgt.background = new THREE.Color(a.layout.background || '#000');
+    if (!take(tgt)) return;
+    const tm = renderer.toneMapping; renderer.toneMapping = THREE.AgXToneMapping;
+    let ps;
+    try {
+      // (the player, his ball and clothes as they will be drawn in there — the fake scene lends them to compile)
+      const carry = { traverseVisible() {}, traverse(cb) { for (const o of scene.children) if (carriesIntoLoft(o)) o.traverse(cb); } };
+      ps = [renderer.compileAsync(tgt, camera), renderer.compileAsync(carry, camera, tgt)];
+    } finally { renderer.toneMapping = tm; give(tgt); }
+    await Promise.all(ps);
+    a.stats.warmMs = Date.now() - t0;
+  } catch (e) { console.warn('[loft] warm-up', e); }
+  finally { LOFT.warm = 'done'; }
+}
+/** At black: the court world out, the loft in (all or nothing — a failure puts the court back as it was). */
+function enterLoft() {
+  const a = LOFT.asset, W = LOFT.W, P = S.player;
+  // first entry: the room's own environment (reflections, the player's ambient light), drawn once
+  if (!LOFT.env) loftEnvironment(a);
+  const sv = { bg: scene.background, fog: scene.fog, env: scene.environment, envI: scene.environmentIntensity, tm: renderer.toneMapping, exp: renderer.toneMappingExposure,
+    near: camera.near, far: camera.far, camYaw: S.camYaw, camDist: S.camDist, hidden: [] };
+  try {
+    for (const o of scene.children) if (o.visible && !carriesIntoLoft(o)) { o.visible = false; sv.hidden.push(o); }
+    scene.add(a.group);
+    scene.background = new THREE.Color(a.layout.background || '#000');
+    scene.fog = null;
+    scene.environment = LOFT.env;   // (its strength is set per material: loft.mjs)
+    renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = LM.loftExposure(a.layout);
+    camera.near = 0.05; camera.far = 220; camera.updateProjectionMatrix();
+    LOFT.saved = sv; LOFT.where = 'loft';
+    LOFT.face = W.spawn.yaw; LOFT.camH = W.spawn.yaw; S.camYaw = 0;
+    P.teleport(W.spawn.x, W.spawn.z, W.spawn.yaw);   // (a new possession: the ball in his hand)
+    LOFT.prevPos = [P.pos[0], P.pos[1]];
+    S.outfit?.resetCloth();
+    const bl = loftBlobs(); bl.player.visible = bl.ball.visible = true;
+    LOFT.shadowDirty = true; S.camSnap = true;
+  } catch (e) {
+    LOFT.saved = sv; restoreCourt();
+    // (if he was already moved in: back outside the court's door)
+    try { if (Math.hypot(P.pos[0] - W.spawn.x, P.pos[1] - W.spawn.z) < 20) P.teleport(DOOR.x, DOOR.z + 0.95, Math.atan2(HOOP[0] - DOOR.x, HOOP[1] - DOOR.z - 0.95)); } catch {}
+    throw e;
+  }
+}
+/** The court world back exactly as it was (visibility, background, fog, environment, tone mapping, camera). */
+function restoreCourt() {
+  const sv = LOFT.saved; if (!sv) return;
+  if (LOFT.asset) scene.remove(LOFT.asset.group);
+  for (const o of sv.hidden) o.visible = true;
+  scene.background = sv.bg; scene.fog = sv.fog; scene.environment = sv.env; scene.environmentIntensity = sv.envI;
+  renderer.toneMapping = sv.tm; renderer.toneMappingExposure = sv.exp;
+  camera.near = sv.near; camera.far = sv.far; camera.updateProjectionMatrix();
+  S.camYaw = sv.camYaw; S.camDist = sv.camDist;
+  if (LOFT.blob) LOFT.blob.player.visible = LOFT.blob.ball.visible = false;
+  LOFT.saved = null; LOFT.where = 'court';
+}
+function exitLoft() {
+  restoreCourt();
+  // just outside the court's door, facing the court (its hoop)
+  const x = DOOR.x, z = DOOR.z + 0.95;
+  S.player.teleport(x, z, Math.atan2(HOOP[0] - x, HOOP[1] - z));
+  S.outfit?.resetCloth();
+  S.camSnap = true;
+}
+/** ✕ at the door: fade out, swap at black (the first time also the room's environment and shaders), fade in. */
+async function loftGo(to) {
+  if (LOFT.trans) return;
+  const fadeTo = (v) => new Promise((res) => { LOFT.trans.target = v; LOFT.trans.done = res; });
+  LOFT.trans = { to, phase: 'out' };
+  $('fade').style.display = 'block';
+  await fadeTo(1);
+  LOFT.trans.phase = 'hold';
+  if (to === 'loft' && !LOFT.env) {
+    // (the first entry draws the room's environment and compiles its shaders: a moment at black — said so)
+    $('fade').textContent = 'Opening the loft…';
+    for (let i = 0; i < 2; i++) await new Promise((r) => requestAnimationFrame(() => r()));
+  }
+  try {
+    if (to === 'loft') {
+      const t0 = Date.now();
+      enterLoft();
+      const t1 = Date.now();
+      try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); } catch {}
+      LOFT.lastEntry = { swapMs: t1 - t0, compileMs: Date.now() - t1 };
+    }
+    else exitLoft();
+  } catch (e) {
+    console.error('[loft] swap failed', e);
+    toast(`The loft could not open (${esc(e.message || e)}) — you are still on the court.`, 5000);
+  }
+  $('fade').textContent = '';
+  if (S.meter && S.lastInp?.shoot) S.meter.notAShot();   // (□ held through the door is not a shot)
+  LOFT.trans.phase = 'in';
+  await fadeTo(0);
+  $('fade').style.display = 'none';
+  LOFT.trans = null; LOFT.cool = 0.5;
+}
+/** Every frame (before the game ticks): the fade, the prompt, ✕ at the door, the preload. Returns the input to play. */
+function loftFrame(inp, rdt, now) {
+  const P = S.player;
+  if (!LOFT.enabled || !P) return inp;
+  LOFT.cool = Math.max(0, LOFT.cool - rdt);
+  const T = LOFT.trans;
+  if (T) {
+    if (T.phase !== 'hold') {
+      LOFT.fade = T.target > LOFT.fade ? Math.min(T.target, LOFT.fade + rdt / FADE_S) : Math.max(T.target, LOFT.fade - rdt / FADE_S);
+      $('fade').style.opacity = LOFT.fade.toFixed(3);
+      if (LOFT.fade === T.target && T.done) { const d = T.done; T.done = null; d(); }
+    }
+    showPrompt(null);
+    // (no walking / moves / shots through a doorway)
+    return { ...inp, mx: 0, my: 0, shoot: false, sprint: false, edge: {}, stick: null };
+  }
+  // the prompt: at the court's door, or at the loft's exit
+  let kind = null;
+  if (loftUsable()) {
+    if (LOFT.where === 'court' && doorDist() < 1.5) kind = 'enter';
+    else if (LOFT.where === 'loft' && LOFT.W && Math.hypot(P.pos[0] - LOFT.W.exit.x, P.pos[1] - LOFT.W.exit.z) < LOFT.W.exit.r) kind = 'exit';
+  }
+  showPrompt(kind);
+  if (kind && inp.edge.door) {
+    // ✕ goes through the door — and nothing else (no new ball, no hesitation; also not right after a door)
+    inp = { ...inp, edge: { ...inp.edge, ball: false, ballTap: false, door: false, hesi: inp.edge.hesiKey ? inp.edge.hesi : false } };
+    if (LOFT.cool > 0) { /* (just came through: a second press is not taken) */ }
+    else if (kind === 'exit') loftGo('court');
+    else if (LOFT.asset) loftGo('loft');
+    else loftLoad(true);
+  }
+  // the room's textures onto the GPU a few per frame (~6 ms) before he goes in: the first entry is not held at
+  // black for their upload (~2.5 s for the full set on an M1)
+  if (LOFT.upload?.length && LOFT.where === 'court') {
+    const t0 = Date.now();
+    do renderer.initTexture(LOFT.upload.pop()); while (LOFT.upload.length && Date.now() - t0 < 6);
+    if (!LOFT.upload.length) loftWarm();
+  }
+  // walking away from the door puts the load panel away (a load still on goes on: a toast when it is ready)
+  if (LOFT.panel && LOFT.where === 'court' && doorDist() > 4) { LOFT.panel = false; if (!LOFT.loading) LOFT.want = false; }
+  // preload: once the page has been idle a while (court and clips loaded) its bytes; near the door the room
+  // itself (decoded, ready to go in)
+  if (LOFT.preload && LOFT.where === 'court' && !LOFT.asset && !LOFT.loading && !LOFT.error && window.__c3dReady) {
+    if (doorDist() < 8) loftLoad(false);
+    else if (S.loadingRest === 0 && now - LOFT.readyAt > 5000) loftPrefetch();
+  }
+  loftLoadPanel();
+  return inp;
+}
+function showPrompt(kind) {
+  if (kind === LOFT.prompt) return;
+  LOFT.prompt = kind;
+  const el = $('doorPrompt');
+  if (!kind) { el.style.display = 'none'; return; }
+  setText($('doorTxt'), kind === 'enter' ? 'Enter the loft' : 'Back to the court');
+  setText($('doorKey'), TOUCH ? '' : 'X / ✕');
+  el.style.display = 'block';
+}
+$('doorPrompt').addEventListener('pointerdown', (e) => { e.preventDefault(); touch.door = true; });
+$('loftRetry').onclick = (e) => { e.currentTarget.blur(); LOFT.error = null; loftLoad(true); };
+$('loftCancel').onclick = (e) => { e.currentTarget.blur(); LOFT.panel = false; LOFT.want = false; loftLoadPanel(); };
+/** The loft's camera: behind him, its heading following his facing lazily; never through a wall or the ceiling. */
+const camRay = new THREE.Raycaster(), camV = new THREE.Vector3(), camHead = new THREE.Vector3(), camHit = new THREE.Vector3();
+function loftCamera(dt, inp, p) {
+  const P = S.player, sp = Math.hypot(P.vel[0], P.vel[1]);
+  // (only as far as he heads away from the camera: walking across the screen he strafes in a straight line,
+  // walking toward it he comes at the camera — no circling)
+  const d = LM.angleTo(LOFT.camH, P.yaw), align = Math.max(0, Math.cos(d));
+  if (sp > 0.3) LOFT.camH += d * (1 - Math.exp(-dt * 1.5 * align * Math.min(1, sp / 2.5)));
+  const dist = Math.min(S.camDist, 3.6), h = LOFT.camH + S.camYaw, f = new THREE.Vector3(Math.sin(h), 0, Math.cos(h));
+  let want, look;
+  if (S.cam === 'side') { const r = new THREE.Vector3(-f.z, 0, f.x); want = p.clone().addScaledVector(r, -3).add(new THREE.Vector3(0, 1.7, 0)); look = p.clone().add(new THREE.Vector3(0, 1.1, 0)); }
+  else if (S.cam === 'free') {
+    const pitch = S.camPitch ?? 0.35;
+    want = p.clone().add(new THREE.Vector3(Math.sin(S.camYaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(S.camYaw) * Math.cos(pitch)).multiplyScalar(dist)).add(new THREE.Vector3(0, 1, 0));
+    look = p.clone().add(new THREE.Vector3(0, 1.1, 0));
+  } else {
+    want = p.clone().addScaledVector(f, -dist).add(new THREE.Vector3(0, 1.85, 0));
+    look = p.clone().addScaledVector(f, 1.6).add(new THREE.Vector3(0, 1.2, 0));
+  }
+  const k = S.camSnap ? 1 : 1 - Math.exp(-dt * 6);
+  S.camSnap = false;
+  if (S.camFixed) { S.camPos.set(...S.camFixed.pos); S.camLook.set(...S.camFixed.look); }
+  else { S.camPos.lerp(want, k); S.camLook.lerp(look, k); }
+  // out of the walls, ceiling and furniture: pulled in front of the first thing between his head and the camera
+  if (!S.camFixed) {
+    camHead.set(p.x, 1.45, p.z);
+    camV.subVectors(S.camPos, camHead); const L = camV.length();
+    if (L > 1e-3) {
+      camV.divideScalar(L);
+      camRay.set(camHead, camV); camRay.far = L + 0.25;
+      let hitT = Infinity;
+      const hits = camRay.intersectObjects(LOFT.asset.occluders, false);
+      if (hits.length) hitT = hits[0].distance;
+      for (const b of LOFT.asset.boxesWorld) if (camRay.ray.intersectBox(b, camHit)) { const t = camHit.distanceTo(camHead); if (t < hitT) hitT = t; }
+      if (hitT < L + 0.25) { const t = Math.max(0.3, hitT - 0.25); S.camPos.copy(camHead).addScaledVector(camV, t); S.camPos.y += (1 - t / Math.max(t, dist)) * 0.35; }
+    }
+    LM.clampCamera(S.camPos, LOFT.W);
+  }
+  camera.position.copy(S.camPos); camera.lookAt(S.camLook);
+}
+/** The blobs under him and the ball; the room's shadow once (drawn without the player). */
+function loftBeforeRender() {
+  if (LOFT.where !== 'loft') return;
+  const bl = LOFT.blob, P = S.player;
+  if (bl) {
+    bl.player.position.set(P.pos[0], 0.012, P.pos[1]); bl.player.scale.setScalar(0.95);
+    const by = Math.max(0, ball.position.y - 0.12), k = Math.max(0, 1 - by / 1.6);
+    bl.ball.position.set(ball.position.x, 0.013, ball.position.z); bl.ball.scale.setScalar(0.28 + 0.2 * (1 - k)); bl.ball.material.opacity = 0.9 * k; bl.ball.visible = ball.visible && k > 0.02;
+  }
+  if (LOFT.shadowDirty && LOFT.asset.sun) {
+    const off = [];
+    for (const o of scene.children) if (o.castShadow && carriesIntoLoft(o)) { o.castShadow = false; off.push(o); }
+    LOFT.asset.sun.shadow.needsUpdate = true;
+    renderer.render(scene, camera);
+    for (const o of off) o.castShadow = true;
+  }
+  LOFT.shadowDirty = false;
 }
 
 // ═══ Main loop ═══
@@ -1298,25 +1965,62 @@ function gameTick(dt, rdt, inp, now) {
   // camera-relative stick → world direction
   const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
   const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0));
+  const camF = [fwd.x, fwd.z], camR = [right.x, right.z];   // (the right stick reads the screen the same way — before the line below scales them in place)
   const mv = right.multiplyScalar(inp.mx).add(fwd.multiplyScalar(-inp.my));
   const moving = Math.hypot(inp.mx, inp.my) > 0.2;
   if (moving) S.lastMoveAt = now;
+  const inLoft = LOFT.where === 'loft';
+  // in the loft he faces where he walks (a move's own turn sticks); standing, he keeps his facing
+  if (inLoft) { if (P.mode === 'action') LOFT.face = P.yaw; else if (moving) LOFT.face = Math.atan2(mv.x, mv.z); }
 
-  // no ball (lost, or after a shot): X / ✕ (or a tap) puts a new ball in the dribbling hand
+  // no ball (lost, or after a shot): X / ✕ (or a tap on SHOOT — not while a shot is still in the air: the
+  // pass back brings it, a tap must not wipe the shot out of the air) puts a new ball in the dribbling hand
   const noBall = !P.hasBall || P.ballFree;
-  if (noBall && inp.edge.ball && P.mode === 'loco') { resetPossession(); S.lostToast = false; }
+  const shotInAir = S.ball ? S.ball.free?.kind === 'shot' : S.freeBall?.kind === 'shot';
+  const newBall = inp.edge.ball || (inp.edge.ballTap && !shotInAir);
+  // (the shot button as held — letting go still grades a shot in the air)
+  const shootHeld = !!inp.shoot, upAt = S.shootUpAt;
+  S.shootUpAt = null;
+  const meterOn = S.ball && S.meter?.enabled && !inLoft;
+  if (noBall && newBall && P.mode === 'loco') {
+    resetPossession(); S.lostToast = false;
+    // (the press that asked for the new ball — a tap on SHOOT, or ✕ / X with □ still down — is not a
+    // shot: it must come up before it starts one)
+    if (shootHeld) S.meter?.notAShot();
+  }
   if (noBall) inp = { ...inp, shoot: false, edge: {} };
-  // Square: tap or hold → shot; moving (or just moved) → step-back
-  let trig = null;
-  if (inp.shoot && S.sqAt == null) { S.sqAt = now; S.sqFired = false; }
-  const wantShot = (inp.shoot && !S.sqFired && now - S.sqAt >= HOLD_MS) || (!inp.shoot && S.sqAt != null && !S.sqFired);
-  if (wantShot) { S.sqFired = true; trig = trigger(shotRole(moving || now - S.lastMoveAt < 350)); }
-  if (!inp.shoot) S.sqAt = null;
+  if (inLoft) {
+    // no hoop in the loft: □ only says so — no meter, no shot clip, the ball stays in play (the meter still
+    // hears the button, as "not a shot": held through the door it must come up before it shoots)
+    const held = !!inp.shoot;
+    if (held && !S.loftShootPrev && !noBall) toast('No hoop in here — head back to the court', 2200);
+    S.loftShootPrev = held;
+    if (S.meter) { if (held) S.meter.notAShot(); else if (S.meter.btn) S.meter.release(S.gameT || 0); }
+    S.shootPrev = held;
+    inp = { ...inp, shoot: false };
+  } else S.loftShootPrev = false;
+  // Square: the press shoots (moving, or just moved → step-back); with the shot meter, hold it and let
+  // go on the meter's mark (engine3d/shot-meter.mjs) — graded in the shot clip's own time, at the
+  // moment the key / touch came up between two frames
+  let trig = null, trigSrc = null;
+  const roleNow = () => trigger(shotRole(moving || now - S.lastMoveAt < 350));
+  if (meterOn) {
+    // (a key / touch came up at a known moment since the last frame; a controller's button has no event
+    // time — it came up somewhere between the last poll and this one: halfway, not the last frame's start,
+    // which graded every pad release up to a frame early)
+    // (t: that moment in game time — a release after the shot clip ended is graded then on the meter's own clock,
+    // not at the last drawn frame)
+    const mo = SM.buttonMoment({ gameT: S.gameT || 0, speed: S.speed, upAt, frameAt0: S.frameAt0, frameRdt: S.frameRdt, action: P.action });
+    SM.shootButton(S.meter, { held: shootHeld, t: mo.t, P, clipT: mo.clipT, request: (role) => { trig = role; }, roleOf: roleNow });
+  } else if (inp.shoot && !S.shootPrev) trig = roleNow();
+  if (!inLoft) S.shootPrev = shootHeld;
   if (!trig && inp.edge.cross) trig = trigger('move-crossover');
   if (!trig && inp.edge.spin) trig = trigger('move-spin');
   if (!trig && inp.edge.hesi) trig = trigger('move-hesi');
   if (!trig && inp.edge.btl) trig = trigger('move-btl');
   if (!trig && inp.edge.doubleCross) trig = trigger('move-double-cross');
+  // the right stick (pro stick): the gesture → the move (a shot on this tick wins; ignored while □ is held)
+  if (inp.stick) { const st = stickMove(inp.stick, camF, camR, shootHeld); if (!trig && st) { trig = st; trigSrc = 'stick'; } }
   if (inp.edge.hand && P.mode === 'loco') switchHand();
   // (game time: a slow frame is capped, the wait is measured in dribbles, not wall-clock)
   if (S.ball) {
@@ -1324,10 +2028,11 @@ function gameTick(dt, rdt, inp, now) {
     // window — the ball held by the move's entry hand, the playing move inside its interruption
     // window — and a move for the other hand plays a crossover dribble first
     S.gameT = (S.gameT || 0) + dt;
-    if (trig) S.ball.requestMove(trig, S.gameT);
+    // (a newer stick gesture replaces its queued one: the latest wins, never a backlog of moves)
+    if (trig) S.ball.requestMove(trig, S.gameT, trigSrc ? { src: trigSrc, replace: true, hand: S.stickHand } : undefined);
     const fire = S.ball.nextTrigger(S.gameT);
     if (fire?.missing) toast(`No ${ROLE_NAMES[fire.missing] || fire.missing} for this hand.`);
-    const r = P.update(dt, { move: [mv.x, mv.z], sprint: inp.sprint, face: HOOP, trigger: fire?.role || null, triggerHand: fire?.hand });
+    const r = P.update(dt, { move: [mv.x, mv.z], sprint: inp.sprint, face: faceAt(), trigger: fire?.role || null, triggerHand: fire?.hand });
     return afterUpdate(r, dt, rdt, now);
   }
   // input buffer: a move / shot starts when the ball is physically in the hand (never mid-dribble,
@@ -1345,16 +2050,23 @@ function gameTick(dt, rdt, inp, now) {
     else if (inHand()) { trig = S.pendingTrig.role; S.pendingTrig = null; blog(`${trig} fires`); }
   }
 
-  const r = P.update(dt, { move: [mv.x, mv.z], sprint: inp.sprint, face: HOOP, trigger: trig });
+  const r = P.update(dt, { move: [mv.x, mv.z], sprint: inp.sprint, face: faceAt(), trigger: trig });
   return afterUpdate(r, dt, rdt, now);
 }
 /** After the animation update: court bounds, events, posing, the ball. */
 function afterUpdate(r, dt, rdt, now) {
   const P = S.player;
+  if (LOFT.where === 'loft' && LOFT.W) {
+    // the loft: inside its walkable area, the capsule out of the furniture (sliding along it, not into it)
+    const n = LM.constrainDisc(P.pos, LOFT.prevPos, LM.PLAYER_R, LOFT.W);
+    if (n.length) LM.slideVelocity(P.vel, n);
+    LOFT.prevPos = [P.pos[0], P.pos[1]];
+  } else {
   // court bounds + keep off the stanchion (the capsule only; planted feet stay put)
   P.pos[0] = Math.max(PLAY.minX + 0.4, Math.min(PLAY.maxX - 0.4, P.pos[0]));
   P.pos[1] = Math.max(PLAY.minZ + 0.4, Math.min(PLAY.maxZ - 0.4, P.pos[1]));
   const hd = Math.hypot(P.pos[0], P.pos[1]); if (hd < 0.9) { P.pos[0] *= 0.9 / hd; P.pos[1] *= 0.9 / hd; }
+  }
   for (const e of r.events) {
     if (e.type === 'release' && !S.ball) shootRelease();
     if (e.type === 'action') { S.lastAction = e.role; S.lastPick = e; }
@@ -1373,6 +2085,7 @@ function afterUpdate(r, dt, rdt, now) {
   return r;
 }
 function step(now) {
+  S.frameAt0 = last; S.frameRdt = Math.min(0.1, (now - last) / 1000);   // (the previous frame: when a key came up since)
   const rdt = Math.min(0.1, (now - last) / 1000); last = now; // cap: a stalled tab must not teleport the game
   fpsAcc += rdt; fpsN++;
   if (fpsAcc > 0.5) {
@@ -1384,23 +2097,29 @@ function step(now) {
   }
   if (S.replay) { replayStep(rdt); return; }
   if (S.lab) { labStep(rdt * S.speed, rdt); return; }
-  const inp = readInput();
+  let inp = readInput(now);
+  if (inp.edge.cam) cycleCam();
   const P = S.player;
   if (!P) return;
+  S.lastInp = inp;
+  inp = loftFrame(inp, rdt, now);
   // a slow frame runs as several short game ticks (animation, hands and ball together): a
   // 0.1 s animation jump would move the dribbling hand 20+ cm between two physics targets
   const DT = rdt * S.speed, nTick = Math.min(3, Math.max(1, Math.ceil(DT / (1 / 30) - 1e-6)));
   let r;
-  for (let k = 0; k < nTick; k++) r = gameTick(DT / nTick, rdt / nTick, k === 0 ? inp : { ...inp, edge: {} }, now);
+  // (edges and the stick's gesture belong to the frame's first tick only)
+  for (let k = 0; k < nTick; k++) r = gameTick(DT / nTick, rdt / nTick, k === 0 ? inp : { ...inp, edge: {}, stick: null }, now);
 
   // ── HUD
-  const label = S.swishAt && now - S.swishAt < 1500 ? 'SWISH'
+  const label = S.swishAt && now - S.swishAt < 1500 ? (S.makeLabel || 'SWISH')
     : P.mode === 'action' ? (ROLE_NAMES[P.action?.role] || P.action?.role || 'MOVE').toUpperCase()
     : P.stopping ? (S.skidAt && now - S.skidAt < 500 ? 'SKID STOP' : 'STOP')
     : (!P.hasBall || P.ballFree) && P.mode === 'loco' ? (Math.hypot(P.vel[0], P.vel[1]) > 0.3 ? (P.runFace > 0.5 ? 'RUN' : 'JOG') : 'NO BALL')
     : Math.hypot(P.vel[0], P.vel[1]) > 0.3 ? (P.runFace > 0.5 ? 'RUN DRIBBLE' : 'DRIBBLE') + (P.source === 'clip-loco' ? ' · clip' : '') : 'IDLE';
   setText($('state'), label);
+  setText($('handBtn'), PS.ballHandOf(S.ball?.ctl, P) === 'left' ? 'L' : 'R');   // (the ball's hand: moves on the stick change it all the time)
   if (S.toastUntil && now > S.toastUntil) { $('toast').style.display = 'none'; S.toastUntil = 0; }
+  if (S.stickNoteUntil && now > S.stickNoteUntil) { $('stickNote').style.display = 'none'; S.stickNoteUntil = 0; }
   if (S.dbg) {
     for (const s of ['left', 'right']) {
       const f = P.feetState?.[s];
@@ -1419,7 +2138,9 @@ function step(now) {
 
   if (S.dbgBall) drawBallDbg();
   updateCamera(rdt, inp);
+  drawShotMeter();
   S.outfit?.draw(boneMats);
+  loftBeforeRender();
   renderer.render(scene, camera);
 }
 
@@ -1785,6 +2506,8 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     if (mhrRig) rig.limbRadii = BS.measureLimbRadii(rig.json, mhrRig, A.b64);
     // this character's own hand skin (LOD0): the ball rests on its palm, no finger ever inside it
     rig.handContact = mhrRig ? IK.buildHandContact(rig.json, mhrRig, A.b64, { maxPerSeg: IK.HAND.maxPerSeg, maxPalm: IK.HAND.maxPalm }) : null;
+    // (the body's own skin: every dribble's flight is planned clear of it — engine3d/ball-session.mjs planFlight)
+    rig.bodyContact = mhrRig ? BS.buildBodyContact(rig.json, mhrRig, A.b64) : null;
     // each clip: where its ball track came from (a video or generated) + its edited ball contacts
     const clipMeta = (j, id) => { const e = libInfo.clips.find((c) => c.id === id); if (e) { j.trackSource = e.source === 'video' ? 'video' : 'generated'; if (e.ballContacts) j.ballContacts = e.ballContacts; } return j; };
     S.clipMeta = clipMeta;
@@ -1804,16 +2527,22 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
       loadMsg('loading the court…');
       try { await loadPracticeCourt(); } catch (e) { console.warn('court failed', e); toast(`The VANTHEAH court could not load (${esc(e.message)}) — showing the classic court.`, 6000); }
     }
+    // the door to the loft (both court kinds), off the left sideline
+    if (LOFT.enabled) S.door = buildCourtDoor();
     // the basketball: a Rapier rigid body (the court, rim, backboard and stands are its colliders)
     loadMsg('starting the ball physics…');
     await RAPIER.init();
     S.phys = new BP.BasketballPhysicsSystem(RAPIER, rig.limbRadii ? { ...loadBallCfg(), radii: { ...BP.BALL_DEFAULTS.radii, ...rig.limbRadii } } : loadBallCfg());
     if (BALL_MODE === 'contact' && mhrRig) {
-      S.ball = new BS.BallSession({ player: S.player, mhrRig, IK, MS, phys: S.phys, limbRadii: rig.limbRadii, handContact: rig.handContact, hoop: { center: [0, RIM_Y, 0], rimR: RIM_R }, onEvent: ballEvent });
+      // the shot meter (?shotmeter=0: off — the press shoots, every shot a make). No roll: the release timing alone
+      // sets the flight (engine3d/shot-meter.mjs aimOf)
+      S.meter = new SM.ShotMeter({ enabled: QS.get('shotmeter') !== '0' });
+      S.ball = new BS.BallSession({ player: S.player, mhrRig, IK, MS, phys: S.phys, limbRadii: rig.limbRadii, handContact: rig.handContact, bodyContact: rig.bodyContact, hoop: { center: [0, RIM_Y, 0], rimR: RIM_R }, onEvent: ballEvent, shotMeter: S.meter.enabled ? S.meter : null });
       S.ball.setGraph(S.player.lib);
       window.__ball = { log: () => S.ball.ctl.log.slice(), snapshot: () => S.ball.snapshot(), state: () => S.ball.state, session: S.ball };
-      // the shot hook (a shot meter): the playing shot's timing, the next release's grade, the last shot
+      // the shot hook: the playing shot's timing, the next release's grade (overrides the meter), the last shot
       window.__shot = { timing: () => S.player?.shotTiming?.() || null, input: (x) => S.ball?.setShotInput(x), last: () => S.ball?.lastShot || null };
+      window.__shotMeter = { view: () => S.meter.view(), last: () => S.meter.history.at(-1) || null, history: () => S.meter.history.slice(), shot: () => S.meter.shot && { name: S.meter.shot.name, rel: S.meter.shot.rel, fps: S.meter.shot.fps, riseStart: S.meter.shot.riseStart, lateEnd: S.meter.shot.lateEnd }, clipT: () => S.meter.clipT, cfg: () => ({ ...S.meter.cfg }) };
     }
     if (S.court) {
       S.courtColliders = VC.addVantheahColliders(S.phys, S.court);
@@ -1825,10 +2554,11 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
       S.phys.addStaticBox([0, 2.1, BASELINE_Z - 1.5], [0.14, 1.6, 0.14], { kind: 'stanchion' });
       for (const [x, z, w, d] of [[0, BASELINE_Z - 5, 30, 4], [-HALF_W - 4, 6, 4, 22], [HALF_W + 4, 6, 4, 22], [0, BASELINE_Z + HALF_LEN + 4, 30, 4]]) S.phys.addStaticBox([x, 1.5, z], [w / 2, 1.5, d / 2], { kind: 'stands', restitution: 0.3 });
     }
+    if (S.door) S.phys.addStaticBox([DOOR.x, DOOR.height / 2, DOOR.z - DOOR.depth / 2], [DOOR.width / 2, DOOR.height / 2, DOOR.depth / 2], { kind: 'props', restitution: 0.3 });
     resetPossession();
-    // a debug teleport (tests) starts a new possession with the ball in the hand
+    // a debug teleport (tests, the loft's door) starts a new possession with the ball in the hand
     const tp = S.player.teleport.bind(S.player);
-    S.player.teleport = (...a) => { const out = tp(...a); if (!S.lab && S.phys) { poseCharacter(rig, S.player.update(1 / 60, { face: HOOP }).pose); resetPossession(); } return out; };
+    S.player.teleport = (...a) => { const out = tp(...a); if (!S.lab && S.phys) { poseCharacter(rig, S.player.update(1 / 60, { face: faceAt() }).pose); resetPossession(); } return out; };
     S.camPos.set(start.x + 2, 3, start.z + 6); S.camLook.set(0, 1.2, 0);
     loadMsg('compiling shaders…');
     await new Promise((r) => requestAnimationFrame(r));
@@ -1836,10 +2566,24 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     renderer.render(scene, camera);
     $('loading').style.display = 'none';
     window.__c3dReady = true;
+    LOFT.readyAt = performance.now();
+    // the loft: its state, the door and the exit, the room in world coordinates (tests)
+    window.__loft = {
+      state: () => ({ where: LOFT.where, loaded: !!LOFT.asset, loading: !!LOFT.loading, fetched: !!LOFT.bytes, prefetching: !!LOFT.prefetch, error: LOFT.error, prompt: LOFT.prompt, trans: LOFT.trans ? LOFT.trans.phase : null, fade: LOFT.fade, panel: LOFT.panel, progress: LOFT.progress && { ...LOFT.progress } }),
+      door: () => ({ x: DOOR.px, z: DOOR.pz, face: DOOR.z }), origin: LM.LOFT_ORIGIN,
+      W: () => LOFT.W, stats: () => LOFT.asset && { ...LOFT.asset.stats, lastEntry: LOFT.lastEntry || null }, layout: () => LOFT.asset?.layout || null,
+      load: () => loftLoad(false), go: (to) => loftGo(to),
+      courtVisible: () => { const vis = []; for (const o of scene.children) if (!carriesIntoLoft(o) && o.visible) vis.push(o.name || o.type); return vis; },
+      inScene: () => !!LOFT.asset && LOFT.asset.group.parent === scene,
+      env: () => ({ bg: scene.background?.getHexString?.() || null, fog: !!scene.fog, env: !!scene.environment, toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure }),
+      dbg: () => ({ THREE, scene, renderer, camera, LOFT }),
+    };
     if (QS.get('replay')) startReplay(QS.get('replay')).catch((e) => toast(`Replay failed: ${esc(e.message)}`, 6000));
     if (QS.get('balltest')) labStart(QS.get('balltest'));
     if (QS.get('balldbg') === '1' || QS.get('balltest')) toggleBallDbg(true);
     window.__court3d = S; // for automated checks
+    // the pro stick: every gesture and where it went; the mode; clear the recognizers
+    window.__stick = { log: () => S.stickLog.slice(), mode: PAD_MODE, reset: () => { PRO_PAD.reset(); PRO_KBD.reset(); S.stickLog.length = 0; S.stickPrev = null; } };
     window.__outfitReady = setupOutfit(charId).catch((e) => console.warn('outfit', e));
     window.__outfit = { state: () => S.outfit?.state() || [], sel: () => ({ ...OUTFIT.sel }), wear: (slot, id, c) => wearGarment(slot, id, c).then((ok) => { saveOutfit(); renderOutfitPanel(); return ok; }), color: (slot, c) => { if (OUTFIT.sel[slot]) { OUTFIT.sel[slot].color = c; S.outfit?.setColor(slot, c); renderOutfitPanel(); } }, sim: (on) => { OUTFIT.sim = !!on; if (S.outfit) S.outfit.sim = !!on; }, index: () => OUTFIT.index };
     window.__c3dTest = c3dTestHooks();

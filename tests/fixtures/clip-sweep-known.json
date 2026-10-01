@@ -1,0 +1,98 @@
+{
+ "_note": "measured residuals beyond the sweep limits, per case (clip · hand), AC @60 fps — the ceiling is the value + KNOWN_EPS (tests/clip-sweep.test.js); rewrite: SWEEP_WRITE_KNOWN=1 node --test tests/clip-sweep.test.js",
+ "move-double-cross-r-t01 · right": {
+  "tipGap": 0.0061,
+  "thumbGap": 0.0174,
+  "jointRate": 29.4,
+  "bodyHeld": 0.0966
+ },
+ "move-double-cross-r-t01 · left": {
+  "tipGap": 0.0063,
+  "thumbGap": 0.0163,
+  "jointRate": 32.2,
+  "bodyHeld": 0.0977
+ },
+ "shot-jumper IMG_5816 · right": {
+  "tipGap": 0.0462,
+  "thumbGap": 0.0162,
+  "jointRate": 28,
+  "bodyHeld": 0.0594
+ },
+ "shot-jumper IMG_5816 · left": {
+  "tipGap": 0.0456,
+  "thumbGap": 0.0183,
+  "bodyHeld": 0.0767
+ },
+ "move-btl-cross-shot-r-t01 · right": {
+  "tipGap": 0.0404,
+  "jointRate": 45.6
+ },
+ "Step back jumpshot · right": {
+  "tipGap": 0.0474,
+  "jointRate": 48.2,
+  "bodyHeld": 0.1097
+ },
+ "Step back jumpshot · left": {
+  "tipGap": 0.0546,
+  "jointRate": 41.1,
+  "bodyHeld": 0.1092
+ },
+ "move-spin-layup-r-t01 · right": {
+  "tipGap": 0.0223,
+  "thumbGap": 0.0081,
+  "jointRate": 48.2,
+  "bodyHeld": 0.0463
+ },
+ "move-spin-layup-r-t01 · left": {
+  "tipGap": 0.02,
+  "thumbGap": 0.0083,
+  "jointRate": 36.8,
+  "bodyHeld": 0.0478
+ },
+ "Crossover cut · Kimodo · right": {
+  "tipGap": 0.0444,
+  "thumbGap": 0.0118,
+  "jointRate": 27.2
+ },
+ "Crossover cut · Kimodo · left": {
+  "tipGap": 0.0438,
+  "thumbGap": 0.0121,
+  "jointRate": 39.2
+ },
+ "Crossover on the move (generated) · right": {
+  "jointRate": 49.5
+ },
+ "Crossover on the move (generated) · left": {
+  "jointRate": 53.8
+ },
+ "Crossover (generated) · right": {
+  "tipGap": 0.0086
+ },
+ "Crossover (generated) · left": {
+  "jointRate": 50.9
+ },
+ "Jog dribble · Kimodo · right": {
+  "tipGap": 0.0391
+ },
+ "Jog dribble · Kimodo · left": {
+  "tipGap": 0.0392
+ },
+ "Run dribble (generated) · right": {
+  "tipGap": 0.0359
+ },
+ "Run dribble (generated) · left": {
+  "tipGap": 0.0359
+ },
+ "move-double-cross-r-t01 [auto] · right": {
+  "tipGap": 0.0062,
+  "thumbGap": 0.0157,
+  "jointRate": 32.1,
+  "bodyHeld": 0.0935
+ },
+ "move-double-cross-r-t01 [auto] · left": {
+  "tipGap": 0.0063,
+  "thumbGap": 0.0159,
+  "jointRate": 32.2,
+  "bodyHeld": 0.0942
+ }
+}

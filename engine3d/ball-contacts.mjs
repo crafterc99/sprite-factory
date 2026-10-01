@@ -11,7 +11,7 @@
  *
  * Engine-agnostic: no three.js, no anim3d import (anim3d passes the sampled clip in).
  */
-import { G, planDribble, planToss, segPos } from './ball-trajectory.mjs';
+import { G, planDribble, planToss, segPos, gateCrossing } from './ball-trajectory.mjs';
 
 export const CONTACTS_VERSION = 1;
 export const TYPES = ['release', 'bounce', 'catch', 'gather', 'shot', 'pass'];
@@ -170,6 +170,103 @@ export function detectContacts(C) {
     if (fl.bounce) events.push(fl.bounce);
     flights.push({ release: e.id, bounce: fl.bounce?.id || null, catch: c.id, fromHand: e.hand, toHand: c.hand, kind: fl.kind, profile: fl.profile, rms: fl.rms != null ? +fl.rms.toFixed(4) : null, restitution: fl.restitution != null ? +fl.restitution.toFixed(3) : null });
   }
+  // ── 5b. physics: the per-frame hold flags come from the capture's hold rule (the ball within 24 cm of a palm,
+  // its depth taken from the nearest wrist) — a ball a low crossover pushed down a moment ago, or one rising past
+  // the other hand, still reads "held". A release / catch the ball's own ballistic path cannot meet moves to
+  // where it can; a flight still going at the clip's end is caught at the end by the hand it heads to.
+  const yb0 = floorY + R;
+  const evOf = (id) => events.find((x) => x.id === id);
+  const flightOf = (fl) => ({ e: evOf(fl.release), c: evOf(fl.catch), b: fl.bounce ? evOf(fl.bounce) : null });
+  const bouncePoint = (b) => fromLocal(b.local, C.traj(loop ? ((b.frame % F) + F) % F : b.frame));
+  const holdBefore = (f) => { let a = -Infinity; for (const x of events) if ((x.type === 'catch' || x.type === 'gather') && x.frame < f && x.frame > a) a = x.frame; return Number.isFinite(a) ? a : (loop ? f - F : 0); };
+  // the launch the ballistic path needs from the ball on the palm at t to reach the bounce (fb, pb), and the hand's own velocity then
+  const launch = (t, fb, pb) => { const pr = interpBall(t), T = (fb - t) / fps; return T < 0.02 ? null : [(pb[0] - pr[0]) / T, (yb0 - pr[1] + 0.5 * G * T * T) / T, (pb[2] - pr[2]) / T]; };
+  const handVel = (t, tEnd) => { const t1 = Math.min(t + 0.5, tEnd), a = interpBall(t1 - 1), b = interpBall(t1); return sc(sub(b, a), fps); };
+  const mismatch = (L, v) => Math.hypot(L[1] - v[1], 0.7071 * (L[0] - v[0]), 0.7071 * (L[2] - v[2]));
+  /** Which palm a flight from the bounce (fb, pb, horizontal velocity vh, rebound vUp) reaches at frame tc: the side it is on (along the hips), then the nearer palm. */
+  const handReached = (tc, fb, pb, vh, vUp, fromHand) => {
+    const t = (tc - fb) / fps, p = [pb[0] + vh[0] * 0.9 * t, yb0 + vUp * t - 0.5 * G * t * t, pb[2] + vh[2] * 0.9 * t];
+    const k = Math.min(F - 1, Math.max(0, Math.round(loop ? ((tc % F) + F) % F : tc))), f = fr[k], k0 = Math.max(0, k - 2);
+    const ext = Math.min(0.15, Math.max(0, (tc - (F - 1)) / fps));   // (past the clip's end: the palms move on, a little)
+    const palmAt = (s) => { const a = s === 'left' ? fr[k0].palmL : fr[k0].palmR, b = s === 'left' ? f.palmL : f.palmR; const v = k > k0 ? sc(sub(b, a), fps / (k - k0)) : [0, 0, 0]; return add(b, sc(v, ext)); };
+    const L = palmAt('left'), Rr = palmAt('right');
+    let lat = (q) => 0;
+    if (f.hipL && f.hipR) { const ax = sub(f.hipL, f.hipR), l = Math.hypot(ax[0], ax[2]) || 1, pel = lerp(f.hipL, f.hipR, 0.5); lat = (q) => ((q[0] - pel[0]) * ax[0] + (q[2] - pel[2]) * ax[2]) / l; }
+    // (the side of the body it goes to: a ball well across the midline is the hand of that side's, unless the
+    // palms clearly say otherwise — a crossover is caught by the other hand)
+    const side = Math.abs(lat(p)) > 0.15 ? Math.sign(lat(p)) : 0;
+    const sL = Math.abs(lat(p) - lat(L)) + 0.35 * dist(p, L) - (side > 0 ? 0.15 : 0), sR = Math.abs(lat(p) - lat(Rr)) + 0.35 * dist(p, Rr) - (side < 0 ? 0.15 : 0);
+    return { hand: Math.abs(sL - sR) < 0.03 && fromHand ? fromHand : sL < sR ? 'left' : 'right', p, sL, sR, lat: [lat(p), lat(L), lat(Rr)] };
+  };
+  const rebound = (e, b, pb) => {
+    // the ball's velocity into the floor (from the release on the palm) → its rebound (e ≈ 0.82) and horizontal velocity
+    const L = launch(e.frame, b.frame, pb); if (!L) return null;
+    const Td = (b.frame - e.frame) / fps, vin = L[1] - G * Td;
+    return { vin, vUp: 0.82 * -vin, vh: [L[0], 0, L[2]] };
+  };
+  // (C) the clip's last release, never caught in it (a dribble move's last bounce is after its end): too close to
+  // the end to leave the hand — it keeps the ball; else it bounces and the hand it heads to catches it on the last frame
+  if (!loop && !C.shot) {
+    const ends = events.filter((x) => x.type === 'release' || x.type === 'pass');
+    const lastE = ends[ends.length - 1];
+    if (lastE && !flights.some((fl) => fl.release === lastE.id) && !events.some((x) => x.type === 'catch' && x.frame > lastE.frame)) {
+      if (F - 1 - lastE.frame < 0.15 * fps) { events.splice(events.indexOf(lastE), 1); log.push(`release ${lastE.id} @${lastE.frame.toFixed(1)}: too close to the end to be caught — the hand keeps the ball`); }
+      else {
+        lastE.type = 'release';
+        const c = mk({ type: 'catch', hand: lastE.hand, frame: F - 1, window: [F - 1 - win, F - 1], conf: 0.5, atEnd: true });
+        const f2 = fitFlight(lastE, c);
+        if (f2?.bounce) {
+          events.push(f2.bounce);
+          const pb = bouncePoint(f2.bounce), rb = rebound(lastE, f2.bounce, pb);
+          if (rb) c.hand = handReached(F - 1, f2.bounce.frame, pb, rb.vh, rb.vUp, lastE.hand).hand;
+        }
+        events.push(c);
+        flights.push({ release: lastE.id, bounce: f2?.bounce?.id || null, catch: c.id, fromHand: lastE.hand, toHand: c.hand, kind: lastE.hand === c.hand ? 'dribble' : 'crossover', profile: f2?.profile || 'dribble', rms: null, restitution: null, atEnd: true });
+        log.push(`release ${lastE.id}: still in the air at the end — caught on the last frame by the ${c.hand} hand`);
+      }
+    }
+  }
+  for (const fl of flights) {
+    let { e, c, b } = flightOf(fl);
+    if (!e || !c || !b?.local || (loop && (e.frame >= F || b.frame >= F || c.frame >= F))) continue;
+    // (A) the release: where the launch the bounce needs matches the hand's own motion
+    let pb = bouncePoint(b);
+    // (a push throws the ball faster than the hand moves — but never 6 m/s faster: then the ball had already left it)
+    const L0 = launch(e.frame, b.frame, pb), v0 = handVel(e.frame, e.frame), m0 = L0 ? mismatch(L0, v0) : Infinity, push = L0 ? v0[1] - L0[1] : 0;
+    if (video && push > 6) {
+      const lo = Math.max(holdBefore(e.frame) + 1, e.frame - 0.45 * fps, loop ? -Infinity : 0);
+      let best = null;
+      for (let t = e.frame - 0.25; t >= lo; t -= 0.25) { const L = launch(t, b.frame, pb); if (!L) continue; const m = mismatch(L, handVel(t, e.frame)); if (!best || m < best.m) best = { t, m }; }
+      if (best && best.m < 2.2 && best.m < m0 - 1.5) {
+        log.push(`release ${e.id} @${e.frame.toFixed(1)} → ${best.t.toFixed(1)}: the bounce needs a ${push.toFixed(1)} m/s harder throw than the hand's own motion there (the launch and the hand within ${best.m.toFixed(1)} m/s here)`);
+        // (the bounce stays where the ball's own frames near the floor put it: the release only moved off the hand)
+        e.frame = +best.t.toFixed(2); e.window = [e.frame - win, e.frame + win]; e.conf = +Math.max(0.3, e.conf - 0.15).toFixed(2); e.physics = true;
+      }
+    }
+    // (B) the clip's last catch, a moment after a bounce near its end: the rebound must be able to reach the ball on
+    // the palm by then — else the hold flag is a rising ball passing a hand (two hands near it), and the catch is on
+    // the last frame (or when the rebound reaches the palm), by the hand the ball heads to
+    const run = runs.find((r) => r.kind === 'hold' && r.from <= Math.ceil(c.frame) && r.to >= Math.floor(c.frame));
+    const toEnd = !loop && run && run.to >= F - 1 && !events.some((x) => x.frame > c.frame + 1e-6 && x.type !== 'bounce');
+    const rb = rebound(e, b, pb);
+    if (!video || !toEnd || !rb || rb.vUp <= 0.3) continue;
+    const yc = interpBall(Math.min(c.frame + 1, F - 1))[1], T = (c.frame - b.frame) / fps;
+    const need = T > 0.005 ? (yc - yb0 + 0.5 * G * T * T) / T : Infinity;
+    if (need <= rb.vUp / 0.82 * 1.1) continue;   // (a rebound of e ≤ 1.1 reaches it in time)
+    const disc = rb.vUp * rb.vUp - 2 * G * Math.max(0, yc - yb0);
+    const tUp = disc >= 0 ? (rb.vUp - Math.sqrt(disc)) / G : rb.vUp / G;   // (it never rises that high: its apex)
+    const fc = b.frame + tUp * fps;
+    if (fc < F - 1 - 0.5) {
+      log.push(`catch ${c.id} @${c.frame.toFixed(1)} → ${fc.toFixed(1)}: the rebound reaches the palm then`);
+      c.frame = +fc.toFixed(2); c.window = [c.frame - win, c.frame + win]; c.physics = true;
+    } else {
+      const h = handReached(Math.max(F - 1, fc), b.frame, pb, rb.vh, rb.vUp, c.hand);
+      log.push(`catch ${c.id} @${c.frame.toFixed(1)} → ${F - 1} (${h.hand}): the rebound reaches the palms only after the end (${fc.toFixed(1)}), heading for the ${h.hand} hand (L ${h.sL.toFixed(2)} R ${h.sR.toFixed(2)} at ${h.p.map((x) => x.toFixed(2))}, lateral ${h.lat.map((x) => x.toFixed(2))})`);
+      c.frame = F - 1; c.window = [F - 1 - win, F - 1]; c.hand = h.hand; c.physics = true; c.atEnd = true; c.conf = 0.6;
+      fl.toHand = h.hand; fl.kind = fl.fromHand === h.hand ? 'dribble' : fl.kind === 'dribble' ? 'crossover' : fl.kind;
+    }
+  }
+  events.sort((a, b) => a.frame - b.frame);
   // loops: every event back into [0, F) (frames were unwrapped from the first hold)
   if (loop) for (const e of events) { const k = Math.floor(e.frame / F) * F; if (k) { e.frame -= k; e.window = e.window.map((x) => x - k); } }
   function fitFlight(e, c) {
@@ -216,8 +313,12 @@ export function detectContacts(C) {
         const mx = (sw * stx - st * sx) / den, mz = (sw * stz - st * sz) / den;
         return [(sx - mx * st) / sw + mx * tb, 0, (sz - mz * st) / sw + mz * tb];
       };
-      const d0 = side(pts.filter((q) => q.t < tb)), u0 = side(pts.filter((q) => q.t > tb));
-      pb = [(d0[0] + u0[0]) / 2, yb, (d0[2] + u0[2]) / 2];
+      // (a side with no observation of its own — only its hand anchor, the frames next to it were on the hand — has
+      // no horizontal velocity: the other side's line alone puts the spot; it used to average in the anchor itself)
+      const dP = pts.filter((q) => q.t < tb), uP = pts.filter((q) => q.t > tb);
+      const d0 = side(dP), u0 = side(uP);
+      pb = dP.length >= 2 && uP.length >= 2 ? [(d0[0] + u0[0]) / 2, yb, (d0[2] + u0[2]) / 2]
+        : uP.length >= 2 ? [u0[0], yb, u0[2]] : dP.length >= 2 ? [d0[0], yb, d0[2]] : [pA[0] + (pB[0] - pA[0]) * (tb / T), yb, pA[2] + (pB[2] - pA[2]) * (tb / T)];
       const nObs = obs.length;
       conf = clamp(1 - rms / 0.1, 0.2, 1) * clamp(nObs / 3, 0.4, 1) * (restitution >= 0.5 && restitution <= 1.0 ? 1 : 0.65);
       if (best.rms > 0.12) { conf *= 0.6; log.push(`flight ${e.id}: poor fit (rms ${(best.rms * 100).toFixed(1)} cm)`); }
@@ -245,7 +346,8 @@ export function detectContacts(C) {
     };
   }
   function interpBall(f) {
-    const k = Math.floor(f), u = f - k;
+    if (!loop) f = clamp(f, 0, F - 1);
+    const k = Math.min(Math.floor(f), loop ? Math.floor(f) : F - 2), u = f - k;
     const a = ball(k) || ball(k + 1), b = ball(k + 1) || ball(k);
     if (!a) { const h = hand[idx(Math.round(f))] || 'right'; return palm(Math.round(f), h); }
     return lerp(a, b, u);
@@ -260,9 +362,86 @@ export function detectContacts(C) {
     const h = Math.min(pA[1], pB[1]);
     return h < 0.55 ? 'low' : h > 1.0 ? 'high' : 'dribble';
   }
-  // ── 6. normalized time, holds, entry / exit hands
+  // ── 6. normalized time, holds, entry / exit hands — and one floor contact in every dribble
   const out = finalize({ version: CONTACTS_VERSION, moveId: C.id || null, F, fps, loop, trackSource: C.trackSource || 'unknown', heldDistance: +dh.toFixed(3), events, flights, log, defaultHand: C.hand === 'left' || C.hand === 'right' ? C.hand : null });
-  return out;
+  return ensureBounces(out, C);
+}
+
+/** Where the hands' path (A → B) passes between the legs: under the hips (H: their centre, [x, z]) between the feet (L, Rf: [x, z]) — when it crosses between the feet at all (ball-trajectory gateCrossing), else null. */
+function gateXZ(A, B, L, Rf, Hc = null) {
+  const g = gateCrossing(A, B, { l: L, r: Rf, h: Hc });
+  return g ? g.p : null;
+}
+/**
+ * Every dribble touches the floor exactly once (docs/ball-contact-system.md → CONTACT MODEL → one floor contact per
+ * dribble). Each release → catch flight — the hand that lets go to the hand that takes it, the same or the other — is
+ * read from the motion itself:
+ *   it goes DOWN: the ball's own captured frames well below both hands (a ballistic flight between two hands never
+ *   comes lower than the lower of them: below that it has bounced), or the releasing palm pushing down (vertical
+ *   velocity ≤ −0.4 m/s) to a catch not much lower; or it has a bounce already →
+ *     none: one is put in — WHEN gravity puts it (the drop from the release height and the rise to the catch height,
+ *     √h each, the captured ball's lowest frame when it is near the floor then), WHERE the motion puts it: between the
+ *     feet — under the hips, on the line from the releasing hand to the catching one — when that line crosses between
+ *     them (between the legs), else where the captured ball came lowest, else under the hands' path; out of the legs;
+ *     more than one: the one nearest that time stays;
+ *   it stays up (a hand-off above the knees): no floor contact (a toss).
+ * Applied to detected and to saved (Contact Editor) sets alike. C: the sampled clip (anim3d contactInput).
+ */
+export function ensureBounces(K, C) {
+  if (!K?.events?.length || !C?.frames?.length || !C.traj) return K;
+  const F = C.F, fps = C.fps || 30, loop = !!C.loop, R = C.R ?? 0.12, floorY = C.floorY ?? 0, yb = floorY + R, fr = C.frames;
+  const idx = (f) => (loop ? ((Math.round(f) % F) + F) % F : Math.max(0, Math.min(F - 1, Math.round(f))));
+  const palm = (f, h) => { const q = fr[idx(f)]; return h === 'left' ? q.palmL : h === 'right' ? q.palmR : lerp(q.palmL, q.palmR, 0.5); };
+  const E = [...K.events].sort((a, b) => a.frame - b.frame);
+  const log = K.log || (K.log = []);
+  let changed = false, nid = 0;
+  for (let i = 0; i < E.length; i++) {
+    const e = E[i];
+    if (e.type !== 'release' || (e.hand !== 'left' && e.hand !== 'right')) continue;
+    // the catch that ends this flight (nothing else letting go of the ball before it); loops wrap
+    let c = null;
+    const bs = [];
+    for (let k = 1; k < E.length * (loop ? 2 : 1); k++) {
+      if (!loop && i + k >= E.length) break;
+      const x = E[(i + k) % E.length], fx = i + k >= E.length ? x.frame + F : x.frame;
+      if (x.type === 'bounce') { bs.push({ ev: x, f: fx }); continue; }
+      if (x.type === 'catch') { c = { ev: x, f: fx }; break; }
+      if (x.type === 'release' || x.type === 'shot' || x.type === 'pass' || x.type === 'gather') break;
+    }
+    if (!c) continue;
+    const f0 = e.frame, fc = c.f, hc = c.ev.hand === 'left' || c.ev.hand === 'right' ? c.ev.hand : e.hand;
+    if (fc - f0 < 0.08 * fps) continue;   // (shorter than 80 ms: a hand-to-hand hand-off)
+    const pr = palm(f0, e.hand), pc = palm(fc, hc), vy = ((palm(f0 + 1, e.hand)[1] - palm(f0 - 1, e.hand)[1]) * fps) / 2;
+    let low = null;
+    for (let k = Math.ceil(f0); k <= Math.floor(fc); k++) { const b = fr[idx(k)].ball; if (b && (!low || b[1] < low.p[1])) low = { f: k, p: b }; }
+    const down = bs.length > 0 || (low && low.p[1] < Math.min(pr[1], pc[1]) - 0.15) || (vy <= -0.4 && pc[1] > pr[1] - 0.25);
+    if (!down || bs.length === 1) continue;
+    const hr = Math.max(0.01, pr[1] - yb), hh = Math.max(0.01, pc[1] - yb);
+    const fg = f0 + (fc - f0) * clamp(Math.sqrt(hr) / (Math.sqrt(hr) + Math.sqrt(hh)), 0.25, 0.75);
+    if (bs.length > 1) {
+      bs.sort((a, b) => Math.abs(a.f - fg) - Math.abs(b.f - fg));
+      for (const b of bs.slice(1)) K.events.splice(K.events.indexOf(b.ev), 1);
+      log.push(`flight ${e.id} ${e.hand} @${f0.toFixed(1)}: ${bs.length} floor contacts — the one @${bs[0].f.toFixed(1)} stays`);
+      changed = true;
+      continue;
+    }
+    // (the captured ball's lowest frame, when it is near the floor about then, is the bounce; else gravity's time)
+    const lowNear = low && low.p[1] < yb + 0.25 && Math.abs(low.f - fg) <= 0.15 * fps;
+    const fb = clamp(lowNear ? low.f : fg, f0 + 0.04 * fps, fc - 0.04 * fps), ft = loop ? ((fb % F) + F) % F : fb;
+    const caps = C.legsAt ? C.legsAt(ft) : null;
+    let p = null, how;
+    if (caps?.length >= 6) { const foot = (q) => [(q.a[0] + q.b[0]) / 2, (q.a[2] + q.b[2]) / 2], hip = [(caps[0].a[0] + caps[3].a[0]) / 2, (caps[0].a[2] + caps[3].a[2]) / 2], g = gateXZ(pr, pc, foot(caps[2]), foot(caps[5]), hip); if (g) { p = [g[0], yb, g[1]]; how = 'under the hips, between the feet'; } }
+    if (!p && lowNear) { p = [low.p[0], yb, low.p[2]]; how = 'where the ball came lowest'; }
+    if (!p) { const q = lerp(pr, pc, (fb - f0) / (fc - f0)); p = [q[0], yb, q[2]]; how = "under the hands' path"; }
+    if (caps) { const m = clearOfCaps(p, caps, R, 0.02); if (m.shift > 0.001) p = m.p; }
+    const bw = Math.max(0.5, 0.05 * fps);
+    K.events.push({ id: `bi${++nid}`, type: 'bounce', hand: null, frame: ft, window: [ft - bw, ft + bw], local: r3(toLocal(p, C.traj(ft))), conf: 0.5, auto: true, inserted: true });
+    log.push(`flight ${e.id} ${e.hand} @${f0.toFixed(1)} → ${hc} @${fc.toFixed(1)} goes down with no floor contact: one put in @${ft.toFixed(1)} (${how})`);
+    changed = true;
+  }
+  if (!changed) return K;
+  K.flights = [];   // (rebuilt from the events)
+  return finalize(K);
 }
 
 function emptyContacts(C) {
@@ -341,12 +520,41 @@ export function finalize(c) {
 /**
  * Apply saved edits (Contact Editor) to a detected set. Edits replace the events wholesale
  * (manual: true, confidence 1 unless given); offsets / profiles / hands are kept from the edits.
+ * A saved bounce with no floor spot (a marker placed on the timeline, never dragged on the floor) gets
+ * one — the detected bounce at that moment, else where the clip's ball / hands put it (C: the sampled
+ * clip) — so it still bounces on the floor instead of flying hand to hand.
  */
-export function mergeContacts(auto, edits) {
+export function mergeContacts(auto, edits, C = null) {
   if (!edits || edits.version !== CONTACTS_VERSION || !Array.isArray(edits.events)) return auto;
   const c = { ...auto, flights: [], events: edits.events.map((e) => ({ ...e, manual: true, auto: false, conf: e.conf ?? 1 })), edited: edits.savedAt || true, offsets: edits.offsets || auto.offsets || null, entryHand: edits.entryHand || null, exitHand: edits.exitHand || null };
   if (Array.isArray(edits.flights)) c.flights = edits.flights;
-  return finalize(c);
+  const fps = auto.fps || C?.fps || 30;
+  for (const e of c.events) {
+    if (e.type !== 'bounce' || (Array.isArray(e.local) && e.local.length === 3 && e.local.every(Number.isFinite))) continue;
+    const near = (auto.events || []).filter((a) => a.type === 'bounce' && a.local && Math.abs(a.frame - e.frame) <= Math.max(2, 0.07 * fps)).sort((a, b) => Math.abs(a.frame - e.frame) - Math.abs(b.frame - e.frame))[0];
+    if (near) { e.local = near.local.slice(); e.localFrom = 'auto'; continue; }
+    const at = C ? bounceSpot(C, c.events, e) : null;
+    if (at) { e.local = at; e.localFrom = 'clip'; }
+  }
+  // (a saved set too: every dribble in it touches the floor exactly once)
+  return ensureBounces(finalize(c), C);
+}
+/** A floor spot (local, at e.frame) for a bounce with none: the captured ball's lowest point near it, else under the hands' path, out of the legs. */
+function bounceSpot(C, events, e) {
+  const R = C.R ?? 0.12, floorY = C.floorY ?? 0, F = C.F, fr = C.frames;
+  if (!fr?.length || !C.traj) return null;
+  const at = (k) => fr[Math.max(0, Math.min(F - 1, Math.round(k)))];
+  let pb = null;
+  for (let k = Math.floor(e.frame) - 2; k <= Math.ceil(e.frame) + 2; k++) { const b = k >= 0 && k < F ? fr[k].ball : null; if (b && b[1] < floorY + R + 0.15 && (!pb || b[1] < pb[1])) pb = b; }
+  if (!pb) {
+    const rel = [...events].reverse().find((x) => x.type === 'release' && x.frame < e.frame), cat = events.find((x) => x.type === 'catch' && x.frame > e.frame);
+    const palm = (x) => (x?.hand === 'left' ? at(x.frame).palmL : x?.hand === 'right' ? at(x.frame).palmR : null);
+    const a = palm(rel) || at(e.frame).palmR, b = palm(cat) || a;
+    pb = lerp(a, b, rel && cat ? clamp((e.frame - rel.frame) / Math.max(1e-6, cat.frame - rel.frame), 0, 1) : 0.5);
+  }
+  let p = [pb[0], floorY + R, pb[2]];
+  if (C.legsAt) { const m = clearOfCaps(p, C.legsAt(e.frame), R, 0.02); if (m.shift > 0.001) p = m.p; }
+  return r3(toLocal(p, C.traj(e.frame)));
 }
 
 /** Validate an edit payload (server + editor): returns { ok, errors, clean }. */

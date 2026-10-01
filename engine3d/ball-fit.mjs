@@ -32,7 +32,7 @@ for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const z of [-1, 0, 
  * @param {'left'|'right'|'both'|null} holding  the hand(s) holding the ball (their fingers conform, not collide)
  * @returns {object[]} colliders: { kind: 'cap', a, b, r } | { kind: 'slab', c, n, x, y, h } | { kind: 'box', c, q, h }, each with a name `id`
  */
-export function handColliders(body, holding = null) {
+export function handColliders(body, holding = null, { holdingRigid = true } = {}) {
   const out = [];
   if (!body) return out;
   const C = body.caps || {};
@@ -41,6 +41,9 @@ export function handColliders(body, holding = null) {
   const holds = (s) => holding === 'both' || (holding && holding[0] === s);
   for (const [side, pl] of Object.entries(body.palms || {})) {
     const s = side[0];
+    // (a holding hand with its own skin contact — contact-ik resolveHandBall — rests its palm ON the ball and is
+    // moved out of it by the arm: it is no obstacle to fit the ball away from)
+    if (!holdingRigid && holds(s)) continue;
     out.push({ kind: 'slab', id: `palm_${s}`, c: pl.c, n: pl.n, x: pl.x, y: pl.y, h: pl.h });
     // the knuckles (every finger's base) are the rigid hand, holding or not
     const i1 = C[`index1_${s}`], p1 = C[`pinky1_${s}`];
@@ -96,11 +99,12 @@ function march(p0, d, cols, R, margin, maxMove, step = 0.005) {
  * @param {number[]} p   the ball where the hands would put it
  * @param {object} body  bodySampleFromJoints()
  * @param {number} R     ball radius
- * @param {object} [o]   { holding, prefer: unit launch direction | null, preferWeight 0…1, margin, maxMove }
+ * @param {object} [o]   { holding, prefer: unit launch direction | null, preferWeight 0…1, margin, maxMove, holdingRigid (default
+ *                        true; false: the holding hands' palms / knuckles / thumbs are not obstacles — their skin contact moves them) }
  * @returns {{ p: number[], moved: number, clearance: number, ok: boolean }}
  */
-export function fitBallToHands(p, body, R, { holding = null, prefer = null, preferWeight = 0, margin = 0.002, maxMove = 0.3, cols = null } = {}) {
-  cols = cols || handColliders(body, holding);
+export function fitBallToHands(p, body, R, { holding = null, prefer = null, preferWeight = 0, margin = 0.002, maxMove = 0.3, cols = null, holdingRigid = true } = {}) {
+  cols = cols || handColliders(body, holding, { holdingRigid });
   if (!cols.length) return { p: p.slice(), moved: 0, clearance: Infinity, ok: true };
   const c0 = clearance(p, cols, R);
   if (c0 >= margin && !(prefer && preferWeight >= 0.5)) return { p: p.slice(), moved: 0, clearance: c0, ok: true };

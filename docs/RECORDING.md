@@ -150,11 +150,12 @@ Lane loops (jog, sprint, backpedal): record L→R **and** R→L. Joints on the f
 | `loco-sprint` | `loco-sprint-fwd-r` | loop | 6.5 m lane, 4K | Speed dribble ~5.5–6.5 m/s *(est.)*, ball pushed ahead, bounce every 2 steps | ✅ R2 |
 | `shot-stepback` | `shot-stepback-r` | action | 4.5 m, 3/4 | IDS-R 1 s → jab or one hard dribble → step back 0.8–1.2 m **across** the frame → jumper → land → hold 1 s | ✅ stick + hold □ |
 | `shot-jumper` | `shot-jumper-idle-r` | action | 4.5 m, 3/4 | IDS-R 1 s → spot-up jumper → land → hold 1 s | ✅ hold □ |
-| `move-crossover` | `move-crossover-idle-rl` | action | 3.5 m, 3/4 | IDS-R 1 s → low crossover in front with a small jab step → IDS-L hold 1 s | ✅ ○ |
-| `move-spin` | `move-spin-jog-rl` | action | 5 m lane | Jog → plant the left foot → reverse pivot 360° through the camera side → left hand → continue | ✅ △ |
-| `move-hesi` | `move-hesi-jog-r` | action | 5 m lane | Jog → decelerate → rise with the ball hanging in the right hand → burst 2–3 steps | ✅ ✕ |
-| `move-btl` | `move-btl-idle-rl` | action | 3.5 m, 3/4 | IDS-R, **left foot forward** 1 s → between the legs → ends right foot forward, hold 1 s | ✅ R1 |
-| `move-btb` | `move-btb-idle-rl` | action | 3.5 m, 3/4 | IDS-R 1 s → behind the back → IDS-L hold 1 s | not yet |
+| `move-crossover` | `move-crossover-idle-rl` | action | 3.5 m, 3/4 | IDS-R 1 s → low crossover in front with a small jab step → IDS-L hold 1 s | ✅ RS → free hand |
+| `move-double-cross` | `move-double-cross-r` | action | 3.5 m, 3/4 | IDS-R 1 s → crossover to the left hand → straight back to the right hand → IDS-R hold 1 s | ✅ RS crossover flick, then straight back · L |
+| `move-spin` | `move-spin-jog-rl` | action | 5 m lane | Jog → plant the left foot → reverse pivot 360° through the camera side → left hand → continue | ✅ RS ¼–½ circle |
+| `move-hesi` | `move-hesi-jog-r` | action | 5 m lane | Jog → decelerate → rise with the ball hanging in the right hand → burst 2–3 steps | ✅ RS forward |
+| `move-btl` | `move-btl-idle-rl` | action | 3.5 m, 3/4 | IDS-R, **left foot forward** 1 s → between the legs → ends right foot forward, hold 1 s | ✅ RS back-diagonal, free side |
+| `move-btb` | `move-btb-idle-rl` | action | 3.5 m, 3/4 | IDS-R 1 s → behind the back → IDS-L hold 1 s | ✅ RS straight back |
 | `start-fwd` | `start-jog-fwd-r` | action | 5 m lane | IDS-R side-on in the far third of the lane, hold 1 s → 3–4 accelerating steps → ≥ 2 steps at jog pace in frame | not yet |
 | `stop` | `stop-jog-r` | action | 5 m lane | Enter at jog pace → 2-count stride stop or jump stop → IDS-R hold 1.5 s | not yet |
 | `layup` | `layup-jog-r` | action | 5 m lane | Jog → gather on the right foot → step left → take off from the left foot → right-hand finish at full reach → land, hold 1 s | not yet |

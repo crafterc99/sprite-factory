@@ -16,7 +16,7 @@
  * so 30 / 60 / 120 fps give the same path, and snapshot() is a compact networkable state.
  * Engine-agnostic (no three.js).
  */
-import { G, planDribble, planToss, solveSegment, retarget, segPos, segVel, segRot, releaseSpin, packSegment, unpackSegment, qmul, qinv, qnorm, qslerp, qexp, quatFromBasis, rollingSpin } from './ball-trajectory.mjs';
+import { G, planDribble, planBounce, planToss, solveSegment, retarget, segPos, segVel, segRot, releaseSpin, packSegment, unpackSegment, qmul, qinv, qnorm, qslerp, qexp, quatFromBasis, rollingSpin } from './ball-trajectory.mjs';
 import { fitBallToHands } from './ball-fit.mjs';
 
 export const STATES = ['HELD_RIGHT', 'HELD_LEFT', 'HELD_BOTH', 'RELEASE_RIGHT', 'RELEASE_LEFT', 'DRIBBLE_DOWN', 'BOUNCE', 'DRIBBLE_UP_RIGHT', 'DRIBBLE_UP_LEFT', 'CATCH_RIGHT', 'CATCH_LEFT', 'SHOT_RELEASE', 'PASS_RELEASE', 'LOOSE', 'DEAD'];
@@ -58,6 +58,8 @@ export const BALL_CONTROL_DEFAULTS = Object.freeze({
   releaseClear: 0.03,       // m: clear of the palm
   catchBlend: 0.08,         // s: the last stretch before a catch blends from the flight into the palm
   catchDist: 0.45,          // m: a receiving hand only takes a ball this close (with the right state / hand / approach)
+  earlyCatchDist: 0.035,    // m: a receiving hand that reaches the rising ball before its planned catch takes it then (its
+                            // clip snaps it to the catch pose early) — the ball settles onto it instead of pushing it away
   catchDecel: 110,          // m/s²: a hand absorbs the ball's speed (relative to the palm) at most this fast (≈ 11 g)
   arriveMatch: 0.6,         // the last stretch of a flight arrives with this share of the palm's own velocity (a soft catch)
   approachCos: -0.2,        // the ball must be arriving (relative velocity · direction to the palm ≥ this · speed)
@@ -88,6 +90,9 @@ export const BALL_CONTROL_DEFAULTS = Object.freeze({
   handFitMax: 0.3,          // m, the most it moves the ball off its targets
   handFitHalflife: 0.04,    // s, the fit eases in / out (critically damped): a correction, never a pop
   handFitMaxSpeed: 2.0,     // m/s the correction itself may move
+  handSkin: false,          // the session has the hands' own skin contact: in a two-hand hold the hands are not obstacles of the
+                            // fit (their palms are moved onto / out of the ball, their fingers wrap it — the fit used to push
+                            // the ball onto the heels of the hands, the fingers far off it)
   shotPocketTime: 0.3,      // s before a shot's release the ball goes to the launch side of the hands
 });
 
@@ -124,6 +129,7 @@ export class BallController {
     this.cfg = { ...BALL_CONTROL_DEFAULTS, ...cfg, offsets: { ...BALL_CONTROL_DEFAULTS.offsets, ...(cfg.offsets || {}) } };
     this.state = 'DEAD'; this.since = 0; this.t = 0;
     this.p = [0, this.cfg.R, 0]; this.v = [0, 0, 0]; this.q = [0, 0, 0, 1]; this.w = [0, 0, 0];
+    this.drawT = 0;            // the time along the ball's path its drawn position is (t; the bounce tick: the bounce instant)
     this.hold = null;          // { hand, off: [x,y,z], offV, attach (quat), from (handoff), t0 }
     this.flight = null;        // { kind, down, up, toss, tr, tb, tc, fromHand, toHand, bounceAt, catchAt, eventIds }
     this.recovery = null;      // { t0, T, from, fromV, reason }
@@ -210,7 +216,7 @@ export class BallController {
    */
   update(t, dt, f) {
     this.events = [];
-    this.t = t; this.lastDt = dt;
+    this.t = t; this.lastDt = dt; this.drawT = t;
     this.last = { targets: f.targets, schedule: f.schedule };
     const S = f.schedule || { events: [] };
     this.moveId = S.moveId || null; this.u = S.u ?? null; this.expected = S.hand || null;
@@ -225,7 +231,7 @@ export class BallController {
   }
 
   out() {
-    return { p: this.p, v: this.v, q: this.q, w: this.w, state: this.state, owner: this.owner, physics: this.physics, events: this.events, ik: this.ik, flight: this.flight, recovery: this.recovery };
+    return { p: this.p, v: this.v, q: this.q, w: this.w, state: this.state, owner: this.owner, physics: this.physics, events: this.events, ik: this.ik, flight: this.flight, recovery: this.recovery, drawT: this.drawT };
   }
 
   // ── HELD_* : the ball follows its palm target (offset decays; orientation follows the palm)
@@ -278,7 +284,7 @@ export class BallController {
     let want = [0, 0, 0];
     if (body) {
       const w = shot ? smooth(1 - shot.releaseIn / Math.max(1e-3, c.shotPocketTime)) : 0;
-      const r = fitBallToHands(this.p, body, c.R, { holding: hand, prefer: shot?.prefer || null, preferWeight: w, margin: c.handFitMargin, maxMove: c.handFitMax });
+      const r = fitBallToHands(this.p, body, c.R, { holding: hand, prefer: shot?.prefer || null, preferWeight: w, margin: c.handFitMargin, maxMove: c.handFitMax, holdingRigid: !(c.handSkin && hand === 'both') });
       want = sub(r.p, this.p);
       this.lastFit = { moved: r.moved, clearance: r.clearance, ok: r.ok, pocket: w >= 0.5 };
     }
@@ -318,14 +324,26 @@ export class BallController {
       // exact event times (not the tick that noticed them): the same plan at any frame rate
       const trPlan = t + Math.min(0, rel.in);
       const tb = clamp(t + bounceEv.in, trPlan + 0.04, tc - 0.04);
-      const plan = planDribble({ tr: t, trPlan, prPlan: sub(pr, sc(vr, t - trPlan)), pr, vr, tb, tbWindow: bounceEv.window ? [t + bounceEv.window[0], t + bounceEv.window[1]] : null, pb: bounceEv.world, tc, pc, vc: null, g: cfg.g, floorY: cfg.floorY, R: cfg.R, w0: releaseSpin(vr, cfg.R), q0: this.q });
-      if (plan) fl = { kind: 'dribble', down: plan.down, up: plan.up, tr: t, tb: plan.tb, tc, restitution: plan.restitution, bounceAt: [bounceEv.world[0], cfg.floorY + cfg.R, bounceEv.world[2]], plannedBounce: bounceEv.world.slice() };
+      const ref = bounceEv.worldRaw || bounceEv.world;   // (the spot the schedule re-predicts every tick)
+      const req = { tr: t, trPlan, prPlan: sub(pr, sc(vr, t - trPlan)), pr, vr, tb, tbWindow: bounceEv.window ? [t + bounceEv.window[0], t + bounceEv.window[1]] : null, pb: ref, pbContact: bounceEv.world, conf: bounceEv.conf, tc, pc, vc: null, g: cfg.g, floorY: cfg.floorY, R: cfg.R, w0: releaseSpin(vr, cfg.R), q0: this.q, fromHand: hand, toHand: catchEv.hand };
+      // the bounce from the motion, the flight clear of the body (the session's planner: the body as it will be), else the
+      // contact's own spot
+      const planned = f.planFlight ? f.planFlight(req) : null;
+      const plan = planned || planDribble({ ...req, pb: bounceEv.world });
+      const pb = planned ? planned.pb : bounceEv.world;
+      if (plan) {
+        fl = { kind: 'dribble', down: plan.down, up: plan.up, tr: t, tb: plan.tb, tc, restitution: plan.restitution, bounceAt: [pb[0], cfg.floorY + cfg.R, pb[2]], plannedBounce: pb.slice() };
+        // (the planned spot rides on the schedule's re-predicted one: the body moves on, the choice stays)
+        if (planned) fl.plan = { why: planned.why, gate: planned.gate, clearance: planned.clearance, checked: planned.checked, whyNot: planned.whyNot || null };
+        if (planned && planned.why !== 'contact') fl.bounceShift = [pb[0] - ref[0], 0, pb[2] - ref[2]];
+      }
     }
     if (!fl) fl = { kind: 'toss', toss: planToss({ tr: t, pr, vr, tc, pc, g: cfg.g, floorY: cfg.floorY, R: cfg.R, w0: releaseSpin(vr, cfg.R), q0: this.q }), tr: t, tc };
-    Object.assign(fl, { fromHand: hand, toHand: catchEv.hand === 'both' ? hand : catchEv.hand, catchAt: pc.slice(), eventIds: { release: rel.id, bounce: bounceEv?.id, catch: catchEv.id }, moveId: S.moveId, profile: bounceEv?.profile || catchEv?.profile || null });
+    Object.assign(fl, { fromHand: hand, toHand: catchEv.hand === 'both' ? hand : catchEv.hand, catchAt: pc.slice(), eventIds: { release: rel.id, bounce: bounceEv?.id, catch: catchEv.id }, moveId: S.moveId, profile: bounceEv?.profile || catchEv?.profile || null, pr: pr.slice(), vr: vr.slice() });
     this.flight = fl;
     const vinS = fl.down ? Math.hypot(...segVel(fl.down, fl.tb)) : null;
-    this.go(`RELEASE_${H[hand]}`, `release → ${fl.kind === 'dribble' ? 'bounce' : 'toss'} → ${fl.toHand}${fl.down ? ` (flight ${(fl.tc - t).toFixed(3)} s, bounce +${(fl.tb - t).toFixed(3)} s, ${vinS.toFixed(1)} m/s in, e ${fl.restitution.toFixed(2)}, heights ${pr[1].toFixed(2)} → ${pc[1].toFixed(2)})` : ''}`, t);
+    const pw = fl.plan ? `, ${fl.plan.why}${fl.plan.whyNot ? ` (the contact's own: ${fl.plan.whyNot})` : ''}${fl.plan.clearance != null ? (Number.isFinite(fl.plan.clearance) ? ` ${(fl.plan.clearance * 100).toFixed(1)} cm clear` : ' clear') : ''}` : '';
+    this.go(`RELEASE_${H[hand]}`, `release → ${fl.kind === 'dribble' ? 'bounce' : 'toss'} → ${fl.toHand}${fl.down ? ` (flight ${(fl.tc - t).toFixed(3)} s, bounce +${(fl.tb - t).toFixed(3)} s, ${vinS.toFixed(1)} m/s in, e ${fl.restitution.toFixed(2)}, heights ${pr[1].toFixed(2)} → ${pc[1].toFixed(2)}${pw})` : ''}`, t);
     this.hold = null;
     this.stats.releases++;
     this.events.push({ type: 'release', hand, t, toHand: fl.toHand, kind: fl.kind });
@@ -357,7 +375,8 @@ export class BallController {
     if (Th && tau < cfg.homeTime && !catchEv?.skinned) pc = lerp(pc, add(Th.p, sc(Th.v || [0, 0, 0], Math.max(0, tau))), smooth(1 - tau / cfg.homeTime));
     fl.catchAt = moveToward(fl.catchAt, pc, cfg.maxTargetSpeed * (tau < cfg.homeTime ? 3.5 : 1) * dt);
     if (!fl.toss && t < fl.tb - 0.01 && bounceEv?.world) {
-      const nb = [bounceEv.world[0], cfg.floorY + cfg.R, bounceEv.world[2]];
+      const ref = fl.bounceShift ? add(bounceEv.worldRaw || bounceEv.world, fl.bounceShift) : bounceEv.world;
+      const nb = [ref[0], cfg.floorY + cfg.R, ref[2]];
       const moved = moveToward(fl.bounceAt, nb, cfg.maxTargetSpeed * dt);
       if (len(sub(moved, fl.bounceAt)) > 1e-4) { fl.bounceAt = moved; fl.down = retarget(fl.down, t, fl.bounceAt, fl.tb); }
     }
@@ -376,18 +395,37 @@ export class BallController {
       const clear = !T || len(sub(segPos(segNow(), t), T.p)) > cfg.releaseClear || t - fl.tr >= cfg.releaseTime;
       if (clear) this.go(fl.toss ? `DRIBBLE_UP_${H[fl.toHand]}` : 'DRIBBLE_DOWN', fl.toss ? 'toss' : 'clear of the palm', t);
     }
-    if (this.state === 'DRIBBLE_DOWN' && t >= fl.tb) {
+    // the floor contact is DRAWN: the tick nearest the bounce shows the ball on the floor, at the bounce point (BOUNCE,
+    // one tick — the bounce instant, ≤ half a tick from this tick's time), the next one rising from it. (Drawn at the
+    // tick's own time it would be up to v·dt/2 above the floor on both sides — at 9 m/s and 30 fps 15 cm: never seen
+    // touching it.) The path itself is unchanged.
+    if (this.state === 'BOUNCE') this.go(`DRIBBLE_UP_${H[fl.toHand]}`, 'rebound', t);
+    if (this.state === 'DRIBBLE_DOWN' && t >= fl.tb - 0.5 * (this.lastDt || 0)) {
       this.go('BOUNCE', `floor at ${fl.bounceAt.map((x) => x.toFixed(2)).join(', ')}`, fl.tb);
       this.stats.bounces++;
       if (fl.plannedBounce) this.stats.maxBounceErr = Math.max(this.stats.maxBounceErr, Math.hypot(fl.bounceAt[0] - fl.plannedBounce[0], fl.bounceAt[2] - fl.plannedBounce[2]));
       this.events.push({ type: 'bounce', t: fl.tb, p: fl.bounceAt.slice(), restitution: fl.restitution });
+      this.p = segPos(fl.down, fl.tb); this.v = segVel(fl.up, fl.tb); this.q = segRot(fl.down, fl.tb); this.w = fl.up.w;
+      this.drawT = fl.tb;
+      return;
     }
-    if (this.state === 'BOUNCE') this.go(`DRIBBLE_UP_${H[fl.toHand]}`, 'rebound', t);
     if (/^DRIBBLE_UP_/.test(this.state) && handOf(this.state) !== fl.toHand) this.go(`DRIBBLE_UP_${H[fl.toHand]}`, 'receiver changed', t);
     // catch: the right state + the expected hand + close + arriving
     const Tc0 = this.targetOf(fl.toHand, f.targets);
     const relArr = Tc0 ? len(sub(segVel(segNow(), fl.tc), Tc0.v || [0, 0, 0])) : 0;
     const blendLead = Math.max(cfg.catchBlend, Math.min(0.14, relArr / cfg.catchDecel));
+    // an early meeting: the receiving hand is at the ball before the planned catch (its clip brings it in early):
+    // it takes it now — the catch blend settles the ball onto it
+    if (/^DRIBBLE_UP_/.test(this.state) && Tc0 && t < fl.tc - blendLead && t > (fl.tb ?? fl.tr) + 0.02) {
+      const bp = segPos(segNow(), t), d = len(sub(bp, Tc0.p));
+      if (d < cfg.earlyCatchDist) {
+        this.logLine(`early catch: the ${fl.toHand} palm met the ball ${((fl.tc - t) * 1000).toFixed(0)} ms early`, t);
+        fl.tc = t; fl.predErr = d; fl.blendEnd = t + Math.max(this.lastDt || 1 / 60, d / 1.5);
+        fl.catchFrom = { t, p: bp, v: segVel(segNow(), t), err: d };
+        fl.early = true;
+        this.go(`CATCH_${H[fl.toHand]}`, `${fl.toHand} palm ${(d * 100).toFixed(1)} cm, met early`, t);
+      }
+    }
     if ((/^DRIBBLE_UP_/.test(this.state) || this.state === 'PASS_RELEASE') && t >= fl.tc - blendLead) {
       const T = Tc0;
       const bp = segPos(segNow(), t), bv = segVel(segNow(), t);
@@ -419,6 +457,10 @@ export class BallController {
       if (Tn) fl.lastTgt = { t, p: Tn.p.slice() };
     }
     if (/^CATCH_/.test(this.state)) {
+      // the hand already met the ball (a fast catch: the hand swept onto it before the planned contact): caught
+      // now — it settles onto the palm in the hold (its offset decays) instead of flying on into the hand
+      const Tm = this.targetOf(fl.toHand, f.targets);
+      if (Tm && t < (fl.blendEnd || fl.tc) - dt && len(sub(this.p, Tm.p)) < cfg.earlyCatchDist) { this.logLine(`early catch: the ${fl.toHand} palm met the ball ${(((fl.blendEnd || fl.tc) - t) * 1000).toFixed(0)} ms early`, t); fl.early = true; this.completeCatch(t, f); return; }
       // the ball stays on its flight; only the prediction error — where the palm will really be at
       // the catch (its motion extrapolated) minus where the flight was aimed — is blended in, so it
       // meets the real palm exactly at the catch without being pulled toward where the palm is NOW
@@ -539,7 +581,8 @@ export class BallController {
     this.fitOff = null; this.fitV = null;
     // (the blend ended matched to the palm: the hold starts at rest relative to it — no spring kick)
     this.hold = { hand, off: T ? sub(this.p, T.p) : [0, 0, 0], offV: [0, 0, 0], attach: T ? qmul(qinv(T.q), this.q) : [0, 0, 0, 1], t0: t };
-    this.events.push({ type: 'catch', hand, t, err, approach: fl.catchFrom?.err ?? null });
+    // (an early catch is where the hand met the ball — its distance then is not a prediction error: `early`)
+    this.events.push({ type: 'catch', hand, t, err, approach: fl.catchFrom?.err ?? null, early: !!fl.early });
     this.lastFlight = fl; this.flight = null;
   }
 

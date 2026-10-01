@@ -118,6 +118,37 @@ function serveStatic(res, filePath, contentType, { revalidate = false } = {}) {
   }
 }
 
+/**
+ * A large binary file (the loft GLB, 50–100 MB) streamed from disk: ETag (304 on a match), byte ranges
+ * (206 / 416, a resumed or partial download), HEAD, a Content-Length the page's progress bar reads.
+ * Never gzipped / held in memory: Draco geometry and JPEG / WebP textures don't compress.
+ */
+function serveRanged(req, res, filePath, contentType, cacheControl) {
+  let st;
+  try { st = fs.statSync(filePath); } catch { res.writeHead(404); return res.end('Not found'); }
+  const etag = `"${st.mtimeMs.toString(36)}-${st.size.toString(36)}"`;
+  const head = { 'Content-Type': contentType, 'Accept-Ranges': 'bytes', 'Cache-Control': cacheControl, ETag: etag, 'Last-Modified': st.mtime.toUTCString() };
+  const inm = String(req.headers['if-none-match'] || '').split(/\s*,\s*/).map((t) => t.replace(/^W\//, ''));
+  if (inm.includes(etag)) { res.writeHead(304, { ETag: etag, 'Cache-Control': cacheControl }); return res.end(); }
+  let start = 0, end = st.size - 1, status = 200;
+  const range = req.headers.range, ifRange = req.headers['if-range'];
+  if (range && (!ifRange || ifRange.replace(/^W\//, '') === etag || ifRange === head['Last-Modified'])) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
+    if (m && (m[1] !== '' || m[2] !== '')) {
+      if (m[1] === '') { start = Math.max(0, st.size - +m[2]); } else { start = +m[1]; if (m[2] !== '') end = Math.min(end, +m[2]); }
+      if (start > end || start >= st.size) { res.writeHead(416, { 'Content-Range': `bytes */${st.size}`, ETag: etag }); return res.end(); }
+      status = 206; head['Content-Range'] = `bytes ${start}-${end}/${st.size}`;
+    }
+  }
+  head['Content-Length'] = end - start + 1;
+  res.writeHead(status, head);
+  if (req.method === 'HEAD') return res.end();
+  const s = fs.createReadStream(filePath, { start, end });
+  s.on('error', () => res.destroy());
+  res.on('close', () => s.destroy());
+  s.pipe(res);
+}
+
 function json(res, data, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(data));
@@ -809,6 +840,34 @@ async function handler(req, res) {
     if (fp && fs.existsSync(fp)) return serveStatic(res, fp, 'text/javascript');
     res.writeHead(404); return res.end('Not found');
   }
+  if (pathname === '/vendor/draco/draco_wasm_wrapper.js' || pathname === '/vendor/draco/draco_decoder.wasm') {
+    // the Draco mesh decoder (Apache-2.0, three r160 examples/jsm/libs/draco/gltf/) the loft GLB needs (DRACOLoader)
+    const f = pathname.slice('/vendor/draco/'.length);
+    return serveStatic(res, path.join(__dirname, 'vendor', 'draco', f), f.endsWith('.wasm') ? 'application/wasm' : 'text/javascript');
+  }
+  // the loft behind the court's door (court3d.html, engine3d/loft.mjs): its layout (walkable area, colliders,
+  // lights) carries the GLB's version, and the GLB under that version is cached for good (a second visit
+  // never downloads it again; a new GLB is a new version). Streamed with ranges, never gzipped.
+  if (pathname === '/courts/loft-layout.json') {
+    try {
+      const lp = path.join(__dirname, 'assets', 'courts', 'loft-layout.json'), gp = path.join(__dirname, 'assets', 'courts', 'loft.glb');
+      const ls = fs.statSync(lp), gs = fs.statSync(gp);
+      const ver = `${gs.mtimeMs.toString(36)}-${gs.size.toString(36)}`;
+      const etag = `"${ls.mtimeMs.toString(36)}-${ver}"`;
+      const inm = String(req.headers['if-none-match'] || '').split(/\s*,\s*/).map((t) => t.replace(/^W\//, ''));
+      if (inm.includes(etag)) { res.writeHead(304, { ETag: etag }); return res.end(); }
+      const layout = JSON.parse(fs.readFileSync(lp, 'utf8'));
+      layout.glb = { url: `/courts/loft.glb?v=${ver}`, bytes: gs.size, version: ver };
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ETag: etag });
+      return res.end(JSON.stringify(layout));
+    } catch (e) { return json(res, { error: 'loft not available (' + (e.code || e.message) + ')' }, 404); }
+  }
+  if (pathname === '/courts/loft.glb') {
+    const fp = path.join(__dirname, 'assets', 'courts', 'loft.glb');
+    let ver = null; try { const gs = fs.statSync(fp); ver = `${gs.mtimeMs.toString(36)}-${gs.size.toString(36)}`; } catch {}
+    const cc = ver && url.searchParams.get('v') === ver ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate';
+    return serveRanged(req, res, fp, 'model/gltf-binary', cc);
+  }
   // the VANTHEAH practice court (textures as WebP: scripts/court-webp.js; geometry gzips 6.5 → 2.4 MB)
   // and the game ball (the Spalding model, tools/ball/build_ball.py; 0.9 → 0.6 MB)
   const GLB = { '/courts/vantheah.glb': ['courts', 'vantheah.glb'], '/models/basketball.glb': ['models', 'basketball.glb'] }[pathname];
@@ -831,8 +890,12 @@ async function handler(req, res) {
   if (pathname === '/js/basketball-physics.mjs' || pathname === '/js/contact-ik.mjs' || pathname === '/js/ball-lab.mjs' || pathname === '/js/ball-setup.mjs' || pathname === '/js/court-vantheah.mjs' || pathname === '/js/souljam-material.mjs' || pathname === '/js/garments.mjs'
     // the ball contact system (docs/ball-contact-system.md)
     || pathname === '/js/ball-contacts.mjs' || pathname === '/js/ball-trajectory.mjs' || pathname === '/js/ball-control.mjs' || pathname === '/js/ball-session.mjs'
-    // shots: the release from the arm, the arc (and the shot meter's hook), the held ball clear of the hands
-    || pathname === '/js/shot-release.mjs' || pathname === '/js/shot-flight.mjs' || pathname === '/js/ball-fit.mjs') {
+    // shots: the release from the arm, the arc (and the shot meter's hook), the held ball clear of the hands, the shot meter;
+    // the pro stick (every ball-handling move on the right stick)
+    || pathname === '/js/shot-release.mjs' || pathname === '/js/shot-flight.mjs' || pathname === '/js/ball-fit.mjs' || pathname === '/js/shot-meter.mjs'
+    || pathname === '/js/pro-stick.mjs'
+    // the loft behind the court's door (load, lightmapped materials, walking / camera collision)
+    || pathname === '/js/loft.mjs') {
     // the basketball physics system, its contact IK and the test scenes (engine3d/)
     return serveStatic(res, path.join(__dirname, 'engine3d', pathname.slice(4)), 'text/javascript', { revalidate: true });
   }

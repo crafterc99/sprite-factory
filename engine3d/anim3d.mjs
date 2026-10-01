@@ -343,7 +343,7 @@ export function prepareClip(json, rig, { mirror = false } = {}) {
   // then the Contact Editor's saved edits (json.ballContacts) on top — docs/ball-contact-system.md
   try {
     clip.contactInput = contactInput(clip, rig, json);
-    clip.ballContacts = mergeContacts(detectContacts(clip.contactInput), json.ballContacts && mirror ? mirrorEdits(json.ballContacts) : json.ballContacts);
+    clip.ballContacts = mergeContacts(detectContacts(clip.contactInput), json.ballContacts && mirror ? mirrorEdits(json.ballContacts) : json.ballContacts, clip.contactInput);
   } catch (e) {
     clip.ballContacts = { version: 1, events: [], flights: [], holds: [], entryHand: hand, exitHand: endHand, log: ['detection failed: ' + e.message] };
   }
@@ -393,7 +393,7 @@ export function applyContactEdits(clip, edits) {
   for (const c of [clip, clip.mirrored].filter(Boolean)) {
     if (!c.contactInput) continue;
     c.json.ballContacts = edits || undefined;
-    c.ballContacts = mergeContacts(detectContacts(c.contactInput), edits && c.mirror ? mirrorEdits(edits) : edits);
+    c.ballContacts = mergeContacts(detectContacts(c.contactInput), edits && c.mirror ? mirrorEdits(edits) : edits, c.contactInput);
     if (c.ballContacts.entryHand) c.hand = c.ballContacts.entryHand;
     if (c.ballContacts.exitHand) c.endHand = c.ballContacts.exitHand;
   }
@@ -421,7 +421,7 @@ export function contactInput(clip, rig, json = clip.json) {
     const tr = sampleTraj(clip, i);
     placePose(P, tr[0], tr[1], tr[2], W, NJ);
     const b = clip.ball[i];
-    frames.push({ ball: b?.p ? toClip(b.p, tr) : null, held: !!b?.held, hand: b?.hand || null, palmL: palmOf(W, 'left'), palmR: palmOf(W, 'right') });
+    frames.push({ ball: b?.p ? toClip(b.p, tr) : null, held: !!b?.held, hand: b?.hand || null, palmL: palmOf(W, 'left'), palmR: palmOf(W, 'right'), hipL: get3(W, J['left-hip']), hipR: get3(W, J['right-hip']) });
   }
   const ls = rig.ls || 1, radii = rig.limbRadii || { thigh: 0.07 * ls, shin: 0.05 * ls, foot: 0.045 * ls };
   const legsAt = (t) => {
@@ -437,7 +437,7 @@ export function contactInput(clip, rig, json = clip.json) {
   return {
     id: json?.id || clip.name, F, fps: clip.fps, loop: clip.loop, R: 0.12, floorY: 0,
     trackSource: json?.trackSource || (video ? 'video' : 'generated'),
-    frames, traj: (t) => sampleTraj(clip, t), shot: clip.shot ? { releaseFrame: clip.shot.releaseFrame, hand: clip.shot.hand } : null, hand: clip.hand,
+    frames, traj: (t) => sampleTraj(clip, t), shot: clip.shot ? { releaseFrame: clip.shot.releaseFrame, hand: clip.shot.hand } : null, hand: clip.hand, role: clip.role || json?.role || null,
     labels: clip.ballEvents?.frames || null, legsAt,
   };
 }

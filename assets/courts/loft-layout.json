@@ -1,0 +1,361 @@
+{
+ "units": "metres, three.js axes (x right, y up, z toward the photo camera)",
+ "bounds": {
+  "minX": -4.3,
+  "maxX": 8.5,
+  "minZ": -9.6,
+  "maxZ": 1.3
+ },
+ "colliders": [
+  {
+   "name": "00-sofa#0",
+   "minX": -1.65,
+   "maxX": 2.95,
+   "minZ": -5.35,
+   "maxZ": -2.85
+  },
+  {
+   "name": "01-coffee-table#0",
+   "minX": -0.675,
+   "maxX": 0.775,
+   "minZ": -3.944,
+   "maxZ": -3.056
+  },
+  {
+   "name": "02-media-console#0",
+   "minX": -4.59,
+   "maxX": -4.13,
+   "minZ": -8.4,
+   "maxZ": -5.5
+  },
+  {
+   "name": "03-speaker#0",
+   "minX": -4.468,
+   "maxX": -4.232,
+   "minZ": -5.247,
+   "maxZ": -4.953
+  },
+  {
+   "name": "03-speaker#1",
+   "minX": -4.468,
+   "maxX": -4.232,
+   "minZ": -8.897,
+   "maxZ": -8.603
+  },
+  {
+   "name": "04-turntable#0",
+   "minX": -1.784,
+   "maxX": -0.916,
+   "minZ": -2.872,
+   "maxZ": -1.828
+  },
+  {
+   "name": "06-dining-table#0",
+   "minX": -2.65,
+   "maxX": -0.35,
+   "minZ": -9.075,
+   "maxZ": -8.025
+  },
+  {
+   "name": "07-dining-chair#0",
+   "minX": -2.609,
+   "maxX": -1.591,
+   "minZ": -8.229,
+   "maxZ": -7.211
+  },
+  {
+   "name": "07-dining-chair#1",
+   "minX": -1.409,
+   "maxX": -0.391,
+   "minZ": -8.229,
+   "maxZ": -7.211
+  },
+  {
+   "name": "07-dining-chair#2",
+   "minX": -2.609,
+   "maxX": -1.591,
+   "minZ": -9.889,
+   "maxZ": -8.871
+  },
+  {
+   "name": "07-dining-chair#3",
+   "minX": -1.409,
+   "maxX": -0.391,
+   "minZ": -9.889,
+   "maxZ": -8.871
+  },
+  {
+   "name": "10-bar-stool#0",
+   "minX": 1.055,
+   "maxX": 1.445,
+   "minZ": -7.144,
+   "maxZ": -6.756
+  },
+  {
+   "name": "10-bar-stool#1",
+   "minX": 1.705,
+   "maxX": 2.095,
+   "minZ": -7.144,
+   "maxZ": -6.756
+  },
+  {
+   "name": "10-bar-stool#2",
+   "minX": 2.355,
+   "maxX": 2.745,
+   "minZ": -7.144,
+   "maxZ": -6.756
+  },
+  {
+   "name": "11-fridge#0",
+   "minX": 4.675,
+   "maxX": 5.525,
+   "minZ": -9.895,
+   "maxZ": -9.145
+  },
+  {
+   "name": "14-floor-plant-bop#0",
+   "minX": 4.73,
+   "maxX": 5.37,
+   "minZ": -4.62,
+   "maxZ": -3.98
+  },
+  {
+   "name": "17-duffel#0",
+   "minX": 1.575,
+   "maxX": 2.325,
+   "minZ": -2.934,
+   "maxZ": -2.566
+  },
+  {
+   "name": "18-kitchen-island#0",
+   "minX": 0.75,
+   "maxX": 3.65,
+   "minZ": -8.325,
+   "maxZ": -7.375
+  },
+  {
+   "name": "29-tall-plant#0",
+   "minX": -4.55,
+   "maxX": -4.05,
+   "minZ": -9.15,
+   "maxZ": -8.65
+  },
+  {
+   "name": "30-bush-plant#0",
+   "minX": 0.2,
+   "maxX": 0.7,
+   "minZ": -9.55,
+   "maxZ": -9.05
+  },
+  {
+   "name": "closet-panel",
+   "minX": 6.0,
+   "maxX": 6.85,
+   "minZ": -9.9,
+   "maxZ": -8.55
+  },
+  {
+   "name": "doorway-dark",
+   "minX": 7.3,
+   "maxX": 8.15,
+   "minZ": -9.6,
+   "maxZ": -8.75
+  },
+  {
+   "name": "kitchen-base",
+   "minX": 2.11,
+   "maxX": 4.65,
+   "minZ": -9.9,
+   "maxZ": -9.28
+  },
+  {
+   "name": "kitchen-counter",
+   "minX": 2.09,
+   "maxX": 4.65,
+   "minZ": -9.9,
+   "maxZ": -9.24
+  },
+  {
+   "name": "pillar",
+   "minX": 5.55,
+   "maxX": 6.0,
+   "minZ": -9.0,
+   "maxZ": -8.55
+  },
+  {
+   "name": "plant-cabinet",
+   "minX": -4.6,
+   "maxX": -4.0,
+   "minZ": -9.2,
+   "maxZ": -8.6
+  },
+  {
+   "name": "under-mezz-wall-a",
+   "minX": 6.85,
+   "maxX": 7.3,
+   "minZ": -8.75,
+   "maxZ": -8.55
+  },
+  {
+   "name": "under-mezz-wall-b",
+   "minX": 8.15,
+   "maxX": 8.8,
+   "minZ": -8.75,
+   "maxZ": -8.55
+  },
+  {
+   "name": "stairs",
+   "minX": 3.493,
+   "maxX": 6.854,
+   "minZ": -6.981,
+   "maxZ": -4.689
+  }
+ ],
+ "spawn": {
+  "pos": [
+   1.1,
+   0,
+   -0.4
+  ],
+  "faceDeg": 180,
+  "note": "face -z (into the room, toward the window)"
+ },
+ "exit": {
+  "pos": [
+   1.1,
+   0,
+   1.2
+  ],
+  "radius": 1.0,
+  "label": "Leave the loft"
+ },
+ "camera": {
+  "minX": -4.35,
+  "maxX": 8.55,
+  "minZ": -9.65,
+  "maxZ": 1.35,
+  "maxY": 5.55
+ },
+ "lights": {
+  "hemisphere": {
+   "sky": "#9b7fe0",
+   "ground": "#3b2430",
+   "intensity": 1.4
+  },
+  "sun": {
+   "color": "#ffa463",
+   "intensity": 2.6,
+   "from": [
+    -7.88,
+    2.806,
+    -29.9
+   ],
+   "to": [
+    0,
+    0,
+    -4
+   ]
+  },
+  "points": [
+   {
+    "pos": [
+     -0.05,
+     2.95,
+     -4.1
+    ],
+    "color": "#ffb070",
+    "intensity": 70,
+    "what": "dome pendant"
+   },
+   {
+    "pos": [
+     1.45,
+     1.95,
+     -7.85
+    ],
+    "color": "#ffb070",
+    "intensity": 14,
+    "what": "island pendant"
+   },
+   {
+    "pos": [
+     2.15,
+     1.95,
+     -7.85
+    ],
+    "color": "#ffb070",
+    "intensity": 14,
+    "what": "island pendant"
+   },
+   {
+    "pos": [
+     2.88,
+     1.95,
+     -7.85
+    ],
+    "color": "#ffb070",
+    "intensity": 14,
+    "what": "island pendant"
+   },
+   {
+    "pos": [
+     3.3,
+     1.5,
+     -9.5
+    ],
+    "color": "#ffb070",
+    "intensity": 22,
+    "what": "kitchen LED"
+   },
+   {
+    "pos": [
+     3.05,
+     3.6,
+     -9.35
+    ],
+    "color": "#ffb070",
+    "intensity": 14,
+    "what": "bedside lamp"
+   },
+   {
+    "pos": [
+     -4.25,
+     2.38,
+     -9.6
+    ],
+    "color": "#ffb070",
+    "intensity": 8,
+    "what": "sconce"
+   },
+   {
+    "pos": [
+     -4.2,
+     1.5,
+     -6.95
+    ],
+    "color": "#8f7cff",
+    "intensity": 18,
+    "what": "TV glow"
+   },
+   {
+    "pos": [
+     1.1,
+     2.6,
+     1.0
+    ],
+    "color": "#ffb070",
+    "intensity": 10,
+    "what": "exit sign"
+   }
+  ],
+  "note": "the room is baked; these lights are for the character and the ball only (keep them modest)"
+ },
+ "background": "#a870b2",
+ "water": "#6d4466",
+ "baked": {
+  "note": "lighting is baked (tools/loft/bake_game.py): userData.lm_scale \u2192 MeshBasic+lightMap(emissiveMap, ch1, lm_scale\u00b7\u03c0); userData.vc_scale \u2192 MeshBasic+vertexColors, color\u00d7vc_scale; others glow as exported",
+  "toneMapping": "AgX",
+  "exposure": 1.27,
+  "canvasFilter": "contrast(1.08) saturate(1.18)"
+ }
+}

@@ -175,6 +175,240 @@ export function planDribble({ tr, trPlan = tr, prPlan = null, pr, vr, tb, tbWind
   return { down: best.down, up, tb: t, restitution: best.e, vin: best.vin, vout: segVel(up, t) };
 }
 
+/**
+ * Where a ball that goes from one side of the feet to the other crosses between them (x, z): the hands' path
+ * (release A → catch B, on the floor) through the gate between the feet's centres, inside it (≥ 12 % of the stance
+ * from either foot). null: the path does not pass between the legs.
+ * @returns {{ p: number[], s: number, u: number, d: number[], n: number[] } | null}  p on the floor plane [x, z]; s along
+ *   A → B; u along left → right foot; d the feet line's direction, n its normal (unit, [x, z])
+ */
+export function gateCrossing(A, B, feet) {
+  if (!feet?.l || !feet?.r) return null;
+  const a = [A[0], A[2]], ab = [B[0] - A[0], B[2] - A[2]], L = feet.l, fr = [feet.r[0] - L[0], feet.r[1] - L[1]];
+  const den = ab[0] * fr[1] - ab[1] * fr[0], w = Math.hypot(fr[0], fr[1]);
+  if (Math.abs(den) < 1e-9 || w < 0.12 || Math.hypot(ab[0], ab[1]) < 0.08) return null;
+  const qa = [L[0] - a[0], L[1] - a[1]];
+  const s = (qa[0] * fr[1] - qa[1] * fr[0]) / den, u = (qa[0] * ab[1] - qa[1] * ab[0]) / den;
+  if (s <= 0 || s >= 1 || u < 0.12 || u > 0.88) return null;
+  const d = [fr[0] / w, fr[1] / w], n = [-d[1], d[0]];
+  let p = [a[0] + ab[0] * s, a[1] + ab[1] * s];
+  // under the hips (feet.h: the hips' centre on the floor): the point of the hands' path nearest under them, when it
+  // is still between the feet
+  if (feet.h) {
+    const l2 = ab[0] * ab[0] + ab[1] * ab[1], sh = clamp(((feet.h[0] - a[0]) * ab[0] + (feet.h[1] - a[1]) * ab[1]) / l2, 0.05, 0.95);
+    const q = [a[0] + ab[0] * sh, a[1] + ab[1] * sh], uq = ((q[0] - L[0]) * d[0] + (q[1] - L[1]) * d[1]) / w;
+    if (uq >= 0.12 && uq <= 0.88) p = q;
+  }
+  return { p, s, u, d, n, width: w, onFeetLine: [a[0] + ab[0] * s, a[1] + ab[1] * s] };
+}
+
+export const BOUNCE_PLAN = Object.freeze({
+  rest: 0.78, restRange: [0.55, 0.95],   // a believable bounce
+  keep: 0.8,                              // horizontal speed kept through the bounce (friction takes some, it never turns back)
+  maxImpact: 8.5,                         // m/s: harder than this into the floor reads as a slam
+  reach: 0.3, step: 0.02,                 // m: the spots tried around the motion's spot
+  times: 13,                              // bounce times tried in the window
+  margin: 0.01,                           // m: the flight's clearance of the body …
+  contactMargin: 0.005,                   // m: … the contact's own flight is kept down to this
+  spotMargin: 0.02,                       // m: … and of its floor contact (by the feet: a foot planting or lifting is the least sure)
+  skipNear: 0.03,                         // m: … this close to the release / catch point the ball is on the hand (not a flight) …
+  nearHand: 0.08, marginNear: 0.004,      // … and within nearHand of it the margin tapers to marginNear (a hand at a knee: the ball arrives along its skin)
+  handForced: 0.2,                        // m: near a hand whose own ball is in the body, the ball may be that deep, tapering over this
+  checks: 28,                             // flights checked against the body, at most (a failing one stops at its first contact) …
+  repairs: 4,                             // … each best spot moved this many times away from where its flight touched the body
+  deficitCost: 8,                         // none clear: each metre short of the margin costs this much (1 cm ≈ a 0.08 cost)
+  better: 0.1,                            // a flight re-planned for its physics replaces the contact's own only when it scores this much better
+                                          // (a 1.06 restitution the motion's dribble clock forces is not worth a different catch)
+});
+/**
+ * The bounce of a hand → floor → hand flight, chosen from the motion (docs/ball-contact-system.md → TRAJECTORY MODEL →
+ * the floor contact): WHERE the ball meets the floor and WHEN (inside the contact's window), so that
+ *   - the flight is physical: gravity, the releasing hand's own velocity (a push down is fine), a believable
+ *     restitution, the horizontal speed kept through the bounce (some lost to friction, never turned back);
+ *   - it lands where the motion puts it — a ball whose path goes from one side of the feet to the other passes
+ *     between the legs: it bounces in that gate, under the hips, on the line from the releasing hand to the catching
+ *     one (gateCrossing); any other on the contact's own spot (the capture's, weighed by its confidence);
+ *   - the whole flight stays clear of the body (o.clearAt(t, p): the ball's clearance at game time t, the body as it
+ *     will be then) — the best-ranked candidates are solved (planDribble) and checked, the first clear one wins (none:
+ *     the clearest);
+ * and at the bounce time the ball's centre is exactly floorY + R there (planDribble).
+ * o: tr, trPlan, pr, prPlan, vr, tb, tbWindow, pb (the contact's spot), conf, tc, pc, vc, g, floorY, R, w0, q0, matchEnd,
+ *    feetAt?(t) → { l: [x, z], r: [x, z] }, clearAt?(t, p) → m, cfg? (BOUNCE_PLAN overrides)
+ * @returns planDribble's result + { pb, gate, clearance, cost, checked, why }   (null: no flight possible)
+ */
+export function planBounce(o) {
+  const c = { ...BOUNCE_PLAN, ...(o.cfg || {}) };
+  const { tr, trPlan = tr, pr, prPlan = null, vr, tc, pc, vc = null, g = G, floorY = 0, R = 0.12, w0 = [0, 0, 0], q0 = [0, 0, 0, 1], matchEnd = 0.5 } = o;
+  const p0 = prPlan || pr, yb = floorY + R, v0 = vr && finite3(vr) ? vr : [0, 0, 0];
+  const lo = Math.max(trPlan + 0.04, o.tbWindow ? o.tbWindow[0] : o.tb), hi = Math.min(tc - 0.04, o.tbWindow ? o.tbWindow[1] : o.tb);
+  const tb0 = clamp(o.tb, trPlan + 0.04, tc - 0.04), hw = Math.max(0.02, (hi - lo) / 2);
+  const times = hi <= lo ? [tb0] : Array.from({ length: c.times }, (_, k) => lo + ((hi - lo) * k) / (c.times - 1));
+  // the motion's spot: between the legs (the hands' path through the gate between the feet), else the contact's
+  const feet = o.feetAt ? o.feetAt(clamp(tb0, lo, Math.max(lo, hi))) : null;
+  const gate = gateCrossing(p0, pc, feet);
+  if (o.debug) o.debug.push({ feet, gate, prior: o.pb, p0, pc, lo, hi });
+  const prior = gate ? gate.p : [o.pb[0], o.pb[2]], conf = gate ? 1 : clamp(o.conf ?? 0.6, 0.2, 1);
+  // the cost of a bounce at (tb, x, z): its physics, how far it is from the motion's spot, the gate
+  const slice = (tb) => {
+    const Td = tb - trPlan, Tu = tc - tb;
+    if (Td <= 0.02 || Tu <= 0.02) return null;
+    const vy0 = (yb - p0[1] + 0.5 * g * Td * Td) / Td, vinY = vy0 - g * Td, uy = (pc[1] - yb + 0.5 * g * Tu * Tu) / Tu;
+    if (vinY > -0.5) return null;
+    const e = uy / -vinY;
+    if (!(e > 0)) return null;
+    const costE = (e - c.rest) ** 2 + 4 * Math.max(0, e - c.restRange[1]) ** 2 + 4 * Math.max(0, c.restRange[0] - e) ** 2;
+    const ft = gate && o.feetAt ? o.feetAt(tb) : null;
+    return { tb, Td, Tu, vy0, vinY, e, base: costE + 0.004 * ((tb - o.tb) / hw) ** 2, fg: ft ? gateFrame(ft) : null };
+  };
+  const costOf = (S, x, z) => {
+    const { Td, Tu, vy0, vinY } = S;
+    const vx = (x - p0[0]) / Td, vz = (z - p0[2]) / Td, ux = (pc[0] - x) / Tu, uz = (pc[2] - z) / Tu;
+    // horizontal: kept through the bounce (along the way in, a little lost; never turned back, not much sideways)
+    const s = Math.hypot(vx, vz);
+    let costH;
+    if (s > 0.25) { const u = (ux * vx + uz * vz) / s, wx = ux - (u * vx) / s, wz = uz - (u * vz) / s; costH = 0.002 * (u - c.keep * s) ** 2 + 0.01 * Math.min(0, u) ** 2 + 0.01 * Math.max(0, u - 1.05 * s) ** 2 + 0.004 * (wx * wx + wz * wz); }
+    else costH = 0.003 * (ux * ux + uz * uz);
+    // the release: the hand's own motion — sideways it carries the ball, down it may push it harder
+    const dy = vy0 - v0[1];
+    const costL = 0.003 * ((vx - v0[0]) ** 2 + (vz - v0[2]) ** 2) + 0.003 * Math.max(0, dy) ** 2 + 0.002 * Math.max(0, -dy - 4) ** 2;
+    const sp = Math.hypot(vx, vinY, vz), costV = 0.01 * Math.max(0, sp - c.maxImpact) ** 2;
+    const costP = 4 * conf * ((x - prior[0]) ** 2 + (z - prior[1]) ** 2);   // (10 cm off it: 0.04 × conf)
+    // between the legs: inside the gate between the feet at that moment
+    let costG = 0;
+    if (S.fg) { const uu = ((x - S.fg.L[0]) * S.fg.d[0] + (z - S.fg.L[1]) * S.fg.d[1]) / S.fg.w; costG = 0.05 * ((Math.max(0, 0.18 - uu) + Math.max(0, uu - 0.82)) / 0.1) ** 2; }
+    return S.base + costH + costL + costV + costP + costG;
+  };
+  // the best spot of each bounce time (a grid around the motion's spot)
+  const n = Math.round(c.reach / c.step), starts = [];
+  for (const tb of times) {
+    const S = slice(tb);
+    if (!S) continue;
+    let best = null;
+    for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
+      const x = prior[0] + i * c.step, z = prior[1] + j * c.step, cost = costOf(S, x, z);
+      if (!best || cost < best.cost) best = { S, tb, x, z, cost };
+    }
+    if (best) starts.push(best);
+  }
+  if (!starts.length) return null;
+  starts.sort((a, b) => a.cost - b.cost);
+  const solve = (k) => {
+    const pl = planDribble({ tr, trPlan, prPlan, pr, vr, tb: k.tb, tbWindow: null, pb: [k.x, yb, k.z], tc, pc, vc, g, floorY, R, w0, q0, matchEnd });
+    return pl ? { ...pl, pb: [k.x, yb, k.z] } : null;
+  };
+  const done = (pl, k, extra) => ({ ...pl, gate: !!gate, cost: k.cost, ...extra });
+  if (!o.clearAt) { const pl = solve(starts[0]); return pl && done(pl, starts[0], { clearance: null, checked: 0, why: gate ? 'gate' : 'spot' }); }
+  // clear of the body: from the best spots (best first), each repaired a few times — a flight that touches the body
+  // moves its bounce away from where it touched (by how much the bounce moves the ball there); the first clear one wins
+  const h = 1 / 120;
+  // (the clearance is measured against the margin it needs there: the full margin in the air, tapering to marginNear
+  // within nearHand of the hand that lets go / catches — returned as clearance − need + margin, so ≥ margin = clear)
+  // (… and where a hand itself holds the ball in the body — the capture's hand at a shin, behind a calf — the ball near
+  // it may be as deep as on it, tapering to the full margin handForced m away: no bounce makes that clear)
+  const onHand = { r: Math.min(c.margin, o.clearAt(tr, pr)), c: Math.min(c.margin, o.clearAt(tc, pc)) };
+  const forced = (d, c0) => (c0 >= c.margin ? c.margin : c0 + (c.margin - c0) * clamp((d - c.skipNear) / Math.max(1e-6, c.handForced - c.skipNear), 0, 1));
+  const needAt = (p) => {
+    const dr = len(sub(p, pr)), dc = len(sub(p, pc)), d = Math.min(dr, dc);
+    return Math.min(c.marginNear + (c.margin - c.marginNear) * clamp((d - c.skipNear) / Math.max(1e-6, c.nearHand - c.skipNear), 0, 1), forced(dr, onHand.r), forced(dc, onHand.c));
+  };
+  const near = {};
+  const clearance = (pl, stop = -Infinity) => {
+    // (the floor contact is drawn on the tick nearest the bounce — up to half a frame either side of it: the spot is
+    // checked against the body over ±1/60 s, a 30 fps tick's reach)
+    let m = Infinity, w = null;
+    for (const dt of [0, -1 / 60, 1 / 60, -1 / 120, 1 / 120]) {
+      // (the feet are where the body's prediction is least sure — a foot planting or lifting: the spot keeps spotMargin)
+      const x = o.clearAt(clamp(pl.tb + dt, tr, tc), pl.pb, near) - Math.max(c.spotMargin, needAt(pl.pb)) + c.margin;
+      if (x < m) { m = x; w = { t: pl.tb + dt, p: pl.pb, q: near.q }; }
+      if (m < stop) return { m, w };
+    }
+    if (m >= stop) for (let t = tr; t <= tc + 1e-9; t += h) {
+      const p = t <= pl.tb ? segPos(pl.down, t) : segPos(pl.up, t);
+      if (len(sub(p, pr)) < c.skipNear || len(sub(p, pc)) < c.skipNear) continue;
+      const x = o.clearAt(t, p, near) - needAt(p) + c.margin;
+      if (x < m) { m = x; w = { t, p, q: near.q }; }
+      if (m < stop) break;
+    }
+    return { m, w };
+  };
+  // the contact's own flight first (its spot, its time chosen in its window — as authored): kept exactly when it is
+  // physical (a believable restitution, not a slam), lands in the gate when the hands' path goes between the legs, and
+  // is clear of the body — only a flight that fails one of those is planned anew
+  const pbA = o.pbContact || o.pb;
+  const A = pbA && planDribble({ tr, trPlan, prPlan, pr, vr, tb: o.tb, tbWindow: o.tbWindow, pb: pbA, tc, pc, vc, g, floorY, R, w0, q0, matchEnd });
+  let whyNot = null;
+  if (A) {
+    A.pb = [pbA[0], yb, pbA[2]];
+    const vin = Math.hypot(...A.vin), fg = gate && o.feetAt ? gateFrame(o.feetAt(A.tb)) : null;
+    const inGate = !fg || (() => { const uu = ((pbA[0] - fg.L[0]) * fg.d[0] + (pbA[2] - fg.L[1]) * fg.d[1]) / fg.w, off = Math.abs((pbA[0] - fg.L[0]) * fg.d[1] - (pbA[2] - fg.L[1]) * fg.d[0]); return uu >= 0.18 && uu <= 0.82 && off <= 0.12; })();
+    whyNot = !(A.restitution >= c.restRange[0] && A.restitution <= c.restRange[1]) ? `restitution ${A.restitution.toFixed(2)}` : vin > c.maxImpact * 1.15 ? `${vin.toFixed(1)} m/s into the floor` : !inGate ? 'not between the feet' : null;
+    // (the dribble layer — a loop whose catch frames are built to meet its own bounces — keeps its tempo: a restitution
+    // its dribble clock forces is not re-timed; only a move's flights are)
+    if (whyNot && inGate && (o.trust ?? 1) < 1) whyNot = null;
+    if (!whyNot) {
+      // (the contact's own flight keeps its place a little closer to the body than a new one is put: contactMargin)
+      const { m } = clearance(A);
+      A.clear = m;
+      if (m >= c.contactMargin) return { ...A, gate: !!gate, cost: 0, clearance: m, checked: 1, why: 'contact' };
+      whyNot = `${(m * 100).toFixed(1)} cm from the body`;
+    }
+  }
+  // a re-plan starts from the contact's own flight — its time, its spot — and moves it (the same flight at any frame
+  // rate, near the motion's). Only its clearance failed: its time stays (the spot moves), and a move that does not
+  // clear it by ≥ 3 mm more keeps it as it was. Its physics or the gate failed: every time of the window is tried.
+  const onlyClear = !!A && A.clear != null;
+  if (A && !gate) {
+    const S = slice(A.tb);
+    if (S) { if (onlyClear) starts.length = 0; starts.unshift({ S, tb: A.tb, x: pbA[0], z: pbA[2], cost: costOf(S, pbA[0], pbA[2]) }); }
+    if (S && onlyClear) {
+      // (and the best spots at that time on rings around the contact's spot)
+      for (const r of [0.04, 0.08, 0.12]) for (let a = 0; a < 8; a++) { const x = pbA[0] + r * Math.cos((a * Math.PI) / 4), z = pbA[2] + r * Math.sin((a * Math.PI) / 4); starts.push({ S, tb: A.tb, x, z, cost: costOf(S, x, z) }); }
+      const head = starts.shift(); starts.sort((a, b) => a.cost - b.cost); starts.unshift(head);
+    }
+  }
+  // every flight tried scores its cost + how far short of clear it is (× how much the body's prediction is trusted: a
+  // move's own future pose fully, the dribble layer's — its pose now — less); a clear one scores its cost. The best
+  // wins; a clear one nearly as cheap as the best spot ends the search
+  let checked = A ? 1 : 0, best = null;
+  const tried = [], lam = c.deficitCost * (o.trust ?? 1), good = Math.min(...starts.map((q) => q.cost)) + 0.03;
+  for (const s0 of starts) {
+    if (checked >= c.checks) break;
+    if (tried.some((q) => Math.abs(q.tb - s0.tb) < 0.004 && Math.hypot(q.x - s0.x, q.z - s0.z) < 0.015)) continue;
+    let k = s0;
+    for (let rep = 0; rep <= c.repairs && checked < c.checks; rep++) {
+      tried.push(k); checked++;
+      const pl = solve(k);
+      if (!pl) break;
+      const { m, w } = clearance(pl), clear = m >= c.margin, score = k.cost + lam * Math.max(0, c.margin - m);
+      if (!best || score < best.score) best = done(pl, k, { clearance: m, checked, repairs: rep, score, why: !clear ? 'best-effort' : gate ? 'gate' : rep ? 'moved' : 'spot', whyNot });
+      if (clear) { if (k.cost <= good) return best; break; }
+      if (o.debug) o.debug.push({ tb: +k.tb.toFixed(3), x: +k.x.toFixed(3), z: +k.z.toFixed(3), cost: +k.cost.toFixed(4), cl: +m.toFixed(3), at: +w.t.toFixed(3), p: w.p.map((q) => +q.toFixed(3)) });
+      // repair: move the bounce away from where the flight touched (horizontally), by the deficit over how far the
+      // bounce moves the ball at that moment (down: (τ/Td)²(2 − τ/Td); up: 1 − τ/Tu)
+      if (!w?.q) break;
+      const sens = w.t <= k.tb ? (() => { const u = clamp((w.t - tr) / Math.max(1e-3, k.tb - tr), 0, 1); return u * u * (2 - u); })() : clamp(1 - (w.t - k.tb) / Math.max(1e-3, tc - k.tb), 0, 1);
+      let d = [w.p[0] - w.q[0], w.p[2] - w.q[2]];
+      const dl = Math.hypot(d[0], d[1]);
+      if (dl < 1e-4 || sens < 0.15) break;
+      d = [d[0] / dl, d[1] / dl];
+      const step = Math.min(0.12, (c.margin - m + 0.004) / sens);
+      const x = k.x + d[0] * step, z = k.z + d[1] * step;
+      k = { S: k.S, tb: k.tb, x, z, cost: costOf(k.S, x, z) };
+    }
+  }
+  // (a clearance-only re-plan that gains < 3 mm keeps the contact's own flight; so does a physics re-plan that is not
+  // clearly more physical — the motion's own timing may allow nothing better: a 0.12 s dribble from the hip is a slam
+  // whatever its bounce)
+  if (onlyClear && (!best || best.clearance < A.clear + 0.003)) return { ...A, gate: !!gate, cost: 0, clearance: A.clear, checked, why: 'contact', whyNot };
+  if (A && !onlyClear && !gate && best) {
+    // (scored as the others: its cost + how far short of clear it is — a re-plan has to beat it by c.better)
+    const S = slice(A.tb), costA = S ? costOf(S, pbA[0], pbA[2]) : Infinity, mA = clearance(A).m, scoreA = costA + lam * Math.max(0, c.margin - mA);
+    if (!(best.score < scoreA - c.better && best.clearance >= Math.min(c.margin, mA) - 0.003)) return { ...A, gate: false, cost: costA, score: scoreA, clearance: mA, checked, why: 'contact', whyNot: `${whyNot}; nothing clearly better` };
+  }
+  return best;
+}
+function gateFrame(ft) { const L = ft.l, d = [ft.r[0] - L[0], ft.r[1] - L[1]], w = Math.hypot(d[0], d[1]) || 1; return { L, d: [d[0] / w, d[1] / w], w }; }
+
 /** A hand-to-hand toss (no bounce): one arc from the release to the catch. */
 export function planToss({ tr, pr, vr, tc, pc, vc = null, g = G, floorY = 0, R = 0.12, w0 = [0, 0, 0], q0 = [0, 0, 0, 1] }) {
   return solveSegment({ t0: tr, p0: pr, v0: vr, t1: tc, p1: pc, v1: vc, g, floorY, R, w: w0, q0, kind: 'toss' });
