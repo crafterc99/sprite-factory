@@ -448,6 +448,21 @@ plays). It replaces the queued crossover, or takes over the crossover in its pre
 interruption window); once the crossover has let go of the ball, the flick back is a crossover back — and a double
 crossover recognised with the ball in one hand that waits (the crossover past its interruption window) and fires from the
 other hand is a crossover back too (the request carries the hand it was read in: never the mirrored double crossover).
+
+**Move controls (user-set triggers, 2026-10-01).** The fixed sectors above are now the *default bindings*
+(`engine3d/move-controls.mjs` DEFAULT_BINDINGS, at 45°: the borders moved to the midpoints between the bound
+angles — 45 / 112.5 / 157.5 / 202.5 / 247.5 / 315° — instead of 35 / 105 / 150°). Every move can be given any
+trigger: a sequence of 1–6 steps — `{ flick: deg }`, `{ hold: deg|'any', ms? }`, `{ spin: 'cw'|'ccw'|'any', turn? }`,
+`{ release: true }` — with angles relative to the ball hand (0 forward, 90 the ball hand, 180 back, 270 the free
+hand; mirrored in the left hand unless `mirror: false`) and a gap to the next step (default 350 ms). The recognizer
+(`engine3d/pro-stick.mjs` MoveControls, the court and the harness alike) keeps ProStick as the segmenter and matches
+every gesture against all bindings: the longest complete match wins; a single move a combo starts with plays at once
+and the combo upgrades it (`mode: 'upgrade'`, the double crossover's behaviour) or nothing plays until the combo is
+complete or its gap ran out (`mode: 'wait'`); an attempt nothing matches reads as the nearest single-step binding. A
+combo carries `degrade` (its last step read in the other hand): fired from the other hand it plays that
+(`BallSession.nextTrigger` — the double-crossover fix, generalised). Stored by `/api/mocap3d/controls`
+(data/move-controls.json + the bucket's `_meta/move-controls.json`); any `move-<name>` role given to a clip is a new
+move. The court's hook surface is `window.__controls` (the temporary panel: M or `?controls=1`).
 The recognizer lets a full flick straight back through its 150 ms cooldown, and a stick swung straight
 across between two samples (a low frame rate never reads the centre) is two flicks, not one. Keyboard:
 ← then → quickly, or **L**; touch: two swipes. The controller camera stays on the D-pad (← → orbit,
@@ -681,7 +696,11 @@ it still bounces on the floor (it used to fly hand to hand: the double crossover
   headless game (crossovers both ways, the spin, between the legs → crossover, a hold = one move,
   gestures during a move, the stick during a shot). `tests/pro-stick-court.spec.js`: the real court
   with a synthetic gamepad (every gesture, R3, the D-pad, a side camera, the keyboard, the touch zone,
-  `?pad=classic`).
+  `?pad=classic`). `tests/move-controls.test.js`: the bindings model and the recognizer (45° quantisation,
+  mirroring, the nearest move, sequences, upgrade / wait, gaps, long holds, half circles, releases, recording,
+  events); `tests/move-controls-server.test.js`: the API, validation, the disk + bucket copies, the restore after a
+  redeploy, a clip given a new move role; `tests/move-controls-court.spec.js`: a new move + a 2-step combo set
+  through the API, performed on the gamepad, recorded on the stick and saved.
 - `tests/shot-meter.test.js`: the meter's grades in clip time for every shot clip (the jump shot,
   the step-back entered at 0–4, the combo, mirrored; 30–120 Hz ticks; 1× / 0.5× / 0.25× speed), the
   bar on its mark on the frame the ball leaves, the timing → flight map (short / front rim / swish /

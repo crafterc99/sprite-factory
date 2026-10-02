@@ -151,7 +151,7 @@
 
 <div id="help">
   <span id="helpPad"><b>Controller</b> left stick move · hold <b>R2</b> run-dribble · hold <b>□</b> shoot, let go on the meter's mark (green = perfect; moving = step-back) · <b>right stick = every move</b>, relative to him: flick toward the free hand crossover · <b>flick toward the free hand, then straight back</b> (ball in the right hand: ←, then →) double crossover · forward hesi · toward the ball hand in-and-out · back-diagonal, free side between the legs · back-diagonal, ball side step-back · straight back behind the back · ¼ or ½ circle spin · hold size-up · <b>R3</b> switch hand · D-pad camera (← → orbit, ↑ ↓ zoom) · View camera mode · ✕ new ball (at the <b>LOFT</b> door behind the baseline: in / out) · <a id="padLink" href="?pad=classic" style="color:var(--accent)">classic buttons</a><br>
-  <b>Keyboard</b> WASD move · hold Shift run · hold <b>I</b>/Space shoot, let go on the mark · <b>arrows = right stick</b> (tap = flick, hold, roll ↓ ↘ → ↗ = spin; ← then → quickly = double crossover) · O cross · <b>L</b> double crossover · K spin · J hesi · U btl · H hand · <b>X</b> new ball / the LOFT door · Q/E orbit · −/= zoom · C camera · F feet</span><br>
+  <b>Keyboard</b> WASD move · hold Shift run · hold <b>I</b>/Space shoot, let go on the mark · <b>arrows = right stick</b> (tap = flick, hold, roll ↓ ↘ → ↗ = spin; ← then → quickly = double crossover) · O cross · <b>L</b> double crossover · K spin · J hesi · U btl · H hand · <b>X</b> new ball / the LOFT door · Q/E orbit · −/= zoom · C camera · F feet · <b>M</b> move controls</span><br>
   Standing = idle dribble facing the basket. Let go at speed = slide-in stop. Moves pick the variant + frame nearest your pose.
 </div>
 <div id="outfitPanel"><div class="oh"><b>Outfit</b><span id="outfitInfo" style="color:var(--dim);font-size:12px"></span><button id="outfitClose" type="button">×</button></div>
@@ -234,6 +234,7 @@ import * as GA from '/js/garments.mjs';
 import * as SF from '/js/shot-flight.mjs';
 import * as SM from '/js/shot-meter.mjs';
 import * as PS from '/js/pro-stick.mjs';
+import * as MCD from '/js/move-controls.mjs';
 import * as LM from '/js/loft.mjs';
 window.__c3dBoot = true;
 // The loft is tone mapped with AgX (the court keeps ACES), graded like its bake was checked against the Cycles render
@@ -833,8 +834,59 @@ for (const s of ['left', 'right']) {
 const keys = new Set();
 const pressedSinceTick = new Set(); // a quick tap between two frames still counts
 const GAME_KEYS = new Set(['KeyX', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyI', 'KeyJ', 'KeyK', 'KeyL', 'KeyO', 'KeyU', 'KeyH', 'KeyC', 'KeyF', 'KeyV', 'KeyB', 'KeyQ', 'KeyE', 'Minus', 'Equal', 'ShiftLeft', 'ShiftRight']);
-// the pro stick's gesture recognizers (engine3d/pro-stick.mjs): the pad's right stick (or the touch zone), the arrow keys
-const PRO_PAD = new PS.ProStick(), PRO_KBD = new PS.ProStick(PS.KEYBOARD_STICK);
+// the pro stick (engine3d/pro-stick.mjs MoveControls): the pad's right stick (or the touch zone) and the arrow keys, read
+// against the move bindings — the saved ones (GET /api/mocap3d/controls, engine3d/move-controls.mjs) once they arrive,
+// the defaults until then
+const CONTROLS = new PS.MoveControls({ sticks: { pad: {}, kbd: PS.KEYBOARD_STICK } });
+const PRO_PAD = CONTROLS.sticks.pad, PRO_KBD = CONTROLS.sticks.kbd;
+/** The saved move bindings → the recognizer (the defaults stay when the server has none or cannot be reached). */
+function loadControls() {
+  return fetch('/api/mocap3d/controls?moves=0', { credentials: 'same-origin', cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+    .then((j) => {
+      const v = CONTROLS.setControls(j.controls);
+      S.controlsInfo = v.ok ? { source: j.isDefault ? 'defaults' : 'saved', updatedAt: j.controls.updatedAt || null } : { source: 'defaults (the saved ones did not validate)', errors: v.errors };
+      return S.controlsInfo;
+    })
+    .catch((e) => { console.warn('move controls', e); S.controlsInfo = { source: 'defaults (not loaded)', error: e.message }; return S.controlsInfo; });
+}
+/**
+ * The move controls' hook surface (the designed controls UI uses only this; so does the temporary panel below and
+ * tests/move-controls-court.spec.js). Saving goes through /api/mocap3d/controls and applies what the server kept.
+ */
+{
+  const api = async (method, url, body) => {
+    const r = await fetch(url, { method, credentials: 'same-origin', cache: 'no-store', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({ error: 'HTTP ' + r.status }));
+    if (r.ok && j.controls) { CONTROLS.setControls(j.controls); S.controlsInfo = { source: j.isDefault ? 'defaults' : 'saved', updatedAt: j.controls.updatedAt || null, savedToCloud: j.savedToCloud }; }
+    return { ok: r.ok, status: r.status, ...j };
+  };
+  const roleUrl = (role, q = '') => `/api/mocap3d/controls/${encodeURIComponent(role)}?moves=0${q}`;
+  window.__controls = {
+    engine: CONTROLS,                                         // (the recognizer itself: engine3d/pro-stick.mjs MoveControls)
+    ready: null,                                              // (a promise: the saved bindings applied — set at boot)
+    info: () => ({ ...S.controlsInfo }),
+    get: () => CONTROLS.controls,                             // { version, bindings, updatedAt }
+    defaults: () => MCD.defaultControls(),
+    registry: () => CONTROLS.registry({ roles: S.roles, lib: S.player?.lib }),   // every move: clips, switchesHand, triggers
+    describe: (b) => MCD.describeBinding(b), arrows: (b) => MCD.arrowsOf(b), describeStep: (s, o) => MCD.describeStep(s, o),
+    conflicts: (binding, o) => CONTROLS.conflicts(binding, o),
+    setTrigger: (role, binding, { unbindOthers = false } = {}) => api('PUT', roleUrl(role, unbindOthers ? '&unbindOthers=1' : ''), binding == null ? { steps: null } : Array.isArray(binding) ? { bindings: binding } : binding),
+    clearTrigger: (role) => api('DELETE', roleUrl(role)),
+    setAll: (bindings) => api('PUT', '/api/mocap3d/controls?moves=0', { bindings }),
+    reset: (role = null, { unbindOthers = false } = {}) => api('POST', '/api/mocap3d/controls/reset?moves=0', role ? { role, unbindOthers } : {}),
+    reload: () => loadControls(),
+    apply: (controls) => CONTROLS.setControls(controls),       // (this page only, not saved: try a binding out)
+    startRecording: (role, o) => CONTROLS.startRecording(role, o),
+    cancelRecording: () => CONTROLS.cancelRecording(),
+    recording: () => CONTROLS.recording,
+    simulate: (steps, o) => CONTROLS.simulate(steps, { lib: S.player?.lib || null, ...o }),
+    test: (on = true) => CONTROLS.test(on),
+    on: (fn) => CONTROLS.on(fn),
+    history: () => CONTROLS.history(),
+    trail: (src = null) => CONTROLS.trail(src),
+  };
+}
 window.addEventListener('gamepaddisconnected', () => PRO_PAD.reset());
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return; // browser shortcuts (Cmd+F, Ctrl+C) are not game input
@@ -852,7 +904,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => { keys.delete(e.code); if (e.code === 'KeyI' || e.code === 'Space') S.shootUpAt = performance.now(); });   // (the shot meter: when the shot key came up, between two frames)
 // keys held while the window loses focus never get a keyup: drop all held input
-const dropInput = () => { keys.clear(); pressedSinceTick.clear(); touch.shoot = touch.run = false; touch.id = null; touch.x = touch.y = 0; sb.style.display = 'none'; touch.rid = null; touch.rx = touch.ry = 0; touch.rpk = null; PRO_PAD.reset(); PRO_KBD.reset(); };
+const dropInput = () => { keys.clear(); pressedSinceTick.clear(); touch.shoot = touch.run = false; touch.id = null; touch.x = touch.y = 0; sb.style.display = 'none'; touch.rid = null; touch.rx = touch.ry = 0; touch.rpk = null; CONTROLS.reset(); };
 window.addEventListener('blur', dropInput);
 document.addEventListener('visibilitychange', () => { if (document.hidden) dropInput(); });
 const touch = { x: 0, y: 0, shoot: false, tap: false, move: false, id: null, ox: 0, oy: 0, rid: null, rx: 0, ry: 0, rox: 0, roy: 0, rpk: null, door: false };
@@ -975,7 +1027,7 @@ function readInput(now = performance.now()) {
     if (touch.rid != null) { rx = touch.rx; ry = touch.ry; } else if (touch.rpk) { rx = touch.rpk[0]; ry = touch.rpk[1]; }
     touch.rpk = null;
     const kl = Math.hypot(ax, ay) || 1;
-    const gk = PRO_KBD.sample(ax / kl, ay / kl, now), gpad = PRO_PAD.sample(rx, ry, now);
+    const gk = CONTROLS.sample('kbd', ax / kl, ay / kl, now), gpad = CONTROLS.sample('pad', rx, ry, now);
     stick = gpad || gk;
   }
   setText($('pad'), gp ? '🎮 ' + (gp.id.split('(')[0].trim().slice(0, 22) || 'controller') + (PAD_MODE === 'pro' ? ' · pro stick' : ' · classic') : (COARSE ? 'touch' : 'keyboard'));
@@ -994,7 +1046,8 @@ const S = {
   cam: 'chase', camYaw: 0, camDist: 5.2, camPos: new THREE.Vector3(), camLook: new THREE.Vector3(),
   dbg: false, toastUntil: 0,
   stickLog: [], stickNoteUntil: 0,   // the pro stick: every gesture and where it went (window.__stick.log()), its note
-  stickPrev: null,                   // the last gesture it routed (the double crossover: a crossover flick, then straight back)
+  stickHand: null, stickDegrade: undefined, stickReplace: true,   // the stick request: the hand it was read in, a combo's degrade, replace a queued one
+  controlsInfo: { source: 'defaults (loading)' },                  // where the move bindings came from
 };
 try { S.speed = parseFloat(localStorage.getItem('court3d_speed')) || 1; } catch {}
 $('speed').value = S.speed; $('speedLbl').textContent = S.speed.toFixed(2) + '×';
@@ -1022,23 +1075,37 @@ function shotRole(moving) {
 /** The pro stick's note (bottom centre): a move with no clip yet, or the move it fell back to. */
 function stickNote(text, ms = 1300) { const el = $('stickNote'); setText(el, text); el.style.display = 'block'; S.stickNoteUntil = performance.now() + ms; }
 /**
- * A right-stick gesture (engine3d/pro-stick.mjs) → the move: relative to his facing and the ball hand, the role
- * the library has (a move with no clip falls back: behind the back → between the legs → crossover → the crossover
- * dribble). Ignored with no ball, the shot button held or a shot playing (never buffered). Logged either way.
- * @returns the role to request, or null
+ * The right stick (engine3d/pro-stick.mjs MoveControls): a gesture this frame (g), or none (a 'wait' combo running
+ * out, a recording ending) → the move, read against the move bindings: relative to his facing and the ball hand,
+ * the role the library has (a move with no clip falls back: behind the back → between the legs → crossover → the
+ * crossover dribble). Ignored with no ball, the shot button held or a shot playing (never buffered). Logged either
+ * way. Moves a 'wait' combo held back come first (requested here, in order); a combo carries its degrade.
+ * @returns the role to request now, or null
  */
-function stickMove(g, camFwd, camRight, shootHeld) {
+function stickMove(g, camFwd, camRight, shootHeld, now) {
   const P = S.player;
-  const res = PS.routeGesture(g, { P, ctl: S.ball ? S.ball.ctl : { heldHand: S.phys?.heldHand }, lib: P.lib, camFwd, camRight, shootHeld, prev: S.stickPrev });
-  S.stickPrev = res.combo ? null : res;
-  S.stickLog.push({ t: +(S.gameT || 0).toFixed(3), ...res, a: +g.a.toFixed(1), theta: res.theta != null ? +res.theta.toFixed(1) : null });
-  if (S.stickLog.length > 200) S.stickLog.shift();
-  if (res.ignored) return null;
-  const note = PS.gestureNote(res, ROLE_NAMES);
-  if (note) stickNote(note); else if (S.dbgBall) stickNote(PS.GESTURE_NAMES[res.gesture] + (res.kind === 'hold' ? ' (hold)' : ''), 900);
-  if (res.handSwitch) { if (P.mode === 'loco') switchHand(); return null; }
-  S.stickHand = res.hand || null;   // (the hand the ball was in when it was read: a double crossover fired later from the other hand is a crossover back)
-  return res.role ? trigger(res.role) : null;
+  const ctx = { P, ctl: S.ball ? S.ball.ctl : { heldHand: S.phys?.heldHand }, lib: P.lib, camFwd, camRight, shootHeld };
+  const res = g ? CONTROLS.read(g, ctx) : CONTROLS.tick(now, ctx);
+  if (!res || res.recording) return null;
+  const all = [...(res.before || []), res];
+  let role = null;
+  all.forEach((r, i) => {
+    S.stickLog.push({ t: +(S.gameT || 0).toFixed(3), ...r, before: undefined, keys: undefined, a: r.a ?? (g ? +g.a.toFixed(1) : null), theta: r.theta != null ? +r.theta.toFixed(1) : null });
+    if (S.stickLog.length > 200) S.stickLog.shift();
+    if (r.ignored || r.waiting) return;
+    const note = PS.gestureNote(r, ROLE_NAMES);
+    if (note) stickNote(note); else if (S.dbgBall) stickNote((r.label || PS.GESTURE_NAMES[r.gesture] || r.gesture) + (r.kind === 'hold' ? ' (hold)' : '') + (r.nearest ? ' · nearest' : '') + (r.upgradeOf ? ' · upgrade' : ''), 900);
+    if (r.handSwitch) { if (P.mode === 'loco') switchHand(); return; }
+    const want = r.role ? trigger(r.role) : null;
+    if (!want) return;
+    // (a move a 'wait' combo held back: requested now, before this one — the first replaces a queued stick request)
+    if (i < all.length - 1) { S.ball?.requestMove(want, S.gameT || 0, { src: 'stick', replace: i === 0, hand: r.hand }); return; }
+    role = want;
+    S.stickHand = r.hand || null;   // (the hand the ball was in when it was read: a combo fired later from the other hand plays its degrade)
+    S.stickDegrade = r.combo ? r.degrade : undefined;
+    S.stickReplace = !(res.before && res.before.length);
+  });
+  return role;
 }
 
 // ═══ The ball in play (physics owns it; these only give it impulses) ═══
@@ -1395,7 +1462,7 @@ function drawBallContactDbg() {
     // (the shot meter: its phase; the last shot — its grade, its outcome, bent in the air, in or out)
     `shot      meter ${S.meter?.enabled ? S.meter.phase : 'off'}${B.lastShot ? ` · last ${B.lastShot.meter ? `${B.lastShot.meter.label} (${Math.round(B.lastShot.meter.e * 1000)} ms) → ` : B.lastShot.provisional ? 'held → ' : ''}${B.lastShot.outcome}${B.lastShot.reaimed ? ' (bent in the air)' : ''}${B.lastShot.result ? (B.lastShot.result.made ? ' · in' : ' · out') : ''}` : ''}`,
     // (the pro stick: its last gesture — kind, move, θ from his facing toward the free hand — and where it went)
-    `stick     ${PAD_MODE === 'classic' ? 'classic (face buttons)' : (() => { const q = S.stickLog.at(-1); return q ? `${q.kind} ${q.gesture || ''}${q.theta != null ? ` θ ${q.theta}°` : ''}${q.hand ? ' (' + q.hand + ')' : ''} → ${q.ignored ? 'ignored: ' + q.ignored : q.role ? q.role + (q.fellBack ? ' (fallback)' : '') : q.handSwitch ? 'hand switch' : 'no clip'}` : '—'; })()}`,
+    `stick     ${PAD_MODE === 'classic' ? 'classic (face buttons)' : (() => { const q = S.stickLog.at(-1); return !q ? '—' : q.waiting ? `${q.kind} → waiting for ${q.waiting.join(', ')}` : `${q.kind} ${q.gesture || ''}${q.theta != null ? ` θ ${q.theta}°` : ''}${q.hand ? ' (' + q.hand + ')' : ''}${q.combo ? ' combo' : ''}${q.nearest ? ' nearest' : ''}${q.late != null ? ` +${q.late} ms` : ''} → ${q.ignored ? 'ignored: ' + q.ignored : q.role ? q.role + (q.fellBack ? ' (fallback)' : '') : q.handSwitch ? 'hand switch' : 'no clip'}`; })()}`,
     `stats     ${C.stats.releases} releases · ${C.stats.bounces} bounces · ${C.stats.catches} catches · catch err ${f2(C.stats.maxCatchErr)} · leg slides ${C.stats.legSlides || 0}`,
     `safety    recoveries ${C.recoveries} · rejected ${C.rejected} · floor fixes ${C.stats.floorViolations} · buffer ${B.buffer.map((b) => b.role).join(', ') || '—'}`,
     ...C.log.slice(-5),
@@ -2019,8 +2086,9 @@ function gameTick(dt, rdt, inp, now) {
   if (!trig && inp.edge.hesi) trig = trigger('move-hesi');
   if (!trig && inp.edge.btl) trig = trigger('move-btl');
   if (!trig && inp.edge.doubleCross) trig = trigger('move-double-cross');
-  // the right stick (pro stick): the gesture → the move (a shot on this tick wins; ignored while □ is held)
-  if (inp.stick) { const st = stickMove(inp.stick, camF, camR, shootHeld); if (!trig && st) { trig = st; trigSrc = 'stick'; } }
+  // the right stick (pro stick): the gesture → the move (a shot on this tick wins; ignored while □ is held); with no
+  // gesture the bindings still tick (a 'wait' combo running out, a recording ending)
+  if (PAD_MODE === 'pro') { const st = stickMove(inp.stick, camF, camR, shootHeld, now); if (!trig && st) { trig = st; trigSrc = 'stick'; } }
   if (inp.edge.hand && P.mode === 'loco') switchHand();
   // (game time: a slow frame is capped, the wait is measured in dribbles, not wall-clock)
   if (S.ball) {
@@ -2029,7 +2097,7 @@ function gameTick(dt, rdt, inp, now) {
     // window — and a move for the other hand plays a crossover dribble first
     S.gameT = (S.gameT || 0) + dt;
     // (a newer stick gesture replaces its queued one: the latest wins, never a backlog of moves)
-    if (trig) S.ball.requestMove(trig, S.gameT, trigSrc ? { src: trigSrc, replace: true, hand: S.stickHand } : undefined);
+    if (trig) S.ball.requestMove(trig, S.gameT, trigSrc ? { src: trigSrc, replace: S.stickReplace !== false, hand: S.stickHand, ...(S.stickDegrade !== undefined ? { degrade: S.stickDegrade } : {}) } : undefined);
     const fire = S.ball.nextTrigger(S.gameT);
     if (fire?.missing) toast(`No ${ROLE_NAMES[fire.missing] || fire.missing} for this hand.`);
     const r = P.update(dt, { move: [mv.x, mv.z], sprint: inp.sprint, face: faceAt(), trigger: fire?.role || null, triggerHand: fire?.hand });
@@ -2473,6 +2541,8 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     loadMsg('finding clips…');
     const libInfo = await getJSON('/api/mocap3d/library', { label: 'clip library' });
     S.roles = libInfo.roles || {};
+    // the move bindings (not waited for: the defaults play until they arrive)
+    window.__controls.ready = loadControls();
     const focus = QS.get('focus');
     let court = libInfo.court || [];
     // ?focus=<motionId>: play that clip in its role (unassigned: loop → idle, action → the shot button)
@@ -2583,7 +2653,7 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     if (QS.get('balldbg') === '1' || QS.get('balltest')) toggleBallDbg(true);
     window.__court3d = S; // for automated checks
     // the pro stick: every gesture and where it went; the mode; clear the recognizers
-    window.__stick = { log: () => S.stickLog.slice(), mode: PAD_MODE, reset: () => { PRO_PAD.reset(); PRO_KBD.reset(); S.stickLog.length = 0; S.stickPrev = null; } };
+    window.__stick = { log: () => S.stickLog.slice(), mode: PAD_MODE, reset: () => { CONTROLS.reset(); S.stickLog.length = 0; } };
     window.__outfitReady = setupOutfit(charId).catch((e) => console.warn('outfit', e));
     window.__outfit = { state: () => S.outfit?.state() || [], sel: () => ({ ...OUTFIT.sel }), wear: (slot, id, c) => wearGarment(slot, id, c).then((ok) => { saveOutfit(); renderOutfitPanel(); return ok; }), color: (slot, c) => { if (OUTFIT.sel[slot]) { OUTFIT.sel[slot].color = c; S.outfit?.setColor(slot, c); renderOutfitPanel(); } }, sim: (on) => { OUTFIT.sim = !!on; if (S.outfit) S.outfit.sim = !!on; }, index: () => OUTFIT.index };
     window.__c3dTest = c3dTestHooks();
@@ -2621,5 +2691,113 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
   requestAnimationFrame(tick);
 })();
 </script>
+<!-- ═══ TEMPORARY: move-controls debug panel (M, or ?controls=1) ═══════════════════════════════════════════════
+     A plain stand-in until the designed controls UI replaces it: delete this whole block (style + markup + script, down
+     to "END move-controls debug panel"). It uses only window.__controls — the hook surface the designed UI will use. -->
+<style>
+  #mcPanel { position:fixed; right:12px; top:56px; z-index:11; width:min(560px, calc(100vw - 24px)); max-height:calc(100vh - 70px); overflow:auto; background:#10131c; border:1px solid #39405a; border-radius:8px; padding:8px; font:12px/1.4 ui-monospace, Menlo, monospace; color:#dde; display:none; }
+  #mcPanel table { width:100%; border-collapse:collapse; margin:6px 0; }
+  #mcPanel td, #mcPanel th { border-bottom:1px solid #262b3d; padding:3px 4px; text-align:left; vertical-align:top; }
+  #mcPanel tr.sel td { background:#1d2540; }
+  #mcPanel tr.na td { color:#778; }
+  #mcPanel button { font:inherit; font-size:11px; padding:1px 6px; margin:1px; }
+  #mcPanel .mc-box { border:1px solid #39405a; border-radius:6px; padding:6px; margin:6px 0; }
+  #mcPanel .mc-warn { color:#ffb347; } #mcPanel .mc-ok { color:#6ddc8b; } #mcPanel .mc-dim { color:#889; }
+  #mcPanel canvas { background:#0b0d14; border:1px solid #262b3d; float:right; margin-left:6px; }
+</style>
+<div id="mcPanel" role="dialog" aria-label="Move controls (temporary)">
+  <div><b>Move controls</b> <span class="mc-dim">(temporary debug panel · M)</span> <span id="mcInfo" class="mc-dim"></span>
+    <span style="float:right"><button id="mcResetAll" type="button">reset all to defaults</button><button id="mcClose" type="button">×</button></span></div>
+  <div class="mc-dim">Angles are relative to the ball hand: 0 forward · 90 toward the ball hand · 180 back · 270 toward the free hand (ball in the right hand: ← is 270). Mirrored in the left hand.</div>
+  <table><thead><tr><th>move</th><th>clips</th><th>⇄</th><th>trigger</th><th></th></tr></thead><tbody id="mcRows"></tbody></table>
+  <div class="mc-box" id="mcRec">
+    <div><b>Record a trigger</b> for <span id="mcRecRole">— pick a move above —</span>
+      <label><input id="mcWait" type="checkbox"> combo waits (no upgrade)</label>
+      <label><input id="mcMirror" type="checkbox" checked> mirrored in the left hand</label></div>
+    <div><button id="mcRecBtn" type="button" disabled>Record</button><button id="mcRecCancel" type="button" disabled>Cancel</button>
+      <span id="mcRecState" class="mc-dim">Record, then do the move on the right stick (or the arrow keys); it ends ~0.65 s after your last gesture.</span></div>
+    <div id="mcRecOut"></div>
+  </div>
+  <div class="mc-box"><canvas id="mcTrail" width="110" height="110"></canvas><b>Live</b> <span class="mc-dim">what the stick read, and what fired</span>
+    <div id="mcLive" style="min-height:110px"></div></div>
+</div>
+<script type="module">
+// (temporary: the designed controls UI replaces this — see the comment above)
+const $ = (id) => document.getElementById(id);
+const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const P = { open: false, sel: null, rec: null, off: null, live: [], trail: [], timer: null };
+const C = () => window.__controls;
+function info() { const i = C()?.info() || {}; $('mcInfo').textContent = `· ${i.source || ''}${i.updatedAt ? ' ' + i.updatedAt.slice(0, 19).replace('T', ' ') : ''}${i.savedToCloud === false ? ' · NOT in the bucket' : ''}`; }
+function rows() {
+  if (!C()) return;
+  const reg = C().registry().filter((m) => m.input === 'stick');
+  $('mcRows').innerHTML = reg.map((m) => `<tr data-role="${esc(m.role)}" class="${m.role === P.sel ? 'sel' : ''} ${m.available ? '' : 'na'}">
+    <td>${esc(m.label)}<br><span class="mc-dim">${esc(m.role)}${m.custom ? ' · new' : ''}</span></td>
+    <td>${m.clips.length ? m.clips.map((c) => esc(c.name)).join('<br>') : '<span class="mc-dim">no clip</span>'}</td>
+    <td>${m.switchesHand == null ? '?' : m.switchesHand ? '⇄' : '—'}</td>
+    <td>${m.triggers.length ? m.triggers.map((b, i) => `<b>${esc(m.arrows[i])}</b> <span class="mc-dim">${esc(m.describe[i])}</span>`).join('<br>') : '<span class="mc-warn">no trigger</span>'}</td>
+    <td><button data-act="pick" type="button">select</button><button data-act="clear" type="button">clear</button><button data-act="default" type="button">default</button></td></tr>`).join('');
+  info();
+}
+async function act(role, a) {
+  if (a === 'pick') { P.sel = role; $('mcRecRole').textContent = role; $('mcRecBtn').disabled = false; rows(); return; }
+  const r = a === 'clear' ? await C().clearTrigger(role) : await C().reset(role);
+  if (!r.ok) $('mcRecOut').innerHTML = `<span class="mc-warn">${esc(r.error)}${(r.conflicts || []).map((c) => ' · ' + esc(c.text || c.role)).join('')}</span>`;
+  rows();
+}
+async function record() {
+  if (!P.sel) return;
+  $('mcRecBtn').disabled = true; $('mcRecCancel').disabled = false; $('mcRecOut').textContent = '';
+  $('mcRecState').innerHTML = `<span class="mc-warn">recording ${esc(P.sel)} — do it on the stick now…</span>`;
+  const res = await C().startRecording(P.sel, { mode: $('mcWait').checked ? 'wait' : undefined, mirror: $('mcMirror').checked });
+  $('mcRecBtn').disabled = false; $('mcRecCancel').disabled = true;
+  if (res.cancelled) { $('mcRecState').textContent = `not recorded (${res.reason})`; return; }
+  P.rec = res;
+  $('mcRecState').innerHTML = `recorded: <b>${esc(C().arrows(res.binding))}</b> ${esc(res.describe)}`;
+  const same = res.conflicts.filter((c) => c.type === 'same');
+  $('mcRecOut').innerHTML = `<pre style="white-space:pre-wrap;margin:4px 0">${esc(JSON.stringify(res.binding))}</pre>`
+    + res.conflicts.map((c) => `<div class="${c.type === 'same' ? 'mc-warn' : 'mc-dim'}">${esc(c.type)}: ${esc(c.text)}</div>`).join('')
+    + `<button id="mcSave" type="button">Save</button>${same.length ? `<button id="mcSaveTake" type="button">Save (take it from ${esc(same.map((c) => c.role).join(', '))})</button>` : ''}<button id="mcTry" type="button">Try (this page only)</button><button id="mcDrop" type="button">Discard</button>`;
+  const save = async (unbindOthers) => { const r = await C().setTrigger(res.role, res.binding, { unbindOthers }); $('mcRecState').innerHTML = r.ok ? `<span class="mc-ok">saved${r.savedToCloud ? ' (bucket too)' : ''}</span>` : `<span class="mc-warn">${esc(r.error)}${(r.conflicts || []).map((c) => ' · ' + esc(c.text || c.role)).join('')}</span>`; if (r.ok) $('mcRecOut').textContent = ''; rows(); };
+  $('mcSave').onclick = () => save(false);
+  if ($('mcSaveTake')) $('mcSaveTake').onclick = () => save(true);
+  $('mcTry').onclick = () => { const cur = C().get(); const v = C().apply({ bindings: [...cur.bindings.filter((b) => b.role !== res.role), res.binding] }); $('mcRecState').innerHTML = v.ok ? 'trying it on this page (not saved)' : `<span class="mc-warn">${esc(v.errors.join('; '))}</span>`; rows(); };
+  $('mcDrop').onclick = () => { $('mcRecOut').textContent = ''; $('mcRecState').textContent = 'discarded'; };
+}
+function onEvent(e) {
+  if (e.type === 'sample') { P.trail.push([e.x, e.y, e.t]); if (P.trail.length > 90) P.trail.shift(); return; }
+  if (e.type === 'bindings') { rows(); return; }
+  if (e.type === 'record' && e.phase === 'step') { $('mcRecState').innerHTML = `<span class="mc-warn">recording ${esc(e.role)}: ${esc(C().arrows({ steps: e.steps }))}</span>`; return; }
+  let line = null;
+  if (e.type === 'read') { const r = e.read; line = `${r.steps.map((x) => x.kind[0] + Math.round(x.a)).join(' ')} → <b>${esc(r.label)}</b>${r.role && r.role !== r.binding ? ' as ' + esc(r.role) : ''}${r.handSwitch ? ' (crossover dribble)' : ''}${r.missing ? ' <span class="mc-warn">no clip</span>' : ''} <span class="mc-dim">${r.match}${r.combo ? ' · combo' : ''}${r.upgradeOf ? ' · upgrades ' + esc(r.upgradeOf) : ''}${r.late != null ? ' · +' + r.late + ' ms' : ''} · ${r.hand}</span>`; }
+  else if (e.type === 'waiting') line = `${e.step.kind[0]}${Math.round(e.step.a)} → <span class="mc-dim">waiting for ${esc(e.waiting.join(', '))}</span>`;
+  else if (e.type === 'ignored') line = `<span class="mc-dim">ignored: ${esc(e.reason)}</span>`;
+  else if (e.type === 'step') line = null;
+  if (line) { P.live.unshift(`<span class="mc-dim">${(performance.now() / 1000).toFixed(2)}</span> ${line}`); P.live.length = Math.min(P.live.length, 10); $('mcLive').innerHTML = P.live.join('<br>'); }
+}
+function drawTrail() {
+  const cv = $('mcTrail'), g = cv.getContext('2d'), W = cv.width, R = W / 2 - 6, now = performance.now();
+  g.clearRect(0, 0, W, W); g.strokeStyle = '#39405a'; g.beginPath(); g.arc(W / 2, W / 2, R, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.arc(W / 2, W / 2, R * 0.3, 0, Math.PI * 2); g.stroke();
+  const pts = P.trail.filter((p) => now - p[2] < 1500);
+  g.strokeStyle = '#ff6a1a'; g.beginPath(); pts.forEach((p, i) => { const x = W / 2 + p[0] * R, y = W / 2 + p[1] * R; if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke();
+  if (P.open) requestAnimationFrame(drawTrail);
+}
+function toggle(on = !P.open) {
+  if (!C()) return;
+  P.open = on; $('mcPanel').style.display = on ? 'block' : 'none';
+  if (on) { P.off = C().on(onEvent); C().test(true); rows(); P.timer = setInterval(rows, 3000); requestAnimationFrame(drawTrail); }
+  else { P.off?.(); P.off = null; C().test(false); clearInterval(P.timer); if (C().recording()) C().cancelRecording(); }
+}
+$('mcRows').addEventListener('click', (e) => { const b = e.target.closest('button[data-act]'), tr = e.target.closest('tr[data-role]'); if (b && tr) act(tr.dataset.role, b.dataset.act); });
+$('mcRecBtn').onclick = record;
+$('mcRecCancel').onclick = () => C().cancelRecording();
+$('mcClose').onclick = () => toggle(false);
+$('mcResetAll').onclick = async () => { const r = await C().reset(); $('mcRecState').textContent = r.ok ? 'all moves back to their default triggers' : r.error; rows(); };
+window.addEventListener('keydown', (e) => { if (e.code === 'KeyM' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) toggle(); });
+if (new URLSearchParams(location.search).get('controls') === '1') { const w = () => (window.__c3dReady && C() ? toggle(true) : setTimeout(w, 300)); w(); }
+window.__controlsPanel = { toggle, open: () => P.open, select: (role) => act(role, 'pick') };
+</script>
+<!-- ═══ END move-controls debug panel ═══════════════════════════════════════════════════════════════════════════ -->
 </body>
 </html>

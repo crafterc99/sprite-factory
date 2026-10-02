@@ -33,6 +33,15 @@
  *   POST /api/mocap3d/generate                   { kind: run-dribble | crossover | crossover-moving, hand, speed } → new motion
  *   POST /api/mocap3d/import                     { name, role, fps, skeleton: mhr70|soma|smplx, frames, upAxis, units } → new motion
  *   POST /api/mocap3d/import-kimodo              raw Kimodo .npz body ?name&role&arms=dribble|crossover|none&hand&prompt → new motion
+ *
+ *   Move controls (the right-stick bindings: engine3d/move-controls.mjs, stored by lib/mocap/move-controls-store.js)
+ *   GET  /api/mocap3d/controls                   { controls, isDefault, defaults, conflicts, moves } (?moves=0: no registry)
+ *   PUT  /api/mocap3d/controls                   { bindings: [...] } replaces them all ({ reset: true }: the defaults)
+ *   PUT  /api/mocap3d/controls/:role             one move's trigger { steps, mirror?, mode?, fallback? } (or { bindings: [...] }
+ *                                                several, { steps: null } none); 409 when another move has the same trigger
+ *                                                (?unbindOthers=1 / unbindOthers: true takes it from them)
+ *   DELETE /api/mocap3d/controls/:role           the move has no trigger
+ *   POST /api/mocap3d/controls/reset             { role? } the defaults (all, or that move's)
  */
 'use strict';
 
@@ -257,6 +266,7 @@ function register(baseRouter, ctx) {
   // ── 3D animation set (skeletal runtime: engine3d/anim3d.mjs) ──────────
   const GC = require('../lib/mocap/game-clips');
   const RIG = require('../lib/mocap/character-rig');
+  const { roleDef } = require('../lib/mocap/game-roles');
   // gzipped JSON with an ETag (304 when the browser already has it)
   const sendGz = (req, res, { gz, etag, json: j }) => {
     const inm = String(req.headers['if-none-match'] || '').split(/\s*,\s*/).map((t) => t.replace(/^W\//, ''));
@@ -268,7 +278,8 @@ function register(baseRouter, ctx) {
   router.get('/api/mocap3d/library', async (req, res) => {
     try {
       const clips = await GC.library();
-      json(res, { clips, court: await GC.clipsForCourt(clips), roles: GC.ROLES, characters: RIG.listCharacters() });
+      // (roles: the game's, plus the new move roles clips were given — move-<name>)
+      json(res, { clips, court: await GC.clipsForCourt(clips), roles: GC.rolesFor(clips), characters: RIG.listCharacters() });
     } catch (err) { json(res, { error: err.message }, 500); }
   });
   router.get('/api/mocap3d/characters', (req, res) => json(res, { characters: RIG.listCharacters() }));
@@ -345,9 +356,9 @@ function register(baseRouter, ctx) {
       const frames = K.toMHR70(body);
       const fps = +body.fps || 30;
       const balls = Array.isArray(body.balls) && body.balls.length === frames.length ? body.balls : GEN.synthesizeBall(frames, fps, { hand: body.hand || null });
-      const role = body.role && GC.ROLES[body.role] ? body.role : null;
+      const role = body.role && roleDef(body.role) ? body.role : null;
       const id = await GM.saveGenerated({
-        name: String(body.name || 'imported motion').slice(0, 80), role, type: body.type || (role ? GC.ROLES[role].type : 'action'),
+        name: String(body.name || 'imported motion').slice(0, 80), role, type: body.type || (role ? roleDef(role).type : 'action'),
         fps, statureM: +body.statureM || 1.8, frames, balls, source: String(body.source || body.skeleton || 'import').slice(0, 40), prompt: body.prompt ? String(body.prompt).slice(0, 500) : null,
         entryMax: body.entryMax != null ? +body.entryMax : undefined,
       });
@@ -373,8 +384,8 @@ function register(baseRouter, ctx) {
       const fps = +query.fps || 30, hand = query.hand === 'left' ? 'left' : 'right';
       const arms = ['dribble', 'crossover', 'none'].includes(query.arms) ? query.arms : 'dribble';
       const g = arms === 'dribble' ? GEN.dribbleOnto(frames, fps, { hand }) : arms === 'crossover' ? GEN.crossoverOnto(frames, fps, { hand }) : { frames, balls: GEN.synthesizeBall(frames, fps) };
-      const role = query.role && GC.ROLES[query.role] ? query.role : (arms === 'crossover' ? 'move-crossover' : null);
-      const type = query.type || (role ? GC.ROLES[role].type : arms === 'crossover' ? 'action' : 'loop');
+      const role = query.role && roleDef(query.role) ? query.role : (arms === 'crossover' ? 'move-crossover' : null);
+      const type = query.type || (role ? roleDef(role).type : arms === 'crossover' ? 'action' : 'loop');
       const id = await GM.saveGenerated({
         name: String(query.name || 'Kimodo motion').slice(0, 80), role, type, fps, statureM: 1.8, frames: g.frames, balls: g.balls,
         source: 'kimodo', prompt: query.prompt ? String(query.prompt).slice(0, 500) : null, entryMax: g.entryMax,
@@ -399,6 +410,87 @@ function register(baseRouter, ctx) {
   router.delete('/api/mocap3d/contacts/:id', async (req, res, params) => {
     try { await GC.saveBallContacts(params.id, null); json(res, { success: true, id: params.id, contacts: null }); }
     catch (err) { json(res, { error: err.message }, 400); }
+  });
+
+  // ── Move controls: the right-stick bindings — which gesture / sequence plays which move ──
+  const MCS = require('../lib/mocap/move-controls-store');
+  const MCM = () => import('../engine3d/move-controls.mjs');
+  /** Every move the court can play (the library's clips by role, the roles table) with its triggers. */
+  async function moveRegistryFor(bindings) {
+    const { moveRegistry } = await MCM();
+    const lib = await GC.library();
+    const clips = {};
+    for (const c of await GC.clipsForCourt(lib)) {
+      const h = lib.find((m) => m.id === c.id)?.built?.hands;
+      (clips[c.role] ||= []).push({ id: c.id, name: c.name, ...(h?.entry ? { hand: h.entry } : {}), ...(h?.exit ? { endHand: h.exit } : {}) });
+    }
+    return moveRegistry({ roles: GC.rolesFor(lib), clips, bindings });
+  }
+  async function controlsView(controls, isDefault, query = {}, extra = {}) {
+    const { defaultControls, allConflicts } = await MCM();
+    const out = { ...extra, controls, isDefault, defaults: defaultControls(), conflicts: allConflicts(controls.bindings) };
+    if (query.moves !== '0') { try { out.moves = await moveRegistryFor(controls.bindings); } catch (e) { out.moves = null; out.movesError = e.message; } }
+    return out;
+  }
+  const sendSaved = async (res, r, query, status = 200) => {
+    if (!r.ok) return json(res, { error: 'invalid move controls', errors: r.errors, conflicts: r.conflicts || [] }, 400);
+    json(res, await controlsView(r.controls, !!r.controls.reset, query, { success: true, savedToCloud: r.savedToCloud, cloudError: r.cloudError, storage: r.storage }), status);
+  };
+  /** A move's new bindings among the rest (its place in the list kept: the order breaks exact ties). */
+  async function withRole(role, mine, { unbindOthers = false } = {}) {
+    const { normalizeBinding, conflictsOf, relation } = await MCM();
+    const errors = [];
+    const clean = mine.map((b, i) => { const r = normalizeBinding({ ...b, role }); if (!r.ok) errors.push(...r.errors.map((e) => `trigger ${i + 1}: ${e}`)); return r.binding; });
+    if (errors.length) return { errors };
+    const cur = (await MCS.load()).controls.bindings;
+    let others = cur.filter((b) => b.role !== role);
+    const conflicts = clean.flatMap((b) => conflictsOf(b, others));
+    const same = conflicts.filter((c) => c.type === 'same');
+    if (same.length && !unbindOthers) return { conflict: same, conflicts };
+    if (unbindOthers) others = others.filter((o) => !clean.some((b) => relation(b, o)?.type === 'same'));
+    const at = cur.findIndex((b) => b.role === role), before = at < 0 ? others.length : cur.slice(0, at).filter((b) => others.includes(b)).length;
+    return { bindings: [...others.slice(0, before), ...clean, ...others.slice(before)], conflicts, unbound: same.map((c) => c.role) };
+  }
+  const roleParam = async (res, role) => { const { isMoveRole } = await MCM(); if (isMoveRole(role)) return true; json(res, { error: `"${String(role).slice(0, 60)}" is not a move role (move-…)` }, 400); return false; };
+  router.get('/api/mocap3d/controls', async (req, res, params, query) => {
+    try { const st = await MCS.load(); json(res, await controlsView(st.controls, st.isDefault, query, { source: st.source })); }
+    catch (err) { json(res, { error: err.message }, 500); }
+  });
+  router.put('/api/mocap3d/controls', async (req, res, params, query) => {
+    try {
+      const body = await parseBody(req);
+      await sendSaved(res, await MCS.save(body?.reset === true ? null : body), query);
+    } catch (err) { json(res, { error: err.message }, 500); }
+  });
+  router.post('/api/mocap3d/controls/reset', async (req, res, params, query) => {
+    try {
+      const body = await parseBody(req);
+      if (!body?.role) return sendSaved(res, await MCS.save(null), query);
+      if (!(await roleParam(res, body.role))) return;
+      const { DEFAULT_BINDINGS } = await MCM();
+      const w = await withRole(body.role, DEFAULT_BINDINGS.filter((b) => b.role === body.role), { unbindOthers: body.unbindOthers === true || query.unbindOthers === '1' });
+      if (w.conflict) return json(res, { error: 'another move has this trigger', conflicts: w.conflict }, 409);
+      await sendSaved(res, await MCS.save({ bindings: w.bindings }), query);
+    } catch (err) { json(res, { error: err.message }, 500); }
+  });
+  router.put('/api/mocap3d/controls/:role', async (req, res, params, query) => {
+    try {
+      if (!(await roleParam(res, params.role))) return;
+      const body = await parseBody(req);
+      const { unbindOthers, ...b } = body || {};
+      const mine = b.steps === null || (Array.isArray(b.bindings) && !b.bindings.length) ? [] : Array.isArray(b.bindings) ? b.bindings : [b];
+      const w = await withRole(params.role, mine, { unbindOthers: unbindOthers === true || query.unbindOthers === '1' });
+      if (w.errors) return json(res, { error: 'invalid trigger', errors: w.errors }, 400);
+      if (w.conflict) return json(res, { error: 'another move has this trigger', conflicts: w.conflict }, 409);
+      await sendSaved(res, await MCS.save({ bindings: w.bindings }), query);
+    } catch (err) { json(res, { error: err.message }, 500); }
+  });
+  router.delete('/api/mocap3d/controls/:role', async (req, res, params, query) => {
+    try {
+      if (!(await roleParam(res, params.role))) return;
+      const w = await withRole(params.role, []);
+      await sendSaved(res, await MCS.save({ bindings: w.bindings }), query);
+    } catch (err) { json(res, { error: err.message }, 500); }
   });
 
   // Character rig (skinned mesh + skeleton), ?motion=&frame= to build from another scan

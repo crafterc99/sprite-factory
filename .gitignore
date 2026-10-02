@@ -25,6 +25,7 @@ data/.char-prompts.json
 data/.clothing-registry.json
 data/.cost-tracking.json
 data/.custom-animations.json
+data/move-controls.json
 data/wardrobe.json
 data/frame-prompts.json
 data/regen-anim-results.json

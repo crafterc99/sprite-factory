@@ -614,6 +614,7 @@ router.post('/api/migrate-to-storage', async (req, res) => {
     { file: 'data/.char-prompts.json',         key: '_meta/char-prompts.json',      label: 'charPrompts' },
     { file: 'data/frame-prompts.json',         key: '_meta/frame-prompts.json',     label: 'framePrompts' },
     { file: 'data/.cost-tracking.json',        key: '_meta/cost-tracking.json',     label: 'costTracking' },
+    { file: path.relative(__dirname, require('./lib/mocap/move-controls-store').FILE), key: '_meta/move-controls.json', label: 'moveControls' },
   ];
 
   for (const { file, key, label } of metaUploads) {
@@ -893,7 +894,7 @@ async function handler(req, res) {
     // shots: the release from the arm, the arc (and the shot meter's hook), the held ball clear of the hands, the shot meter;
     // the pro stick (every ball-handling move on the right stick)
     || pathname === '/js/shot-release.mjs' || pathname === '/js/shot-flight.mjs' || pathname === '/js/ball-fit.mjs' || pathname === '/js/shot-meter.mjs'
-    || pathname === '/js/pro-stick.mjs'
+    || pathname === '/js/pro-stick.mjs' || pathname === '/js/move-controls.mjs'
     // the loft behind the court's door (load, lightmapped materials, walking / camera collision)
     || pathname === '/js/loft.mjs') {
     // the basketball physics system, its contact IK and the test scenes (engine3d/)
@@ -1131,6 +1132,11 @@ if (require.main === module) {
     } catch (e) {
       console.warn('  [startup] metadata restore failed (non-fatal):', e.message);
     }
+
+    // ── STEP 6b: the move controls (the right-stick bindings) — always refreshed from storage, like movement-profiles
+    // (lib/mocap/move-controls-store.js; its own restore so the tests' stand-in bucket works too)
+    try { await require('./lib/mocap/move-controls-store').restoreFromStorage(); }
+    catch (e) { console.warn('  [startup] move-controls restore failed (non-fatal):', e.message); }
 
     // ── STEP 7: Proactively seed R2 from local state (first-run or gap fill)
     // If a file exists locally but the R2 backup is stale/missing, upload now.

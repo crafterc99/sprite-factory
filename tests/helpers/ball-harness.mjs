@@ -158,8 +158,9 @@ export async function makeGame(o = {}) {
    * Run a script: [[from, to, { move: [x, z], sprint, trig: role, hand: 'left'|'right', switchHand, shoot, shotRole, stick }], …]
    * (move = WORLD direction; 'toHoop' / 'awayHoop' / 'sideHoop' / 'diagHoop' are relative to the hoop).
    * stick: the right stick, raw [x, y-down] (or u → [x, y] over the segment, u 0…1) — the pro stick
-   * (engine3d/pro-stick.mjs) as court3d.html runs it, the chase camera behind him looking at the hoop:
-   * m.stick (every gesture and where it went), m.stickBufferMax (stick requests queued at once).
+   * (engine3d/pro-stick.mjs MoveControls, the move bindings: makeGame's o.controls, else the defaults) as
+   * court3d.html runs it, the chase camera behind him looking at the hoop: m.stick (every read and where it went),
+   * m.stickBufferMax (stick requests queued at once).
    */
   function run(script, opts = {}) {
     const T = Math.max(...script.map((s) => s[1]));
@@ -181,8 +182,7 @@ export async function makeGame(o = {}) {
     let prevObs = null;
     const ms0 = handObs.ms, n0 = handObs.n;
     const flightStart = new Map(), ev0 = evs.length;
-    const pro = new PS.ProStick(); m.stick = []; m.stickBufferMax = 0;
-    let prevStick = null;   // (the double crossover: a crossover flick, then straight back — as court3d.html stickMove)
+    const pro = new PS.MoveControls({ controls: o.controls || null, sticks: { pad: {} } }); m.stick = []; m.stickBufferMax = 0;
     for (let k = 0; t < T - 1e-9 && k < 1e6; k++) {
       const seg = script.find(([a, b]) => t >= a && t < b)?.[2] || {};
       const key = script.find(([a, b]) => t >= a && t < b);
@@ -198,13 +198,18 @@ export async function makeGame(o = {}) {
       }
       // the right stick (court3d.html gameTick → stickMove): the gesture → the move, a newer one replacing its queued one
       const sv = typeof seg.stick === 'function' ? seg.stick(key ? (t - key[0]) / (key[1] - key[0]) : 0) : (seg.stick || [0, 0]);
-      const gst = pro.sample(sv[0], sv[1], t * 1000);
-      if (gst) {
+      const gst = pro.sample('pad', sv[0], sv[1], t * 1000);
+      {
         const h = [-P.pos[0], -P.pos[1]], hl = Math.hypot(h[0], h[1]) || 1, f = [h[0] / hl, h[1] / hl];   // (the chase camera looks at the hoop)
-        const res = PS.routeGesture(gst, { P, ctl: session.ctl, lib, camFwd: f, camRight: [-f[1], f[0]], shootHeld, prev: prevStick });
-        prevStick = res.combo ? null : res;
-        m.stick.push({ t: +t.toFixed(3), a: +gst.a.toFixed(1), mode: P.mode, action: P.action?.clip?.name || null, ...res });
-        if (!res.ignored) { if (res.handSwitch) { if (P.mode === 'loco') session.requestHandSwitch(); } else if (res.role) session.requestMove(res.role, t, { src: 'stick', replace: true, hand: res.hand }); }
+        const ctx = { P, ctl: session.ctl, lib, camFwd: f, camRight: [-f[1], f[0]], shootHeld };
+        const res = gst ? pro.read(gst, ctx) : pro.tick(t * 1000, ctx);
+        // (as court3d.html stickMove: a wait that ended plays its held moves first; the newest replaces a queued one)
+        for (const r of res ? [...(res.before || []), res] : []) {
+          if (r.recording) continue;
+          m.stick.push({ t: +t.toFixed(3), a: r.a ?? +(gst?.a ?? 0).toFixed(1), mode: P.mode, action: P.action?.clip?.name || null, ...r, before: undefined });
+          if (r.ignored || r.waiting) continue;
+          if (r.handSwitch) { if (P.mode === 'loco') session.requestHandSwitch(); } else if (r.role) session.requestMove(r.role, t, { src: 'stick', replace: r === res.before?.[0] || !res.before, hand: r.hand, ...(r.combo ? { degrade: r.degrade } : {}) });
+        }
       }
       m.stickBufferMax = Math.max(m.stickBufferMax, session.buffer.filter((b) => b.src === 'stick').length);
       const trig = session.nextTrigger(t);

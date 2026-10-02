@@ -337,8 +337,9 @@ export class BallSession {
    * A move / shot request (the input). It fires at the next valid window (see nextTrigger).
    * opts.src names the input it came from ('stick': the right stick); with opts.replace a newer request
    * from that input replaces its queued one (the latest gesture wins, one at a time — never a backlog).
-   * opts.hand: the hand the ball was in when the input was read (the pro stick's double crossover is
-   * recognised against it — fired later from the other hand it is a crossover back, see nextTrigger).
+   * opts.hand: the hand the ball was in when the input was read (the pro stick's combos are recognised against it
+   * — fired later from the other hand a combo plays opts.degrade instead: the double crossover a crossover back, see
+   * nextTrigger).
    */
   requestMove(role, t = this.t, opts = {}) {
     this.stats.requests++;
@@ -350,7 +351,7 @@ export class BallSession {
     // (a full buffer pushes its oldest request out: dropped like any other — a queued shot's armed meter goes with it,
     // else the meter stays "armed" and swallows the next press)
     if (this.buffer.length >= 3) { const d = this.buffer.shift(); this.stats.dropped++; this.log(`input ${d.role} dropped (the buffer is full)`); this.dropped(d.role); }
-    this.buffer.push({ role, at: t, src: opts.src || null, hand: opts.hand === 'left' || opts.hand === 'right' ? opts.hand : null });
+    this.buffer.push({ role, at: t, src: opts.src || null, hand: opts.hand === 'left' || opts.hand === 'right' ? opts.hand : null, ...(opts.degrade !== undefined ? { degrade: opts.degrade } : {}) });
     this.log(`input ${role}${opts.src ? ' [' + opts.src + ']' : ''} (buffered)`);
   }
   requestHandSwitch() { const ok = this.P.requestHandSwitch(); if (ok) { this.stats.switches++; this.log('hand switch requested (crossover dribble)'); } return ok; }
@@ -374,10 +375,16 @@ export class BallSession {
     const rel = S?.events?.find((e) => e.type === 'release' && e.in >= 0);
     if (rel && rel.in < 0.06) { this.stats.waited++; return null; }
     const hand = holder === 'both' ? (P.hand || 'right') : holder;
-    // the double crossover was recognised with the ball in req.hand (a crossover flick, then straight back): if it
-    // waited (the crossover could not be interrupted) and the other hand has the ball by now, the flick back is a
-    // crossover back from there — never the mirrored double crossover (left → right → left)
-    if (req.role === 'move-double-cross' && req.hand && req.hand !== hand) { this.log(`double crossover (recognised in the ${req.hand} hand) fires from the ${hand} hand: a crossover back`); req.role = 'move-crossover'; }
+    // a combo was recognised with the ball in req.hand (the double crossover: a crossover flick, then straight back):
+    // if it waited (its first move could not be interrupted) and the other hand has the ball by now, its last step is
+    // that hand's own move (req.degrade, read by the pro stick) — never the mirrored combo (left → right → left)
+    if (req.hand && req.hand !== hand && (req.degrade !== undefined || req.role === 'move-double-cross')) {
+      const to = req.degrade !== undefined ? req.degrade : 'move-crossover';
+      if (req.role === 'move-double-cross' && to === 'move-crossover') this.log(`double crossover (recognised in the ${req.hand} hand) fires from the ${hand} hand: a crossover back`);
+      else this.log(`${req.role} (recognised in the ${req.hand} hand) fires from the ${hand} hand: ${to || 'nothing'} instead`);
+      if (!to) { this.buffer.shift(); this.stats.dropped++; this.dropped(req.role); return null; }
+      req.role = to; req.hand = null; delete req.degrade;   // (read once: a wait after this does not read it again)
+    }
     if (!P.hasMoveFor(req.role, hand)) {
       if (P.hasMoveFor(req.role, other(hand))) {
         if (P.mode === 'loco' && !P.switchPending) { this.requestHandSwitch(); this.log(`${req.role} starts in the ${other(hand)} hand: crossover first`); }
