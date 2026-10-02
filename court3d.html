@@ -139,6 +139,7 @@
   <a class="pill" href="/?page=testing" title="Back to the 2D test court">← 2D</a>
   <span class="pill">3D COURT <span id="state">loading</span></span>
   <span class="pill">Player <select id="selChar"></select></span>
+  <span class="pill" title="The practice court — saved on this device">Court <select id="selCourt"><option value="vantheah">VANTHEAH</option><option value="river">River</option></select></span>
   <span class="pill" title="The ball hand — the loops are mirrored for the other hand (switch: R3 / H; ?pad=classic: L1)">Hand <button id="handBtn">—</button></span>
   <span class="pill" title="Game speed (1.00× = real time). Saved on this device.">Speed <input type="range" id="speed" min="0.25" max="1.5" step="0.05"><b id="speedLbl">1.00×</b></span>
   <span class="pill">Cam <button id="camChase" class="on">2K</button><button id="camSide">Side</button><button id="camFree">Orbit</button></span>
@@ -236,6 +237,7 @@ import * as SM from '/js/shot-meter.mjs';
 import * as PS from '/js/pro-stick.mjs';
 import * as MCD from '/js/move-controls.mjs';
 import * as LM from '/js/loft.mjs';
+import * as RC from '/js/court-river.mjs';
 window.__c3dBoot = true;
 // The loft is tone mapped with AgX (the court keeps ACES), graded like its bake was checked against the Cycles render
 // (AgX Punchy +0.35 EV): plain AgX + the CSS filter "contrast(1.08) saturate(1.18)" (layout.baked.canvasFilter). The
@@ -275,9 +277,25 @@ if (window.__c3dPendingErr) window.__c3dFail(window.__c3dPendingErr);
 
 // ═══ Constants (metres; y up; rim centre above the origin; court toward +z) ═══
 const RIM_Y = 3.05, RIM_R = 0.2286, BASELINE_Z = -1.575, HALF_LEN = 14.33, HALF_W = 7.62;
-// the practice court: the VANTHEAH rooftop (full court, the game plays at its West basket), or the classic half court
-const COURT_KIND = new URLSearchParams(location.search).get('court') === 'classic' ? 'classic' : 'vantheah';
-const PLAY = COURT_KIND === 'vantheah' ? { ...VC.VANTHEAH.bounds } : { minX: -HALF_W, maxX: HALF_W, minZ: BASELINE_Z, maxZ: BASELINE_Z + HALF_LEN };
+// the practice court: the VANTHEAH rooftop (full court, the game plays at its West basket), the River waterfront court
+// (engine3d/court-river.mjs: the same frame, the same hoops), or the classic half court. ?court= first, else the
+// court this device last picked in the top bar (court3d_court), else VANTHEAH.
+const COURT_KEY = 'court3d_court';
+const COURT_KIND = (() => {
+  let k = new URLSearchParams(location.search).get('court');
+  if (!k) { try { k = localStorage.getItem(COURT_KEY); } catch {} }
+  return k === 'classic' || k === 'river' ? k : 'vantheah';
+})();
+const PLAY = COURT_KIND !== 'classic' ? { ...VC.VANTHEAH.bounds } : { minX: -HALF_W, maxX: HALF_W, minZ: BASELINE_Z, maxZ: BASELINE_Z + HALF_LEN };
+{
+  const sel = document.getElementById('selCourt');
+  if (COURT_KIND === 'classic') sel.insertAdjacentHTML('beforeend', '<option value="classic">Classic</option>');
+  sel.value = COURT_KIND;
+  sel.onchange = () => {
+    try { localStorage.setItem(COURT_KEY, sel.value); } catch {}
+    const q = new URLSearchParams(location.search); q.set('court', sel.value); location.search = q.toString();
+  };
+}
 const G = 9.81, BALL_R = 0.12;
 const $ = (id) => document.getElementById(id);
 const loadMsg = (m) => { $('loadMsg').textContent = m; };
@@ -339,7 +357,9 @@ function resize() {
   renderer.setSize(w, h); // also sets the CSS size (never a zoomed/cropped canvas)
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  for (const f of resizeHooks) f();
 }
+const resizeHooks = [];   // (the River court's reflection is sampled in screen space: its size follows the canvas)
 window.addEventListener('resize', resize);
 resize();
 
@@ -412,6 +432,7 @@ for (const [x, z, w, d] of [[0, BASELINE_Z - 5, 30, 4], [-HALF_W - 4, 6, 4, 22],
 }
 /** The VANTHEAH court replaces the classic scene: its own sky, sun, floodlights and environment. */
 async function loadPracticeCourt() {
+  if (COURT_KIND === 'river') return loadRiverCourt();
   if (COURT_KIND !== 'vantheah') return null;
   const court = await VC.loadVantheahCourt({ scene, renderer, quality: LITE ? 'mobile' : 'desktop', hide: [...charMeshes, ball],
     onProgress: (a, b) => { if (b) loadMsg(`loading the court… ${Math.round((a / b) * 100)}%`); } });
@@ -423,12 +444,51 @@ async function loadPracticeCourt() {
   S.court = court;
   return court;
 }
+/**
+ * The River court (engine3d/court-river.mjs) replaces the classic scene: its sky, sun (real shadows), glow,
+ * hemisphere, fog, AgX, its own environment, the wet reflection (desktop). Placed by VANTHEAH's frame (VC): the
+ * same hoops, the same hoop physics. The player walks its layout (bounds + push-out, as in the loft).
+ */
+async function loadRiverCourt() {
+  const [{ GLTFLoader }, { DRACOLoader }, { Reflector }] = await Promise.all([import('/vendor/three-addons/GLTFLoader.js'), import('/vendor/three-addons/DRACOLoader.js'), import('/vendor/three-addons/Reflector.js')]);
+  const mq = QS.get('riverreflect');   // ?riverreflect=0: no planar reflection (desktop) · lite devices never
+  const court = await RC.loadRiverCourt({ THREE, GLTFLoader, DRACOLoader, Reflector: LITE || mq === '0' ? null : Reflector, frame: VC, scene, renderer,
+    quality: LITE ? 'mobile' : 'desktop', hide: [...charMeshes, ball],
+    onProgress: (phase, a, b) => loadMsg(phase === 'download' ? `loading the river court… ${b ? Math.round((a / b) * 100) + '%' : (a / 1e6).toFixed(1) + ' MB'}` : 'unpacking the river court…') });
+  for (const o of classicCourt) o.visible = false;
+  scene.remove(hemi, sun, sun.target); if (fillLight) scene.remove(fillLight);
+  renderer.toneMapping = court.toneMapping === 'AgX' ? THREE.AgXToneMapping : THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = court.exposure;
+  camera.near = 0.1; camera.far = 350; camera.updateProjectionMatrix();
+  camera.layers.enable(RC.REFLECT_HIDDEN_LAYER);   // (the weeds: drawn, but kept out of the reflection)
+  if (court.reflect) resizeHooks.push(() => court.reflect.resize());
+  // a heavy scene (~1.7 M triangles, a planar reflection, a 4096 × 1024 shadow map): on a Retina desktop at most 1.5×
+  // pixels (an 8 GB M1 at 2×: 45 fps in the 2K view, at 1.5×: 60); and like the lite path it steps down to 1× when a
+  // device cannot hold 45 fps once the court has settled (step()). ?hq=1 keeps 2×.
+  if (!LITE && QS.get('hq') !== '1' && pixelRatio > 1.5) { pixelRatio = 1.5; renderer.setPixelRatio(1.5); resize(); }
+  // the loft's door: against the left wall in the waterfront corner (RC.RIVER_DOOR), its stair-house sprayed like the walls
+  placeDoor({ ...RC.RIVER_DOOR, wallMap: court.named['wall-left-a']?.material?.map || null });
+  court.W = RC.riverWorld(court.layout, VC, { overrides: court.overrides, extra: LOFT.enabled ? [RC.doorFootprint(DOOR, { depth: DOOR.depth, width: DOOR.width })] : [] });
+  // the camera stays inside the walls (the walkable rectangle, a little wider)
+  const b = court.W.bounds; court.camBox = { minX: b.minX - 0.3, maxX: b.maxX + 0.3, minZ: b.minZ - 0.3, maxZ: b.maxZ + 0.3 };
+  S.court = court; S.river = court;
+  return court;
+}
 
 // ═══ The court's door: a small rooftop stair-house behind the left end of the baseline (both court kinds), its
 // door — lit, a glowing LOFT sign over it — facing the court (seen from the start, past the hoop). ✕ there goes
 // into the loft (the LOFT section below). ═══
-const DOOR = { x: -5.2, z: PLAY.minZ - 0.35, w: 1.0, h: 2.15, depth: 1.5, width: 2.2, height: 2.85 };   // z: the door's face
-DOOR.px = DOOR.x; DOOR.pz = DOOR.z + 0.15;   // the point the prompt measures from (the door, at the floor)
+// (x, z: the middle of the door's face at the floor; yaw: the way it faces — 0 = +z, the court. The River court
+// moves it: RC.RIVER_DOOR, against its left wall)
+const DOOR = { x: -5.2, z: PLAY.minZ - 0.35, yaw: 0, w: 1.0, h: 2.15, depth: 1.5, width: 2.2, height: 2.85 };
+/** The door at { x, z, yaw }: the point the prompt measures from (the door, at the floor) and where he comes out. */
+function placeDoor(at) {
+  Object.assign(DOOR, at);
+  const fx = Math.sin(DOOR.yaw), fz = Math.cos(DOOR.yaw);
+  DOOR.px = DOOR.x + fx * 0.15; DOOR.pz = DOOR.z + fz * 0.15;
+  DOOR.ox = DOOR.x + fx * 0.95; DOOR.oz = DOOR.z + fz * 0.95;   // (just outside it, on the court)
+}
+placeDoor({});
 function doorTexture() {
   const c = document.createElement('canvas'); c.width = 256; c.height = 512;
   const g = c.getContext('2d');
@@ -466,13 +526,20 @@ function signTexture() {
 function buildCourtDoor() {
   const g = new THREE.Group(); g.name = 'LoftDoor';
   const box = (w, h, d, mat, x, y, z, cast = true) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; g.add(m); return m; };
-  const wallMat = new THREE.MeshStandardMaterial({ map: concreteTexture(), roughness: 0.92, metalness: 0.02 });
+  // (the River court paints it with its own graffiti — DOOR.wallMap, a glTF texture: v runs down, so flipped here — a
+  // crop of the wall's width per face)
+  let wallMap = null;
+  if (DOOR.wallMap) { wallMap = DOOR.wallMap.clone(); wallMap.repeat.set(0.44, -1); wallMap.offset.set(0.3, 1); wallMap.needsUpdate = true; }
+  const wallMat = wallMap ? new THREE.MeshStandardMaterial({ map: wallMap, color: 0xd8d0d8, roughness: 0.9, metalness: 0.02 })
+    : new THREE.MeshStandardMaterial({ map: concreteTexture(), roughness: 0.92, metalness: 0.02 });
   const steel = new THREE.MeshStandardMaterial({ color: 0x17171c, roughness: 0.42, metalness: 0.7 });
   // (no real light at the door: two more lights would cost every lit pixel of the court — the lamp's wash is
   // painted instead: the door a little emissive, a warm glow on the wall and a pool on the floor)
   const doorTex = doorTexture();
   const leafMat = new THREE.MeshStandardMaterial({ map: doorTex, roughness: 0.5, metalness: 0.04, emissive: 0xffa060, emissiveMap: doorTex, emissiveIntensity: 0.35 });
-  const { x, z, w, h, depth: D, width: Wd, height: H } = DOOR;
+  // (built around the door's face at the group's origin, facing +z; the group stands at the door, turned to its yaw)
+  const x = 0, z = 0, { w, h, depth: D, width: Wd, height: H } = DOOR;
+  g.position.set(DOOR.x, 0, DOOR.z); g.rotation.y = DOOR.yaw;
   const house = box(Wd, H, D, wallMat, x, H / 2, z - D / 2);                       // the stair-house (behind the door's face)
   box(Wd + 0.18, 0.12, D + 0.18, steel, x, H + 0.06, z - D / 2);                  // its roof cap
   box(0.08, h + 0.08, 0.06, steel, x - w / 2 - 0.04, (h + 0.08) / 2, z + 0.03);   // the frame
@@ -1582,6 +1649,8 @@ function updateCamera(dt, inp) {
   if (S.camFixed) { S.camPos.set(...S.camFixed.pos); S.camLook.set(...S.camFixed.look); }   // tests: a camera held still
   else {
     S.camPos.lerp(want, k); S.camLook.lerp(look, k);
+    // the River court: the camera stays inside its walls (it never looks at him through the graffiti wall)
+    if (S.river?.camBox) { const C = S.river.camBox; S.camPos.x = Math.max(C.minX, Math.min(C.maxX, S.camPos.x)); S.camPos.z = Math.max(C.minZ, Math.min(C.maxZ, S.camPos.z)); }
     // the loft's stair-house is never between the camera and the player: the camera comes in front of it
     if (S.door) {
       camHead.set(p.x, 1.45, p.z); camV.subVectors(S.camPos, camHead); const L = camV.length();
@@ -1837,7 +1906,7 @@ function enterLoft() {
   } catch (e) {
     LOFT.saved = sv; restoreCourt();
     // (if he was already moved in: back outside the court's door)
-    try { if (Math.hypot(P.pos[0] - W.spawn.x, P.pos[1] - W.spawn.z) < 20) P.teleport(DOOR.x, DOOR.z + 0.95, Math.atan2(HOOP[0] - DOOR.x, HOOP[1] - DOOR.z - 0.95)); } catch {}
+    try { if (Math.hypot(P.pos[0] - W.spawn.x, P.pos[1] - W.spawn.z) < 20) P.teleport(DOOR.ox, DOOR.oz, Math.atan2(HOOP[0] - DOOR.ox, HOOP[1] - DOOR.oz)); } catch {}
     throw e;
   }
 }
@@ -1856,7 +1925,7 @@ function restoreCourt() {
 function exitLoft() {
   restoreCourt();
   // just outside the court's door, facing the court (its hoop)
-  const x = DOOR.x, z = DOOR.z + 0.95;
+  const x = DOOR.ox, z = DOOR.oz;
   S.player.teleport(x, z, Math.atan2(HOOP[0] - x, HOOP[1] - z));
   S.outfit?.resetCloth();
   S.camSnap = true;
@@ -2129,6 +2198,13 @@ function afterUpdate(r, dt, rdt, now) {
     const n = LM.constrainDisc(P.pos, LOFT.prevPos, LM.PLAYER_R, LOFT.W);
     if (n.length) LM.slideVelocity(P.vel, n);
     LOFT.prevPos = [P.pos[0], P.pos[1]];
+  } else if (S.river?.W) {
+    // the River court: off the hoop (as on VANTHEAH), then inside its walls and out of what stands on it — the
+    // bleachers, the rubble, the hoop poles, the curb, the loft's stair-house — sliding along it (as in the loft)
+    const hd = Math.hypot(P.pos[0], P.pos[1]); if (hd < 0.9) { P.pos[0] *= 0.9 / hd; P.pos[1] *= 0.9 / hd; }
+    const n = LM.constrainDisc(P.pos, S.courtPrev, LM.PLAYER_R, S.river.W);
+    if (n.length) LM.slideVelocity(P.vel, n);
+    S.courtPrev = [P.pos[0], P.pos[1]];
   } else {
   // court bounds + keep off the stanchion (the capsule only; planted feet stay put)
   P.pos[0] = Math.max(PLAY.minX + 0.4, Math.min(PLAY.maxX - 0.4, P.pos[0]));
@@ -2160,7 +2236,10 @@ function step(now) {
     const f = fpsN / fpsAcc;
     setText($('fps'), Math.round(f) + ' fps');
     // adaptive quality: a slow tablet drops to 1× pixels
-    if (LITE && f < 45 && pixelRatio > 1) { slowFor += fpsAcc; if (slowFor > 2) { pixelRatio = 1; renderer.setPixelRatio(1); resize(); } } else slowFor = 0;
+    // (the River court on a desktop too — once it has settled: clips loading and shaders compiling are not a slow GPU)
+    const riverSlow = !!S.river && S.loadingRest === 0 && LOFT.readyAt > 0 && now - LOFT.readyAt > 6000;
+    // (?adapt=0: never — measurements)
+    if ((LITE || riverSlow) && f < 45 && pixelRatio > 1 && QS.get('adapt') !== '0') { slowFor += fpsAcc; if (slowFor > 2) { pixelRatio = 1; renderer.setPixelRatio(1); resize(); } } else slowFor = 0;
     fpsAcc = 0; fpsN = 0;
   }
   if (S.replay) { replayStep(rdt); return; }
@@ -2593,9 +2672,9 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     const r0 = S.player.update(1 / 60, { face: HOOP });
     poseCharacter(rig, r0.pose);
     // the practice court (its colliders are added with the ball physics below)
-    if (COURT_KIND === 'vantheah') {
+    if (COURT_KIND === 'vantheah' || COURT_KIND === 'river') {
       loadMsg('loading the court…');
-      try { await loadPracticeCourt(); } catch (e) { console.warn('court failed', e); toast(`The VANTHEAH court could not load (${esc(e.message)}) — showing the classic court.`, 6000); }
+      try { await loadPracticeCourt(); } catch (e) { console.warn('court failed', e); toast(`The ${COURT_KIND === 'river' ? 'River' : 'VANTHEAH'} court could not load (${esc(e.message)}) — showing the classic court.`, 6000); }
     }
     // the door to the loft (both court kinds), off the left sideline
     if (LOFT.enabled) S.door = buildCourtDoor();
@@ -2615,8 +2694,9 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
       window.__shotMeter = { view: () => S.meter.view(), last: () => S.meter.history.at(-1) || null, history: () => S.meter.history.slice(), shot: () => S.meter.shot && { name: S.meter.shot.name, rel: S.meter.shot.rel, fps: S.meter.shot.fps, riseStart: S.meter.shot.riseStart, lateEnd: S.meter.shot.lateEnd }, clipT: () => S.meter.clipT, cfg: () => ({ ...S.meter.cfg }) };
     }
     if (S.court) {
-      S.courtColliders = VC.addVantheahColliders(S.phys, S.court);
-      const bd = VC.boxToGame([-12.8, 3.425, 0], [0.025, 0.525, 0.9]);
+      // (the River court: VANTHEAH's hoops, its own walls, fences and props — engine3d/court-river.mjs)
+      S.courtColliders = S.river ? RC.addRiverColliders(S.phys, S.court, VC) : VC.addVantheahColliders(S.phys, S.court);
+      const bd = VC.boxToGame([-(S.courtColliders.boardFaceX ? S.courtColliders.boardFaceX + 0.025 : 12.8), 3.425, 0], [0.025, 0.525, 0.9]);
       dbg.board.position.set(...bd.center); dbg.board.scale.set((bd.half[0] * 2) / 1.83, (bd.half[1] * 2) / 1.07, 1);
     } else {
       S.phys.addHoop({ center: [0, RIM_Y, 0], rimR: RIM_R, tube: 0.012, board: { center: [0, 2.9 + 0.535, BASELINE_Z + 1.22], half: [0.915, 0.535, 0.02] } });
@@ -2624,11 +2704,15 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
       S.phys.addStaticBox([0, 2.1, BASELINE_Z - 1.5], [0.14, 1.6, 0.14], { kind: 'stanchion' });
       for (const [x, z, w, d] of [[0, BASELINE_Z - 5, 30, 4], [-HALF_W - 4, 6, 4, 22], [HALF_W + 4, 6, 4, 22], [0, BASELINE_Z + HALF_LEN + 4, 30, 4]]) S.phys.addStaticBox([x, 1.5, z], [w / 2, 1.5, d / 2], { kind: 'stands', restitution: 0.3 });
     }
-    if (S.door) S.phys.addStaticBox([DOOR.x, DOOR.height / 2, DOOR.z - DOOR.depth / 2], [DOOR.width / 2, DOOR.height / 2, DOOR.depth / 2], { kind: 'props', restitution: 0.3 });
+    if (S.door) {
+      // (the stair-house: its depth behind the door's face, turned to the door's yaw)
+      const fx = Math.sin(DOOR.yaw), fz = Math.cos(DOOR.yaw), hx = Math.abs(fz) * DOOR.width / 2 + Math.abs(fx) * DOOR.depth / 2, hz = Math.abs(fx) * DOOR.width / 2 + Math.abs(fz) * DOOR.depth / 2;
+      S.phys.addStaticBox([DOOR.x - fx * DOOR.depth / 2, DOOR.height / 2, DOOR.z - fz * DOOR.depth / 2], [hx, DOOR.height / 2, hz], { kind: 'props', restitution: 0.3 });
+    }
     resetPossession();
     // a debug teleport (tests, the loft's door) starts a new possession with the ball in the hand
     const tp = S.player.teleport.bind(S.player);
-    S.player.teleport = (...a) => { const out = tp(...a); if (!S.lab && S.phys) { poseCharacter(rig, S.player.update(1 / 60, { face: faceAt() }).pose); resetPossession(); } return out; };
+    S.player.teleport = (...a) => { const out = tp(...a); S.courtPrev = null; if (!S.lab && S.phys) { poseCharacter(rig, S.player.update(1 / 60, { face: faceAt() }).pose); resetPossession(); } return out; };
     S.camPos.set(start.x + 2, 3, start.z + 6); S.camLook.set(0, 1.2, 0);
     loadMsg('compiling shaders…');
     await new Promise((r) => requestAnimationFrame(r));
@@ -2640,7 +2724,7 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
     // the loft: its state, the door and the exit, the room in world coordinates (tests)
     window.__loft = {
       state: () => ({ where: LOFT.where, loaded: !!LOFT.asset, loading: !!LOFT.loading, fetched: !!LOFT.bytes, prefetching: !!LOFT.prefetch, error: LOFT.error, prompt: LOFT.prompt, trans: LOFT.trans ? LOFT.trans.phase : null, fade: LOFT.fade, panel: LOFT.panel, progress: LOFT.progress && { ...LOFT.progress } }),
-      door: () => ({ x: DOOR.px, z: DOOR.pz, face: DOOR.z }), origin: LM.LOFT_ORIGIN,
+      door: () => ({ x: DOOR.px, z: DOOR.pz, face: DOOR.z, faceX: DOOR.x, yaw: DOOR.yaw, out: [DOOR.ox, DOOR.oz] }), origin: LM.LOFT_ORIGIN,
       W: () => LOFT.W, stats: () => LOFT.asset && { ...LOFT.asset.stats, lastEntry: LOFT.lastEntry || null }, layout: () => LOFT.asset?.layout || null,
       load: () => loftLoad(false), go: (to) => loftGo(to),
       courtVisible: () => { const vis = []; for (const o of scene.children) if (!carriesIntoLoft(o) && o.visible) vis.push(o.name || o.type); return vis; },
@@ -2648,6 +2732,30 @@ async function getJSON(url, { label, headerMs = 30000, idleMs = 20000, tries = 4
       env: () => ({ bg: scene.background?.getHexString?.() || null, fog: !!scene.fog, env: !!scene.environment, toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure }),
       dbg: () => ({ THREE, scene, renderer, camera, LOFT }),
     };
+    // the court (tests): which one; the River court's world, colliders, its reference camera, what a frame costs
+    window.__courtKind = S.river ? 'river' : S.court ? 'vantheah' : 'classic';
+    if (S.river) {
+      const R = S.river;
+      window.__river = {
+        W: () => R.W, layout: () => R.layout, stats: () => ({ ...R.stats, reflectFrames: R.reflect?.frames ?? null }), colliders: () => S.courtColliders,
+        renderCamera: () => RC.renderCameraToGame(R.layout, VC),
+        /** A camera held still at { pos, look, fov } (the reference view); null: back to the game's camera. */
+        view: (v) => { if (!v) { S.camFixed = null; camera.fov = 50; camera.updateProjectionMatrix(); return; } S.camFixed = { pos: v.pos, look: v.look }; if (v.fov) { camera.fov = v.fov; camera.updateProjectionMatrix(); } },
+        /** One frame drawn on its own: draw calls / triangles in all (shadow + reflection + picture) and the picture alone. */
+        frameCost: () => {
+          const info = renderer.info, refl = R.reflect?.mesh, au = renderer.shadowMap.autoUpdate;
+          info.autoReset = false;
+          const run = () => { info.reset(); renderer.render(scene, camera); return { calls: info.render.calls, triangles: info.render.triangles }; };
+          try {
+            const all = run();
+            renderer.shadowMap.autoUpdate = false; if (refl) refl.visible = false;
+            const picture = run();
+            return { all, picture, programs: info.programs?.length ?? null, textures: info.memory.textures, geometries: info.memory.geometries };
+          } finally { info.autoReset = true; renderer.shadowMap.autoUpdate = au; if (refl) refl.visible = true; }
+        },
+        dbg: () => ({ THREE, scene, renderer, camera, court: R }),
+      };
+    }
     if (QS.get('replay')) startReplay(QS.get('replay')).catch((e) => toast(`Replay failed: ${esc(e.message)}`, 6000));
     if (QS.get('balltest')) labStart(QS.get('balltest'));
     if (QS.get('balldbg') === '1' || QS.get('balltest')) toggleBallDbg(true);

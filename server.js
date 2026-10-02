@@ -846,25 +846,28 @@ async function handler(req, res) {
     const f = pathname.slice('/vendor/draco/'.length);
     return serveStatic(res, path.join(__dirname, 'vendor', 'draco', f), f.endsWith('.wasm') ? 'application/wasm' : 'text/javascript');
   }
-  // the loft behind the court's door (court3d.html, engine3d/loft.mjs): its layout (walkable area, colliders,
-  // lights) carries the GLB's version, and the GLB under that version is cached for good (a second visit
-  // never downloads it again; a new GLB is a new version). Streamed with ranges, never gzipped.
-  if (pathname === '/courts/loft-layout.json') {
+  // the loft behind the court's door (court3d.html, engine3d/loft.mjs) and the River practice court
+  // (engine3d/court-river.mjs): each layout (walkable area, colliders, lights) carries its GLB's version, and the
+  // GLB under that version is cached for good (a second visit never downloads it again; a new GLB is a new
+  // version). Streamed with ranges, never gzipped / held in memory.
+  const VERSIONED = { '/courts/loft-layout.json': 'loft', '/courts/river-layout.json': 'river' };
+  if (VERSIONED[pathname]) {
+    const name = VERSIONED[pathname];
     try {
-      const lp = path.join(__dirname, 'assets', 'courts', 'loft-layout.json'), gp = path.join(__dirname, 'assets', 'courts', 'loft.glb');
+      const lp = path.join(__dirname, 'assets', 'courts', `${name}-layout.json`), gp = path.join(__dirname, 'assets', 'courts', `${name}.glb`);
       const ls = fs.statSync(lp), gs = fs.statSync(gp);
       const ver = `${gs.mtimeMs.toString(36)}-${gs.size.toString(36)}`;
       const etag = `"${ls.mtimeMs.toString(36)}-${ver}"`;
       const inm = String(req.headers['if-none-match'] || '').split(/\s*,\s*/).map((t) => t.replace(/^W\//, ''));
       if (inm.includes(etag)) { res.writeHead(304, { ETag: etag }); return res.end(); }
       const layout = JSON.parse(fs.readFileSync(lp, 'utf8'));
-      layout.glb = { url: `/courts/loft.glb?v=${ver}`, bytes: gs.size, version: ver };
+      layout.glb = { url: `/courts/${name}.glb?v=${ver}`, bytes: gs.size, version: ver };
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ETag: etag });
       return res.end(JSON.stringify(layout));
-    } catch (e) { return json(res, { error: 'loft not available (' + (e.code || e.message) + ')' }, 404); }
+    } catch (e) { return json(res, { error: `${name} not available (` + (e.code || e.message) + ')' }, 404); }
   }
-  if (pathname === '/courts/loft.glb') {
-    const fp = path.join(__dirname, 'assets', 'courts', 'loft.glb');
+  if (pathname === '/courts/loft.glb' || pathname === '/courts/river.glb') {
+    const fp = path.join(__dirname, 'assets', 'courts', pathname.slice('/courts/'.length));
     let ver = null; try { const gs = fs.statSync(fp); ver = `${gs.mtimeMs.toString(36)}-${gs.size.toString(36)}`; } catch {}
     const cc = ver && url.searchParams.get('v') === ver ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate';
     return serveRanged(req, res, fp, 'model/gltf-binary', cc);
@@ -895,8 +898,8 @@ async function handler(req, res) {
     // the pro stick (every ball-handling move on the right stick)
     || pathname === '/js/shot-release.mjs' || pathname === '/js/shot-flight.mjs' || pathname === '/js/ball-fit.mjs' || pathname === '/js/shot-meter.mjs'
     || pathname === '/js/pro-stick.mjs' || pathname === '/js/move-controls.mjs'
-    // the loft behind the court's door (load, lightmapped materials, walking / camera collision)
-    || pathname === '/js/loft.mjs') {
+    // the loft behind the court's door (load, lightmapped materials, walking / camera collision); the River practice court
+    || pathname === '/js/loft.mjs' || pathname === '/js/court-river.mjs') {
     // the basketball physics system, its contact IK and the test scenes (engine3d/)
     return serveStatic(res, path.join(__dirname, 'engine3d', pathname.slice(4)), 'text/javascript', { revalidate: true });
   }

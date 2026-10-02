@@ -170,9 +170,11 @@ export async function loadVantheahCourt({ scene, renderer, quality = 'desktop', 
   };
 }
 
-/** Markings (lines, baselines, wordmark, floor motifs) → one texture on a plane just above the court. */
-function bakeFloorMarkings(root, renderer, quality, named) {
-  const RE = /^(COURT_Painted_Lines|Court_Baseline|Court_Wordmark|Brand_Motifs_Floor)/;
+/**
+ * Markings (lines, baselines, wordmark, floor motifs) → one texture on a plane just above the court.
+ * (RE: which meshes — the River court, same frame, bakes its painted lines with it.)
+ */
+export function bakeFloorMarkings(root, renderer, quality, named, RE = /^(COURT_Painted_Lines|Court_Baseline|Court_Wordmark|Brand_Motifs_Floor)/) {
   const meshes = [];
   root.traverse((o) => { if (o.isMesh && RE.test(o.name)) meshes.push(o); });
   if (!meshes.length) return null;
@@ -255,6 +257,23 @@ export function clipOutOfRings(lo, hi, goals = VANTHEAH.goals, r = VANTHEAH.rimR
     if (off < 0) hi[ax] = Math.min(hi[ax], g[ax] - r); else lo[ax] = Math.max(lo[ax], g[ax] + r);
   }
   return { lo, hi };
+}
+
+/**
+ * Only the two hoops of this frame (open 32-capsule rims + regulation backboards), as addVantheahColliders adds
+ * them — for another court authored in the same frame (the River court). boardFaceX: where that court's boards
+ * show their court-side face (|glb x|; VANTHEAH's: 12.775), the 5 cm board behind it.
+ * @returns {number} colliders added
+ */
+export function addVantheahHoops(phys, { boardFaceX = 12.775 } = {}) {
+  let n = 0;
+  for (const sign of [-1, 1]) {
+    const g = toGame([sign * 12.425, VANTHEAH.rimY, 0]);
+    const board = boxToGame([sign * (boardFaceX + 0.025), 3.425, 0], [0.025, 0.525, 0.9]);
+    phys.addHoop({ center: g, rimR: VANTHEAH.rimR, tube: VANTHEAH.tube, segments: VANTHEAH.segments, board });
+    n += VANTHEAH.segments + 1;
+  }
+  return n;
 }
 
 /**
